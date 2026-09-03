@@ -1,0 +1,331 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum LicenseTier {
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum StreamProtocol {
+  RTSP
+  WHEP
+  HLS
+}
+
+enum RecordingMode {
+  CONTINUOUS
+  SCHEDULED
+  MOTION
+  OFF
+}
+
+enum RecorderState {
+  STOPPED
+  STARTING
+  RUNNING
+  STOPPING
+  ERROR
+}
+
+enum SegmentStatus {
+  RECORDING
+  FINALIZED
+  CORRUPTED
+  ARCHIVED
+}
+
+enum ExportMode {
+  STREAM_COPY
+  FRAME_ACCURATE
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SigningMode {
+  IN_APP_DESIGNATED
+  EXTERNAL_PHYSICAL
+}
+
+enum EventType {
+  MOTION
+  CAMERA_ONLINE
+  CAMERA_OFFLINE
+  RECORDING_GAP
+  CORRUPTED_SEGMENT
+  STORAGE_WARNING
+  TAMPER
+}
+
+enum EventSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  sites       Site[]
+  cameras     Camera[]
+  auditEvents AuditEvent[]
+  exports     EvidenceExport[]
+  licenses    License[]
+  eventRules  EventRule[]
+}
+
+model License {
+  id               String      @id @default(uuid())
+  tenantId         String
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  licenseId        String      @unique // e.g. lic_01h...
+  tier             LicenseTier @default(ENTERPRISE)
+  maxCameras       Int         @default(16)
+  features         String[]    @default(["ANPR", "MULTI_SITE", "ADVANCED_PTZ", "EVIDENCE_EXPORT"])
+  
+  issuedAt         DateTime    @default(now())
+  expiresAt        DateTime?   // Null for perpetual licenses
+  
+  // Authoritative signed artifact
+  signedPayload    String      // Canonical JSON payload
+  signatureEd25519 String      // Ed25519 signature over signedPayload
+  
+  // Optional extension points for hardware/appliance binding
+  installationId   String?
+  deviceBinding    String?
+  
+  appliedAt        DateTime    @default(now())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([tenantId])
+}
+
+model User {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role       @default(OPERATOR)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  auditEvents  AuditEvent[]
+  exports      EvidenceExport[]
+}
+
+model Site {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  timezone    String   @default("Asia/Kolkata")
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cameras     Camera[]
+
+  @@index([tenantId])
+}
+
+model Camera {
+  id              String         @id @default(uuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteId          String
+  site            Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  
+  name            String
+  streamPath      String         @unique // MediaMTX path key (e.g. cam_<uuid>)
+  ipAddress       String
+  onvifPort       Int            @default(80)
+  rtspPort        Int            @default(554)
+  
+  // Encrypted at rest (AES-256-GCM)
+  encryptedAuth   String?        // Encrypted JSON containing { username, password }
+  
+  // Hardware & ONVIF Metadata
+  manufacturer    String?
+  model           String?
+  firmwareVersion String?
+  serialNumber    String?
+  macAddress      String?
+  hasPtz          Boolean        @default(false)
+  vendorQuirks    String[]       @default([])
+  
+  // Stream & Recording State
+  mainRtspUri     String         // Resolved via ONVIF GetStreamUri
+  subRtspUri      String?
+  recordingMode   RecordingMode  @default(CONTINUOUS) // Configured intent
+  recorderState   RecorderState  @default(STOPPED)    // Actual engine state
+  
+  isOnline        Boolean        @default(false)
+  lastSeenAt      DateTime?
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  segments        RecordingSegment[]
+  events          Event[]
+  exports         EvidenceExport[]
+
+  @@index([tenantId, siteId])
+  @@index([streamPath])
+}
+
+model RecordingSegment {
+  id           String        @id @default(uuid())
+  cameraId     String
+  camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  
+  filePath     String        @unique
+  startTime    DateTime
+  endTime      DateTime
+  durationMs   Int
+  sizeBytes    BigInt
+  sha256Hash   String?       // Computed upon segment finalization
+  
+  codec        String?       @default("h264")
+  width        Int?
+  height       Int?
+  fps          Float?
+  status       SegmentStatus @default(FINALIZED)
+
+  createdAt    DateTime      @default(now())
+
+  @@index([cameraId, startTime, endTime])
+  @@index([status])
+}
+
+model EventRule {
+  id             String      @id @default(uuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  enabled        Boolean     @default(true)
+  triggerType    EventType   // e.g. MOTION, CAMERA_OFFLINE
+  conditionsJson Json?       // e.g. { cameraIds: [...], timeWindow: "20:00-06:00" }
+  actionsJson    Json        // e.g. [{ action: "START_RECORDING", durationSec: 60 }]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  events         Event[]
+
+  @@index([tenantId, triggerType])
+}
+
+model Event {
+  id              String        @id @default(uuid())
+  cameraId        String?
+  camera          Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  ruleId          String?
+  rule            EventRule?    @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  
+  type            EventType
+  severity        EventSeverity @default(INFO)
+  title           String
+  description     String?
+  metadata        Json?
+  
+  // Motion / Episode State Machine
+  firstDetectedAt DateTime      @default(now())
+  lastDetectedAt  DateTime      @default(now())
+  durationSeconds Int           @default(0)
+  motionSpikes    Int           @default(1)
+  
+  startTime       DateTime      @default(now())
+  endTime         DateTime?
+  acknowledged    Boolean       @default(false)
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+
+  @@index([cameraId, startTime])
+  @@index([type, severity, acknowledged])
+}
+
+model EvidenceExport {
+  id             String       @id @default(uuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId       String
+  camera         Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  
+  startTime      DateTime
+  endTime        DateTime
+  exportMode     ExportMode   @default(STREAM_COPY)
+  status         ExportStatus @default(PENDING)
+  
+  outputFilePath String?
+  fileSizeBytes  BigInt?
+  sha256Hash     String?      // Computed hash of the exported clip
+  signatureEd25519 String?    // Appliance private key signature over manifest
+  
+  // Section 63 BSA Part A & Part B Signatory Details
+  partAPartyName         String?
+  partAPartyDesignation  String?
+  partBExpertName        String?
+  partBExpertDesignation String?
+  partBExpertOrganization String?
+  partBSigningMode       SigningMode  @default(IN_APP_DESIGNATED)
+  
+  manifestJson   Json?        // Complete audit manifest
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, cameraId])
+  @@index([status])
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  sequenceNumber BigInt   @default(autoincrement())
+  action         String   // e.g. "CAMERA_CREATE", "EXPORT_EVIDENCE_BSA63", "USER_CREATE"
+  resourceType   String
+  resourceId     String?
+  timestampUtc   DateTime @default(now())
+  ipAddress      String
+  userAgent      String?
+  metadataJson   Json?
+  
+  // Cryptographic Tamper-Evident Hash Chain
+  prevHash       String   // 64 hex characters (SHA-256 of preceding entry or genesis hash)
+  eventHash      String   // 64 hex characters (SHA-256 of prevHash + event details)
+
+  @@index([tenantId, sequenceNumber])
+  @@index([tenantId, action, timestampUtc])
+}

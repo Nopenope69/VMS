@@ -1,0 +1,47 @@
+# MediaMTX Configuration for VigilOne VMS
+# Edge-first, zero-transcode media engine
+
+logLevel: info
+logDestinations: [stdout]
+
+# Control API - Bound to :9997 inside Docker network only
+api: yes
+apiAddress: :9997
+
+# Authentication Webhook - Queries VigilOne Backend for all playback/read actions
+authMethod: http
+authHTTPAddress: http://backend:4000/api/v1/media/auth
+authHTTPExclude:
+  - action: api
+
+# RTSP Configuration
+rtsp: yes
+rtspAddress: :8554
+protocols: [tcp]
+
+# WebRTC (WHEP) Egress Configuration
+webrtc: yes
+webrtcAddress: :8889
+webrtcServerAddress: :8189
+webrtcServerProtocol: udp
+webrtcAllowTCP: yes
+
+# HLS Egress Configuration
+hls: yes
+hlsAddress: :8888
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
+
+# Recording Defaults (Fragmented MP4)
+# MediaMTX automatically appends .mp4 extension
+record: no
+recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+recordFormat: fmp4
+recordSegmentDuration: 10m
+recordPartDuration: 1s
+recordDeleteAfter: 0s
+
+# Default Path Settings
+pathDefaults:
+  sourceOnDemand: no
+  record: no

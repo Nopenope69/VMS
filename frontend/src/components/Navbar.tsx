@@ -1,0 +1,109 @@
+import React, { useState, useEffect } from 'react';
+import { Camera, Film, HardDrive, ShieldCheck, LogOut, Radio, Bell, Users, FileText, KeyRound } from 'lucide-react';
+import api from '../services/api';
+
+interface NavbarProps {
+  currentTab: string;
+  onSelectTab: (tab: string) => void;
+  user: any;
+  onLogout: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, onLogout }) => {
+  const [unackAlarms, setUnackAlarms] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchStats = () => {
+      api
+        .get('/events/stats')
+        .then((res) => {
+          setUnackAlarms(res.data.unacknowledgedTotal || 0);
+        })
+        .catch(() => {});
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const navItems = [
+    { id: 'live', label: 'Live Grid', icon: Camera },
+    { id: 'playback', label: 'Playback', icon: Film },
+    { id: 'devices', label: 'Cameras', icon: HardDrive },
+    { id: 'events', label: 'Events', icon: Bell, badge: unackAlarms },
+    { id: 'evidence', label: 'Section 63 Evidence', icon: ShieldCheck },
+    { id: 'users', label: 'Staff', icon: Users },
+    { id: 'audit', label: 'Audit Trail', icon: FileText },
+    { id: 'license', label: 'License', icon: KeyRound },
+  ];
+
+  return (
+    <header className="bg-graphite-850 border-b border-graphite-700 select-none">
+      <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        {/* Brand */}
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded bg-cctv-amber/20 border border-cctv-amber/60 flex items-center justify-center">
+            <Radio className="w-5 h-5 text-cctv-amber" />
+          </div>
+          <div>
+            <span className="font-bold tracking-wider text-slate-100 uppercase text-sm">VigilOne</span>
+            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono">
+              VMS 2.0
+            </span>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <nav className="flex space-x-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = currentTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelectTab(item.id)}
+                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-cctv-amber text-graphite-900 font-semibold shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-graphite-700'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{item.label}</span>
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                      active ? 'bg-red-600 text-white' : 'bg-red-500 text-white'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* User profile & logout */}
+        <div className="flex items-center space-x-3 text-xs">
+          <div className="text-right">
+            <div className="font-medium text-slate-200">{user?.name || 'Operator'}</div>
+            <div className="text-slate-400 font-mono text-[10px]">
+              {user?.role || 'OPERATOR'} • {user?.tenantName || 'Main Facility'}
+            </div>
+          </div>
+          <button
+            onClick={onLogout}
+            title="Sign Out"
+            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-rose-400 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Navbar;

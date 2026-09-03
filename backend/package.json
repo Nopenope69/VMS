@@ -1,0 +1,49 @@
+{
+  "name": "vigilone-backend",
+  "version": "1.0.0",
+  "description": "VigilOne Edge-First Commercial VMS Backend",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc && prisma generate",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "test": "jest --runInBand",
+    "test:config": "jest src/__tests__/env.test.ts",
+    "test:crypto": "jest src/__tests__/crypto.test.ts",
+    "test:media-auth": "jest src/__tests__/mediaAuth.test.ts",
+    "test:ffmpeg": "jest src/__tests__/ffmpeg.test.ts",
+    "test:evidence": "jest src/__tests__/evidence.test.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "archiver": "^7.0.1",
+    "axios": "^1.7.9",
+    "bcryptjs": "^2.4.3",
+    "check-disk-space": "^3.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "onvif": "^0.8.2",
+    "pdfkit": "^0.15.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.17.9",
+    "@types/pdfkit": "^0.13.8",
+    "jest": "^29.7.0",
+    "prisma": "^5.22.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

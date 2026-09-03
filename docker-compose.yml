@@ -1,0 +1,126 @@
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: vigilone-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - frontend_dist:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - mediamtx
+    networks:
+      - vigilone-net
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: vigilone-mediamtx
+    restart: unless-stopped
+    ports:
+      # Dedicated WebRTC ICE Media Transport (UDP + TCP fallback)
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
+      # RTSP restreaming for external NVRs/tools on LAN (Auth-gated)
+      - "8554:8554"
+      # Port 9997 (Control API) is NOT mapped to host - strictly internal Docker network!
+    environment:
+      - MTX_WEBRTCADDITIONALHOSTS=${LAN_IP:-127.0.0.1}
+      - RECORD_SEGMENT_DURATION=${RECORD_SEGMENT_DURATION:-10m}
+      - RECORD_PART_DURATION=${RECORD_PART_DURATION:-1s}
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+      - recordings_data:/recordings
+    networks:
+      - vigilone-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: vigilone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vigilone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vigilone_dev_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-vigilone_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - vigilone-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vigilone-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-vigilone}:${POSTGRES_PASSWORD:-vigilone_dev_secret_2026}@postgres:5432/${POSTGRES_DB:-vigilone_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:-vigilone_dev_jwt_signing_key_32bytes_min!}
+      - CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_ENCRYPTION_KEY:-eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
+      - MEDIAMTX_API_URL=http://mediamtx:9997
+      - RECORDINGS_DIR=/recordings
+      - EXPORTS_DIR=/recordings/exports
+      - LAN_IP=${LAN_IP:-127.0.0.1}
+      - RECORD_SEGMENT_DURATION=${RECORD_SEGMENT_DURATION:-10m}
+    volumes:
+      - recordings_data:/recordings
+      - appliance_keys:/etc/vigilone
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+    networks:
+      - vigilone-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vigilone-frontend
+    restart: "no"
+    volumes:
+      - frontend_dist:/srv/frontend
+    networks:
+      - vigilone-net
+
+  # Synthetic test camera - isolated under profile 'test' (never runs in production)
+  synthetic-camera:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: vigilone-synthetic-camera
+    profiles: ["test"]
+    restart: unless-stopped
+    entrypoint: >
+      sh -c '
+      ffmpeg -re -f lavfi -i "testsrc=size=1280x720:rate=25,drawtext=text=%{localtime\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}:fontcolor=white:fontsize=36:x=(w-text_w)/2:y=50:box=1:boxcolor=black@0.6" \
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 50 \
+      -f rtsp rtsp://mediamtx:8554/synthetic_test_stream
+      '
+    depends_on:
+      - mediamtx
+    networks:
+      - vigilone-net
+
+networks:
+  vigilone-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  recordings_data:
+  appliance_keys:
+  caddy_data:
+  caddy_config:
+  frontend_dist:

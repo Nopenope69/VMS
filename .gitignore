@@ -1,0 +1,41 @@
+# Node & Package Managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build Outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & Secret Keys
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+/etc/vigilone/
+appliance.key
+
+# Video & Storage Volumes
+/recordings/
+*.mp4
+*.fmp4
+recordings/**/*.ts
+*.m3u8
+*.zip
+
+# Database & Docker Volumes
+*.db
+*.sqlite
+postgres_data/
+caddy_data/
+caddy_config/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
