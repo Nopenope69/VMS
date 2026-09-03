@@ -14,11 +14,11 @@ export class RecordingIndexerService {
     this.prisma = prisma;
   }
 
-  start(intervalMs = 15000) {
+  start(intervalMs = 300000) {
     if (this.timer) return;
     this.timer = setInterval(() => {
       this.scan().catch((err) => {
-        console.error('[RecordingIndexer] Scan error:', err);
+        console.error('[RecordingIndexer] Reconcile scan error:', err);
       });
     }, intervalMs);
 

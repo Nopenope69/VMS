@@ -48,6 +48,13 @@ enum SegmentStatus {
   ARCHIVED
 }
 
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum ExportMode {
   STREAM_COPY
   FRAME_ACCURATE
@@ -181,20 +188,25 @@ model Camera {
   vendorQuirks    String[]       @default([])
   
   // Stream & Recording State
-  mainRtspUri     String         // Resolved via ONVIF GetStreamUri
-  subRtspUri      String?
-  recordingMode   RecordingMode  @default(CONTINUOUS) // Configured intent
-  recorderState   RecorderState  @default(STOPPED)    // Actual engine state
+  mainRtspUri           String         // Resolved via ONVIF GetStreamUri
+  subRtspUri            String?
+  recordingMode         RecordingMode  @default(CONTINUOUS) // Configured intent
+  recorderState         RecorderState  @default(STOPPED)    // Legacy/synchronized engine state
+  desiredRecorderState  RecorderState  @default(STOPPED)    // Operator intent
+  observedRecorderState RecorderState  @default(STOPPED)    // Polled from MediaMTX
+  lastStateChangeAt     DateTime       @default(now())
+  lastReconciledAt      DateTime?
+  lastRecorderError     String?
   
-  isOnline        Boolean        @default(false)
-  lastSeenAt      DateTime?
+  isOnline              Boolean        @default(false)
+  lastSeenAt            DateTime?
   
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
-  segments        RecordingSegment[]
-  events          Event[]
-  exports         EvidenceExport[]
+  segments              RecordingSegment[]
+  events                Event[]
+  exports               EvidenceExport[]
 
   @@index([tenantId, siteId])
   @@index([streamPath])
@@ -202,6 +214,7 @@ model Camera {
 
 model RecordingSegment {
   id           String        @id @default(uuid())
+  tenantId     String?
   cameraId     String
   camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   
@@ -220,8 +233,43 @@ model RecordingSegment {
 
   createdAt    DateTime      @default(now())
 
+  evidencePins EvidencePin[]
+
   @@index([cameraId, startTime, endTime])
   @@index([status])
+  @@index([tenantId, cameraId, startTime])
+}
+
+model EvidencePin {
+  id          String           @id @default(uuid())
+  tenantId    String
+  segmentId   String
+  segment     RecordingSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  exportJobId String
+  reason      String
+  pinnedAt    DateTime         @default(now())
+  expiresAt   DateTime
+  releasedAt  DateTime?
+
+  @@index([segmentId, expiresAt, releasedAt])
+  @@index([tenantId, expiresAt])
+}
+
+model SegmentJob {
+  id          String    @id @default(uuid())
+  tenantId    String
+  cameraId    String
+  streamPath  String
+  segmentPath String
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@unique([tenantId, segmentPath])
+  @@index([status, createdAt])
 }
 
 model EventRule {
@@ -326,6 +374,7 @@ model AuditEvent {
   prevHash       String   // 64 hex characters (SHA-256 of preceding entry or genesis hash)
   eventHash      String   // 64 hex characters (SHA-256 of prevHash + event details)
 
+  @@unique([tenantId, sequenceNumber])
   @@index([tenantId, sequenceNumber])
   @@index([tenantId, action, timestampUtc])
 }

@@ -88,14 +88,18 @@ export function verifyLicenseArtifact(
   }
 }
 
+import ClockGuard from './clockGuard';
+
 /**
  * Evaluates whether a verified license is currently active or expired.
+ * Incorporates ClockGuard to prevent CMOS battery resets (1970) or clock rollback attacks.
  */
 export function isLicenseActive(claims: LicenseClaims): { active: boolean; reason?: string } {
   if (claims.expiresAt) {
-    const now = new Date();
+    const issuedAt = claims.issuedAt ? new Date(claims.issuedAt) : null;
+    const sanitizedTime = ClockGuard.getSanitizedTimeForLicense(issuedAt);
     const expiry = new Date(claims.expiresAt);
-    if (now > expiry) {
+    if (sanitizedTime > expiry) {
       return { active: false, reason: 'LICENSE_EXPIRED' };
     }
   }

@@ -17,6 +17,8 @@ const envSchema = z.object({
     .min(32, 'JWT_SECRET must be at least 32 characters long')
     .default('vigilone_dev_jwt_signing_key_32bytes_min!'),
   SETUP_TOKEN: z.string().default('vigilone_dev_setup_token_99182'),
+  INTERNAL_API_SECRET: z.string().default('vigilone_internal_secret_token_98234'),
+  MANAGEMENT_IP: z.string().default('127.0.0.1'),
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
   MEDIAMTX_API_URL: z.string().default('http://mediamtx:9997'),
   RECORDINGS_DIR: z.string().default('/recordings'),

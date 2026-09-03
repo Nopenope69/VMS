@@ -14,8 +14,11 @@ import userRoutes from './routes/user.routes';
 import eventRoutes from './routes/event.routes';
 import auditRoutes from './routes/audit.routes';
 import licenseRoutes from './routes/license.routes';
+import internalRoutes from './routes/internal.routes';
 import { RecordingIndexerService } from './services/recordingIndexer.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
+import SegmentJobWorkerService from './services/storage/segmentJobWorker.service';
+import StartupReconcilerService from './services/reconciliation/startupReconciler.service';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -37,6 +40,7 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/license', licenseRoutes);
+app.use('/api/v1/internal', internalRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -45,7 +49,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // Background Services
-const indexerIntervalMs = config.RECORD_SEGMENT_DURATION === '30s' ? 5000 : 15000;
 const indexer = new RecordingIndexerService(prisma);
 const storageSentinel = new StorageSentinelService(prisma);
 
@@ -53,15 +56,22 @@ export const server = app.listen(config.PORT, () => {
   console.log(`[VigilOne] Backend API running on port ${config.PORT} (env: ${config.NODE_ENV})`);
   console.log(`[VigilOne] MediaMTX API configured at: ${config.MEDIAMTX_API_URL}`);
 
-  // Start background services unless running in test mode
+  // Start background services & startup reconciler unless running in test mode
   if (config.NODE_ENV !== 'test') {
-    indexer.start(indexerIntervalMs);
+    SegmentJobWorkerService.start(2000);
+    indexer.start(300000); // 5-minute safety reconciliation fallback
     storageSentinel.start(60000);
+
+    // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
+    StartupReconcilerService.reconcile().catch((err) => {
+      console.error('[StartupReconciler] Boot reconciliation warning:', err.message);
+    });
   }
 });
 
 process.on('SIGTERM', async () => {
   console.log('[VigilOne] Shutting down gracefully...');
+  SegmentJobWorkerService.stop();
   indexer.stop();
   storageSentinel.stop();
   server.close(() => {

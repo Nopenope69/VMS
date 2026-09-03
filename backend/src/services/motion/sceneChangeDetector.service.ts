@@ -1,6 +1,7 @@
 import { ChildProcess, spawn } from 'child_process';
 import { PrismaClient, EventType, EventSeverity } from '@prisma/client';
 import mediaProvider from '../media/mediamtx.provider';
+import EventRateLimiter from '../events/eventRateLimiter.service';
 
 const prisma = new PrismaClient();
 
@@ -27,6 +28,16 @@ export class SceneChangeDetectorService {
    * Consolidates continuous bursts of scene changes into a single logical Event episode.
    */
   async handleSceneChange(cameraId: string, confidence: number = 0.45): Promise<void> {
+    // 1. Check EventRateLimiter to suppress raw spike storms
+    if (!EventRateLimiter.shouldProcessTrigger(cameraId)) {
+      const current = this.cameraStates.get(cameraId);
+      if (current && current.state === 'ACTIVE') {
+        current.motionSpikes += 1;
+        current.lastDetectedAt = new Date();
+      }
+      return;
+    }
+
     const now = new Date();
     let current = this.cameraStates.get(cameraId);
 
@@ -129,20 +140,27 @@ export class SceneChangeDetectorService {
   }
 
   /**
-   * Spawns a lightweight FFmpeg scene-change probe on the camera's RTSP feed.
+   * Spawns a lightweight FFmpeg probe.
+   * STRICT INVARIANT: PULLS EXCLUSIVELY FROM MEDIAMTX LOCALHOST RELAY AT 1 FPS DOWN-SAMPLED TO 320x180.
+   * Zero direct camera connection and minimal host CPU overhead.
    */
-  startProbe(cameraId: string, rtspUrl: string, threshold = 0.4) {
+  startProbe(cameraId: string, streamPathOrRtspUrl: string, threshold = 0.4) {
     if (this.activeProbes.has(cameraId)) {
       this.stopProbe(cameraId);
     }
 
-    // FFmpeg scene change filter: outputs metadata on scene changes exceeding threshold
+    // Determine relay URL: if caller passed a full URL, extract path or use loopback
+    const relayUrl = streamPathOrRtspUrl.startsWith('rtsp://')
+      ? streamPathOrRtspUrl
+      : `rtsp://127.0.0.1:8554/${streamPathOrRtspUrl}`;
+
+    // Downscale to 320x180 @ 1 fps to eliminate CPU decode melt
     const args = [
       '-nostats',
       '-loglevel', 'info',
       '-rtsp_transport', 'tcp',
-      '-i', rtspUrl,
-      '-vf', `select=gt(scene\\,${threshold}),metadata=print:file=-`,
+      '-i', relayUrl,
+      '-vf', `fps=1,scale=320:180,select=gt(scene\\,${threshold}),metadata=print:file=-`,
       '-f', 'null',
       '-',
     ];

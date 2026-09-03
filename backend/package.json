@@ -9,7 +9,7 @@
     "dev": "ts-node src/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand --forceExit",
     "test:config": "jest src/__tests__/env.test.ts",
     "test:crypto": "jest src/__tests__/crypto.test.ts",
     "test:media-auth": "jest src/__tests__/mediaAuth.test.ts",

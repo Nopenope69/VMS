@@ -19,12 +19,13 @@ rtsp: yes
 rtspAddress: :8554
 protocols: [tcp]
 
-# WebRTC (WHEP) Egress Configuration
+# WebRTC (WHEP) Egress Configuration - Scoped to Operator Management Interface
 webrtc: yes
 webrtcAddress: :8889
 webrtcServerAddress: :8189
 webrtcServerProtocol: udp
 webrtcAllowTCP: yes
+webrtcAdditionalHosts: ["${MANAGEMENT_IP:-127.0.0.1}"]
 
 # HLS Egress Configuration
 hls: yes
@@ -45,3 +46,4 @@ recordDeleteAfter: 0s
 pathDefaults:
   sourceOnDemand: no
   record: no
+  runOnRecordSegmentComplete: curl --max-time 3 -s -X POST http://backend:4000/api/v1/internal/segment-complete -H "Authorization: Bearer ${INTERNAL_API_SECRET:-vigilone_internal_secret_token}" -H "Content-Type: application/json" -d '{"path":"$MTX_PATH","file":"$MTX_SEGMENT_PATH","duration":"$MTX_SEGMENT_DURATION"}'

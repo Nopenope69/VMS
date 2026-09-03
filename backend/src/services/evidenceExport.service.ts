@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import config from '../config/env';
 import { FFmpegService } from './ffmpeg/ffmpeg.service';
 import { computeFileSha256, signEvidenceManifest } from '../utils/crypto';
+import EvidencePinManager from './storage/evidencePinManager.service';
 
 export interface CreateEvidenceParams {
   tenantId: string;
@@ -163,6 +164,16 @@ export class EvidenceExportService {
     const workDir = path.join(exportsDir, `EV_${exportId}`);
     fs.mkdirSync(workDir, { recursive: true });
 
+    // Check storage admission control before pinning
+    const admission = await EvidencePinManager.checkAdmissionControl(config.RECORDINGS_DIR);
+    if (!admission.admitted) {
+      await this.prisma.evidenceExport.update({
+        where: { id: exportId },
+        data: { status: 'FAILED', errorMessage: admission.reason },
+      });
+      throw new Error(admission.reason);
+    }
+
     try {
       // Find overlapping recording segments
       const segments = await this.prisma.recordingSegment.findMany({
@@ -174,6 +185,10 @@ export class EvidenceExportService {
         },
         orderBy: { startTime: 'asc' },
       });
+
+      // Acquire time-bounded lease on segments to protect from circular-buffer purge
+      const segmentIds = segments.map((s) => s.id);
+      await EvidencePinManager.acquireLease(params.tenantId, segmentIds, exportId, 'EVIDENCE_EXPORT', 2);
 
       const videoOutPath = path.join(workDir, 'video.mp4');
 
@@ -316,6 +331,11 @@ export class EvidenceExportService {
         },
       });
       throw err;
+    } finally {
+      // Always release time-bounded evidence pin leases
+      await EvidencePinManager.releaseLease(exportId).catch((err) => {
+        console.error(`Failed to release evidence pins for ${exportId}:`, err);
+      });
     }
   }
 
