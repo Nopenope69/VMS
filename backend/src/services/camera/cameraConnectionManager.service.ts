@@ -20,7 +20,7 @@ export class CameraConnectionManager extends EventEmitter {
   private static instance: CameraConnectionManager;
   private cameras = new Map<string, CameraConnectionInfo>();
   private activeHandshakes = 0;
-  private readonly MAX_CONCURRENT_HANDSHAKES = 3;
+  public static readonly MAX_CONCURRENT_HANDSHAKES = 3;
   private queue: string[] = [];
   private processInterval: NodeJS.Timeout | null = null;
 
@@ -54,6 +54,10 @@ export class CameraConnectionManager extends EventEmitter {
       this.cameras.set(cameraId, info);
     }
     return info;
+  }
+
+  public getAllCameras(): CameraConnectionInfo[] {
+    return Array.from(this.cameras.values());
   }
 
   public getCameraStatus(cameraId: string): CameraConnectionInfo | undefined {
@@ -92,7 +96,7 @@ export class CameraConnectionManager extends EventEmitter {
   }
 
   private async processQueue() {
-    if (this.activeHandshakes >= this.MAX_CONCURRENT_HANDSHAKES || this.queue.length === 0) {
+    if (this.activeHandshakes >= CameraConnectionManager.MAX_CONCURRENT_HANDSHAKES || this.queue.length === 0) {
       return;
     }
 
