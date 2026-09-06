@@ -1,0 +1,83 @@
+groups:
+  - name: vigilone_edge_storage_alerts
+    rules:
+      - alert: StorageFreeSpaceWarning
+        expr: vigilone_storage_fill_ratio > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: storage
+        annotations:
+          summary: "Storage volume utilization exceeded 85%"
+          description: "Recordings directory utilization is at {{ $value | humanizePercentage }}. Retention sentinel will initiate purge soon."
+          runbook: "Check retention policy or attach external storage volume."
+
+      - alert: StorageFreeSpaceCritical
+        expr: vigilone_storage_fill_ratio > 0.92
+        for: 2m
+        labels:
+          severity: critical
+          component: storage
+        annotations:
+          summary: "Storage volume critically low (exceeded 92%)"
+          description: "Recordings storage has reached {{ $value | humanizePercentage }}. Emergency circular buffer purge is active."
+          runbook: "Verify unpinned recordings are being purged and check for pinned storage leaks."
+
+      - alert: PinnedStorageExhaustion
+        expr: vigilone_storage_bytes_free < 53687091200 and vigilone_evidence_active_pins_count > 100
+        for: 5m
+        labels:
+          severity: critical
+          component: evidence
+        annotations:
+          summary: "Pinned evidence storage exhaustion risk"
+          description: "Disk free space is below 50GB while active evidence leases exceed 100 pins. Admission control is actively blocking new exports."
+          runbook: "Release or export completed evidence packages or extend retention disk."
+
+  - name: vigilone_edge_media_alerts
+    rules:
+      - alert: SegmentQueueBacklogHigh
+        expr: vigilone_segment_queue_depth{status="PENDING"} > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: ingestion
+        annotations:
+          summary: "Durable segment indexing queue backlog high"
+          description: "More than 50 segment completion jobs are queued in PostgreSQL for over 5 minutes. Potential disk I/O bottleneck."
+          runbook: "Check disk I/O latency and verify FFmpeg probe process execution."
+
+      - alert: CameraFeedOffline
+        expr: sum(vigilone_cameras_total{state="ERROR"}) > 0
+        for: 3m
+        labels:
+          severity: warning
+          component: camera
+        annotations:
+          summary: "One or more camera streams in ERROR state"
+          description: "{{ $value }} registered cameras are currently in recorder error state."
+          runbook: "Inspect camera connection manager logs, RTSP credentials, and physical PoE switch status."
+
+  - name: vigilone_edge_api_slo_alerts
+    rules:
+      - alert: ApiErrorRateHigh
+        expr: sum(rate(vigilone_http_requests_total{status_class="5xx"}[5m])) / sum(rate(vigilone_http_requests_total[5m])) > 0.02
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API 5xx error rate exceeded 2% (SLO Burn)"
+          description: "Current 5xx HTTP error proportion is {{ $value | humanizePercentage }} over a 5-minute window."
+          runbook: "Inspect backend logs with correlation IDs to isolate failing route handlers."
+
+      - alert: ApiLatencyDegraded
+        expr: histogram_quantile(0.95, sum(rate(vigilone_http_request_duration_seconds_bucket[5m])) by (le)) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API P95 latency degraded (> 1000ms)"
+          description: "95th percentile request latency has exceeded 1.0s for over 5 minutes."
+          runbook: "Check CPU saturation, active database connection locks, and MediaMTX relay status."

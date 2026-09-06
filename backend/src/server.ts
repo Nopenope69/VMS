@@ -15,6 +15,8 @@ import eventRoutes from './routes/event.routes';
 import auditRoutes from './routes/audit.routes';
 import licenseRoutes from './routes/license.routes';
 import internalRoutes from './routes/internal.routes';
+import metricsRoutes from './routes/metrics.routes';
+import requestLogger from './middleware/requestLogger';
 import { RecordingIndexerService } from './services/recordingIndexer.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
 import SegmentJobWorkerService from './services/storage/segmentJobWorker.service';
@@ -23,10 +25,15 @@ import StartupReconcilerService from './services/reconciliation/startupReconcile
 const app = express();
 const prisma = new PrismaClient();
 
-// Security middleware
+// Security & Observability middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(requestLogger);
+
+// Prometheus Metrics Scrape Endpoints
+app.use('/metrics', metricsRoutes);
+app.use('/api/v1/metrics', metricsRoutes);
 
 // API Routes
 app.use('/api/v1', healthRoutes);
