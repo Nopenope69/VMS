@@ -1,13 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, AlarmState, EventSeverity } from '@prisma/client';
+import { AlarmState, EventSeverity } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense } from '../middleware/license';
 import { authorize, Permission } from '../services/rbac/permissions';
-import alarmService from '../services/alarm/alarm.service';
-import { AuditChainService } from '../services/audit/auditChain.service';
+import incidentOrchestrator from '../services/incident/orchestrator/incidentOrchestrator.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 router.use(loadTenantLicense);
@@ -19,11 +17,14 @@ router.get('/', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Res
   const { state, severity, cameraId } = req.query;
 
   try {
-    const alarms = await alarmService.listAlarms(req.user!.tenantId, {
-      state: state as AlarmState,
-      severity: severity as EventSeverity,
-      cameraId: cameraId as string,
-    });
+    const alarms = await incidentOrchestrator.listAlarms(
+      {
+        state: state as AlarmState,
+        severity: severity as EventSeverity,
+        cameraId: cameraId as string,
+      },
+      { tenantId: req.user!.tenantId }
+    );
 
     return res.json({ alarms });
   } catch (err: any) {
@@ -36,21 +37,11 @@ router.get('/', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Res
  */
 router.post('/:id/acknowledge', authorize(Permission.ALARM_MANAGE), async (req: Request, res: Response) => {
   try {
-    const alarm = await alarmService.acknowledgeAlarm(
-      req.params.id,
-      req.user!.tenantId,
-      req.user!.id
-    );
-
-    await AuditChainService.record(prisma, {
+    const alarm = await incidentOrchestrator.acknowledgeAlarm(req.params.id, {
       tenantId: req.user!.tenantId,
-      userId: req.user!.id,
-      action: 'ALARM_ACKNOWLEDGE',
-      resourceType: 'Alarm',
-      resourceId: alarm.id,
-      ipAddress: req.ip || '127.0.0.1',
+      actorUserId: req.user!.id,
+      clientIp: req.ip || '127.0.0.1',
       userAgent: req.headers['user-agent'],
-      metadata: { alarmTitle: alarm.title, severity: alarm.severity },
     });
 
     return res.json({ success: true, alarm });
@@ -66,22 +57,11 @@ router.post('/:id/resolve', authorize(Permission.ALARM_MANAGE), async (req: Requ
   const { notes = 'Resolved by operator' } = req.body;
 
   try {
-    const alarm = await alarmService.resolveAlarm(
-      req.params.id,
-      req.user!.tenantId,
-      req.user!.id,
-      notes
-    );
-
-    await AuditChainService.record(prisma, {
+    const alarm = await incidentOrchestrator.resolveAlarm(req.params.id, notes, {
       tenantId: req.user!.tenantId,
-      userId: req.user!.id,
-      action: 'ALARM_RESOLVE',
-      resourceType: 'Alarm',
-      resourceId: alarm.id,
-      ipAddress: req.ip || '127.0.0.1',
+      actorUserId: req.user!.id,
+      clientIp: req.ip || '127.0.0.1',
       userAgent: req.headers['user-agent'],
-      metadata: { alarmTitle: alarm.title, notes },
     });
 
     return res.json({ success: true, alarm });

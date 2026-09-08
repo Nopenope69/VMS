@@ -199,6 +199,12 @@ enum RelayCommandState {
   COMMAND_FAILED
 }
 
+enum RelayConfirmationMode {
+  ACK_ONLY
+  STATE_FEEDBACK
+  PULSE_COMPLETION
+}
+
 enum ArchiveJobStatus {
   QUEUED
   UPLOADING
@@ -981,18 +987,24 @@ model AutomationRule {
 }
 
 model RuleExecutionRecord {
-  id               String                 @id @default(uuid()) // ruleExecutionId
+  id               String                  @id @default(uuid()) // ruleExecutionId
   tenantId         String
   ruleId           String
-  rule             AutomationRule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  rule             AutomationRule          @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   triggerEventId   String?
-  overallStatus    String                 // SUCCESS, PARTIAL, FAILED
+  correlationId    String?
+  rootEventId      String?
+  depth            Int                     @default(0)
+  overallStatus    String                  // PENDING, PROCESSING, SUCCESS, PARTIAL, FAILED, CASCADE_TERMINATED
+  error            String?
   actionExecutions ActionExecutionRecord[]
-  startedAt        DateTime               @default(now())
+  startedAt        DateTime                @default(now())
   completedAt      DateTime?
 
+  @@unique([ruleId, triggerEventId])
   @@index([tenantId, startedAt])
   @@index([ruleId, overallStatus])
+  @@index([correlationId])
 }
 
 model ActionExecutionRecord {
@@ -1001,12 +1013,18 @@ model ActionExecutionRecord {
   ruleExecution   RuleExecutionRecord @relation(fields: [ruleExecutionId], references: [id], onDelete: Cascade)
   actionId        String
   actionType      RuleActionType
-  status          String              // PENDING, SUCCESS, FAILED, TIMEOUT
+  status          String              // PENDING, PROCESSING, SUCCESS, FAILED, TIMEOUT
+  attempt         Int                 @default(1)
   durationMs      Int                 @default(0)
+  resultJson      Json?
   error           String?
+  startedAt       DateTime            @default(now())
+  completedAt     DateTime?
   executedAt      DateTime            @default(now())
 
+  @@unique([ruleExecutionId, actionId])
   @@index([ruleExecutionId, status])
+  @@index([status, startedAt])
 }
 
 model SpatialAnalyticsRule {
@@ -1030,18 +1048,20 @@ model SpatialAnalyticsRule {
 }
 
 model DigitalIoPin {
-  id              String            @id @default(uuid())
-  tenantId        String
-  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  pinNumber       Int
-  direction       RelayPinDirection
-  name            String
-  state           String            @default("LOW") // HIGH, LOW, PULSED
-  activeLow       Boolean           @default(false)
-  pulseDurationMs Int               @default(3000)
-  commandLogs     RelayCommandLog[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id               String                @id @default(uuid())
+  tenantId         String
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pinNumber        Int
+  direction        RelayPinDirection
+  name             String
+  state            String                @default("LOW") // HIGH, LOW, PULSED
+  activeLow        Boolean               @default(false)
+  confirmationMode RelayConfirmationMode @default(STATE_FEEDBACK)
+  timeoutMs        Int                   @default(3000)
+  pulseDurationMs  Int                   @default(3000)
+  commandLogs      RelayCommandLog[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@unique([tenantId, pinNumber])
 }

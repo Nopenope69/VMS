@@ -3,7 +3,7 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **247/247 tests passing across all 49 test suites** (`npm test` in `backend/`, execution time: ~4.7s).  
+- **Automated Test Status:** **262/262 tests passing across all 50 test suites** (`npm test` in `backend/`, execution time: ~5.4s).  
 - **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `vite build` (exit code `0`).
 
 ---
@@ -190,11 +190,20 @@
     - **Calibrated PTZ FOV with Fallback:** Uses calibrated profile lookup when present, with optical fallback $\text{FOV}_{\text{eff}} = \max(10^\circ, \min(180^\circ, \text{FOV}_{\text{h}} / \text{zoom}))$.
     - **Bounded Track State Ledger:** LRU and TTL eviction bounds memory with per-camera caps (500), global caps (5000), and observable telemetry metrics.
     - **Exclusion Precedence:** High-priority exclusion zones have absolute veto over detections.
+20. **Unified Incident Orchestrator & Action Outbox Invariant (ADR 0004):** `IncidentOrchestrator` (`src/services/incident/orchestrator/`) is the single authoritative deep module for sensor/vision event ingestion, automation rule evaluation, persistent action outbox dispatch, hardware relay execution, alarm state machines, and outbound notification delivery.
+    - **Strongly Typed Canonical Event Contract:** Standardized discriminated union `VigilOneEvent` with strict typing across all 9 event types (`MOTION`, `TRIPWIRE_CROSS`, `LOITERING_DWELL`, `ANPR_MATCH`, `CAMERA_OFFLINE`, `STREAM_DEGRADED`, `DI_TRIGGER`, `SCENE_CHANGE`, `SYSTEM_ALERT`), explicit spatial refs, and evidence refs. Zero untyped `any` payload usage.
+    - **Cascade Loop & Depth Protection:** Hard recursion limits `MAX_EVENT_ACTION_DEPTH = 5` and `MAX_ACTIONS_PER_CORRELATION = 25`. Breaching cascades are terminated safely with `CASCADE_TERMINATED` and security alert logging.
+    - **Multi-Level Database-Enforced Idempotency:** Canonical event deduplication key `event.id`, unique `(ruleId, triggerEventId)` on `RuleExecutionRecord`, and unique `(ruleExecutionId, actionId)` on `ActionExecutionRecord`.
+    - **Persistent Action Outbox:** Ingestion durably commits events and pending execution records before background outbox claiming. Process crashes resume cleanly without lost or duplicated actions.
+    - **Adapter-Specific Relay Confirmation Semantics:** Digital I/O execution enforces explicit `RelayConfirmationMode`: `ACK_ONLY` (confirms command transmission only, never claims `STATE_CONFIRMED`), `STATE_FEEDBACK` (requires physical feedback contact), and `PULSE_COMPLETION` (timed pulse cycle completion) with device-level configurable timeouts.
+    - **Atomic Alarm & Audit Serialization:** Mutations consume `CommandContext` (`tenantId`, `actorUserId`, `correlationId`, `permissions`), enforcing tenant boundaries and committing atomic `AuditChainService` records.
+    - **Event $\neq$ Alarm Mental Model:** Sensor events never spontaneously become alarms. Alarms are created strictly via explicit rule actions (including built-in system critical policies).
 
 ---
 
 ## 3. Test & Verification Summary
-- **Backend Test Suites:** 49 suites, 247 tests passing.
+- **Backend Test Suites:** 50 suites, 262 tests passing.
+  - `incidentOrchestrator.test.ts` (15 passed)
   - `spatialEngine.test.ts` (15 passed)
   - `evidenceArchive.test.ts` (9 passed)
   - `recordingCatalog.test.ts` (9 passed)

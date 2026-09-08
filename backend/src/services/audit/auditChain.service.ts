@@ -48,8 +48,8 @@ export class AuditChainService {
    * Uses PostgreSQL transactional advisory lock to guarantee strict linear serialization
    * with zero chain forks across concurrent requests or multi-process replicas.
    */
-  static async record(prisma: PrismaClient, options: RecordAuditOptions): Promise<AuditEvent> {
-    return await prisma.$transaction(async (tx) => {
+  static async record(prisma: PrismaClient | any, options: RecordAuditOptions): Promise<AuditEvent> {
+    const handler = async (tx: any) => {
       // 1. Acquire two-key transactional advisory lock scoped to this tenant
       try {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tenant_audit'), hashtext(${options.tenantId}))`;
@@ -95,7 +95,13 @@ export class AuditChainService {
           eventHash,
         },
       });
-    });
+    };
+
+    if (prisma && typeof prisma.$transaction === 'function') {
+      return await prisma.$transaction(handler);
+    } else {
+      return await handler(prisma);
+    }
   }
 
   /**
