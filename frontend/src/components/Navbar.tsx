@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Film, HardDrive, ShieldCheck, LogOut, Radio, Bell, Users, FileText, KeyRound } from 'lucide-react';
+import {
+  Camera,
+  Film,
+  HardDrive,
+  ShieldCheck,
+  LogOut,
+  Radio,
+  Bell,
+  Users,
+  FileText,
+  KeyRound,
+  Car,
+  Archive,
+  Send,
+  Network,
+  Compass,
+} from 'lucide-react';
 import api from '../services/api';
+import NotificationSettingsModal from './NotificationSettingsModal';
+import BackupModal from './BackupModal';
 
 interface NavbarProps {
   currentTab: string;
@@ -11,6 +29,8 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, onLogout }) => {
   const [unackAlarms, setUnackAlarms] = useState<number>(0);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
 
   useEffect(() => {
     const fetchStats = () => {
@@ -29,13 +49,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
 
   const navItems = [
     { id: 'live', label: 'Live Grid', icon: Camera },
-    { id: 'playback', label: 'Playback', icon: Film },
+    { id: 'investigation', label: 'Investigation', icon: Film },
+    { id: 'floorplans', label: 'Floorplans', icon: Compass },
     { id: 'devices', label: 'Cameras', icon: HardDrive },
+    { id: 'anpr', label: 'ANPR & Fleet', icon: Car },
     { id: 'events', label: 'Events', icon: Bell, badge: unackAlarms },
     { id: 'evidence', label: 'Section 63 Evidence', icon: ShieldCheck },
+    { id: 'identity', label: 'SSO & Identity', icon: KeyRound },
+    { id: 'federation', label: 'Edge Mesh', icon: Network },
     { id: 'users', label: 'Staff', icon: Users },
     { id: 'audit', label: 'Audit Trail', icon: FileText },
-    { id: 'license', label: 'License', icon: KeyRound },
   ];
 
   return (
@@ -85,8 +108,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
           })}
         </nav>
 
-        {/* User profile & logout */}
+        {/* Action icons & User profile & logout */}
         <div className="flex items-center space-x-3 text-xs">
+          <button
+            onClick={() => setShowNotificationModal(true)}
+            title="Notification Channels & Webhooks"
+            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-amber transition"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => setShowBackupModal(true)}
+            title="Disaster Recovery & Appliance Backup"
+            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-teal transition"
+          >
+            <Archive className="w-4 h-4" />
+          </button>
+
+          <div className="h-4 w-px bg-graphite-700 mx-1" />
+
           <div className="text-right">
             <div className="font-medium text-slate-200">{user?.name || 'Operator'}</div>
             <div className="text-slate-400 font-mono text-[10px]">
@@ -102,6 +143,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
           </button>
         </div>
       </div>
+
+      <NotificationSettingsModal
+        isOpen={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+      />
+
+      <BackupModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+      />
     </header>
   );
 };

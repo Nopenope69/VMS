@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Film, ShieldCheck, Download } from 'lucide-react';
+import { Calendar, Film, ShieldCheck, Download, Crosshair } from 'lucide-react';
 import api from '../services/api';
 import TimelineScrubber, { TimelineSegment } from '../components/TimelineScrubber';
 import EvidenceExportModal from '../components/EvidenceExportModal';
+import SmartSearchModal from '../components/SmartSearchModal';
 
 export const Playback: React.FC = () => {
   const [cameras, setCameras] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export const Playback: React.FC = () => {
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
 
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSmartSearch, setShowSmartSearch] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
   // Load cameras
@@ -64,6 +66,15 @@ export const Playback: React.FC = () => {
     }
   };
 
+  const handleSeekToTimestamp = (isoTimestamp: string) => {
+    const targetDate = new Date(isoTimestamp);
+    const dateStr = targetDate.toISOString().slice(0, 10);
+    if (dateStr !== selectedDate) {
+      setSelectedDate(dateStr);
+    }
+    handleSeek(targetDate);
+  };
+
   const activeCamera = cameras.find((c) => c.id === selectedCameraId);
 
   return (
@@ -99,8 +110,16 @@ export const Playback: React.FC = () => {
           </div>
         </div>
 
-        {/* Section 63 Evidence Export Button */}
-        <div>
+        {/* Forensic Search & Section 63 Evidence Export Buttons */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowSmartSearch(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-graphite-800 border border-graphite-700 hover:border-cctv-amber text-slate-200 transition"
+          >
+            <Crosshair className="w-4 h-4 text-cctv-amber" />
+            <span>Smart Forensic & ANPR Search</span>
+          </button>
+
           <button
             onClick={() => setShowExportModal(true)}
             disabled={!selectedCameraId}
@@ -212,6 +231,15 @@ export const Playback: React.FC = () => {
           }}
         />
       )}
+
+      {/* Smart Spatial Forensics & ANPR Wildcard Modal */}
+      <SmartSearchModal
+        isOpen={showSmartSearch}
+        onClose={() => setShowSmartSearch(false)}
+        cameraId={selectedCameraId}
+        cameras={cameras}
+        onSeekToTimestamp={handleSeekToTimestamp}
+      />
     </div>
   );
 };

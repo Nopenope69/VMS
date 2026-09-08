@@ -13,6 +13,12 @@ import { OnvifDiscoveryService } from '../services/onvif/discovery';
 import mediaProvider from '../services/media/mediamtx.provider';
 import sceneChangeDetector from '../services/motion/sceneChangeDetector.service';
 import { detectVendorFromManufacturer } from '../services/onvif/quirks';
+import recordingScheduleService, { DEFAULT_WEEKLY_MATRIX } from '../services/schedule/recordingSchedule.service';
+import DetectionZoneService from '../services/motion/detectionZone.service';
+import ptzArbiterService from '../services/ptz/ptzArbiter.service';
+import guardTourService from '../services/ptz/guardTour.service';
+import streamWatchdogService from '../services/watchdog/streamWatchdog.service';
+import { ZoneType, TourState } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -295,7 +301,7 @@ router.post('/:id/media-token', authorize(Permission.CAMERA_VIEW), async (req: R
 });
 
 /**
- * PTZ ContinuousMove & Stop
+ * PTZ ContinuousMove & Stop (Gated by PTZ Arbiter & Concurrency Lock)
  */
 router.post('/:id/ptz', authorize(Permission.CAMERA_PTZ), async (req: Request, res: Response) => {
   const { action, x = 0, y = 0, zoom = 0, profileToken } = req.body;
@@ -323,18 +329,469 @@ router.post('/:id/ptz', authorize(Permission.CAMERA_PTZ), async (req: Request, r
     const token = profileToken || 'Profile_1';
 
     if (action === 'move') {
-      await onvifManager.ptzContinuousMove(onvifCreds, token, { x, y, zoom });
+      await ptzArbiterService.manualMove(
+        camera.id,
+        req.user!.id,
+        onvifCreds,
+        token,
+        { x, y, zoom }
+      );
       return res.json({ success: true, action: 'moved' });
     }
 
     if (action === 'stop') {
-      await onvifManager.ptzStop(onvifCreds, token);
+      await ptzArbiterService.manualStop(camera.id, req.user!.id, onvifCreds, token);
       return res.json({ success: true, action: 'stopped' });
     }
 
     return res.status(400).json({ error: 'Invalid PTZ action' });
   } catch (err: any) {
-    return res.status(500).json({ error: `PTZ error: ${err.message}` });
+    return res.status(err.statusCode || 500).json({ error: `PTZ error: ${err.message}` });
+  }
+});
+
+/**
+ * PTZ Presets: List
+ */
+router.get('/:id/ptz/presets', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const presets = await prisma.ptzPreset.findMany({
+      where: { cameraId: camera.id },
+      orderBy: { name: 'asc' },
+    });
+
+    return res.json({ presets });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * PTZ Presets: Save Current Position as Preset
+ */
+router.post('/:id/ptz/presets', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Preset name is required' });
+
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    let creds = { username: '', password: '' };
+    if (camera.encryptedAuth) {
+      creds = JSON.parse(decryptCredential(camera.encryptedAuth));
+    }
+    const onvifCreds = {
+      hostname: camera.ipAddress,
+      port: camera.onvifPort,
+      username: creds.username,
+      password: creds.password,
+    };
+
+    let presetToken = `preset_${Date.now()}`;
+    try {
+      presetToken = await onvifManager.setPreset(onvifCreds, 'Profile_1', name, presetToken);
+    } catch (err: any) {
+      console.warn(`[CameraRoutes] Physical ONVIF SetPreset warning (using synthetic token):`, err.message);
+    }
+
+    const preset = await prisma.ptzPreset.create({
+      data: {
+        tenantId: req.user!.tenantId,
+        cameraId: camera.id,
+        name,
+        presetToken,
+      },
+    });
+
+    return res.status(201).json({ preset });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * PTZ Presets: Goto Preset
+ */
+router.post('/:id/ptz/presets/:presetId/goto', authorize(Permission.CAMERA_PTZ), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const preset = await prisma.ptzPreset.findUnique({ where: { id: req.params.presetId } });
+    if (!preset || preset.cameraId !== camera.id) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    let creds = { username: '', password: '' };
+    if (camera.encryptedAuth) {
+      creds = JSON.parse(decryptCredential(camera.encryptedAuth));
+    }
+    const onvifCreds = {
+      hostname: camera.ipAddress,
+      port: camera.onvifPort,
+      username: creds.username,
+      password: creds.password,
+    };
+
+    await ptzArbiterService.gotoPreset(
+      camera.id,
+      req.user!.id,
+      onvifCreds,
+      'Profile_1',
+      preset.presetToken
+    );
+
+    return res.json({ success: true, message: `Navigated to preset ${preset.name}` });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * PTZ Presets: Delete
+ */
+router.delete('/:id/ptz/presets/:presetId', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const preset = await prisma.ptzPreset.findUnique({ where: { id: req.params.presetId } });
+    if (!preset || preset.cameraId !== camera.id) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    await prisma.ptzPreset.delete({ where: { id: req.params.presetId } });
+    return res.json({ success: true, message: 'Preset deleted' });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * PTZ Tours: List & Create
+ */
+router.get('/:id/ptz/tours', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const tours = await prisma.ptzTour.findMany({
+      where: { cameraId: camera.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json({ tours });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/ptz/tours', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  const { name, steps } = req.body;
+  if (!name || !Array.isArray(steps) || steps.length === 0) {
+    return res.status(400).json({ error: 'Tour name and non-empty steps array required' });
+  }
+
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const tour = await prisma.ptzTour.create({
+      data: {
+        tenantId: req.user!.tenantId,
+        cameraId: camera.id,
+        name,
+        stepsJson: steps,
+      },
+    });
+
+    return res.status(201).json({ tour });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/ptz/tours/:tourId/start', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    let creds = { username: '', password: '' };
+    if (camera.encryptedAuth) {
+      creds = JSON.parse(decryptCredential(camera.encryptedAuth));
+    }
+    const onvifCreds = {
+      hostname: camera.ipAddress,
+      port: camera.onvifPort,
+      username: creds.username,
+      password: creds.password,
+    };
+
+    await guardTourService.startTour(req.params.tourId, onvifCreds);
+    return res.json({ success: true, message: 'Guard tour started' });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/ptz/tours/:tourId/stop', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  try {
+    await guardTourService.stopTour(req.params.tourId);
+    return res.json({ success: true, message: 'Guard tour stopped' });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id/ptz/tours/:tourId', authorize(Permission.PTZ_MANAGE), async (req: Request, res: Response) => {
+  try {
+    await guardTourService.stopTour(req.params.tourId);
+    await prisma.ptzTour.delete({ where: { id: req.params.tourId } });
+    return res.json({ success: true, message: 'Tour deleted' });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * Recording Schedule: Get & Put
+ */
+router.get('/:id/schedule', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      include: { recordingSchedule: true, site: true },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const schedule = camera.recordingSchedule || {
+      weeklyMatrixJson: DEFAULT_WEEKLY_MATRIX,
+      lastAppliedMode: camera.recordingMode,
+    };
+
+    return res.json({
+      schedule,
+      timezone: camera.site?.timezone || 'Asia/Kolkata',
+      recordingMode: camera.recordingMode,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.put('/:id/schedule', authorize(Permission.SCHEDULE_MANAGE), async (req: Request, res: Response) => {
+  const { weeklyMatrix, recordingMode } = req.body;
+
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      include: { recordingSchedule: true },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    if (recordingMode) {
+      await prisma.camera.update({
+        where: { id: camera.id },
+        data: { recordingMode },
+      });
+    }
+
+    let schedule = camera.recordingSchedule;
+    if (schedule) {
+      schedule = await prisma.recordingSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          weeklyMatrixJson: weeklyMatrix,
+          version: { increment: 1 },
+        },
+      });
+    } else {
+      schedule = await prisma.recordingSchedule.create({
+        data: {
+          tenantId: req.user!.tenantId,
+          cameraId: camera.id,
+          weeklyMatrixJson: weeklyMatrix || DEFAULT_WEEKLY_MATRIX,
+          version: 1,
+        },
+      });
+    }
+
+    // Trigger immediate evaluation if camera is in SCHEDULED mode
+    await recordingScheduleService.evaluateCamera(camera.id);
+
+    return res.json({ success: true, schedule });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * Detection Zones: List, Create, Update, Delete & Test
+ */
+router.get('/:id/zones', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const zones = await prisma.detectionZone.findMany({
+      where: { cameraId: camera.id },
+      orderBy: { priority: 'desc' },
+    });
+
+    return res.json({ zones });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/zones', authorize(Permission.ZONE_MANAGE), async (req: Request, res: Response) => {
+  const { name, type = ZoneType.INCLUSION, priority = 0, polygonCoordinates, enabled = true } = req.body;
+
+  if (!name || !Array.isArray(polygonCoordinates) || polygonCoordinates.length < 3) {
+    return res.status(400).json({ error: 'Zone name and polygon with at least 3 vertices required' });
+  }
+
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const zone = await prisma.detectionZone.create({
+      data: {
+        tenantId: req.user!.tenantId,
+        cameraId: camera.id,
+        name,
+        type,
+        priority: Number(priority),
+        polygonCoordinates,
+        enabled: Boolean(enabled),
+      },
+    });
+
+    return res.status(201).json({ zone });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.put('/:id/zones/:zoneId', authorize(Permission.ZONE_MANAGE), async (req: Request, res: Response) => {
+  const { name, type, priority, polygonCoordinates, enabled } = req.body;
+
+  try {
+    const zone = await prisma.detectionZone.findUnique({ where: { id: req.params.zoneId } });
+    if (!zone || zone.cameraId !== req.params.id) {
+      return res.status(404).json({ error: 'Zone not found' });
+    }
+
+    const updated = await prisma.detectionZone.update({
+      where: { id: req.params.zoneId },
+      data: {
+        ...(name ? { name } : {}),
+        ...(type ? { type } : {}),
+        ...(priority !== undefined ? { priority: Number(priority) } : {}),
+        ...(polygonCoordinates ? { polygonCoordinates } : {}),
+        ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
+        version: { increment: 1 },
+      },
+    });
+
+    return res.json({ zone: updated });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id/zones/:zoneId', authorize(Permission.ZONE_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const zone = await prisma.detectionZone.findUnique({ where: { id: req.params.zoneId } });
+    if (!zone || zone.cameraId !== req.params.id) {
+      return res.status(404).json({ error: 'Zone not found' });
+    }
+
+    await prisma.detectionZone.delete({ where: { id: req.params.zoneId } });
+    return res.json({ success: true, message: 'Detection zone deleted' });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/zones/test', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  const { point } = req.body; // { x, y }
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+    return res.status(400).json({ error: 'Valid point { x, y } required' });
+  }
+
+  try {
+    const zones = await prisma.detectionZone.findMany({
+      where: { cameraId: req.params.id, enabled: true },
+    });
+
+    const evaluation = DetectionZoneService.evaluateDetection(point, zones);
+    return res.json({ evaluation });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * Stream Diagnostics: Get snapshot & Live Probe
+ */
+router.get('/:id/diagnostic', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+      include: { streamBaseline: true },
+    });
+    if (!camera) return res.status(404).json({ error: 'Camera not found' });
+
+    const latest = await prisma.streamDiagnostic.findFirst({
+      where: { cameraId: camera.id },
+      orderBy: { checkedAt: 'desc' },
+    });
+
+    return res.json({
+      diagnostic: latest || {
+        fps: 25.0,
+        bitrateKbps: 2500,
+        resolution: '1920x1080',
+        videoCodec: 'h264',
+        isDegraded: false,
+        deviationScore: 0.0,
+      },
+      baseline: camera.streamBaseline,
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/diagnostic/probe', authorize(Permission.CAMERA_CONFIG), async (req: Request, res: Response) => {
+  try {
+    const evaluation = await streamWatchdogService.evaluateStream(req.params.id);
+    return res.json({ evaluation });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

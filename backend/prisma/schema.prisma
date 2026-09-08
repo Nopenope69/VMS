@@ -77,15 +77,166 @@ enum EventType {
   CAMERA_ONLINE
   CAMERA_OFFLINE
   RECORDING_GAP
+  RECORDING_FAILURE
   CORRUPTED_SEGMENT
   STORAGE_WARNING
+  STREAM_DEGRADED
+  PTZ_ERROR
   TAMPER
+  PERSON_DETECTED
+  VEHICLE_DETECTED
 }
 
 enum EventSeverity {
   INFO
   WARNING
   CRITICAL
+}
+
+enum ZoneType {
+  INCLUSION
+  EXCLUSION
+}
+
+enum TourState {
+  STOPPED
+  RUNNING
+  PAUSED
+  MANUAL_OVERRIDE
+}
+
+enum GridLayoutType {
+  GRID_1X1
+  GRID_2X2
+  GRID_3X3
+  GRID_1_PLUS_5
+  GRID_4X4
+}
+
+enum LayoutVisibility {
+  PRIVATE
+  TENANT_SHARED
+}
+
+enum AlarmState {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum VehicleCategory {
+  TWO_WHEELER
+  FOUR_WHEELER
+  HEAVY_COMMERCIAL
+  EMERGENCY
+  UNKNOWN
+}
+
+enum WatchlistCategory {
+  WHITELIST
+  BLACKLIST
+  VIP
+  SUSPECT
+}
+
+enum NotificationChannelType {
+  WEBHOOK
+  SLACK
+  EMAIL
+}
+
+enum NotificationJobStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  DEAD_LETTER
+}
+
+enum NodeState {
+  PAIRING
+  ONLINE
+  OFFLINE
+  SYNCING
+  DEGRADED
+}
+
+enum RuleTriggerType {
+  MOTION_ZONE
+  ANPR_WATCHLIST
+  PERSON_DETECTED
+  VEHICLE_DETECTED
+  TRIPWIRE_CROSS
+  LOITERING_DWELL
+  CAMERA_OFFLINE
+  SCENE_CHANGE
+  DIGITAL_INPUT_STATE
+}
+
+enum RuleActionType {
+  TRIGGER_ALARM
+  PTZ_PRESET_GOTO
+  DISPATCH_NOTIFICATION
+  START_HIGH_RES_RECORDING
+  FIRE_DO_RELAY
+  BOOKMARK_SEGMENT
+}
+
+enum TripwireDirection {
+  A_TO_B
+  B_TO_A
+  BIDIRECTIONAL
+}
+
+enum RelayPinDirection {
+  INPUT
+  OUTPUT
+}
+
+enum RelayCommandState {
+  COMMAND_SENT
+  COMMAND_ACK
+  STATE_CONFIRMED
+  COMMAND_FAILED
+}
+
+enum ArchiveJobStatus {
+  QUEUED
+  UPLOADING
+  COMPLETED
+  FAILED
+}
+
+enum IdentityProviderType {
+  OIDC
+}
+
+enum SessionState {
+  ACTIVE
+  LOCKED
+  REVOKED
+  EXPIRED
+}
+
+enum PlaybackSessionState {
+  STOPPED
+  PLAYING
+  PAUSED
+  SEEKING
+  BUFFERING
+}
+
+enum RedactionMode {
+  FACE
+  LICENSE_PLATE
+  BYSTANDER
+  STATIC_MASK
+}
+
+enum RedactionJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model Tenant {
@@ -95,13 +246,38 @@ model Tenant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users       User[]
-  sites       Site[]
-  cameras     Camera[]
-  auditEvents AuditEvent[]
-  exports     EvidenceExport[]
-  licenses    License[]
-  eventRules  EventRule[]
+  users                 User[]
+  sites                 Site[]
+  cameras               Camera[]
+  auditEvents           AuditEvent[]
+  exports               EvidenceExport[]
+  licenses              License[]
+  eventRules            EventRule[]
+  layouts               Layout[]
+  alarms                Alarm[]
+  retentionPolicies     RetentionPolicy[]
+  detectionEvents       DetectionEvent[]
+  vehicleObservations   VehicleObservation[]
+  vehicleWatchlists     VehicleWatchlist[]
+  notificationChannels  NotificationChannel[]
+  notificationJobs      NotificationJob[]
+  notificationLogs      NotificationLog[]
+  aiRuntimeDiagnostics  AiRuntimeDiagnostic[]
+  federatedNodes        FederatedNode[]
+  automationRules       AutomationRule[]
+  spatialAnalyticsRules SpatialAnalyticsRule[]
+  digitalIoPins         DigitalIoPin[]
+  objectStorageConfig   ObjectStorageConfig?
+  archiveJobs           ArchiveJob[]
+  identityProviders     IdentityProvider[]
+  userSessions          UserSession[]
+  recordingSegments     RecordingSegment[]
+  playbackSessions      PlaybackSession[]
+  evidenceManifests     EvidenceManifest[]
+  privacyPolicies       PrivacyPolicy[]
+  redactionJobs         RedactionJob[]
+  floorplans            Floorplan[]
+  chainOfCustodyLogs    ChainOfCustodyLog[]
 }
 
 model License {
@@ -143,8 +319,14 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  auditEvents  AuditEvent[]
-  exports      EvidenceExport[]
+  auditEvents       AuditEvent[]
+  exports           EvidenceExport[]   @relation("RequestedExports")
+  approvedExports   EvidenceExport[]   @relation("ApprovedExports")
+  layouts           Layout[]
+  userSessions      UserSession[]
+  playbackSessions  PlaybackSession[]
+  evidenceManifests EvidenceManifest[]
+  redactionJobs     RedactionJob[]
 }
 
 model Site {
@@ -158,6 +340,7 @@ model Site {
   updatedAt   DateTime @updatedAt
 
   cameras     Camera[]
+  floorplans  Floorplan[]
 
   @@index([tenantId])
 }
@@ -207,33 +390,53 @@ model Camera {
   segments              RecordingSegment[]
   events                Event[]
   exports               EvidenceExport[]
+  recordingSchedule     RecordingSchedule?
+  detectionZones        DetectionZone[]
+  ptzPresets            PtzPreset[]
+  ptzTours              PtzTour[]
+  ptzLock               PtzLock?
+  streamBaseline        StreamProfileBaseline?
+  diagnostics           StreamDiagnostic[]
+  alarms                Alarm[]
+  detectionEvents       DetectionEvent[]
+  vehicleObservations   VehicleObservation[]
+  spatialAnalyticsRules   SpatialAnalyticsRule[]
+  spatialPlacement        CameraSpatialPlacement?
 
   @@index([tenantId, siteId])
   @@index([streamPath])
 }
 
 model RecordingSegment {
-  id           String        @id @default(uuid())
-  tenantId     String?
-  cameraId     String
-  camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(uuid())
+  tenantId            String?
+  tenant              Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId            String
+  camera              Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   
-  filePath     String        @unique
-  startTime    DateTime
-  endTime      DateTime
-  durationMs   Int
-  sizeBytes    BigInt
-  sha256Hash   String?       // Computed upon segment finalization
+  filePath            String        @unique
+  startTime           DateTime
+  endTime             DateTime
+  durationMs          Int
+  sizeBytes           BigInt
+  sha256Hash          String?       // Computed upon segment finalization
   
-  codec        String?       @default("h264")
-  width        Int?
-  height       Int?
-  fps          Float?
-  status       SegmentStatus @default(FINALIZED)
+  codec               String?       @default("h264")
+  width               Int?
+  height              Int?
+  fps                 Float?
+  status              SegmentStatus @default(FINALIZED)
 
-  createdAt    DateTime      @default(now())
+  startPts            BigInt        @default(0)
+  endPts              BigInt        @default(0)
+  timebaseNumerator   Int           @default(1)
+  timebaseDenominator Int           @default(90000)
+  keyframeIndexJson   Json?
+  storageLocation     String        @default("LOCAL")
 
-  evidencePins EvidencePin[]
+  createdAt           DateTime      @default(now())
+
+  evidencePins        EvidencePin[]
 
   @@index([cameraId, startTime, endTime])
   @@index([status])
@@ -250,6 +453,7 @@ model EvidencePin {
   pinnedAt    DateTime         @default(now())
   expiresAt   DateTime
   releasedAt  DateTime?
+  pinType     String           @default("TEMPORARY_EXPORT")
 
   @@index([segmentId, expiresAt, releasedAt])
   @@index([tenantId, expiresAt])
@@ -285,6 +489,7 @@ model EventRule {
   updatedAt      DateTime    @updatedAt
 
   events         Event[]
+  alarms         Alarm[]
 
   @@index([tenantId, triggerType])
 }
@@ -314,6 +519,8 @@ model Event {
   acknowledgedAt  DateTime?
   acknowledgedBy  String?
 
+  alarms          Alarm[]
+
   @@index([cameraId, startTime])
   @@index([type, severity, acknowledged])
 }
@@ -325,7 +532,7 @@ model EvidenceExport {
   cameraId       String
   camera         Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   requestedById  String
-  requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedBy    User         @relation("RequestedExports", fields: [requestedById], references: [id], onDelete: Restrict)
   
   startTime      DateTime
   endTime        DateTime
@@ -349,6 +556,17 @@ model EvidenceExport {
   errorMessage   String?
   createdAt      DateTime     @default(now())
   completedAt    DateTime?
+
+  // Bucket 6 Evidence Manifest & Privacy Redaction Linkages
+  manifestId          String?
+  manifest            EvidenceManifest? @relation(fields: [manifestId], references: [id], onDelete: SetNull)
+  parentManifestId    String?
+  outputObjectKey     String?
+  outputSha256        String?
+  format              String?          @default("MP4")
+  redactionPolicyId   String?
+  approvedByUserId    String?
+  approvedByUser      User?            @relation("ApprovedExports", fields: [approvedByUserId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, cameraId])
   @@index([status])
@@ -378,3 +596,693 @@ model AuditEvent {
   @@index([tenantId, sequenceNumber])
   @@index([tenantId, action, timestampUtc])
 }
+
+model RetentionPolicy {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId        String?  @unique // Null for site/tenant-wide default
+  continuousDays  Int      @default(30)
+  motionDays      Int      @default(90)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model RecordingSchedule {
+  id                String         @id @default(uuid())
+  tenantId          String
+  cameraId          String         @unique
+  camera            Camera         @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  version           Int            @default(1)
+  weeklyMatrixJson  Json           // 7 days x 24 hours: { MONDAY: ["CONTINUOUS", ...], ... }
+  lastAppliedMode   RecordingMode?
+  lastAppliedAt     DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([tenantId, cameraId])
+}
+
+model DetectionZone {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  cameraId           String
+  camera             Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  name               String
+  type               ZoneType @default(INCLUSION)
+  priority           Int      @default(0) // Higher priority evaluated first
+  enabled            Boolean  @default(true)
+  polygonCoordinates Json     // Array<{ x: number, y: number }> normalized 0..1
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([tenantId, cameraId])
+}
+
+model PtzPreset {
+  id          String   @id @default(uuid())
+  tenantId    String
+  cameraId    String
+  camera      Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  name        String
+  presetToken String
+  pan         Float?
+  tilt        Float?
+  zoom        Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([cameraId, name])
+  @@unique([cameraId, presetToken])
+  @@index([tenantId, cameraId])
+}
+
+model PtzTour {
+  id          String    @id @default(uuid())
+  tenantId    String
+  cameraId    String
+  camera      Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  name        String
+  state       TourState @default(STOPPED)
+  stepsJson   Json      // [{ presetId, presetToken, dwellSeconds, speed }]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, cameraId])
+}
+
+model PtzLock {
+  id         String   @id @default(uuid())
+  cameraId   String   @unique
+  camera     Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  userId     String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([cameraId, expiresAt])
+}
+
+model Layout {
+  id          String           @id @default(uuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name        String
+  gridType    GridLayoutType   @default(GRID_2X2)
+  visibility  LayoutVisibility @default(PRIVATE)
+  isDefault   Boolean          @default(false)
+  slotsJson   Json             // [{ slotIndex: number, cameraId: string | null }]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([tenantId, userId])
+}
+
+model StreamProfileBaseline {
+  id                     String   @id @default(uuid())
+  cameraId               String   @unique
+  camera                 Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  expectedFps            Float    @default(25.0)
+  expectedBitrateKbpsMin Int      @default(1500)
+  expectedBitrateKbpsMax Int      @default(6000)
+  expectedResolution     String   @default("1920x1080")
+  expectedGopSeconds     Float    @default(2.0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model StreamDiagnostic {
+  id             String   @id @default(uuid())
+  tenantId       String
+  cameraId       String
+  camera         Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  fps            Float
+  bitrateKbps    Int
+  resolution     String
+  videoCodec     String
+  audioCodec     String?
+  gopInterval    Float?
+  deviationScore Float    @default(0.0)
+  isDegraded     Boolean  @default(false)
+  degradedReason String?
+  checkedAt      DateTime @default(now())
+
+  @@index([cameraId, checkedAt])
+  @@index([tenantId, isDegraded])
+}
+
+model Alarm {
+  id               String        @id @default(uuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId         String?
+  camera           Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  eventId          String?
+  event            Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  ruleId           String?
+  rule             EventRule?    @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  
+  title            String
+  description      String?
+  severity         EventSeverity @default(WARNING)
+  state            AlarmState    @default(ACTIVE)
+  metadataJson     Json?
+  
+  triggeredAt      DateTime      @default(now())
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  resolvedAt       DateTime?
+  resolvedById     String?
+  resolutionNotes  String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  notificationJobs NotificationJob[]
+  notificationLogs NotificationLog[]
+
+  @@index([tenantId, state, severity])
+  @@index([cameraId, triggeredAt])
+}
+
+model DetectionEvent {
+  id             String        @id @default(uuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId       String
+  camera         Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  trackId        String?
+  type           EventType     // MOTION, PERSON_DETECTED, VEHICLE_DETECTED, etc.
+  confidence     Float         @default(1.0)
+  
+  // Spatial coordinates normalized [0..1]
+  boundingBox    Json?         // { x: number, y: number, width: number, height: number }
+  centroid       Json?         // { x: number, y: number }
+  attributesJson Json?         // Arbitrary classifier attributes (e.g. color, sub-category)
+  snapshotPath   String?
+  timestamp      DateTime      @default(now())
+
+  @@index([tenantId, type, timestamp])
+  @@index([cameraId, timestamp])
+}
+
+model VehicleObservation {
+  id                 String            @id @default(uuid())
+  tenantId           String
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId           String
+  camera             Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  trackId            String?
+  
+  plateNumber        String            // Raw or cleaned plate
+  normalizedPlate    String            // Uppercase, no spaces/hyphens (e.g. DL01AB1234)
+  stateCode          String?           // e.g. DL, MH, KA, BH
+  vehicleCategory    VehicleCategory   @default(UNKNOWN)
+  
+  firstSeenAt        DateTime          @default(now())
+  lastSeenAt         DateTime          @default(now())
+  observationCount   Int               @default(1)
+  bestConfidence     Float             @default(0.0)
+  bestSnapshotPath   String?
+  
+  matchedWatchlistId String?
+  matchedWatchlist   VehicleWatchlist? @relation(fields: [matchedWatchlistId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([tenantId, normalizedPlate])
+  @@index([cameraId, lastSeenAt])
+}
+
+model VehicleWatchlist {
+  id              String            @id @default(uuid())
+  tenantId        String
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plateNumber     String
+  normalizedPlate String            // Uppercase, alphanumeric only
+  category        WatchlistCategory @default(BLACKLIST)
+  ownerName       String?
+  notes           String?
+  alertOnMatch    Boolean           @default(true)
+  severity        EventSeverity     @default(CRITICAL)
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  observations    VehicleObservation[]
+
+  @@unique([tenantId, normalizedPlate])
+  @@index([tenantId, category, active])
+}
+
+model NotificationChannel {
+  id          String                  @id @default(uuid())
+  tenantId    String
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  type        NotificationChannelType @default(WEBHOOK)
+  targetUrl   String                  // Webhook URL or Email address
+  secretToken String?                 // Optional HMAC secret for webhooks
+  configJson  Json?                   // Extra channel configs (headers, SMTP options)
+  minSeverity EventSeverity           @default(WARNING)
+  enabled     Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  jobs        NotificationJob[]
+  logs        NotificationLog[]
+
+  @@index([tenantId, enabled])
+}
+
+model NotificationJob {
+  id             String                @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelId      String
+  channel        NotificationChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  alarmId        String
+  alarm          Alarm                 @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  
+  idempotencyKey String                @unique // SHA256(alarmId + channelId + state)
+  status         NotificationJobStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  maxAttempts    Int                   @default(3)
+  nextRetryAt    DateTime?
+  error          String?
+  payloadJson    Json
+  createdAt      DateTime              @default(now())
+  processedAt    DateTime?
+
+  @@index([tenantId, status, nextRetryAt])
+}
+
+model NotificationLog {
+  id           String              @id @default(uuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelId    String
+  channel      NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  alarmId      String
+  alarm        Alarm               @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  status       String              // DELIVERED, FAILED
+  responseCode Int?
+  latencyMs    Int?
+  error        String?
+  dispatchedAt DateTime            @default(now())
+
+  @@index([tenantId, dispatchedAt])
+  @@index([channelId, status])
+}
+
+model AiRuntimeDiagnostic {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inferenceFps        Float    @default(0.0)
+  processingLatencyMs Float    @default(0.0)
+  queueDepth          Int      @default(0)
+  droppedFrames       Int      @default(0)
+  modelLoadState      String   @default("READY")
+  memoryMb            Float    @default(0.0)
+  checkedAt           DateTime @default(now())
+
+  @@index([tenantId, checkedAt])
+}
+
+// -----------------------------------------------------------------------------
+// BUCKET 5: ENTERPRISE EDGE FEDERATION & ADVANCED AUTOMATION
+// -----------------------------------------------------------------------------
+
+model FederatedNode {
+  id                     String             @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nodeUuid               String             @unique
+  name                   String
+  publicKeyEd25519       String
+  certificateFingerprint String
+  softwareVersion        String
+  protocolVersion        Int                @default(1)
+  schemaVersion          String
+  capabilitiesJson       Json
+  state                  NodeState          @default(PAIRING)
+  lastSeenAt             DateTime?
+  syncCursorEvent        BigInt             @default(0)
+  syncCursorAudit        BigInt             @default(0)
+  syncCursorAlarm        BigInt             @default(0)
+  configVersionApplied   Int                @default(0)
+  configRecords          ConfigSyncRecord[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([tenantId, state])
+}
+
+model ConfigSyncRecord {
+  id             String        @id @default(uuid())
+  tenantId       String
+  nodeId         String
+  node           FederatedNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  desiredVersion Int
+  appliedVersion Int           @default(0)
+  status         String        // PENDING, APPLIED, REJECTED
+  payloadJson    Json
+  errorMessage   String?
+  syncedAt       DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([nodeId, status])
+}
+
+model AutomationRule {
+  id                 String                @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  enabled            Boolean               @default(true)
+  priority           Int                   @default(1)
+  cooldownSeconds    Int                   @default(30)
+  lastTriggeredAt    DateTime?
+  triggerType        RuleTriggerType
+  triggerConfigJson  Json
+  conditionsJson     Json
+  actionsJson        Json
+  executions         RuleExecutionRecord[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([tenantId, enabled, triggerType])
+}
+
+model RuleExecutionRecord {
+  id               String                 @id @default(uuid()) // ruleExecutionId
+  tenantId         String
+  ruleId           String
+  rule             AutomationRule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  triggerEventId   String?
+  overallStatus    String                 // SUCCESS, PARTIAL, FAILED
+  actionExecutions ActionExecutionRecord[]
+  startedAt        DateTime               @default(now())
+  completedAt      DateTime?
+
+  @@index([tenantId, startedAt])
+  @@index([ruleId, overallStatus])
+}
+
+model ActionExecutionRecord {
+  id              String              @id @default(uuid())
+  ruleExecutionId String
+  ruleExecution   RuleExecutionRecord @relation(fields: [ruleExecutionId], references: [id], onDelete: Cascade)
+  actionId        String
+  actionType      RuleActionType
+  status          String              // PENDING, SUCCESS, FAILED, TIMEOUT
+  durationMs      Int                 @default(0)
+  error           String?
+  executedAt      DateTime            @default(now())
+
+  @@index([ruleExecutionId, status])
+}
+
+model SpatialAnalyticsRule {
+  id                     String            @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId               String
+  camera                 Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  name                   String
+  type                   String            // TRIPWIRE, LOITERING
+  enabled                Boolean           @default(true)
+  direction              TripwireDirection @default(BIDIRECTIONAL)
+  lineCoordinatesJson    Json?             // [{x, y}, {x, y}] for Tripwire
+  polygonCoordinatesJson Json?             // [{x, y}, ...] for Loitering
+  dwellThresholdSeconds  Int?              @default(30) // Continuous dwell threshold
+  cooldownSeconds        Int               @default(10)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  @@index([cameraId, type, enabled])
+}
+
+model DigitalIoPin {
+  id              String            @id @default(uuid())
+  tenantId        String
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pinNumber       Int
+  direction       RelayPinDirection
+  name            String
+  state           String            @default("LOW") // HIGH, LOW, PULSED
+  activeLow       Boolean           @default(false)
+  pulseDurationMs Int               @default(3000)
+  commandLogs     RelayCommandLog[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([tenantId, pinNumber])
+}
+
+model RelayCommandLog {
+  id             String            @id @default(uuid())
+  pinId          String
+  pin            DigitalIoPin      @relation(fields: [pinId], references: [id], onDelete: Cascade)
+  command        String            // SET_HIGH, SET_LOW, PULSE
+  targetState    String            // HIGH, LOW
+  lifecycleState RelayCommandState @default(COMMAND_SENT)
+  issuedBy       String?
+  sentAt         DateTime          @default(now())
+  acknowledgedAt DateTime?
+  confirmedAt    DateTime?
+  failedAt       DateTime?
+  errorMessage   String?
+
+  @@index([pinId, lifecycleState])
+}
+
+model ObjectStorageConfig {
+  id                 String   @id @default(uuid())
+  tenantId           String   @unique
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider           String   @default("S3_COMPATIBLE")
+  endpoint           String?
+  bucket             String
+  region             String   @default("us-east-1")
+  accessKeyEncrypted String
+  secretKeyEncrypted String
+  offPeakStartUtc    String   @default("01:00")
+  offPeakEndUtc      String   @default("05:00")
+  bandwidthLimitKbps Int      @default(2048)
+  enabled            Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ArchiveJob {
+  id             String           @id @default(uuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  segmentPath    String
+  sha256Checksum String
+  sizeBytes      BigInt
+  objectKey      String
+  priority       Boolean          @default(false)
+  status         ArchiveJobStatus @default(QUEUED)
+  attempts       Int              @default(0)
+  maxAttempts    Int              @default(3)
+  error          String?
+  queuedAt       DateTime         @default(now())
+  uploadedAt     DateTime?
+
+  @@unique([tenantId, segmentPath])
+  @@index([tenantId, status, priority])
+}
+
+model IdentityProvider {
+  id                   String               @id @default(uuid())
+  tenantId             String
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                 String
+  type                 IdentityProviderType @default(OIDC)
+  issuerUrl            String
+  clientId             String
+  clientSecretEncrypted String
+  scopes               String[]             @default(["openid", "profile", "email"])
+  enabled              Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model UserSession {
+  id             String       @id @default(uuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state          SessionState @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  lastActivityAt DateTime     @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  @@index([tenantId, userId, state])
+}
+
+model PlaybackSession {
+  id            String               @id @default(uuid())
+  tenantId      String
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cameraIdsJson Json
+  masterTimeUtc DateTime
+  playbackRate  Float                @default(1.0)
+  state         PlaybackSessionState @default(STOPPED)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([tenantId, userId])
+}
+
+model EvidenceManifest {
+  id                  String           @id @default(uuid())
+  tenantId            String
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdByUserId     String
+  createdByUser       User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt           DateTime         @default(now())
+  startUtc            DateTime
+  endUtc              DateTime
+  cameraIdsJson       Json
+  masterEvidenceHash    String
+  evidenceMerkleRoot    String?
+  applianceSignature    String?
+  canonicalManifestJson Json?
+  manifestVersion       Int              @default(1)
+  hashAlgorithm         String           @default("SHA-256")
+  sourceMetadataJson    Json
+  segmentManifestJson   Json
+  certificateDataJson   Json?
+  chainOfCustodyJson    Json?
+  legalHold             Boolean          @default(false)
+
+  exports             EvidenceExport[]
+  redactionJobs       RedactionJob[]
+
+  @@index([tenantId, createdAt])
+}
+
+model PrivacyPolicy {
+  id                  String         @id @default(uuid())
+  tenantId            String
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  enabled             Boolean        @default(true)
+  faceRedaction       Boolean        @default(false)
+  plateRedaction      Boolean        @default(false)
+  bystanderRedaction  Boolean        @default(false)
+  restrictedZonesJson Json?
+  defaultExportMode   String         @default("STREAM_COPY")
+  approvalRequired    Boolean        @default(false)
+  retentionDays       Int            @default(30)
+  version             Int            @default(1)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  redactionJobs       RedactionJob[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model RedactionJob {
+  id                  String             @id @default(uuid())
+  tenantId            String
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceManifestId    String
+  sourceManifest      EvidenceManifest   @relation(fields: [sourceManifestId], references: [id], onDelete: Cascade)
+  privacyPolicyId     String?
+  privacyPolicy       PrivacyPolicy?     @relation(fields: [privacyPolicyId], references: [id], onDelete: SetNull)
+  status              RedactionJobStatus @default(QUEUED)
+  redactionMode       RedactionMode      @default(FACE)
+  modelVersion        String             @default("1.0.0")
+  maskMetadataJson    Json?
+  outputObjectKey     String?
+  outputSha256        String?
+  createdByUserId     String
+  createdByUser       User               @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt           DateTime           @default(now())
+  completedAt         DateTime?
+  error               String?
+
+  @@index([tenantId, status])
+}
+
+model Floorplan {
+  id                  String                   @id @default(uuid())
+  tenantId            String
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  siteId              String?
+  site                Site?                    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  name                String
+  imageObjectKey      String
+  geoAnchorLat        Float?
+  geoAnchorLng        Float?
+  rotationDegrees     Float                    @default(0.0)
+  scalePixelsPerMeter Float                    @default(20.0)
+  coordinateSystem    String                   @default("LOCAL_PIXEL")
+  floorLevel          Int                      @default(1)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  cameraPlacements    CameraSpatialPlacement[]
+
+  @@index([tenantId, siteId])
+}
+
+model CameraSpatialPlacement {
+  id                   String    @id @default(uuid())
+  cameraId             String    @unique
+  camera               Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  floorplanId          String
+  floorplan            Floorplan @relation(fields: [floorplanId], references: [id], onDelete: Cascade)
+  x                    Float
+  y                    Float
+  mountHeightMeters    Float     @default(3.0)
+  headingDegrees       Float     @default(0.0)
+  pitchDegrees         Float     @default(30.0)
+  fovHorizontalDegrees Float     @default(85.0)
+  fovVerticalDegrees   Float     @default(50.0)
+  zoom                 Float     @default(1.0)
+  updatedAt            DateTime  @updatedAt
+
+  @@index([floorplanId])
+}
+
+model ChainOfCustodyLog {
+  id           String   @id @default(uuid())
+  eventId      String   @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evidenceId   String
+  actorUserId  String
+  timestampUtc DateTime @default(now())
+  action            String
+  sourceHash        String
+  resultHash        String?
+  previousEventHash String?
+  eventHash         String?
+  sequenceNumber    Int?
+  metadata          Json?
+
+  @@index([tenantId, evidenceId])
+  @@index([tenantId, evidenceId, sequenceNumber])
+}
+
+

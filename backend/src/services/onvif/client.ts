@@ -196,6 +196,95 @@ export class OnvifClientManager {
       );
     });
   }
+
+  async getPresets(
+    creds: OnvifCredentials,
+    profileToken: string
+  ): Promise<Array<{ token: string; name: string }>> {
+    const cam = await this.getCam(creds);
+
+    return new Promise((resolve, reject) => {
+      (cam as any).getPresets({ profileToken }, (err: any, presetsObj: any) => {
+        if (err) {
+          return reject(new Error(`ONVIF GetPresets failed: ${err.message}`));
+        }
+        const list: Array<{ token: string; name: string }> = [];
+        if (presetsObj && typeof presetsObj === 'object') {
+          for (const key of Object.keys(presetsObj)) {
+            const p = presetsObj[key];
+            list.push({
+              token: p.$?.token || key,
+              name: p.name || key,
+            });
+          }
+        }
+        resolve(list);
+      });
+    });
+  }
+
+  async setPreset(
+    creds: OnvifCredentials,
+    profileToken: string,
+    presetName: string,
+    presetToken?: string
+  ): Promise<string> {
+    const cam = await this.getCam(creds);
+
+    return new Promise((resolve, reject) => {
+      (cam as any).setPreset(
+        { profileToken, presetName, presetToken },
+        (err: any, res: any) => {
+          if (err) {
+            return reject(new Error(`ONVIF SetPreset failed: ${err.message}`));
+          }
+          const token = res?.setPresetResponse?.presetToken || presetToken || presetName;
+          resolve(token);
+        }
+      );
+    });
+  }
+
+  async gotoPreset(
+    creds: OnvifCredentials,
+    profileToken: string,
+    presetToken: string,
+    speed?: number
+  ): Promise<void> {
+    const cam = await this.getCam(creds);
+
+    return new Promise((resolve, reject) => {
+      (cam as any).gotoPreset(
+        { profileToken, preset: presetToken, speed },
+        (err: any) => {
+          if (err) {
+            return reject(new Error(`ONVIF GotoPreset failed: ${err.message}`));
+          }
+          resolve();
+        }
+      );
+    });
+  }
+
+  async removePreset(
+    creds: OnvifCredentials,
+    profileToken: string,
+    presetToken: string
+  ): Promise<void> {
+    const cam = await this.getCam(creds);
+
+    return new Promise((resolve, reject) => {
+      (cam as any).removePreset(
+        { profileToken, presetToken },
+        (err: any) => {
+          if (err) {
+            return reject(new Error(`ONVIF RemovePreset failed: ${err.message}`));
+          }
+          resolve();
+        }
+      );
+    });
+  }
 }
 
 export const onvifManager = new OnvifClientManager();

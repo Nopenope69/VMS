@@ -35,6 +35,7 @@ export class EvidencePinManager {
       exportJobId,
       reason,
       expiresAt,
+      pinType: 'TEMPORARY_EXPORT',
     }));
 
     // Create all pins in a batch
@@ -48,12 +49,14 @@ export class EvidencePinManager {
   }
 
   /**
-   * Explicitly release all pins held by an export job.
+   * Explicitly release temporary export pins held by an export job.
+   * INVARIANT: Never releases LEGAL_HOLD pins!
    */
   public static async releaseLease(exportJobId: string): Promise<number> {
     const result = await this.prisma.evidencePin.updateMany({
       where: {
         exportJobId,
+        pinType: 'TEMPORARY_EXPORT',
         releasedAt: null,
       },
       data: {

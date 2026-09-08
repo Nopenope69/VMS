@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process';
 import { PrismaClient, EventType, EventSeverity } from '@prisma/client';
 import mediaProvider from '../media/mediamtx.provider';
 import EventRateLimiter from '../events/eventRateLimiter.service';
+import DetectionZoneService, { Point2D, BoundingBox2D } from './detectionZone.service';
 
 const prisma = new PrismaClient();
 
@@ -26,9 +27,34 @@ export class SceneChangeDetectorService {
   /**
    * Processes a scene-change trigger event through the camera episode state machine.
    * Consolidates continuous bursts of scene changes into a single logical Event episode.
+   * Filters through DetectionZoneService if detection coordinates are provided.
    */
-  async handleSceneChange(cameraId: string, confidence: number = 0.45): Promise<void> {
-    // 1. Check EventRateLimiter to suppress raw spike storms
+  async handleSceneChange(
+    cameraId: string,
+    confidence: number = 0.45,
+    detectionCoords?: Point2D | BoundingBox2D
+  ): Promise<void> {
+    // 1. Evaluate Detection Zones if coordinates are provided
+    let zoneSnapshot: any = undefined;
+    if (detectionCoords) {
+      try {
+        const zones = await prisma.detectionZone.findMany({
+          where: { cameraId, enabled: true },
+        });
+        if (zones.length > 0) {
+          const evaluation = DetectionZoneService.evaluateDetection(detectionCoords, zones);
+          if (!evaluation.allowed) {
+            // Blocked by exclusion mask or not inside active inclusion zones
+            return;
+          }
+          zoneSnapshot = DetectionZoneService.createZoneSnapshot(zones);
+        }
+      } catch (err: any) {
+        console.warn(`[SceneDetector] Zone evaluation error for ${cameraId}:`, err.message);
+      }
+    }
+
+    // 2. Check EventRateLimiter to suppress raw spike storms
     if (!EventRateLimiter.shouldProcessTrigger(cameraId)) {
       const current = this.cameraStates.get(cameraId);
       if (current && current.state === 'ACTIVE') {
@@ -55,7 +81,11 @@ export class SceneChangeDetectorService {
             firstDetectedAt: now,
             lastDetectedAt: now,
             motionSpikes: 1,
-            metadata: { initialScore: confidence },
+            metadata: {
+              initialScore: confidence,
+              detectionCoords: detectionCoords as any,
+              zoneConfigSnapshot: zoneSnapshot,
+            } as any,
           },
         });
 

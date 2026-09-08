@@ -13,6 +13,7 @@ jest.mock('@prisma/client', () => {
   return {
     PrismaClient: jest.fn(() => ({
       event: mEvent,
+      detectionZone: { findMany: jest.fn().mockResolvedValue([]) },
     })),
     EventType: { MOTION: 'MOTION' },
     EventSeverity: { INFO: 'INFO' },

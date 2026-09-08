@@ -3,6 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { PrismaClient } from '@prisma/client';
 import config from './config/env';
+
+// Global defense-in-depth polyfill: serialize BigInt primitives to string in JSON.stringify / Express res.json
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
 import healthRoutes from './routes/health.routes';
 import authRoutes from './routes/auth.routes';
 import mediaAuthRoutes from './routes/mediaAuth.routes';
@@ -16,11 +21,27 @@ import auditRoutes from './routes/audit.routes';
 import licenseRoutes from './routes/license.routes';
 import internalRoutes from './routes/internal.routes';
 import metricsRoutes from './routes/metrics.routes';
+import layoutRoutes from './routes/layout.routes';
+import alarmRoutes from './routes/alarm.routes';
+import anprRoutes, { aggregator, aiRuntime } from './routes/anpr.routes';
+import smartSearchRoutes from './routes/smartSearch.routes';
+import notificationRoutes, { dispatcher } from './routes/notification.routes';
+import systemRoutes from './routes/system.routes';
+import federationRoutes from './routes/federation.routes';
+import automationRoutes from './routes/automation.routes';
+import spatialAnalyticsRoutes from './routes/spatialAnalytics.routes';
+import relayRoutes from './routes/relay.routes';
+import archiveRoutes from './routes/archive.routes';
+import ssoRoutes from './routes/sso.routes';
+import privacyRoutes from './routes/privacy.routes';
+import floorplanRoutes from './routes/floorplan.routes';
 import requestLogger from './middleware/requestLogger';
-import { RecordingIndexerService } from './services/recordingIndexer.service';
+import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
 import SegmentJobWorkerService from './services/storage/segmentJobWorker.service';
 import StartupReconcilerService from './services/reconciliation/startupReconciler.service';
+import recordingScheduleService from './services/schedule/recordingSchedule.service';
+import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -48,6 +69,20 @@ app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/license', licenseRoutes);
 app.use('/api/v1/internal', internalRoutes);
+app.use('/api/v1/layouts', layoutRoutes);
+app.use('/api/v1/alarms', alarmRoutes);
+app.use('/api/v1/anpr', anprRoutes);
+app.use('/api/v1/search', smartSearchRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/system', systemRoutes);
+app.use('/api/v1/federation', federationRoutes);
+app.use('/api/v1/automation', automationRoutes);
+app.use('/api/v1/spatial-rules', spatialAnalyticsRoutes);
+app.use('/api/v1/relays', relayRoutes);
+app.use('/api/v1/archive', archiveRoutes);
+app.use('/api/v1/sso', ssoRoutes);
+app.use('/api/v1/privacy', privacyRoutes);
+app.use('/api/v1/floorplans', floorplanRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -56,7 +91,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // Background Services
-const indexer = new RecordingIndexerService(prisma);
+export const recordingCatalog = new RecordingCatalog(prisma);
 const storageSentinel = new StorageSentinelService(prisma);
 
 export const server = app.listen(config.PORT, () => {
@@ -66,8 +101,14 @@ export const server = app.listen(config.PORT, () => {
   // Start background services & startup reconciler unless running in test mode
   if (config.NODE_ENV !== 'test') {
     SegmentJobWorkerService.start(2000);
-    indexer.start(300000); // 5-minute safety reconciliation fallback
+    recordingCatalog.startReconciler(300000); // 5-minute safety reconciliation fallback
     storageSentinel.start(60000);
+    recordingScheduleService.start(60000);
+    streamWatchdogService.start(30000);
+    recordingCatalog.startRetention(3600000);
+    aggregator.start();
+    aiRuntime.start();
+    dispatcher.start();
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -79,8 +120,13 @@ export const server = app.listen(config.PORT, () => {
 process.on('SIGTERM', async () => {
   console.log('[VigilOne] Shutting down gracefully...');
   SegmentJobWorkerService.stop();
-  indexer.stop();
+  recordingCatalog.stop();
   storageSentinel.stop();
+  recordingScheduleService.stop();
+  streamWatchdogService.stop();
+  aggregator.stop();
+  aiRuntime.stop();
+  dispatcher.stop();
   server.close(() => {
     prisma.$disconnect();
     process.exit(0);

@@ -8,6 +8,11 @@ import Evidence from './pages/Evidence';
 import Users from './pages/Users';
 import AuditLogs from './pages/AuditLogs';
 import License from './pages/License';
+import AnprConsole from './pages/AnprConsole';
+import FederationConsole from './pages/FederationConsole';
+import Investigation from './pages/Investigation';
+import FloorplanView from './pages/FloorplanView';
+import IdentitySettings from './pages/IdentitySettings';
 import Login from './pages/Login';
 import api from './services/api';
 
@@ -77,11 +82,21 @@ export const App: React.FC = () => {
       />
 
       <main className="flex-1">
-        {currentTab === 'live' && <LiveView onNavigateToDevices={() => setCurrentTab('devices')} />}
+        {currentTab === 'live' && (
+          <LiveView
+            onNavigateToDevices={() => setCurrentTab('devices')}
+            onNavigateToAlarms={() => setCurrentTab('events')}
+          />
+        )}
         {currentTab === 'playback' && <Playback />}
+        {currentTab === 'investigation' && <Investigation />}
+        {currentTab === 'floorplans' && <FloorplanView />}
         {currentTab === 'devices' && <Devices />}
+        {currentTab === 'anpr' && <AnprConsole />}
         {currentTab === 'events' && <Events />}
         {currentTab === 'evidence' && <Evidence />}
+        {currentTab === 'identity' && <IdentitySettings />}
+        {currentTab === 'federation' && <FederationConsole />}
         {currentTab === 'users' && <Users />}
         {currentTab === 'audit' && <AuditLogs />}
         {currentTab === 'license' && <License />}

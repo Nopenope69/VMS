@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Radio, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Radio, AlertTriangle, Calendar, Shield, Compass, Activity, Crosshair } from 'lucide-react';
 import api from '../services/api';
+import ScheduleMatrixModal from '../components/ScheduleMatrixModal';
+import DetectionZoneModal from '../components/DetectionZoneModal';
+import PtzControlModal from '../components/PtzControlModal';
+import StreamDiagnosticModal from '../components/StreamDiagnosticModal';
+import TripwireModal from '../components/TripwireModal';
 
 export const Devices: React.FC = () => {
   const [cameras, setCameras] = useState<any[]>([]);
@@ -9,6 +14,12 @@ export const Devices: React.FC = () => {
   const [discovered, setDiscovered] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Surveillance Operation Modals State
+  const [selectedCameraForModal, setSelectedCameraForModal] = useState<any | null>(null);
+  const [activeModalType, setActiveModalType] = useState<
+    'SCHEDULE' | 'ZONES' | 'PTZ' | 'DIAGNOSTIC' | 'TRIPWIRE' | null
+  >(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -195,6 +206,7 @@ export const Devices: React.FC = () => {
                   <th className="px-4 py-2.5">Configured Mode</th>
                   <th className="px-4 py-2.5">Engine Status</th>
                   <th className="px-4 py-2.5">Stream State</th>
+                  <th className="px-4 py-2.5 text-right">Surveillance Operations</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-graphite-700 text-slate-300">
@@ -231,6 +243,62 @@ export const Devices: React.FC = () => {
                     <td className="px-4 py-3 flex items-center space-x-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-400" />
                       <span className="text-emerald-400">ONLINE</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedCameraForModal(c);
+                            setActiveModalType('SCHEDULE');
+                          }}
+                          title="Weekly Recording Schedule Matrix"
+                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedCameraForModal(c);
+                            setActiveModalType('ZONES');
+                          }}
+                          title="Motion Detection Zones & Exclusion Masks"
+                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                        </button>
+                        {c.hasPtz && (
+                          <button
+                            onClick={() => {
+                              setSelectedCameraForModal(c);
+                              setActiveModalType('PTZ');
+                            }}
+                            title="PTZ Presets & Guard Patrol Tours"
+                            className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                          >
+                            <Compass className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedCameraForModal(c);
+                            setActiveModalType('DIAGNOSTIC');
+                          }}
+                          title="Stream Telemetry & Diagnostics"
+                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-teal hover:bg-graphite-700 transition"
+                        >
+                          <Activity className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedCameraForModal(c);
+                            setActiveModalType('TRIPWIRE');
+                          }}
+                          title="Vector Tripwire & Continuous Loitering Analytics"
+                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                        >
+                          <Crosshair className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -372,6 +440,60 @@ export const Devices: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Surveillance Operation Modals */}
+      {selectedCameraForModal && activeModalType === 'SCHEDULE' && (
+        <ScheduleMatrixModal
+          camera={selectedCameraForModal}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+            fetchData();
+          }}
+        />
+      )}
+
+      {selectedCameraForModal && activeModalType === 'ZONES' && (
+        <DetectionZoneModal
+          camera={selectedCameraForModal}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+          }}
+        />
+      )}
+
+      {selectedCameraForModal && activeModalType === 'PTZ' && (
+        <PtzControlModal
+          camera={selectedCameraForModal}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+          }}
+        />
+      )}
+
+      {selectedCameraForModal && activeModalType === 'DIAGNOSTIC' && (
+        <StreamDiagnosticModal
+          camera={selectedCameraForModal}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+          }}
+        />
+      )}
+
+      {selectedCameraForModal && activeModalType === 'TRIPWIRE' && (
+        <TripwireModal
+          isOpen={true}
+          cameraId={selectedCameraForModal.id}
+          cameraName={selectedCameraForModal.name}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+          }}
+        />
       )}
     </div>
   );

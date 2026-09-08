@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { Maximize2, Minimize2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ZoomIn, ZoomOut, Activity, Compass } from 'lucide-react';
 import { WhepClient } from '../services/whepPlayer';
 import api from '../services/api';
+import PtzControlModal from './PtzControlModal';
+import StreamDiagnosticModal from './StreamDiagnosticModal';
 
 export interface CameraData {
   id: string;
@@ -24,6 +26,8 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
   const [streamStatus, setStreamStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
   const [clock, setClock] = useState('');
   const [showPtz, setShowPtz] = useState(false);
+  const [showPtzModal, setShowPtzModal] = useState(false);
+  const [showDiagModal, setShowDiagModal] = useState(false);
 
   // Live CCTV OSD clock update
   useEffect(() => {
@@ -107,16 +111,34 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
       </div>
 
       {/* Tile Controls (Hover Overlay) */}
-      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 p-1 rounded border border-white/10">
+      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 p-1 rounded border border-white/10 z-10">
+        <button
+          onClick={() => setShowDiagModal(true)}
+          title="Stream Quality & Diagnostics"
+          className="p-1 rounded text-slate-300 hover:text-cctv-teal transition"
+        >
+          <Activity className="w-3.5 h-3.5" />
+        </button>
+
         {camera.hasPtz && (
-          <button
-            onClick={() => setShowPtz(!showPtz)}
-            className={`px-2 py-0.5 rounded text-[11px] font-mono transition ${
-              showPtz ? 'bg-cctv-teal text-graphite-900 font-bold' : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            PTZ
-          </button>
+          <>
+            <button
+              onClick={() => setShowPtzModal(true)}
+              title="PTZ Presets & Guard Tours"
+              className="p-1 rounded text-slate-300 hover:text-cctv-amber transition"
+            >
+              <Compass className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setShowPtz(!showPtz)}
+              title="Quick D-Pad Overlay"
+              className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                showPtz ? 'bg-cctv-teal text-graphite-900 font-bold' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              PAD
+            </button>
+          </>
         )}
 
         {onToggleFullscreen && (
@@ -193,6 +215,20 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
             </button>
           </div>
         </div>
+      )}
+
+      {showDiagModal && (
+        <StreamDiagnosticModal
+          camera={camera}
+          onClose={() => setShowDiagModal(false)}
+        />
+      )}
+
+      {showPtzModal && camera.hasPtz && (
+        <PtzControlModal
+          camera={camera}
+          onClose={() => setShowPtzModal(false)}
+        />
       )}
     </div>
   );
