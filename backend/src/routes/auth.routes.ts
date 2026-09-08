@@ -6,6 +6,7 @@ import config from '../config/env';
 import { requireAuth } from '../middleware/auth';
 import { signLicensePayload, LicenseClaims } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
+import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -13,11 +14,21 @@ const prisma = new PrismaClient();
 /**
  * Bootstrap endpoint for initial appliance deployment.
  * Automatically provisions Tenant, Site, Super Admin, and signs an evaluation Enterprise license.
+ * Enforces one-time lifecycle: permanently returns 410 Gone once a SUPER_ADMIN exists.
  */
-router.post('/bootstrap', async (req: Request, res: Response) => {
+router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Response) => {
   const setupHeader = req.headers['x-setup-token'];
   if (!setupHeader || setupHeader !== config.SETUP_TOKEN) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid setup token' });
+  }
+
+  // 1. One-time bootstrap lifecycle invariant: fail permanently if already initialized
+  const superAdminCount = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+  if (superAdminCount > 0) {
+    return res.status(410).json({
+      error: 'Appliance already initialized. Bootstrap is permanently disabled.',
+      code: 'BOOTSTRAP_ALREADY_COMPLETED',
+    });
   }
 
   const { tenantName, adminEmail, adminPassword, adminName } = req.body;
@@ -123,11 +134,13 @@ router.post('/bootstrap', async (req: Request, res: Response) => {
 /**
  * Operator login endpoint
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
+
+  const clientIp = AuthRateLimiter.getClientIp(req);
 
   try {
     const user = await prisma.user.findUnique({
@@ -135,21 +148,23 @@ router.post('/login', async (req: Request, res: Response) => {
       include: { tenant: true },
     });
 
-    if (!user) {
+    // Uniform anti-enumeration response:
+    // If user does not exist, account is inactive, or password does not match, return identical 401.
+    let passwordMatches = false;
+    if (user && user.active) {
+      passwordMatches = await bcrypt.compare(password, user.passwordHash);
+    } else {
+      // Constant-time dummy comparison to prevent response timing analysis
+      await bcrypt.compare(password, '$2a$12$e80yqVbB7f45bZkJbC1U5.YpUf71y4Zq/qM1sL2e8pP5dO4tF4z1e');
+    }
+
+    if (!user || !user.active || !passwordMatches) {
+      AuthRateLimiter.recordFailedLogin(clientIp, email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.active) {
-      return res.status(403).json({
-        error: 'Account has been deactivated. Please contact your security administrator.',
-        code: 'ACCOUNT_DEACTIVATED',
-      });
-    }
-
-    const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    // Clear failed attempt tracking upon successful authentication
+    AuthRateLimiter.recordSuccessfulLogin(clientIp, email);
 
     const token = jwt.sign(
       {

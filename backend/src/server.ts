@@ -47,8 +47,57 @@ const app = express();
 const prisma = new PrismaClient();
 
 // Security & Observability middleware
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: true, credentials: true }));
+// Strict Content Security Policy tailored for WebRTC WHEP media egress and same-origin SPA
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'"],
+        mediaSrc: ["'self'", 'blob:', 'mediastream:'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Restricted CORS: Same-origin browser requests do not send an Origin header.
+// Cross-origin requests are rejected unless explicitly matching configured management or local appliance host.
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const allowedPatterns = [
+        /^https?:\/\/localhost(:\d+)?$/,
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+      ];
+      if (config.MANAGEMENT_IP) {
+        allowedPatterns.push(
+          new RegExp(`^https?:\\/\\/${config.MANAGEMENT_IP.replace(/\./g, '\\.')}(:\\d+)?$`)
+        );
+      }
+      if (config.LAN_IP) {
+        allowedPatterns.push(
+          new RegExp(`^https?:\\/\\/${config.LAN_IP.replace(/\./g, '\\.')}(:\\d+)?$`)
+        );
+      }
+      if (allowedPatterns.some((pattern) => pattern.test(origin))) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS policy: Access denied for this origin.'));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(requestLogger);
 

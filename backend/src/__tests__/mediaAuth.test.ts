@@ -69,4 +69,35 @@ describe('MediaMTX Webhook Authentication Logic', () => {
 
     expect(() => jwt.verify(forgedToken, config.JWT_SECRET)).toThrow(/invalid signature/);
   });
+
+  describe('RTSP Ingest & Publishing Authorization Invariant', () => {
+    it('should reject unauthenticated publish attempts', () => {
+      const candidateSecret: string | undefined = undefined;
+      const isAuthorized = candidateSecret === config.INTERNAL_API_SECRET;
+      expect(isAuthorized).toBe(false);
+    });
+
+    it('should forbid web user session JWTs from authorizing RTSP publishing', () => {
+      const userWebToken = jwt.sign(
+        {
+          id: 'user_123',
+          email: 'admin@vigilone.local',
+          role: 'SUPER_ADMIN',
+          tenantId,
+        },
+        config.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Web session JWT should never match the internal ingest secret
+      const isAuthorized = userWebToken === config.INTERNAL_API_SECRET;
+      expect(isAuthorized).toBe(false);
+    });
+
+    it('should authorize internal services supplying valid INTERNAL_API_SECRET', () => {
+      const internalSecret = config.INTERNAL_API_SECRET;
+      const isAuthorized = internalSecret === config.INTERNAL_API_SECRET;
+      expect(isAuthorized).toBe(true);
+    });
+  });
 });

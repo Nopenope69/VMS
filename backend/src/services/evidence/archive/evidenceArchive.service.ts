@@ -182,6 +182,14 @@ export class EvidenceArchive {
     });
     if (!camera) throw new Error('Camera not found');
 
+    // Evidentiary Provenance Invariant:
+    // Internal test streams or synthetic generators must never be certified under a Section 63 BSA legal declaration.
+    if (camera.streamPath === 'synthetic_test_stream' || camera.ipAddress === 'synthetic') {
+      throw new Error(
+        'Evidentiary Provenance Invariant: Synthetic or internal test streams cannot be certified as Section 63 BSA legal evidence.'
+      );
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: params.requestedById },
     });

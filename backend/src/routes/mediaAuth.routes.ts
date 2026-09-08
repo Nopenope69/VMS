@@ -31,9 +31,19 @@ router.post('/auth', async (req: Request, res: Response) => {
     return res.status(200).send('OK');
   }
 
-  // 2. Allow publishing for synthetic test stream or localhost ingest
+  // 2. Strict media publishing authorization
   if (payload.action === 'publish') {
-    return res.status(200).send('OK');
+    // Only internal services (e.g. synthetic test generator, trusted local bridges) with INTERNAL_API_SECRET are authorized to publish.
+    // User web session JWTs are strictly forbidden from authorizing media publishing.
+    const secretCandidate = payload.password || payload.token;
+    if (secretCandidate && secretCandidate === config.INTERNAL_API_SECRET) {
+      return res.status(200).send('OK');
+    }
+
+    console.warn(
+      `[MediaAuth] Denied unauthorized RTSP publish attempt for path: ${payload.path} from IP: ${payload.ip}`
+    );
+    return res.status(403).json({ error: 'Forbidden: Unauthorized media publishing' });
   }
 
   // 3. For read/playback, authenticate bearer token

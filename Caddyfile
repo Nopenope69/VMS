@@ -1,13 +1,24 @@
 {
     admin off
-    auto_https off
 }
 
+# HTTP Port 80: Permanent redirect to HTTPS
 :80 {
     log {
         output stdout
         format console
     }
+    redir https://{host}{uri} permanent
+}
+
+# HTTPS Port 443: Commercial edge TLS with Caddy internal CA
+:443 {
+    log {
+        output stdout
+        format console
+    }
+
+    tls internal
 
     # Block external access to internal webhook endpoints
     handle /api/v1/internal/* {

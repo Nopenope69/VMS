@@ -79,6 +79,16 @@ export function loadConfig() {
     if (parsed.data.DATABASE_URL.includes('change_me') || parsed.data.DATABASE_URL.includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default database credentials! Halting startup.');
     }
+    if (
+      parsed.data.INTERNAL_API_SECRET.length < 32 ||
+      parsed.data.INTERNAL_API_SECRET.includes('change_me') ||
+      parsed.data.INTERNAL_API_SECRET.includes('vigilone_internal') ||
+      parsed.data.INTERNAL_API_SECRET.includes('vigilone_dev')
+    ) {
+      throw new Error(
+        'FATAL: Production mode detected with default, short (<32 chars), or insecure INTERNAL_API_SECRET! Halting startup.'
+      );
+    }
   }
 
   const resolvedEncryptionKey = resolveEncryptionKey(parsed.data.CREDENTIAL_ENCRYPTION_KEY, isProd);
