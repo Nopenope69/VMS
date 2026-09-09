@@ -2,6 +2,8 @@ import fs from 'fs';
 import { PrismaClient, JobStatus, SegmentStatus } from '@prisma/client';
 import { FFmpegService } from '../ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../../utils/crypto';
+import StorageVolumeService from './storageVolume.service';
+import StorageEpochService from './storageEpoch.service';
 
 export class SegmentJobWorkerService {
   private static prisma = new PrismaClient();
@@ -99,7 +101,25 @@ export class SegmentJobWorkerService {
       const endTime = stats.mtime;
       const startTime = new Date(endTime.getTime() - durationMs);
 
-      // 4. Atomically insert or update RecordingSegment
+      // 4. Resolve active storage volume and epoch for provenance
+      let activeVolumeId: string | undefined = undefined;
+      let activeEpochId: string | undefined = undefined;
+
+      try {
+        const volumeService = StorageVolumeService.getInstance(this.prisma);
+        const epochService = new StorageEpochService(this.prisma);
+        const resolved = await volumeService.resolveActiveVolumeForCamera(job.cameraId);
+        activeVolumeId = resolved?.volume?.id;
+
+        if (activeVolumeId && job.tenantId) {
+          const epoch = await epochService.getOrCreateActiveEpoch(job.tenantId, job.cameraId, activeVolumeId);
+          activeEpochId = epoch?.id;
+        }
+      } catch (err: any) {
+        console.warn(`[SegmentJobWorker] Non-blocking epoch resolution note:`, err.message);
+      }
+
+      // 5. Atomically insert or update RecordingSegment
       await this.prisma.recordingSegment.upsert({
         where: { filePath },
         update: {
@@ -112,6 +132,8 @@ export class SegmentJobWorkerService {
           height: probe.height || 1080,
           fps: probe.fps || 25,
           status: SegmentStatus.FINALIZED,
+          storageVolumeId: activeVolumeId,
+          storageEpochId: activeEpochId,
         },
         create: {
           tenantId: job.tenantId,
@@ -127,6 +149,8 @@ export class SegmentJobWorkerService {
           height: probe.height || 1080,
           fps: probe.fps || 25,
           status: SegmentStatus.FINALIZED,
+          storageVolumeId: activeVolumeId,
+          storageEpochId: activeEpochId,
         },
       });
 

@@ -89,6 +89,15 @@ export class StartupReconcilerService {
         data: { status: 'PENDING' },
       });
 
+      // 4. Execute physical storage crash recovery & power-cut integrity scan
+      try {
+        const { CrashRecoveryService } = await import('./crashRecovery.service');
+        const recoveryService = new CrashRecoveryService(this.prisma);
+        await recoveryService.recoverStorage();
+      } catch (err: any) {
+        console.warn('[StartupReconciler] Boot storage crash recovery warning:', err.message);
+      }
+
       console.info(
         `[StartupReconciler] Reconciliation complete: ${report.reconciledCount}/${report.totalCameras} cameras synchronized, ${report.healedPaths} paths healed.`
       );

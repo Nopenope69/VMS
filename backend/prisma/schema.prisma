@@ -41,11 +41,34 @@ enum RecorderState {
   ERROR
 }
 
+enum VolumeStatus {
+  HEALTHY
+  DEGRADED
+  READ_ONLY
+  UNMOUNTED
+}
+
+enum RetentionPriority {
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum DegradationReason {
+  NONE
+  STORAGE_PRESSURE_WARNING
+  STORAGE_PRESSURE_CRITICAL
+  EVIDENCE_PRESERVATION
+}
+
 enum SegmentStatus {
   RECORDING
   FINALIZED
   CORRUPTED
   ARCHIVED
+  FILE_MISSING
+  QUARANTINED
+  RECOVERY_FAILED
 }
 
 enum JobStatus {
@@ -85,6 +108,13 @@ enum EventType {
   TAMPER
   PERSON_DETECTED
   VEHICLE_DETECTED
+  STORAGE_FAILOVER
+  STORAGE_DEGRADED_MODE_ACTIVE
+  STORAGE_DEGRADED_MODE_CLEARED
+  STORAGE_VOLUME_DEGRADED
+  STORAGE_VOLUME_READONLY
+  STORAGE_EVIDENCE_DEADLOCK_PREVENTION
+  STORAGE_CORRUPT_SEGMENT_QUARANTINED
 }
 
 enum EventSeverity {
@@ -284,6 +314,8 @@ model Tenant {
   redactionJobs         RedactionJob[]
   floorplans            Floorplan[]
   chainOfCustodyLogs    ChainOfCustodyLog[]
+  storageVolumes        StorageVolume[]
+  storageEpochs         StorageEpoch[]
 }
 
 model License {
@@ -380,6 +412,12 @@ model Camera {
   mainRtspUri           String         // Resolved via ONVIF GetStreamUri
   subRtspUri            String?
   recordingMode         RecordingMode  @default(CONTINUOUS) // Configured intent
+  effectiveRecordingMode RecordingMode @default(CONTINUOUS) // Operational mode under degradation
+  degradationReason     DegradationReason @default(NONE)
+  degradationSince      DateTime?
+  retentionPriority     RetentionPriority @default(NORMAL)
+  storageVolumeId       String?
+  storageVolume         StorageVolume? @relation(fields: [storageVolumeId], references: [id], onDelete: SetNull)
   recorderState         RecorderState  @default(STOPPED)    // Legacy/synchronized engine state
   desiredRecorderState  RecorderState  @default(STOPPED)    // Operator intent
   observedRecorderState RecorderState  @default(STOPPED)    // Polled from MediaMTX
@@ -394,6 +432,8 @@ model Camera {
   updatedAt             DateTime       @updatedAt
 
   segments              RecordingSegment[]
+  storageEpochs         StorageEpoch[]
+  retentionPolicy       RetentionPolicy?
   events                Event[]
   exports               EvidenceExport[]
   recordingSchedule     RecordingSchedule?
@@ -439,6 +479,14 @@ model RecordingSegment {
   timebaseDenominator Int           @default(90000)
   keyframeIndexJson   Json?
   storageLocation     String        @default("LOCAL")
+  storageVolumeId     String?
+  storageVolume       StorageVolume? @relation(fields: [storageVolumeId], references: [id], onDelete: SetNull)
+  storageEpochId      String?
+  storageEpoch        StorageEpoch?  @relation(fields: [storageEpochId], references: [id], onDelete: SetNull)
+  originalSha256      String?       // Pre-repair original checksum if repaired
+  repairedSha256      String?       // Post-repair derivative checksum if repaired
+  repairedAt          DateTime?     // Timestamp of repair operation
+  quarantineReason    String?       // Reason string if quarantined
 
   createdAt           DateTime      @default(now())
 
@@ -608,9 +656,11 @@ model RetentionPolicy {
   tenantId        String
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cameraId        String?  @unique // Null for site/tenant-wide default
-  continuousDays  Int      @default(30)
-  motionDays      Int      @default(90)
-  createdAt       DateTime @default(now())
+  camera          Camera?  @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  continuousDays      Int      @default(30)
+  motionDays          Int      @default(90)
+  maxStorageGigabytes Int?     // Optional quota cap in GB
+  createdAt           DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([tenantId])
@@ -1305,4 +1355,51 @@ model ChainOfCustodyLog {
   @@index([tenantId, evidenceId])
 }
 
+model StorageVolume {
+  id               String        @id @default(uuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String        // e.g. "Primary NVMe", "Drive Bay 2 (WD Purple)"
+  path             String        @unique // Mount path e.g. "/recordings"
+  deviceIdentifier String?       // e.g. "UUID=4f2a-8b9e" or "/dev/sdb1"
+  mountSource      String?       // e.g. "/dev/sdb1"
+  filesystemType   String?       // e.g. "ext4", "xfs", "btrfs"
+  isDefault        Boolean       @default(false)
+  isReadOnly       Boolean       @default(false)
+  maxBytes         BigInt?       // Optional quota cap
+  status           VolumeStatus  @default(HEALTHY)
+  lastSeenAt       DateTime      @default(now())
+  lastHealthyAt    DateTime      @default(now())
+  lastFailureAt    DateTime?
+  healthReason     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
+  cameras          Camera[]
+  segments         RecordingSegment[]
+  storageEpochs    StorageEpoch[]
+
+  @@index([tenantId, status])
+}
+
+model StorageEpoch {
+  id               String        @id @default(uuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId         String
+  camera           Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  epochNumber      Int
+  storageVolumeId  String
+  storageVolume    StorageVolume @relation(fields: [storageVolumeId], references: [id], onDelete: Cascade)
+  startedAt        DateTime      @default(now())
+  endedAt          DateTime?
+  transitionReason String?       // e.g. "INITIAL_PROVISION", "FAILOVER_EROFS", "FAILOVER_UNMOUNTED", "OPERATOR_REASSIGN"
+  prevEpochHash    String?       // SHA-256 link to preceding epoch for audit trail
+  epochHash        String?       // Monotonic cryptographic chain
+  metadataJson     Json?
+
+  segments         RecordingSegment[]
+
+  @@unique([cameraId, epochNumber])
+  @@index([tenantId, cameraId, epochNumber])
+}

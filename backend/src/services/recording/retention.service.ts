@@ -1,20 +1,21 @@
-import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
-
-export interface RetentionReport {
-  purgedCount: number;
-  reclaimedBytes: bigint;
-  pinnedSkippedCount: number;
-  evaluatedSegmentsCount: number;
-}
+import { RetentionPolicyEngine, PruneReport } from './catalog/retentionPolicy';
+import { SegmentRepository } from './catalog/segmentRepository';
+import { EvidencePinRegistry } from './catalog/evidencePinRegistry';
+import { LocalStorageAdapter } from './catalog/storageAdapter';
 
 export class RetentionService {
   private prisma: PrismaClient;
   private timer: NodeJS.Timeout | null = null;
   private isPruning = false;
+  private engine: RetentionPolicyEngine;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    const repo = new SegmentRepository(prisma);
+    const pins = new EvidencePinRegistry(prisma);
+    const storage = new LocalStorageAdapter();
+    this.engine = new RetentionPolicyEngine(prisma, repo, pins, storage);
   }
 
   start(intervalMs = 3600000): void { // Hourly retention prune
@@ -34,94 +35,66 @@ export class RetentionService {
   }
 
   /**
-   * Evaluates all segments against camera / tenant retention policies.
+   * Evaluates all segments against per-camera retention policies and storage quotas.
    * STRICT INVARIANT: Segments with active EvidencePin leases are NEVER deleted.
    */
-  async executeRetentionPrune(now = new Date()): Promise<RetentionReport> {
+  async executeRetentionPrune(now = new Date()): Promise<PruneReport> {
     if (this.isPruning) {
-      return { purgedCount: 0, reclaimedBytes: BigInt(0), pinnedSkippedCount: 0, evaluatedSegmentsCount: 0 };
+      return {
+        purgedCount: 0,
+        reclaimedBytes: BigInt(0),
+        pinnedSkippedCount: 0,
+        evaluatedSegmentsCount: 0,
+        exhaustionCondition: false,
+      };
     }
     this.isPruning = true;
 
-    let purgedCount = 0;
-    let reclaimedBytes = BigInt(0);
-    let pinnedSkippedCount = 0;
-    let evaluatedSegmentsCount = 0;
-
     try {
-      // 1. Load all active policies
-      const policies = await this.prisma.retentionPolicy.findMany();
-      const policyMap = new Map<string, { continuousDays: number; motionDays: number }>();
-
-      for (const p of policies) {
-        if (p.cameraId) {
-          policyMap.set(`cam:${p.cameraId}`, { continuousDays: p.continuousDays, motionDays: p.motionDays });
-        } else {
-          policyMap.set(`tenant:${p.tenantId}`, { continuousDays: p.continuousDays, motionDays: p.motionDays });
-        }
+      let tenants: { id: string }[] = [];
+      if (typeof this.prisma.tenant?.findMany === 'function') {
+        tenants = await this.prisma.tenant.findMany({ select: { id: true } });
       }
 
-      // Default fallback: 30 days continuous, 90 days motion
-      const defaultPolicy = { continuousDays: 30, motionDays: 90 };
-
-      // 2. Fetch all candidate segments
-      const segments = await this.prisma.recordingSegment.findMany({
-        where: { status: 'FINALIZED' },
-        include: {
-          evidencePins: {
-            where: {
-              releasedAt: null,
-              expiresAt: { gt: now },
-            },
-          },
-        },
-      });
-
-      evaluatedSegmentsCount = segments.length;
-
-      for (const seg of segments) {
-        // Strict Invariant: If segment has unexpired active pins, skip!
-        if (seg.evidencePins.length > 0) {
-          pinnedSkippedCount++;
-          continue;
-        }
-
-        const cameraPolicy =
-          policyMap.get(`cam:${seg.cameraId}`) ||
-          (seg.tenantId ? policyMap.get(`tenant:${seg.tenantId}`) : null) ||
-          defaultPolicy;
-
-        const retentionDays = cameraPolicy.continuousDays;
-        const cutoffMs = now.getTime() - retentionDays * 24 * 60 * 60 * 1000;
-
-        if (seg.endTime.getTime() < cutoffMs) {
-          // Candidate for deletion
-          try {
-            if (fs.existsSync(seg.filePath)) {
-              fs.unlinkSync(seg.filePath);
-            }
-          } catch (err: any) {
-            console.warn(`[RetentionService] Failed to unlink file ${seg.filePath}:`, err.message);
+      if (tenants.length === 0) {
+        if (typeof this.prisma.retentionPolicy?.findMany === 'function') {
+          const policies = await this.prisma.retentionPolicy.findMany().catch(() => []);
+          const tIds = new Set<string>();
+          for (const p of policies) {
+            if (p.tenantId) tIds.add(p.tenantId);
           }
-
-          await this.prisma.recordingSegment.delete({
-            where: { id: seg.id },
-          });
-
-          purgedCount++;
-          reclaimedBytes += seg.sizeBytes;
+          tenants = Array.from(tIds).map((id) => ({ id }));
+        }
+        if (tenants.length === 0) {
+          tenants = [{ id: 'default' }];
         }
       }
+
+      let totalPurged = 0;
+      let totalReclaimed = 0n;
+      let totalSkipped = 0;
+      let totalEvaluated = 0;
+      let hasExhaustion = false;
+
+      for (const tenant of tenants) {
+        const report = await this.engine.pruneCameraQuotasAndRetention(tenant.id, now);
+        totalPurged += report.purgedCount;
+        totalReclaimed += report.reclaimedBytes;
+        totalSkipped += report.pinnedSkippedCount;
+        totalEvaluated += report.evaluatedSegmentsCount;
+        if (report.exhaustionCondition) hasExhaustion = true;
+      }
+
+      return {
+        purgedCount: totalPurged,
+        reclaimedBytes: totalReclaimed,
+        pinnedSkippedCount: totalSkipped,
+        evaluatedSegmentsCount: totalEvaluated,
+        exhaustionCondition: hasExhaustion,
+      };
     } finally {
       this.isPruning = false;
     }
-
-    return {
-      purgedCount,
-      reclaimedBytes,
-      pinnedSkippedCount,
-      evaluatedSegmentsCount,
-    };
   }
 }
 

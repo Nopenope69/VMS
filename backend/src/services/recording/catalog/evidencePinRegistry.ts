@@ -36,6 +36,9 @@ export class EvidencePinRegistry {
    * Checks whether a specific segment is currently protected by an active pin
    */
   async isPinned(segmentId: string): Promise<boolean> {
+    if (typeof this.prisma?.evidencePin?.count !== 'function') {
+      return false;
+    }
     const now = new Date();
     const count = await this.prisma.evidencePin.count({
       where: {
@@ -52,6 +55,9 @@ export class EvidencePinRegistry {
    */
   async getPinnedSegmentIds(segmentIds: string[]): Promise<Set<string>> {
     if (!segmentIds || segmentIds.length === 0) return new Set();
+    if (typeof this.prisma?.evidencePin?.findMany !== 'function') {
+      return new Set();
+    }
 
     const now = new Date();
     const activePins = await this.prisma.evidencePin.findMany({

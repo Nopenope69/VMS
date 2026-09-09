@@ -13,6 +13,7 @@ import FederationConsole from './pages/FederationConsole';
 import Investigation from './pages/Investigation';
 import FloorplanView from './pages/FloorplanView';
 import IdentitySettings from './pages/IdentitySettings';
+import StorageManagement from './pages/StorageManagement';
 import Login from './pages/Login';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 
@@ -81,6 +82,7 @@ export const App: React.FC = () => {
       'users',
       'audit',
       'license',
+      'storage',
     ],
     SUPER_ADMIN: [
       'live',
@@ -96,6 +98,7 @@ export const App: React.FC = () => {
       'users',
       'audit',
       'license',
+      'storage',
     ],
   };
 
@@ -156,6 +159,7 @@ export const App: React.FC = () => {
         {currentTab === 'users' && <Users />}
         {currentTab === 'audit' && <AuditLogs />}
         {currentTab === 'license' && <License />}
+        {currentTab === 'storage' && <StorageManagement />}
       </main>
     </div>
   );

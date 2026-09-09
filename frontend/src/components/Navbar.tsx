@@ -15,6 +15,7 @@ import {
   Send,
   Network,
   Compass,
+  Database,
 } from 'lucide-react';
 import api from '../services/api';
 import NotificationSettingsModal from './NotificationSettingsModal';
@@ -60,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
     { id: 'identity', label: 'SSO & Identity', icon: KeyRound, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
     { id: 'federation', label: 'Edge Mesh', icon: Network, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
     { id: 'users', label: 'Staff', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'storage', label: 'Storage', icon: Database, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
     { id: 'audit', label: 'Audit Trail', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
   ];
 
