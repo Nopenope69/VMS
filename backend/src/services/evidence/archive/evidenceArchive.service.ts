@@ -184,7 +184,11 @@ export class EvidenceArchive {
 
     // Evidentiary Provenance Invariant:
     // Internal test streams or synthetic generators must never be certified under a Section 63 BSA legal declaration.
-    if (camera.streamPath === 'synthetic_test_stream' || camera.ipAddress === 'synthetic') {
+    if (
+      camera.streamPath === 'synthetic_test_stream' ||
+      camera.ipAddress === 'synthetic' ||
+      camera.mainRtspUri?.includes('synthetic_test_stream')
+    ) {
       throw new Error(
         'Evidentiary Provenance Invariant: Synthetic or internal test streams cannot be certified as Section 63 BSA legal evidence.'
       );

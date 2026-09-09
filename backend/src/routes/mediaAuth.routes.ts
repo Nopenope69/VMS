@@ -31,23 +31,36 @@ router.post('/auth', async (req: Request, res: Response) => {
     return res.status(200).send('OK');
   }
 
-  // 2. Strict media publishing authorization
-  if (payload.action === 'publish') {
-    // Only internal services (e.g. synthetic test generator, trusted local bridges) with INTERNAL_API_SECRET are authorized to publish.
-    // User web session JWTs are strictly forbidden from authorizing media publishing.
-    const secretCandidate = payload.password || payload.token;
-    if (secretCandidate && secretCandidate === config.INTERNAL_API_SECRET) {
-      return res.status(200).send('OK');
-    }
+  // 2. Allow internal services supplying INTERNAL_API_SECRET (internal pipelines, synthetic sources, proxies)
+  const secretCandidate = payload.password || payload.token;
+  if (secretCandidate && secretCandidate === config.INTERNAL_API_SECRET) {
+    return res.status(200).send('OK');
+  }
 
+  // 3. Strict media publishing authorization (reject external publish)
+  if (payload.action === 'publish') {
     console.warn(
       `[MediaAuth] Denied unauthorized RTSP publish attempt for path: ${payload.path} from IP: ${payload.ip}`
     );
     return res.status(403).json({ error: 'Forbidden: Unauthorized media publishing' });
   }
 
-  // 3. For read/playback, authenticate bearer token
-  const token = payload.token || (payload.password && payload.password.length > 30 ? payload.password : undefined);
+  // 4. For read/playback, authenticate media token from token, password, user, or query parameter
+  let token = payload.token;
+  if (!token && payload.password && payload.password.length > 20) {
+    token = payload.password;
+  }
+  if (!token && payload.user && payload.user.length > 20) {
+    token = payload.user;
+  }
+  if (!token && payload.query) {
+    try {
+      const searchParams = new URLSearchParams(payload.query);
+      token = searchParams.get('token') || searchParams.get('jwt') || undefined;
+    } catch {
+      // Ignore malformed query string
+    }
+  }
 
   if (!token) {
     console.warn(`[MediaAuth] Denied unauthenticated ${payload.action} request for path: ${payload.path} from IP: ${payload.ip}`);

@@ -186,12 +186,26 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    entrypoint: >
-      sh -c '
-      ffmpeg -re -f lavfi -i "testsrc=size=1280x720:rate=25,drawtext=text=%{localtime\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}:fontcolor=white:fontsize=36:x=(w-text_w)/2:y=50:box=1:boxcolor=black@0.6" \
-      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 50 \
-      -f rtsp "rtsp://internal:${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}@mediamtx:8554/synthetic_test_stream"
-      '
+    entrypoint:
+      - ffmpeg
+      - -re
+      - -f
+      - lavfi
+      - -i
+      - testsrc=size=1280x720:rate=25
+      - -c:v
+      - libx264
+      - -preset
+      - ultrafast
+      - -tune
+      - zerolatency
+      - -pix_fmt
+      - yuv420p
+      - -g
+      - "50"
+      - -f
+      - rtsp
+      - rtsp://internal:vigilone_internal_secret_token_98234@mediamtx:8554/synthetic_test_stream
     depends_on:
       - mediamtx
     deploy:

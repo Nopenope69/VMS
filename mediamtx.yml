@@ -22,9 +22,8 @@ protocols: [tcp]
 # WebRTC (WHEP) Egress Configuration - Scoped to Operator Management Interface
 webrtc: yes
 webrtcAddress: :8889
-webrtcServerAddress: :8189
-webrtcServerProtocol: udp
-webrtcAllowTCP: yes
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
 webrtcAdditionalHosts: ["${MANAGEMENT_IP:-127.0.0.1}"]
 
 # HLS Egress Configuration
@@ -33,17 +32,20 @@ hlsAddress: :8888
 hlsSegmentDuration: 2s
 hlsPartDuration: 500ms
 
-# Recording Defaults (Fragmented MP4)
-# MediaMTX automatically appends .mp4 extension
-record: no
-recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
-recordFormat: fmp4
-recordSegmentDuration: 10m
-recordPartDuration: 1s
-recordDeleteAfter: 0s
-
 # Default Path Settings
 pathDefaults:
   sourceOnDemand: no
   record: no
-  runOnRecordSegmentComplete: curl --max-time 3 -s -X POST http://backend:4000/api/v1/internal/segment-complete -H "Authorization: Bearer ${INTERNAL_API_SECRET:-vigilone_internal_secret_token}" -H "Content-Type: application/json" -d '{"path":"$MTX_PATH","file":"$MTX_SEGMENT_PATH","duration":"$MTX_SEGMENT_DURATION"}'
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordSegmentDuration: 10m
+  recordPartDuration: 1s
+  recordDeleteAfter: 0s
+  runOnRecordSegmentComplete: >-
+    curl --max-time 3 -s -X POST http://backend:4000/api/v1/internal/segment-complete -H "Authorization: Bearer ${INTERNAL_API_SECRET:-vigilone_internal_secret_token}" -H "Content-Type: application/json" -d '{"path":"$MTX_PATH","file":"$MTX_SEGMENT_PATH","duration":"$MTX_SEGMENT_DURATION"}'
+
+# Path Configuration
+paths:
+  all_others:
+
+
