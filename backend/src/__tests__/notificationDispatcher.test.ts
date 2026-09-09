@@ -2,8 +2,16 @@ import { EventSeverity, NotificationChannelType, NotificationJobStatus } from '@
 import { NotificationDispatcherService } from '../services/notification/notificationDispatcher.service';
 import crypto from 'crypto';
 import axios from 'axios';
+import dns from 'dns';
 
 jest.mock('axios');
+jest.mock('dns', () => ({
+  promises: {
+    lookup: jest.fn().mockImplementation((hostname: string) => {
+      return Promise.resolve([{ address: '93.184.216.34', family: 4 }]);
+    }),
+  },
+}));
 
 describe('NotificationDispatcherService - Reliable Alert Queue & HMAC Signing', () => {
   let service: NotificationDispatcherService;

@@ -37,7 +37,7 @@ VigilOne is a vendor-neutral, commercial CCTV Video Management System (VMS) engi
 3. **Caddy Single HTTP(S) Gateway:** Terminates port 80/443, proxying REST API (`/api/*`), WebRTC WHEP signaling (`/whep/*`), and HLS (`/hls/*`) under a single origin to eliminate CORS and runtime configuration bugs.
 4. **Dedicated WebRTC ICE Port:** Dedicated media transport on UDP port `8189` (with TCP fallback) for robust LAN streaming.
 5. **Unified Streaming Security:** MediaMTX delegates all read/playback requests to the backend via HTTP Webhook (`/api/v1/media/auth`) using short-lived Bearer tokens. Control API (port `9997`) is locked to the internal Docker network.
-6. **Section 63 BSA Evidence Package Generator:** Produces court-ready electronic evidence archives under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (BSA / formerly 65B IEA) containing SHA-256 manifests, Ed25519 appliance digital signatures, and pre-populated statutory Part A & Part B PDFs.
+6. **Section 63 BSA Evidence Package Generator:** Produces tamper-evident electronic evidence archives with Section 63 BSA compliance reporting and statutory Part A & Part B certification workflows under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 (BSA / formerly 65B IEA) containing SHA-256 manifests, Ed25519 appliance digital signatures, and human signatory declarations.
 7. **Offline Ed25519 Commercial Licensing:** Enforces camera limits, subscription expiry, and feature gating with an inviolable surveillance continuity invariant: licensing checks never disrupt live view or existing recordings.
 8. **Tamper-Evident Audit Event Hash Chain:** Links all audit records cryptographically (`eventHash = SHA256(prevHash + eventData)`), proving mathematical immutability for compliance and legal scrutiny.
 
@@ -76,7 +76,7 @@ VigilOne is a vendor-neutral, commercial CCTV Video Management System (VMS) engi
 
 ### Prerequisites
 - Docker Engine 24+ & Docker Compose v2
-- Port `80`, `443`, `8189` (UDP/TCP), and `8554` available
+- Port `80`, `443`, and `8189` (UDP/TCP) available (RTSP `8554` is internal only)
 
 ### Launch Edge Appliance
 ```bash

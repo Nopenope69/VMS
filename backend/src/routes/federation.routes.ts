@@ -5,12 +5,14 @@ import { authorize, Permission } from '../services/rbac/permissions';
 import { FederationService } from '../services/federation/federation.service';
 import { SyncEngineService } from '../services/federation/syncEngine.service';
 import { ConfigSyncService } from '../services/federation/configSync.service';
+import { createRequireNodeSignature } from '../middleware/federationAuth';
 
 const router = Router();
 const prisma = new PrismaClient();
 const federationService = new FederationService(prisma);
 const syncEngineService = new SyncEngineService(prisma);
 const configSyncService = new ConfigSyncService(prisma);
+const requireNodeAuth = createRequireNodeSignature(prisma, federationService);
 
 /**
  * POST /api/v1/federation/pairing-token
@@ -116,9 +118,9 @@ router.get(
 
 /**
  * POST /api/v1/federation/nodes/:nodeUuid/heartbeat
- * Edge node heartbeat ping
+ * Edge node heartbeat ping (authenticated via Ed25519 signature & replay nonce)
  */
-router.post('/nodes/:nodeUuid/heartbeat', async (req: Request, res: Response): Promise<void> => {
+router.post('/nodes/:nodeUuid/heartbeat', requireNodeAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { nodeUuid } = req.params;
     const result = await federationService.handleHeartbeat(nodeUuid, req.body);
@@ -130,9 +132,9 @@ router.post('/nodes/:nodeUuid/heartbeat', async (req: Request, res: Response): P
 
 /**
  * POST /api/v1/federation/nodes/:nodeUuid/sync-batch
- * Store-and-forward batch ingestion
+ * Store-and-forward batch ingestion (authenticated via Ed25519 signature & replay nonce)
  */
-router.post('/nodes/:nodeUuid/sync-batch', async (req: Request, res: Response): Promise<void> => {
+router.post('/nodes/:nodeUuid/sync-batch', requireNodeAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { nodeUuid } = req.params;
     const { streamType, fromSeq, toSeq, items } = req.body;
@@ -158,9 +160,9 @@ router.post('/nodes/:nodeUuid/sync-batch', async (req: Request, res: Response): 
 
 /**
  * POST /api/v1/federation/nodes/:nodeUuid/config-ack
- * Edge node acknowledging desired configuration application
+ * Edge node acknowledging desired configuration application (authenticated via Ed25519)
  */
-router.post('/nodes/:nodeUuid/config-ack', async (req: Request, res: Response): Promise<void> => {
+router.post('/nodes/:nodeUuid/config-ack', requireNodeAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { nodeUuid } = req.params;
     const result = await configSyncService.handleConfigAck(nodeUuid, req.body);

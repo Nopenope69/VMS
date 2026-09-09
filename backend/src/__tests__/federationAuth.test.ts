@@ -170,4 +170,122 @@ describe('FederationService (Cryptographic Node Identity, Pairing & Framing)', (
       );
     });
   });
+
+  describe('Edge Node Ingress Middleware (createRequireNodeSignature)', () => {
+    const { createRequireNodeSignature, buildCanonicalRequest } = require('../middleware/federationAuth');
+
+    it('should reject requests missing required cryptographic headers with 401', async () => {
+      const middleware = createRequireNodeSignature(mockPrisma, service);
+      const req: any = {
+        params: { nodeUuid },
+        headers: {},
+        method: 'POST',
+        originalUrl: `/api/v1/federation/nodes/${nodeUuid}/heartbeat`,
+        body: {},
+      };
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await middleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringMatching(/Missing edge node authentication headers/) })
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject requests with skewed or expired timestamps (> 300s)', async () => {
+      const middleware = createRequireNodeSignature(mockPrisma, service);
+      const req: any = {
+        params: { nodeUuid },
+        headers: {
+          'x-node-signature': 'dGVzdA==',
+          'x-node-timestamp': String(Date.now() - 400000), // 400s in past
+          'x-node-nonce': crypto.randomUUID(),
+        },
+        method: 'POST',
+        originalUrl: `/api/v1/federation/nodes/${nodeUuid}/heartbeat`,
+        body: {},
+      };
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await middleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringMatching(/Timestamp expired or skewed/) })
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject replayed requests with duplicate nonces', async () => {
+      const middleware = createRequireNodeSignature(mockPrisma, service);
+      const nonce = crypto.randomUUID();
+      const timestamp = String(Date.now());
+      const body = { test: true };
+      const rawBody = Buffer.from(JSON.stringify(body));
+      const bodyHash = crypto.createHash('sha256').update(rawBody).digest('hex');
+
+      const canonical = buildCanonicalRequest({
+        version: 'v1',
+        nodeUuid,
+        timestamp,
+        nonce,
+        method: 'POST',
+        path: `/api/v1/federation/nodes/${nodeUuid}/sync-batch`,
+        bodyHashHex: bodyHash,
+      });
+
+      const pubKeyBase64 = keyPair.publicKey.toString('base64');
+      const privKey = crypto.createPrivateKey({
+        key: Buffer.from(keyPair.privateKey.toString('base64'), 'base64'),
+        format: 'der',
+        type: 'pkcs8',
+      });
+
+      const signature = crypto.sign(null, Buffer.from(canonical), privKey).toString('base64');
+      mockPrisma.federatedNode.findUnique.mockResolvedValue({
+        nodeUuid,
+        publicKeyEd25519: pubKeyBase64,
+        status: 'ACTIVE',
+      });
+
+      const req: any = {
+        params: { nodeUuid },
+        headers: {
+          'x-node-signature': signature,
+          'x-node-timestamp': timestamp,
+          'x-node-nonce': nonce,
+        },
+        method: 'POST',
+        originalUrl: `/api/v1/federation/nodes/${nodeUuid}/sync-batch`,
+        body,
+        rawBody,
+      };
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      // First request: successful
+      await middleware(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+
+      // Duplicate replay: rejected with 401
+      const next2 = jest.fn();
+      await middleware(req, res, next2);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringMatching(/Cryptographic replay detected/) })
+      );
+      expect(next2).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -21,6 +21,10 @@ const envSchema = z.object({
   MANAGEMENT_IP: z.string().default('127.0.0.1'),
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
   MEDIAMTX_API_URL: z.string().default('http://mediamtx:9997'),
+  COTURN_SECRET: z.string().default('vigilone_turn_secret_dev_38921'),
+  COTURN_HOST: z.string().default('turn.vigilone.internal'),
+  COTURN_PORT: z.coerce.number().default(3478),
+  METRICS_AUTH_TOKEN: z.string().optional(),
   RECORDINGS_DIR: z.string().default('/recordings'),
   EXPORTS_DIR: z.string().default('/recordings/exports'),
   RECORD_SEGMENT_DURATION: z.string().default('10m'),
@@ -87,6 +91,16 @@ export function loadConfig() {
     ) {
       throw new Error(
         'FATAL: Production mode detected with default, short (<32 chars), or insecure INTERNAL_API_SECRET! Halting startup.'
+      );
+    }
+    if (
+      parsed.data.COTURN_SECRET.length < 32 ||
+      parsed.data.COTURN_SECRET.includes('change_me') ||
+      parsed.data.COTURN_SECRET.includes('vigilone_turn_secret_dev') ||
+      parsed.data.COTURN_SECRET.includes('vigilone_dev')
+    ) {
+      throw new Error(
+        'FATAL: Production mode detected with default, short (<32 chars), or insecure COTURN_SECRET! Halting startup.'
       );
     }
   }

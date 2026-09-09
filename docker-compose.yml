@@ -1,3 +1,16 @@
+# ==============================================================================
+# VigilOne VMS - Production Edge Surveillance Appliance
+# SECURITY NOTICE:
+# For production deployments, DO NOT rely on development fallback defaults.
+# Configure a production `.env` file containing cryptographically random values:
+# - JWT_SECRET (min 32 characters)
+# - INTERNAL_API_SECRET (min 32 characters)
+# - COTURN_SECRET (min 32 characters)
+# - POSTGRES_PASSWORD
+# - SETUP_TOKEN
+# In NODE_ENV=production, backend config performs mandatory fail-fast validation.
+# ==============================================================================
+
 services:
   caddy:
     image: caddy:2.9-alpine
@@ -127,6 +140,10 @@ services:
       - RECORDINGS_DIR=/recordings
       - EXPORTS_DIR=/recordings/exports
       - LAN_IP=${LAN_IP:-127.0.0.1}
+      - COTURN_SECRET=${COTURN_SECRET:-vigilone_turn_secret_dev_38921}
+      - COTURN_HOST=${COTURN_HOST:-turn.vigilone.internal}
+      - COTURN_PORT=${COTURN_PORT:-3478}
+      - METRICS_AUTH_TOKEN=${METRICS_AUTH_TOKEN:-}
       - RECORD_SEGMENT_DURATION=${RECORD_SEGMENT_DURATION:-10m}
     volumes:
       - recordings_data:/recordings

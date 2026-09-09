@@ -70,6 +70,14 @@ export class MerkleTree {
 
   /**
    * Combines two 32-byte hex node hashes into a parent node hash.
+   *
+   * Architectural Security Note (RFC 6962 / Second-Preimage Invariant):
+   * This implementation maintains mathematical second-preimage collision resistance
+   * because leaf payloads are domain-separated and structurally bounded to >= 85 bytes
+   * (domain prefix 13B + segIdLen 2B + segId >= 16B + camIdLen 2B + camId >= 16B + time 8B + mediaHash 32B = >= 87 bytes),
+   * while parent internal node pre-images are strictly and invariantly 64 bytes (two concatenated 32-byte hashes).
+   * Because the input domain lengths can never intersect, leaf-to-internal pre-image collisions
+   * are mathematically impossible without breaking backwards-compatibility for existing archives.
    */
   public static combineNodes(leftHex: string, rightHex: string): string {
     const combined = Buffer.concat([

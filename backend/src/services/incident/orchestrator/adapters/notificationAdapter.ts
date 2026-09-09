@@ -5,7 +5,105 @@ import {
   EventSeverity,
 } from '@prisma/client';
 import crypto from 'crypto';
+import dns from 'dns';
+import net from 'net';
 import axios from 'axios';
+
+export async function validateWebhookUrl(urlString: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    throw new Error(`Invalid webhook target URL: ${urlString}`);
+  }
+
+  // 1. Enforce http/https protocols
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`Unsupported protocol for webhook dispatch: ${parsed.protocol}`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // 2. Denylist internal appliance Docker container and local hostnames
+  const dockerDenylist = [
+    'postgres',
+    'backend',
+    'mediamtx',
+    'caddy',
+    'vigilone-backend',
+    'vigilone-mediamtx',
+    'vigilone-postgres',
+    'vigilone-gateway',
+    'vigilone-synthetic-camera',
+    'localhost',
+  ];
+
+  if (dockerDenylist.includes(hostname) || hostname.endsWith('.internal') || hostname.endsWith('.local')) {
+    throw new Error(`SSRF Violation: Target host '${hostname}' is an internal network destination`);
+  }
+
+  // Helper to test if an IP is private/loopback/metadata
+  const isProhibitedIp = (ip: string): boolean => {
+    let cleanIp = ip;
+    if (cleanIp.startsWith('::ffff:')) {
+      cleanIp = cleanIp.slice(7);
+    }
+
+    if (cleanIp.startsWith('127.') || cleanIp === '::1') return true; // Loopback
+    if (cleanIp.startsWith('169.254.') || cleanIp.toLowerCase().startsWith('fe80:')) return true; // Link-local / Cloud metadata
+    if (cleanIp === '0.0.0.0' || cleanIp === '::') return true; // Unspecified
+
+    // RFC 1918 Private ranges
+    if (
+      cleanIp.startsWith('10.') ||
+      cleanIp.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(cleanIp)
+    ) {
+      return true;
+    }
+
+    // IPv6 ULA (fc00::/7) or multicast (ff00::/8)
+    if (/^f[cd][0-9a-f]{2}:/i.test(cleanIp) || /^ff[0-9a-f]{2}:/i.test(cleanIp)) {
+      return true;
+    }
+
+    // IPv4 Multicast
+    if (net.isIPv4(cleanIp)) {
+      const firstOctet = parseInt(cleanIp.split('.')[0], 10);
+      if (firstOctet >= 224) return true;
+    }
+
+    return false;
+  };
+
+  // If hostname is already a direct IP address
+  if (net.isIP(hostname)) {
+    if (isProhibitedIp(hostname)) {
+      throw new Error(`SSRF Violation: Target IP '${hostname}' is a prohibited private/metadata destination`);
+    }
+    return;
+  }
+
+  // 3. Pre-flight DNS resolution
+  try {
+    const lookupPromise = dns.promises.lookup(hostname, { all: true });
+    let timer: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('DNS lookup timed out')), 2500);
+    });
+    const addresses = await Promise.race([lookupPromise, timeoutPromise]).finally(() => {
+      clearTimeout(timer);
+    });
+    for (const record of addresses) {
+      if (isProhibitedIp(record.address)) {
+        throw new Error(`SSRF Violation: Target host '${hostname}' resolved to prohibited IP '${record.address}'`);
+      }
+    }
+  } catch (err: any) {
+    if (err.message?.includes('SSRF Violation')) throw err;
+    throw new Error(`SSRF Guard: Unable to resolve webhook destination '${hostname}': ${err.message}`);
+  }
+}
 
 export interface DispatchNotificationRequest {
   tenantId: string;
@@ -223,7 +321,12 @@ export class NotificationAdapter {
         headers['X-VigilOne-Signature'] = `sha256=${signature}`;
       }
 
-      const res = await axios.post(channel.targetUrl, payload, { headers, timeout: 5000 });
+      await validateWebhookUrl(channel.targetUrl);
+      const res = await axios.post(channel.targetUrl, payload, {
+        headers,
+        timeout: 5000,
+        maxRedirects: 0,
+      });
       return { success: res.status >= 200 && res.status < 300, statusCode: res.status };
     }
 
@@ -249,9 +352,11 @@ export class NotificationAdapter {
         ],
       };
 
+      await validateWebhookUrl(channel.targetUrl);
       const res = await axios.post(channel.targetUrl, slackPayload, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 5000,
+        maxRedirects: 0,
       });
       return { success: res.status === 200, statusCode: res.status };
     }

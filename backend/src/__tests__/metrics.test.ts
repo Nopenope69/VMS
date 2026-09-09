@@ -124,4 +124,32 @@ describe('Prometheus Metrics Engine & Request Logger Middleware', () => {
     expect(responseData).toContain('vigilone_process_uptime_seconds');
     expect(responseData).toContain('vigilone_storage_bytes_total');
   });
+
+  it('should reject external non-authorized client IPs with 403 Forbidden', async () => {
+    let statusCode = 0;
+    let responseData = '';
+    const mockReq = {
+      ip: '203.0.113.195', // External WAN IP
+      headers: {},
+      socket: { remoteAddress: '203.0.113.195' },
+    };
+    const mockRes = {
+      status: (code: number) => {
+        statusCode = code;
+        return mockRes;
+      },
+      send: (body: string) => {
+        responseData = body;
+        return mockRes;
+      },
+      setHeader: () => mockRes,
+    };
+
+    const routeLayer = (metricsRoutes as any).stack.find((l: any) => l.route && l.route.methods.get);
+    const handler = routeLayer.route.stack[0].handle;
+    await handler(mockReq, mockRes);
+
+    expect(statusCode).toBe(403);
+    expect(responseData).toContain('Forbidden: External metrics scrape prohibited');
+  });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import LiveView from './pages/LiveView';
 import Playback from './pages/Playback';
@@ -14,15 +14,25 @@ import Investigation from './pages/Investigation';
 import FloorplanView from './pages/FloorplanView';
 import IdentitySettings from './pages/IdentitySettings';
 import Login from './pages/Login';
-import api from './services/api';
+import api, { setAccessToken, setLogoutHandler } from './services/api';
 
 export const App: React.FC = () => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('vigilone_token'));
+  const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any | null>(null);
   const [currentTab, setCurrentTab] = useState('live');
   const [loading, setLoading] = useState(true);
 
+  const handleLogout = useCallback(() => {
+    api.post('/auth/logout').catch(() => {});
+    setAccessToken(null);
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('vigilone_user');
+  }, []);
+
   useEffect(() => {
+    setLogoutHandler(handleLogout);
+
     const savedUser = localStorage.getItem('vigilone_user');
     if (savedUser) {
       try {
@@ -30,34 +40,80 @@ export const App: React.FC = () => {
       } catch {}
     }
 
-    if (token) {
-      api
-        .get('/auth/me')
-        .then((res) => {
-          setUser(res.data.user);
-          localStorage.setItem('vigilone_user', JSON.stringify(res.data.user));
-        })
-        .catch(() => {
-          handleLogout();
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+    // Transparently refresh in-memory access token via HttpOnly cookie
+    api
+      .post('/auth/refresh')
+      .then((res) => {
+        setAccessToken(res.data.token);
+        setToken(res.data.token);
+        setUser(res.data.user);
+        localStorage.setItem('vigilone_user', JSON.stringify(res.data.user));
+      })
+      .catch(() => {
+        setAccessToken(null);
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
+  }, [handleLogout]);
 
   const handleLoginSuccess = (userData: any, userToken: string) => {
-    localStorage.setItem('vigilone_token', userToken);
-    localStorage.setItem('vigilone_user', JSON.stringify(userData));
+    setAccessToken(userToken);
     setToken(userToken);
     setUser(userData);
+    localStorage.setItem('vigilone_user', JSON.stringify(userData));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('vigilone_token');
-    localStorage.removeItem('vigilone_user');
-    setToken(null);
-    setUser(null);
+  const allowedTabsByRole: Record<string, string[]> = {
+    VIEWER: ['live', 'investigation', 'floorplans', 'playback'],
+    OPERATOR: ['live', 'investigation', 'floorplans', 'playback', 'devices', 'anpr', 'events'],
+    TENANT_ADMIN: [
+      'live',
+      'investigation',
+      'floorplans',
+      'playback',
+      'devices',
+      'anpr',
+      'events',
+      'evidence',
+      'identity',
+      'federation',
+      'users',
+      'audit',
+      'license',
+    ],
+    SUPER_ADMIN: [
+      'live',
+      'investigation',
+      'floorplans',
+      'playback',
+      'devices',
+      'anpr',
+      'events',
+      'evidence',
+      'identity',
+      'federation',
+      'users',
+      'audit',
+      'license',
+    ],
+  };
+
+  const userRole = user?.role || 'VIEWER';
+  const allowedTabs = allowedTabsByRole[userRole] || allowedTabsByRole.VIEWER;
+
+  useEffect(() => {
+    if (user && !allowedTabs.includes(currentTab)) {
+      setCurrentTab('live');
+    }
+  }, [user, currentTab, allowedTabs]);
+
+  const handleSelectTab = (tab: string) => {
+    if (allowedTabs.includes(tab)) {
+      setCurrentTab(tab);
+    } else {
+      setCurrentTab('live');
+    }
   };
 
   if (loading) {
@@ -76,7 +132,7 @@ export const App: React.FC = () => {
     <div className="min-h-screen bg-graphite-900 flex flex-col font-sans text-slate-100">
       <Navbar
         currentTab={currentTab}
-        onSelectTab={setCurrentTab}
+        onSelectTab={handleSelectTab}
         user={user}
         onLogout={handleLogout}
       />
@@ -84,8 +140,8 @@ export const App: React.FC = () => {
       <main className="flex-1">
         {currentTab === 'live' && (
           <LiveView
-            onNavigateToDevices={() => setCurrentTab('devices')}
-            onNavigateToAlarms={() => setCurrentTab('events')}
+            onNavigateToDevices={() => handleSelectTab('devices')}
+            onNavigateToAlarms={() => handleSelectTab('events')}
           />
         )}
         {currentTab === 'playback' && <Playback />}

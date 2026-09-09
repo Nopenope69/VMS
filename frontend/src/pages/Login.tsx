@@ -14,9 +14,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
 
   // Bootstrap form
-  const [tenantName, setTenantName] = useState('Central Security Facility');
-  const [adminName, setAdminName] = useState('Chief Security Officer');
-  const [setupToken, setSetupToken] = useState('vigilone_dev_setup_token_99182');
+  const [tenantName, setTenantName] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [setupToken, setSetupToken] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

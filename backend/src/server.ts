@@ -35,6 +35,7 @@ import archiveRoutes from './routes/archive.routes';
 import ssoRoutes from './routes/sso.routes';
 import privacyRoutes from './routes/privacy.routes';
 import floorplanRoutes from './routes/floorplan.routes';
+import webrtcRoutes from './routes/webrtc.routes';
 import requestLogger from './middleware/requestLogger';
 import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
@@ -45,6 +46,9 @@ import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Configure trust proxy for Caddy reverse proxy to correctly evaluate client IPs
+app.set('trust proxy', 1);
 
 // Security & Observability middleware
 // Strict Content Security Policy tailored for WebRTC WHEP media egress and same-origin SPA
@@ -98,7 +102,14 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(requestLogger);
 
 // Prometheus Metrics Scrape Endpoints
@@ -132,6 +143,7 @@ app.use('/api/v1/archive', archiveRoutes);
 app.use('/api/v1/sso', ssoRoutes);
 app.use('/api/v1/privacy', privacyRoutes);
 app.use('/api/v1/floorplans', floorplanRoutes);
+app.use('/api/v1/webrtc', webrtcRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -1,6 +1,52 @@
+import net from 'net';
 import { Discovery } from 'onvif';
 import onvifManager from './client';
 import { detectVendorFromManufacturer } from './quirks';
+
+export function validateProbeIp(ip: string): void {
+  if (!ip || typeof ip !== 'string') {
+    throw new Error('IP address is required');
+  }
+
+  // 1. Explicit IPv6 policy: Reject all IPv6 addresses
+  if (net.isIPv6(ip)) {
+    throw new Error('IPv6 addresses are not supported for ONVIF camera discovery');
+  }
+
+  // 2. Validate valid IPv4 format
+  if (!net.isIPv4(ip)) {
+    throw new Error(`Invalid IPv4 address format: ${ip}`);
+  }
+
+  // 3. Prohibit link-local cloud metadata (169.254.0.0/16, including 169.254.169.254)
+  if (ip.startsWith('169.254.')) {
+    throw new Error('Access to link-local and cloud metadata addresses (169.254.x.x) is strictly prohibited');
+  }
+
+  // 4. Prohibit loopback (127.0.0.0/8)
+  if (ip.startsWith('127.')) {
+    throw new Error('Access to loopback addresses is prohibited');
+  }
+
+  // 5. Prohibit multicast (224.0.0.0/4), broadcast, unspecified
+  if (ip === '0.0.0.0' || ip === '255.255.255.255') {
+    throw new Error('Invalid destination IP');
+  }
+  const firstOctet = parseInt(ip.split('.')[0], 10);
+  if (firstOctet >= 224) {
+    throw new Error('Multicast/reserved IP addresses are prohibited');
+  }
+
+  // 6. Enforce RFC1918 private subnets for CCTV camera networks
+  const isRfc1918 =
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+
+  if (!isRfc1918) {
+    throw new Error('Camera IP probes are restricted to RFC1918 private subnets (10.x, 172.16-31.x, 192.168.x)');
+  }
+}
 
 export interface DiscoveredCamera {
   ipAddress: string;
@@ -61,6 +107,7 @@ export class OnvifDiscoveryService {
     username?: string,
     password?: string
   ): Promise<DiscoveredCamera | null> {
+    validateProbeIp(ip);
     try {
       const info = await onvifManager.getDeviceInformation({
         hostname: ip,

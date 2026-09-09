@@ -11,6 +11,7 @@ export interface AuthUser {
   role: string;
   tenantId: string;
   active?: boolean;
+  sessionId?: string;
 }
 
 declare global {
@@ -22,10 +23,10 @@ declare global {
 }
 
 /**
- * Authoritative user resolver for active account verification.
- * Abstracted behind a helper function to facilitate in-memory caching or token version checks.
+ * Authoritative user resolver for active account & session verification.
+ * Supports immediate session revocation and token invalidation.
  */
-export async function getActiveUser(userId: string): Promise<AuthUser | null> {
+export async function getActiveUser(userId: string, sessionId?: string): Promise<AuthUser | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -42,12 +43,47 @@ export async function getActiveUser(userId: string): Promise<AuthUser | null> {
       return null;
     }
 
+    if (sessionId && (prisma as any).userSession) {
+      try {
+        const session = await (prisma as any).userSession.findUnique({
+          where: { id: sessionId },
+          select: {
+            id: true,
+            state: true,
+            expiresAt: true,
+            revokedAt: true,
+          },
+        });
+
+        if (
+          !session ||
+          session.state !== 'ACTIVE' ||
+          session.revokedAt ||
+          (session.expiresAt && session.expiresAt < new Date())
+        ) {
+          return null;
+        }
+
+        // Asynchronously touch lastActivityAt
+        (prisma as any).userSession
+          .update({
+            where: { id: sessionId },
+            data: { lastActivityAt: new Date() },
+          })
+          .catch(() => {});
+      } catch (sessionErr) {
+        console.error('[Auth] Error querying userSession:', sessionErr);
+        return null;
+      }
+    }
+
     return {
       id: user.id,
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
       active: user.active,
+      sessionId,
     };
   } catch (err) {
     console.error('[Auth] Error checking active user status:', err);
@@ -63,10 +99,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, config.JWT_SECRET) as AuthUser;
+    const decoded = jwt.verify(token, config.JWT_SECRET) as any;
 
-    // Immediate account revocation check: ensure user exists, is active, and retrieve current role
-    const activeUser = await getActiveUser(decoded.id);
+    // Immediate account & session revocation check: ensure user exists, is active, and session is valid
+    const activeUser = await getActiveUser(decoded.id, decoded.sessionId);
     if (!activeUser) {
       return res.status(401).json({
         error: 'Unauthorized: Account is deactivated or session is invalid',

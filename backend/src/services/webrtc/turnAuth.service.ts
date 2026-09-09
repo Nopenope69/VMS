@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import config from '../../config/env';
 
 export interface IceServerConfig {
   urls: string | string[];
@@ -11,10 +12,10 @@ export class TurnAuthService {
   private turnServerHost: string;
   private turnPort: number;
 
-  constructor() {
-    this.turnSecret = process.env.COTURN_SECRET || 'vigilone_turn_secret_dev_38921';
-    this.turnServerHost = process.env.COTURN_HOST || 'turn.vigilone.internal';
-    this.turnPort = Number(process.env.COTURN_PORT || 3478);
+  constructor(secret?: string, host?: string, port?: number) {
+    this.turnSecret = secret || process.env.COTURN_SECRET || config.COTURN_SECRET;
+    this.turnServerHost = host || process.env.COTURN_HOST || config.COTURN_HOST;
+    this.turnPort = port || Number(process.env.COTURN_PORT || config.COTURN_PORT);
   }
 
   /**
@@ -34,11 +35,10 @@ export class TurnAuthService {
       .digest('base64');
 
     const iceServers: IceServerConfig[] = [
-      // Public STUN server for NAT discovery
+      // Edge appliance STUN server for NAT traversal without external dependency
       {
         urls: [
           `stun:${this.turnServerHost}:${this.turnPort}`,
-          'stun:stun.l.google.com:19302',
         ],
       },
       // Ephemeral TURN relay servers (UDP and TCP)

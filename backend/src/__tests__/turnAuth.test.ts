@@ -22,7 +22,7 @@ describe('WebRTC TurnAuthService (RFC 5766 REST API)', () => {
     // STUN config
     const stunConfig = result.iceServers[0];
     expect(stunConfig.urls).toContain('stun:turn.test.vigilone.local:3478');
-    expect(stunConfig.urls).toContain('stun:stun.l.google.com:19302');
+    expect(JSON.stringify(stunConfig.urls)).not.toContain('stun.l.google.com');
     expect(stunConfig.username).toBeUndefined();
 
     // TURN config

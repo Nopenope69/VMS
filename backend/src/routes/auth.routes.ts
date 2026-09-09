@@ -11,6 +11,67 @@ import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../midd
 const router = Router();
 const prisma = new PrismaClient();
 
+function getCookie(req: Request, name: string): string | undefined {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return undefined;
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+async function createAuthSession(
+  user: { id: string; email: string; role: string; tenantId: string },
+  res: Response
+) {
+  let sessionId: string | undefined;
+  if ((prisma as any).userSession) {
+    try {
+      const session = await (prisma as any).userSession.create({
+        data: {
+          tenantId: user.tenantId,
+          userId: user.id,
+          state: 'ACTIVE',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days session validity
+        },
+      });
+      sessionId = session.id;
+    } catch (err) {
+      console.warn('[Auth] Unable to create userSession record, falling back to stateless token:', err);
+    }
+  }
+
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      ...(sessionId ? { sessionId } : {}),
+    },
+    config.JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+
+  const refreshToken = jwt.sign(
+    {
+      id: user.id,
+      ...(sessionId ? { sessionId } : {}),
+      type: 'refresh',
+    },
+    config.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/api/v1/auth',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  return { token, refreshToken, sessionId };
+}
+
 /**
  * Bootstrap endpoint for initial appliance deployment.
  * Automatically provisions Tenant, Site, Super Admin, and signs an evaluation Enterprise license.
@@ -108,15 +169,9 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
       metadata: { adminEmail: user.email, tenantName: tenant.name },
     });
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        tenantId: tenant.id,
-      },
-      config.JWT_SECRET,
-      { expiresIn: '7d' }
+    const { token, refreshToken } = await createAuthSession(
+      { id: user.id, email: user.email, role: user.role, tenantId: tenant.id },
+      res
     );
 
     return res.status(201).json({
@@ -125,6 +180,7 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
       site: tenant.sites[0],
       user: { id: user.id, email: user.email, role: user.role, name: user.name },
       token,
+      refreshToken,
     });
   } catch (err: any) {
     return res.status(500).json({ error: `Bootstrap failed: ${err.message}` });
@@ -166,15 +222,9 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
     // Clear failed attempt tracking upon successful authentication
     AuthRateLimiter.recordSuccessfulLogin(clientIp, email);
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        tenantId: user.tenantId,
-      },
-      config.JWT_SECRET,
-      { expiresIn: '7d' }
+    const { token, refreshToken } = await createAuthSession(
+      { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId },
+      res
     );
 
     // Record login audit event
@@ -190,6 +240,7 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
 
     return res.json({
       token,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -201,6 +252,140 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: `Login error: ${err.message}` });
+  }
+});
+
+/**
+ * Refresh access token using HttpOnly cookie or body refreshToken.
+ * Validates against server-side user session and active status.
+ */
+router.post('/refresh', async (req: Request, res: Response) => {
+  const cookieToken = getCookie(req, 'refreshToken');
+  const refreshToken = cookieToken || req.body?.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Unauthorized: Missing refresh token' });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
+    if (decoded.type !== 'refresh' || !decoded.id) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid refresh token claims' });
+    }
+
+    // Verify user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      include: { tenant: true },
+    });
+
+    if (!user || !user.active) {
+      return res.status(401).json({
+        error: 'Unauthorized: Account is deactivated or invalid',
+        code: 'ACCOUNT_DEACTIVATED',
+      });
+    }
+
+    // If session ID was attached, verify session is active
+    if (decoded.sessionId && (prisma as any).userSession) {
+      const session = await (prisma as any).userSession.findUnique({
+        where: { id: decoded.sessionId },
+      });
+
+      if (
+        !session ||
+        session.state !== 'ACTIVE' ||
+        session.revokedAt ||
+        (session.expiresAt && session.expiresAt < new Date())
+      ) {
+        return res.status(401).json({
+          error: 'Unauthorized: Session revoked or expired',
+          code: 'SESSION_REVOKED',
+        });
+      }
+
+      // Update session activity
+      (prisma as any).userSession
+        .update({
+          where: { id: decoded.sessionId },
+          data: { lastActivityAt: new Date() },
+        })
+        .catch(() => {});
+    }
+
+    // Mint fresh 15m access token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+        ...(decoded.sessionId ? { sessionId: decoded.sessionId } : {}),
+      },
+      config.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+        tenantName: user.tenant.name,
+      },
+    });
+  } catch (err) {
+    return res.status(401).json({ error: 'Unauthorized: Refresh token expired or invalid' });
+  }
+});
+
+/**
+ * Logout endpoint: revokes active session and clears HttpOnly refresh cookie.
+ */
+router.post('/logout', async (req: Request, res: Response) => {
+  try {
+    const cookieToken = getCookie(req, 'refreshToken');
+    const refreshToken = cookieToken || req.body?.refreshToken;
+    let sessionId: string | undefined;
+
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
+        sessionId = decoded.sessionId;
+      } catch {}
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!sessionId && authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], config.JWT_SECRET) as any;
+        sessionId = decoded.sessionId;
+      } catch {}
+    }
+
+    if (sessionId && (prisma as any).userSession) {
+      await (prisma as any).userSession.updateMany({
+        where: { id: sessionId },
+        data: {
+          state: 'REVOKED',
+          revokedAt: new Date(),
+        },
+      });
+    }
+
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/v1/auth',
+    });
+
+    return res.json({ message: 'Logged out successfully' });
+  } catch (err: any) {
+    return res.status(500).json({ error: `Logout failed: ${err.message}` });
   }
 });
 

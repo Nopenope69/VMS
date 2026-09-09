@@ -1298,11 +1298,11 @@ model ChainOfCustodyLog {
   resultHash        String?
   previousEventHash String?
   eventHash         String?
-  sequenceNumber    Int?
+  sequenceNumber    Int
   metadata          Json?
 
+  @@unique([tenantId, evidenceId, sequenceNumber])
   @@index([tenantId, evidenceId])
-  @@index([tenantId, evidenceId, sequenceNumber])
 }
 
 

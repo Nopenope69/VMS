@@ -40,8 +40,12 @@ router.post('/discover', authorize(Permission.CAMERA_CREATE), async (req: Reques
 
     if (mode === 'ip') {
       if (!ip) return res.status(400).json({ error: 'IP address is required for IP probe' });
-      const result = await OnvifDiscoveryService.probeIp(ip, port, username, password);
-      return res.json({ cameras: result ? [result] : [] });
+      try {
+        const result = await OnvifDiscoveryService.probeIp(ip, port, username, password);
+        return res.json({ cameras: result ? [result] : [] });
+      } catch (validationErr: any) {
+        return res.status(400).json({ error: validationErr.message });
+      }
     }
 
     if (mode === 'subnet') {

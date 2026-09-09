@@ -1,5 +1,14 @@
 {
     admin off
+    servers {
+        max_header_size 1MB
+        timeouts {
+            read_body 15s
+            read_header 5s
+            write 30s
+            idle 60s
+        }
+    }
 }
 
 # HTTP Port 80: Permanent redirect to HTTPS (except internal health check)
@@ -27,9 +36,21 @@ localhost, 127.0.0.1, :443 {
 
     tls internal
 
+    request_body {
+        max_size 10MB
+    }
+
     # Block external access to internal webhook endpoints
     handle /api/v1/internal/* {
         respond "Forbidden: Internal Network Only" 403
+    }
+
+    # Block external access to metrics exposition
+    handle /metrics* {
+        respond "Forbidden: Internal Monitoring Only" 403
+    }
+    handle /api/v1/metrics* {
+        respond "Forbidden: Internal Monitoring Only" 403
     }
 
     # WHEP WebRTC Signaling Proxy (Strips /whep prefix)

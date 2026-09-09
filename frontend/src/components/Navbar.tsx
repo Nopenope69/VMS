@@ -47,19 +47,25 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
     return () => clearInterval(interval);
   }, []);
 
-  const navItems = [
-    { id: 'live', label: 'Live Grid', icon: Camera },
-    { id: 'investigation', label: 'Investigation', icon: Film },
-    { id: 'floorplans', label: 'Floorplans', icon: Compass },
-    { id: 'devices', label: 'Cameras', icon: HardDrive },
-    { id: 'anpr', label: 'ANPR & Fleet', icon: Car },
-    { id: 'events', label: 'Events', icon: Bell, badge: unackAlarms },
-    { id: 'evidence', label: 'Section 63 Evidence', icon: ShieldCheck },
-    { id: 'identity', label: 'SSO & Identity', icon: KeyRound },
-    { id: 'federation', label: 'Edge Mesh', icon: Network },
-    { id: 'users', label: 'Staff', icon: Users },
-    { id: 'audit', label: 'Audit Trail', icon: FileText },
+  const role = user?.role || 'VIEWER';
+
+  const allNavItems = [
+    { id: 'live', label: 'Live Grid', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'investigation', label: 'Investigation', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'floorplans', label: 'Floorplans', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'devices', label: 'Cameras', icon: HardDrive, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'anpr', label: 'ANPR & Fleet', icon: Car, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'events', label: 'Events', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'evidence', label: 'Section 63 Evidence', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'identity', label: 'SSO & Identity', icon: KeyRound, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'federation', label: 'Edge Mesh', icon: Network, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'users', label: 'Staff', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'audit', label: 'Audit Trail', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
   ];
+
+  const navItems = allNavItems.filter((item) => item.roles.includes(role));
+  const canManageNotifications = role === 'OPERATOR' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
+  const canBackup = role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
 
   return (
     <header className="bg-graphite-850 border-b border-graphite-700 select-none">
@@ -110,21 +116,25 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
 
         {/* Action icons & User profile & logout */}
         <div className="flex items-center space-x-3 text-xs">
-          <button
-            onClick={() => setShowNotificationModal(true)}
-            title="Notification Channels & Webhooks"
-            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-amber transition"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+          {canManageNotifications && (
+            <button
+              onClick={() => setShowNotificationModal(true)}
+              title="Notification Channels & Webhooks"
+              className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-amber transition"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          )}
 
-          <button
-            onClick={() => setShowBackupModal(true)}
-            title="Disaster Recovery & Appliance Backup"
-            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-teal transition"
-          >
-            <Archive className="w-4 h-4" />
-          </button>
+          {canBackup && (
+            <button
+              onClick={() => setShowBackupModal(true)}
+              title="Disaster Recovery & Appliance Backup"
+              className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-teal transition"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
+          )}
 
           <div className="h-4 w-px bg-graphite-700 mx-1" />
 

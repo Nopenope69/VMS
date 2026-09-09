@@ -23,13 +23,17 @@ export class WhepClient {
     this.options.onStatusChange?.('connecting');
 
     try {
-      // 1. Fetch fresh short-lived media token from backend
-      const tokenRes = await api.post(`/cameras/${this.options.cameraId}/media-token`);
+      // 1. Fetch fresh short-lived media token and dynamic ICE config from backend
+      const [tokenRes, iceRes] = await Promise.all([
+        api.post(`/cameras/${this.options.cameraId}/media-token`),
+        api.get('/webrtc/ice-config').catch(() => ({ data: { iceServers: [] } })),
+      ]);
       const { token, whepUrl } = tokenRes.data;
+      const iceServers = iceRes.data?.iceServers?.length > 0 ? iceRes.data.iceServers : undefined;
 
-      // 2. Initialize RTCPeerConnection with audio & video receive transceivers
+      // 2. Initialize RTCPeerConnection with dynamic appliance ICE configuration
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers,
       });
       this.peerConnection = pc;
 
