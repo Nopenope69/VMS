@@ -1,0 +1,18 @@
+[Unit]
+Description=VigilOne Commercial CCTV Surveillance Appliance
+Documentation=https://github.com/Nopenope69/VMS
+After=docker.service network-online.target var-lib-vigilone-recordings.mount
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/vigilone
+ExecStart=/usr/bin/docker compose -f /opt/vigilone/docker-compose.yml -f /opt/vigilone/deploy/packaging/docker-compose.prod.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/vigilone/docker-compose.yml -f /opt/vigilone/deploy/packaging/docker-compose.prod.yml down
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+# ==============================================================================
+# VigilOne VMS - Production Appliance Compose Override
+#
+# NETWORK ISOLATION CONTRACT:
+# 1. External Ingress: Only TCP 80 (redirect), TCP 443 (Caddy), and 8189 UDP/TCP (WebRTC ICE).
+# 2. Private Services: PostgreSQL (5432), MediaMTX API (9997), and MediaMTX RTSP (8554)
+#    are NEVER published to host interfaces (0.0.0.0).
+# 3. Dedicated CCTV Storage: Bound to /var/lib/vigilone/recordings.
+# 4. Appliance Secret Vault: Bound to /etc/vigilone (chmod 600).
+# ==============================================================================
+
+services:
+  caddy:
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/vigilone/ssl:/etc/vigilone/ssl:ro
+
+  mediamtx:
+    restart: always
+    ports:
+      # Strictly WebRTC ICE Media Transport (UDP + TCP fallback)
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
+    volumes:
+      - /var/lib/vigilone/recordings:/recordings
+
+  postgres:
+    restart: always
+    # Explicitly empty host ports - accessible ONLY within internal vigilone-net
+    ports: []
+    volumes:
+      - /var/lib/vigilone/postgres:/var/lib/postgresql/data
+
+  backend:
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - RECORDINGS_DIR=/recordings
+      - EXPORTS_DIR=/recordings/exports
+    volumes:
+      - /var/lib/vigilone/recordings:/recordings
+      - /etc/vigilone:/etc/vigilone:ro

@@ -37,6 +37,7 @@ import privacyRoutes from './routes/privacy.routes';
 import floorplanRoutes from './routes/floorplan.routes';
 import webrtcRoutes from './routes/webrtc.routes';
 import storageRoutes from './routes/storage.routes';
+import applianceRoutes from './routes/appliance.routes';
 import requestLogger from './middleware/requestLogger';
 import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
@@ -146,6 +147,7 @@ app.use('/api/v1/privacy', privacyRoutes);
 app.use('/api/v1/floorplans', floorplanRoutes);
 app.use('/api/v1/webrtc', webrtcRoutes);
 app.use('/api/v1/system/storage', storageRoutes);
+app.use('/api/v1/system/appliance', applianceRoutes);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -14,6 +14,8 @@ import Investigation from './pages/Investigation';
 import FloorplanView from './pages/FloorplanView';
 import IdentitySettings from './pages/IdentitySettings';
 import StorageManagement from './pages/StorageManagement';
+import ApplianceConsole from './pages/ApplianceConsole';
+import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 
@@ -22,6 +24,7 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<any | null>(null);
   const [currentTab, setCurrentTab] = useState('live');
   const [loading, setLoading] = useState(true);
+  const [isBootstrapped, setIsBootstrapped] = useState<boolean | null>(null);
 
   const handleLogout = useCallback(() => {
     api.post('/auth/logout').catch(() => {});
@@ -41,16 +44,36 @@ export const App: React.FC = () => {
       } catch {}
     }
 
-    // Transparently refresh in-memory access token via HttpOnly cookie
+    // Step 1: Query appliance bootstrap state
     api
-      .post('/auth/refresh')
-      .then((res) => {
-        setAccessToken(res.data.token);
-        setToken(res.data.token);
-        setUser(res.data.user);
-        localStorage.setItem('vigilone_user', JSON.stringify(res.data.user));
+      .get('/auth/bootstrap/status')
+      .then((statusRes) => {
+        if (statusRes.data && statusRes.data.isBootstrapped === false) {
+          setIsBootstrapped(false);
+          setLoading(false);
+          return;
+        }
+
+        setIsBootstrapped(true);
+
+        // Step 2: Transparently refresh in-memory access token via HttpOnly cookie
+        return api
+          .post('/auth/refresh')
+          .then((res) => {
+            setAccessToken(res.data.token);
+            setToken(res.data.token);
+            setUser(res.data.user);
+            localStorage.setItem('vigilone_user', JSON.stringify(res.data.user));
+          })
+          .catch(() => {
+            setAccessToken(null);
+            setToken(null);
+            setUser(null);
+          });
       })
       .catch(() => {
+        // Fallback: assume bootstrapped and attempt login
+        setIsBootstrapped(true);
         setAccessToken(null);
         setToken(null);
         setUser(null);
@@ -99,6 +122,7 @@ export const App: React.FC = () => {
       'audit',
       'license',
       'storage',
+      'appliance',
     ],
   };
 
@@ -124,6 +148,19 @@ export const App: React.FC = () => {
       <div className="min-h-screen bg-graphite-900 flex items-center justify-center text-slate-400 font-mono text-xs">
         Initializing VigilOne Surveillance Appliance...
       </div>
+    );
+  }
+
+  // If appliance has not been provisioned, present zero-terminal first-run setup wizard
+  if (isBootstrapped === false) {
+    return (
+      <FirstRunWizard
+        onBootstrapComplete={(userData, userToken) => {
+          setIsBootstrapped(true);
+          handleLoginSuccess(userData, userToken);
+        }}
+        onSwitchToLogin={() => setIsBootstrapped(true)}
+      />
     );
   }
 
@@ -160,6 +197,7 @@ export const App: React.FC = () => {
         {currentTab === 'audit' && <AuditLogs />}
         {currentTab === 'license' && <License />}
         {currentTab === 'storage' && <StorageManagement />}
+        {currentTab === 'appliance' && <ApplianceConsole />}
       </main>
     </div>
   );

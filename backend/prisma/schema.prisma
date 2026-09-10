@@ -1403,3 +1403,14 @@ model StorageEpoch {
   @@unique([cameraId, epochNumber])
   @@index([tenantId, cameraId, epochNumber])
 }
+
+model ApplianceState {
+  id                    String    @id @default("SINGLETON")
+  isBootstrapped        Boolean   @default(false)
+  bootstrappedAt        DateTime?
+  initializationVersion String?   @default("1.0.0")
+  applianceId           String    @default(uuid())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+

@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">VigilOne Surveillance Appliance</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+    <txt-record>model=VigilOne-NVR-Appliance</txt-record>
+  </service>
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+    <txt-record>model=VigilOne-NVR-Appliance</txt-record>
+    <txt-record>app=vigilone-vms</txt-record>
+  </service>
+</service-group>

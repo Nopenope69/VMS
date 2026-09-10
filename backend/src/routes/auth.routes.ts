@@ -9,7 +9,11 @@ import { AuditChainService } from '../services/audit/auditChain.service';
 import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
-const prisma = new PrismaClient();
+let prisma = new PrismaClient();
+
+export function setAuthPrismaClient(client: any) {
+  prisma = client;
+}
 
 function getCookie(req: Request, name: string): string | undefined {
   const cookieHeader = req.headers.cookie;
@@ -73,9 +77,37 @@ async function createAuthSession(
 }
 
 /**
+ * Minimal unauthenticated bootstrap status check for frontend router.
+ * Strictly returns { isBootstrapped: boolean } without leaking internal stats.
+ */
+router.get('/bootstrap/status', async (_req: Request, res: Response) => {
+  try {
+    let isBootstrapped = false;
+    if (typeof (prisma as any).applianceState?.findUnique === 'function') {
+      const state = await (prisma as any).applianceState.findUnique({
+        where: { id: 'SINGLETON' },
+      });
+      if (state) {
+        isBootstrapped = state.isBootstrapped;
+      }
+    }
+
+    if (!isBootstrapped && typeof prisma.user?.count === 'function') {
+      const count = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+      isBootstrapped = count > 0;
+    }
+
+    return res.status(200).json({ isBootstrapped });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to query bootstrap status' });
+  }
+});
+
+/**
  * Bootstrap endpoint for initial appliance deployment.
  * Automatically provisions Tenant, Site, Super Admin, and signs an evaluation Enterprise license.
- * Enforces one-time lifecycle: permanently returns 410 Gone once a SUPER_ADMIN exists.
+ * Enforces atomic one-time lifecycle with PostgreSQL transactional advisory lock and ApplianceState singleton.
+ * Permanently returns 410 Gone once initialized.
  */
 router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Response) => {
   const setupHeader = req.headers['x-setup-token'];
@@ -83,106 +115,163 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid setup token' });
   }
 
-  // 1. One-time bootstrap lifecycle invariant: fail permanently if already initialized
-  const superAdminCount = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
-  if (superAdminCount > 0) {
-    return res.status(410).json({
-      error: 'Appliance already initialized. Bootstrap is permanently disabled.',
-      code: 'BOOTSTRAP_ALREADY_COMPLETED',
-    });
-  }
-
-  const { tenantName, adminEmail, adminPassword, adminName } = req.body;
+  const { tenantName, adminEmail, adminPassword, adminName, siteTimezone } = req.body;
 
   if (!tenantName || !adminEmail || !adminPassword) {
     return res.status(400).json({ error: 'tenantName, adminEmail, and adminPassword are required' });
   }
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
-    if (existing) {
-      return res.status(400).json({ error: 'User with this email already exists' });
-    }
+    // Wrap entire bootstrap execution in an interactive transaction with PostgreSQL advisory lock
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Acquire transactional advisory lock to eliminate concurrent bootstrap race conditions
+      if (typeof (tx as any).$executeRawUnsafe === 'function') {
+        try {
+          await (tx as any).$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('vigilone_bootstrap_lock'))`);
+        } catch {}
+      }
 
-    const tenantSlug = tenantName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const tenant = await prisma.tenant.create({
-      data: {
-        name: tenantName,
-        slug: `${tenantSlug}-${Date.now()}`,
-        sites: {
-          create: {
-            name: 'Primary Site',
-            timezone: 'Asia/Kolkata',
+      // 2. Check durable ApplianceState singleton
+      if (typeof (tx as any).applianceState?.findUnique === 'function') {
+        const state = await (tx as any).applianceState.findUnique({
+          where: { id: 'SINGLETON' },
+        });
+        if (state?.isBootstrapped) {
+          const err: any = new Error('Appliance already initialized. Bootstrap is permanently disabled.');
+          err.statusCode = 410;
+          err.code = 'BOOTSTRAP_ALREADY_COMPLETED';
+          throw err;
+        }
+      }
+
+      // Also verify SUPER_ADMIN count as defense-in-depth
+      const superAdminCount = await tx.user.count({ where: { role: 'SUPER_ADMIN' } });
+      if (superAdminCount > 0) {
+        const err: any = new Error('Appliance already initialized. Bootstrap is permanently disabled.');
+        err.statusCode = 410;
+        err.code = 'BOOTSTRAP_ALREADY_COMPLETED';
+        throw err;
+      }
+
+      const existing = await tx.user.findUnique({ where: { email: adminEmail } });
+      if (existing) {
+        const err: any = new Error('User with this email already exists');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const tenantSlug = tenantName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const tenant = await tx.tenant.create({
+        data: {
+          name: tenantName,
+          slug: `${tenantSlug}-${Date.now()}`,
+          sites: {
+            create: {
+              name: 'Primary Site',
+              timezone: siteTimezone || 'Asia/Kolkata',
+            },
           },
         },
-      },
-      include: { sites: true },
-    });
+        include: { sites: true },
+      });
 
-    // Automatically mint an initial evaluation Enterprise License (16 cameras)
-    const now = new Date();
-    const evaluationClaims: LicenseClaims = {
-      licenseId: `lic_eval_${Date.now()}`,
-      tenantId: tenant.id,
-      tier: 'ENTERPRISE',
-      maxCameras: 16,
-      features: ['EVIDENCE_EXPORT', 'ADVANCED_PTZ', 'MULTI_SITE', 'ANPR', 'AUDIT_INTEGRITY'],
-      issuedAt: now.toISOString(),
-      expiresAt: null, // Perpetual evaluation on appliance
-    };
-
-    const licenseArtifact = signLicensePayload(evaluationClaims);
-
-    await prisma.license.create({
-      data: {
+      // Automatically mint an initial evaluation Enterprise License (16 cameras)
+      const now = new Date();
+      const evaluationClaims: LicenseClaims = {
+        licenseId: `lic_eval_${Date.now()}`,
         tenantId: tenant.id,
-        licenseId: evaluationClaims.licenseId,
-        tier: LicenseTier.ENTERPRISE,
+        tier: 'ENTERPRISE',
         maxCameras: 16,
-        features: evaluationClaims.features,
-        signedPayload: licenseArtifact.signedPayload,
-        signatureEd25519: licenseArtifact.signatureEd25519,
-      },
-    });
+        features: ['EVIDENCE_EXPORT', 'ADVANCED_PTZ', 'MULTI_SITE', 'ANPR', 'AUDIT_INTEGRITY'],
+        issuedAt: now.toISOString(),
+        expiresAt: null, // Perpetual evaluation on appliance
+      };
 
-    const passwordHash = await bcrypt.hash(adminPassword, 12);
-    const user = await prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: adminEmail,
-        passwordHash,
-        name: adminName || 'System Admin',
-        role: 'SUPER_ADMIN',
-        active: true,
-      },
+      const licenseArtifact = signLicensePayload(evaluationClaims);
+
+      await tx.license.create({
+        data: {
+          tenantId: tenant.id,
+          licenseId: evaluationClaims.licenseId,
+          tier: LicenseTier.ENTERPRISE,
+          maxCameras: 16,
+          features: evaluationClaims.features,
+          signedPayload: licenseArtifact.signedPayload,
+          signatureEd25519: licenseArtifact.signatureEd25519,
+        },
+      });
+
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      const user = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: adminEmail,
+          passwordHash,
+          name: adminName || 'System Admin',
+          role: 'SUPER_ADMIN',
+          active: true,
+        },
+      });
+
+      // Mark appliance as durably initialized
+      if (typeof (tx as any).applianceState?.upsert === 'function') {
+        try {
+          await (tx as any).applianceState.upsert({
+            where: { id: 'SINGLETON' },
+            create: {
+              id: 'SINGLETON',
+              isBootstrapped: true,
+              bootstrappedAt: now,
+              initializationVersion: '1.0.0',
+            },
+            update: {
+              isBootstrapped: true,
+              bootstrappedAt: now,
+            },
+          });
+        } catch {}
+      }
+
+      return { tenant, user };
     });
 
     // Record bootstrap audit event
-    await AuditChainService.record(prisma, {
-      tenantId: tenant.id,
-      userId: user.id,
-      action: 'SYSTEM_BOOTSTRAP',
-      resourceType: 'Tenant',
-      resourceId: tenant.id,
-      ipAddress: req.ip || '127.0.0.1',
-      userAgent: req.headers['user-agent'],
-      metadata: { adminEmail: user.email, tenantName: tenant.name },
-    });
+    try {
+      await AuditChainService.record(prisma, {
+        tenantId: result.tenant.id,
+        userId: result.user.id,
+        action: 'SYSTEM_BOOTSTRAP',
+        resourceType: 'Tenant',
+        resourceId: result.tenant.id,
+        ipAddress: req.ip || '127.0.0.1',
+        userAgent: req.headers['user-agent'],
+        metadata: { adminEmail: result.user.email, tenantName: result.tenant.name },
+      });
+    } catch {}
 
     const { token, refreshToken } = await createAuthSession(
-      { id: user.id, email: user.email, role: user.role, tenantId: tenant.id },
+      { id: result.user.id, email: result.user.email, role: result.user.role, tenantId: result.tenant.id },
       res
     );
 
     return res.status(201).json({
       message: 'Appliance bootstrapped successfully with Enterprise evaluation license',
-      tenant: { id: tenant.id, name: tenant.name },
-      site: tenant.sites[0],
-      user: { id: user.id, email: user.email, role: user.role, name: user.name },
+      tenant: { id: result.tenant.id, name: result.tenant.name },
+      site: result.tenant.sites[0],
+      user: { id: result.user.id, email: result.user.email, role: result.user.role, name: result.user.name },
       token,
       refreshToken,
     });
   } catch (err: any) {
+    if (err.statusCode === 410 || err.code === 'BOOTSTRAP_ALREADY_COMPLETED') {
+      return res.status(410).json({
+        error: 'Appliance already initialized. Bootstrap is permanently disabled.',
+        code: 'BOOTSTRAP_ALREADY_COMPLETED',
+      });
+    }
+    if (err.statusCode === 400) {
+      return res.status(400).json({ error: err.message });
+    }
     return res.status(500).json({ error: `Bootstrap failed: ${err.message}` });
   }
 });

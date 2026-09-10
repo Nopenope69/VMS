@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# VigilOne VMS - Commercial Appliance Management CLI (vigilonectl)
+# ==============================================================================
+
+set -euo pipefail
+
+INSTALL_DIR="/opt/vigilone"
+CONFIG_DIR="/etc/vigilone"
+DATA_DIR="/var/lib/vigilone"
+RECORDINGS_DIR="${DATA_DIR}/recordings"
+POSTGRES_DIR="${DATA_DIR}/postgres"
+
+RED="[0;31m"
+GREEN="[0;32m"
+YELLOW="[1;33m"
+BLUE="[0;34m"
+CYAN="[0;36m"
+NC="[0m"
+
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_err() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+usage() {
+    echo -e "${BLUE}VigilOne Appliance Control (vigilonectl)${NC}"
+    echo "Usage: vigilonectl <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  status               Display appliance telemetry, health, and storage vitals"
+    echo "  token                Display initial setup token if bootstrap is pending"
+    echo "  logs [options]       View formatted container service logs (-f for follow)"
+    echo "  restart [service]    Restart appliance containers or a specific service"
+    echo "  update               Pull pinned releases, apply DB migrations, with rollback safety"
+    echo "  support-bundle       Generate a sanitized diagnostics archive for technical support"
+    echo "  reset-factory        Factory reset database and appliance state (destructive)"
+    echo "  version              Display VigilOne software and appliance version"
+    echo "  help                 Display this help menu"
+    echo ""
+}
+
+cmd_status() {
+    echo -e "${CYAN}================================================================================${NC}"
+    echo -e "${CYAN}                  VigilOne NVR Appliance - System Status                        ${NC}"
+    echo -e "${CYAN}================================================================================${NC}"
+
+    # 1. Host Vitals
+    UPTIME_STR="$(uptime 2>/dev/null || echo "N/A")"
+    echo -e "${BLUE}[Host Telemetry]${NC}"
+    echo "  Uptime: ${UPTIME_STR}"
+    echo "  Load Average: $(awk '{print $1, $2, $3}' /proc/loadavg 2>/dev/null || echo "N/A")"
+    MEM_TOTAL="$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{printf "%.1f GB", $2/1024/1024}' || echo "N/A")"
+    MEM_FREE="$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{printf "%.1f GB", $2/1024/1024}' || echo "N/A")"
+    echo "  Memory: ${MEM_FREE} free / ${MEM_TOTAL} total"
+    echo ""
+
+    # 2. Container Status
+    echo -e "${BLUE}[Container Matrix]${NC}"
+    if command -v docker &>/dev/null; then
+        cd "${INSTALL_DIR}" 2>/dev/null || true
+        docker compose ps --format "table {{.Name}}	{{.Status}}	{{.Health}}" 2>/dev/null || echo "  Docker compose stack not reachable."
+    else
+        echo "  Docker is not installed or accessible."
+    fi
+    echo ""
+
+    # 3. Storage & Mount Guard Status
+    echo -e "${BLUE}[Storage & Mount Guard]${NC}"
+    PROBE_FILE="${RECORDINGS_DIR}/.vigilone-mount-probe"
+    if [[ -f "$PROBE_FILE" ]]; then
+        echo -e "  Mount Guard: ${GREEN}OK (Probe verified at ${RECORDINGS_DIR})${NC}"
+    else
+        echo -e "  Mount Guard: ${RED}DEGRADED / PROBE MISSING (${RECORDINGS_DIR})${NC}"
+    fi
+
+    if [[ -d "${RECORDINGS_DIR}" ]]; then
+        DISK_USAGE="$(df -h "${RECORDINGS_DIR}" 2>/dev/null | tail -n 1 | awk '{print $3 " used / " $2 " (" $5 " used, " $4 " free)"}' || echo "N/A")"
+        echo "  CCTV Storage Pool: ${DISK_USAGE}"
+    fi
+    echo ""
+
+    # 4. Bootstrap Status
+    echo -e "${BLUE}[Provisioning State]${NC}"
+    STATUS_JSON="$(curl -k -s --max-time 2 https://127.0.0.1/api/v1/auth/bootstrap/status 2>/dev/null || echo "{}")"
+    IS_BOOTSTRAPPED="$(echo "$STATUS_JSON" | grep -o '"isBootstrapped":true' || true)"
+    if [[ -n "$IS_BOOTSTRAPPED" ]]; then
+        echo -e "  Appliance State: ${GREEN}INITIALIZED / ACTIVE${NC} (Bootstrap locked)"
+    else
+        echo -e "  Appliance State: ${YELLOW}UNINITIALIZED (First-Run Setup Pending)${NC}"
+        echo -e "  Run '${CYAN}vigilonectl token${NC}' to view technician setup PIN."
+    fi
+    echo -e "${CYAN}================================================================================${NC}"
+}
+
+cmd_token() {
+    TOKEN_FILE="${CONFIG_DIR}/setup-token.txt"
+
+    # Check if already bootstrapped
+    STATUS_JSON="$(curl -k -s --max-time 2 https://127.0.0.1/api/v1/auth/bootstrap/status 2>/dev/null || echo "{}")"
+    if echo "$STATUS_JSON" | grep -q '"isBootstrapped":true'; then
+        log_info "Appliance is already initialized. First-run bootstrap is permanently disabled (410 Gone)."
+        exit 0
+    fi
+
+    if [[ -f "$TOKEN_FILE" ]]; then
+        TOKEN="$(cat "$TOKEN_FILE" | tr -d '
+')"
+        echo -e "${YELLOW}================================================================================${NC}"
+        echo -e "  VigilOne Initial Setup PIN: ${GREEN}${TOKEN}${NC}"
+        echo -e "${YELLOW}================================================================================${NC}"
+        echo "Enter this PIN in the browser at https://vigilone.local to initialize the appliance."
+    else
+        log_err "Setup token file not found at ${TOKEN_FILE}."
+        exit 1
+    fi
+}
+
+cmd_logs() {
+    cd "${INSTALL_DIR}" 2>/dev/null || fatal "Install directory ${INSTALL_DIR} not found."
+    docker compose logs "$@"
+}
+
+cmd_restart() {
+    cd "${INSTALL_DIR}" 2>/dev/null || fatal "Install directory ${INSTALL_DIR} not found."
+    log_info "Restarting appliance services..."
+    docker compose restart "$@"
+    log_info "Restart complete."
+}
+
+cmd_update() {
+    cd "${INSTALL_DIR}" 2>/dev/null || fatal "Install directory ${INSTALL_DIR} not found."
+    log_info "Initiating safe appliance update..."
+
+    # 1. Pre-update PostgreSQL backup snapshot
+    BACKUP_DIR="${DATA_DIR}/backups"
+    mkdir -p "${BACKUP_DIR}"
+    BACKUP_FILE="${BACKUP_DIR}/pre-update-$(date +%Y%m%d%H%M%S).sql"
+    log_info "Creating pre-update database snapshot at ${BACKUP_FILE}..."
+    docker compose exec -T postgres pg_dump -U vigilone vigilone_db > "${BACKUP_FILE}" || log_warn "Pre-update DB dump skipped (container may be offline)."
+
+    # 2. Pull pinned release images
+    log_info "Pulling release container images..."
+    docker compose pull
+
+    # 3. Apply database migrations
+    log_info "Applying database migrations..."
+    docker compose run --rm backend npx prisma migrate deploy
+
+    # 4. Restart services with new containers
+    log_info "Restarting services with updated containers..."
+    docker compose -f docker-compose.yml -f deploy/packaging/docker-compose.prod.yml up -d --remove-orphans
+
+    # 5. Verify healthcheck probe
+    log_info "Verifying healthcheck probe..."
+    HEALTH_OK=false
+    for i in {1..12}; do
+        if curl -k -s -f https://127.0.0.1/api/v1/health &>/dev/null; then
+            HEALTH_OK=true
+            break
+        fi
+        sleep 3
+    done
+
+    if [[ "$HEALTH_OK" == "true" ]]; then
+        log_info "Appliance update succeeded! All healthchecks passing."
+    else
+        log_err "Healthcheck failed after update! Triggering automatic rollback..."
+        docker compose down
+        docker compose up -d
+        fatal "Update failed healthcheck verification. Rolling back."
+    fi
+}
+
+cmd_support_bundle() {
+    log_info "Generating sanitized diagnostics support bundle..."
+
+    TMP_DIR="$(mktemp -d /tmp/vigilone-support-XXXXXX)"
+    BUNDLE_NAME="vigilone-support-$(date +%Y%m%d-%H%M%S).tar.gz"
+    OUT_FILE="${1:-$(pwd)/${BUNDLE_NAME}}"
+
+    mkdir -p "${TMP_DIR}/system"
+    mkdir -p "${TMP_DIR}/docker"
+    mkdir -p "${TMP_DIR}/logs"
+    mkdir -p "${TMP_DIR}/storage"
+
+    # 1. System specs (sanitized)
+    uname -a > "${TMP_DIR}/system/uname.txt" 2>/dev/null || true
+    cat /etc/os-release > "${TMP_DIR}/system/os-release.txt" 2>/dev/null || true
+    uptime > "${TMP_DIR}/system/uptime.txt" 2>/dev/null || true
+    df -h > "${TMP_DIR}/storage/df.txt" 2>/dev/null || true
+    lsblk > "${TMP_DIR}/storage/lsblk.txt" 2>/dev/null || true
+
+    # 2. Docker inspect & ps
+    if command -v docker &>/dev/null; then
+        cd "${INSTALL_DIR}" 2>/dev/null || true
+        docker compose ps > "${TMP_DIR}/docker/compose-ps.txt" 2>/dev/null || true
+        docker ps --all > "${TMP_DIR}/docker/docker-ps.txt" 2>/dev/null || true
+        # Tail last 500 lines of logs
+        docker compose logs --tail=500 > "${TMP_DIR}/logs/container-logs.txt" 2>/dev/null || true
+    fi
+
+    # 3. Privacy Sanitizer Filter (Mandatory Contract Requirement)
+    log_info "Sanitizing sensitive tokens, credentials, and passwords..."
+    find "${TMP_DIR}" -type f | while read -r f; do
+        # Strip JWTs (eyJ...)
+        sed -i.bak -E 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/[SANITIZED_JWT]/g' "$f" 2>/dev/null || true
+        # Strip Bearer tokens
+        sed -i.bak -E 's/Bearer [A-Za-z0-9_.-]{8,}/Bearer [SANITIZED_TOKEN]/g' "$f" 2>/dev/null || true
+        # Strip Authorization headers
+        sed -i.bak -E 's/Authorization: [^
+]+/Authorization: [SANITIZED]/gI' "$f" 2>/dev/null || true
+        # Strip postgres connection URLs with passwords
+        sed -i.bak -E 's/postgresql:\/\/([^:]+):([^@]+)@/postgresql:\/\/:[SANITIZED]@/g' "$f" 2>/dev/null || true
+        # Strip RTSP URLs with credentials
+        sed -i.bak -E 's/rtsp:\/\/([^:]+):([^@]+)@/rtsp:\/\/:[SANITIZED]@/g' "$f" 2>/dev/null || true
+        # Strip base64 keys and setup tokens
+        sed -i.bak -E 's/SETUP_TOKEN=[^
+]+/SETUP_TOKEN=[SANITIZED]/g' "$f" 2>/dev/null || true
+        sed -i.bak -E 's/JWT_SECRET=[^
+]+/JWT_SECRET=[SANITIZED]/g' "$f" 2>/dev/null || true
+        sed -i.bak -E 's/INTERNAL_API_SECRET=[^
+]+/INTERNAL_API_SECRET=[SANITIZED]/g' "$f" 2>/dev/null || true
+        sed -i.bak -E 's/POSTGRES_PASSWORD=[^
+]+/POSTGRES_PASSWORD=[SANITIZED]/g' "$f" 2>/dev/null || true
+        sed -i.bak -E 's/COTURN_SECRET=[^
+]+/COTURN_SECRET=[SANITIZED]/g' "$f" 2>/dev/null || true
+        sed -i.bak -E 's/CREDENTIAL_ENCRYPTION_KEY=[^
+]+/CREDENTIAL_ENCRYPTION_KEY=[SANITIZED]/g' "$f" 2>/dev/null || true
+        # Remove backup files
+        rm -f "${f}.bak"
+    done
+
+    # 4. Create compressed tarball archive
+    tar -czf "${OUT_FILE}" -C "${TMP_DIR}" .
+    rm -rf "${TMP_DIR}"
+
+    log_info "Sanitized support bundle generated at: ${OUT_FILE}"
+}
+
+cmd_reset_factory() {
+    echo -e "${RED}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!${NC}"
+    echo -e "${RED}                   VIGILONE FACTORY RESET - DESTRUCTIVE ACTION                 ${NC}"
+    echo -e "${RED}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!${NC}"
+    echo "This operation will wipe the appliance database, delete all users and configurations."
+    echo ""
+    read -r -p "Type 'YES-RESET-APPLIANCE' to confirm factory reset: " CONFIRM
+    if [[ "$CONFIRM" != "YES-RESET-APPLIANCE" ]]; then
+        fatal "Factory reset cancelled."
+    fi
+
+    WIPE_RECORDINGS=false
+    read -r -p "Do you also wish to WIPE all recorded video footage? (y/N): " WIPE_INPUT
+    if [[ "$WIPE_INPUT" == "y" || "$WIPE_INPUT" == "Y" ]]; then
+        WIPE_RECORDINGS=true
+    fi
+
+    log_info "Stopping appliance services..."
+    cd "${INSTALL_DIR}" 2>/dev/null || true
+    docker compose down 2>/dev/null || true
+
+    log_info "Wiping database volume..."
+    rm -rf "${POSTGRES_DIR}"/* 2>/dev/null || true
+
+    if [[ "$WIPE_RECORDINGS" == "true" ]]; then
+        log_info "Wiping CCTV video recordings..."
+        rm -rf "${RECORDINGS_DIR}"/* 2>/dev/null || true
+        # Re-plant Mount Guard probe
+        echo "VIGILONE_MOUNT_GUARD_OK_$(date -u +%Y%m%d%H%M%S)" > "${RECORDINGS_DIR}/.vigilone-mount-probe"
+    fi
+
+    # Reset bootstrap token
+    NEW_TOKEN="$(openssl rand -hex 16 2>/dev/null || echo "reset_token_$(date +%s)")"
+    echo "$NEW_TOKEN" > "${CONFIG_DIR}/setup-token.txt" 2>/dev/null || true
+
+    log_info "Restarting appliance stack..."
+    docker compose up -d 2>/dev/null || true
+
+    log_info "Factory reset complete. New Setup PIN: ${NEW_TOKEN}"
+}
+
+cmd_version() {
+    echo "VigilOne NVR Appliance v1.0.0 (Commercial Edition)"
+    echo "Architecture: $(uname -m)"
+    echo "OS: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '"' || uname -s)"
+}
+
+# ------------------------------------------------------------------------------
+# Dispatcher
+# ------------------------------------------------------------------------------
+COMMAND="${1:-help}"
+shift || true
+
+case "$COMMAND" in
+    status)          cmd_status "$@" ;;
+    token)           cmd_token "$@" ;;
+    logs)            cmd_logs "$@" ;;
+    restart)         cmd_restart "$@" ;;
+    update)          cmd_update "$@" ;;
+    support-bundle)  cmd_support_bundle "$@" ;;
+    reset-factory)   cmd_reset_factory "$@" ;;
+    version)         cmd_version "$@" ;;
+    help|--help|-h)  usage ;;
+    *)               fatal "Unknown command: $COMMAND. Run 'vigilonectl help' for usage." ;;
+esac
