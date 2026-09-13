@@ -1,10 +1,10 @@
 import { ChildProcess, spawn } from 'child_process';
-import { PrismaClient, EventType, EventSeverity } from '@prisma/client';
+import { EventType, EventSeverity } from '@prisma/client';
+import prisma from '../../config/database';
 import mediaProvider from '../media/mediamtx.provider';
 import EventRateLimiter from '../events/eventRateLimiter.service';
 import DetectionZoneService, { Point2D, BoundingBox2D } from './detectionZone.service';
 
-const prisma = new PrismaClient();
 
 export interface CameraMotionState {
   state: 'IDLE' | 'ACTIVE' | 'COOLDOWN';

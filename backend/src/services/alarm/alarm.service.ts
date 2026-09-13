@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import { PrismaClient, Alarm, AlarmState, Event, EventSeverity } from '@prisma/client';
 import { IncidentOrchestrator } from '../incident/orchestrator/incidentOrchestrator.service';
 
@@ -99,5 +100,5 @@ export class AlarmService {
   }
 }
 
-export const alarmService = new AlarmService(new PrismaClient());
+export const alarmService = new AlarmService(prisma);
 export default alarmService;

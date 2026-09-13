@@ -45,7 +45,10 @@ export class NotificationDispatcherService {
     await this.adapter.processQueue();
   }
 
-  public async dispatchToAdapter(channel: any, payload: any): Promise<{ success: boolean; statusCode?: number }> {
+  public async dispatchToAdapter(
+    channel: any,
+    payload: any
+  ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
     return this.adapter.dispatchToAdapter(channel, payload);
   }
 }

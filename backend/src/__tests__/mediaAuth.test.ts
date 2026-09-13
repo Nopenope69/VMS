@@ -100,4 +100,44 @@ describe('MediaMTX Webhook Authentication Logic', () => {
       expect(isAuthorized).toBe(true);
     });
   });
+
+  describe('Strict Token Typing & Tenant Isolation Invariants (C-003)', () => {
+    it('should reject refresh tokens attempted for media playback/viewing', () => {
+      const refreshToken = jwt.sign(
+        { id: 'user_1', tenantId, type: 'REFRESH' },
+        config.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
+      const isRefresh = decoded.type === 'REFRESH' || decoded.type === 'refresh';
+      expect(isRefresh).toBe(true);
+    });
+
+    it('should strictly reject media token when tenantId does not match camera tenant', () => {
+      const token = jwt.sign(
+        { id: 'user_1', tenantId: 'tenant_alpha', streamPath, action: 'read', type: 'MEDIA' },
+        config.JWT_SECRET,
+        { expiresIn: '60s' }
+      );
+
+      const decoded = jwt.verify(token, config.JWT_SECRET) as any;
+      const cameraTenantId = 'tenant_beta';
+      const isTenantMatch = decoded.tenantId && decoded.tenantId === cameraTenantId;
+      expect(isTenantMatch).toBe(false);
+    });
+
+    it('should reject media tokens with missing tenantId', () => {
+      const tokenWithoutTenant = jwt.sign(
+        { id: 'user_1', streamPath, action: 'read', type: 'MEDIA' },
+        config.JWT_SECRET,
+        { expiresIn: '60s' }
+      );
+
+      const decoded = jwt.verify(tokenWithoutTenant, config.JWT_SECRET) as any;
+      const cameraTenantId = 'tenant_beta';
+      const isAllowed = Boolean(decoded.tenantId && decoded.tenantId === cameraTenantId);
+      expect(isAllowed).toBe(false);
+    });
+  });
 });

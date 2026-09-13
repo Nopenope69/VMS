@@ -74,20 +74,20 @@ export function loadConfig() {
 
   // Fail-fast checks in production
   if (isProd) {
-    if (parsed.data.JWT_SECRET.includes('change_me') || parsed.data.JWT_SECRET.includes('vigilone_dev')) {
+    if (parsed.data.JWT_SECRET.toLowerCase().includes('change_me') || parsed.data.JWT_SECRET.toLowerCase().includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default or insecure JWT_SECRET! Halting startup.');
     }
-    if (parsed.data.SETUP_TOKEN.includes('change_me') || parsed.data.SETUP_TOKEN.includes('vigilone_dev')) {
+    if (parsed.data.SETUP_TOKEN.toLowerCase().includes('change_me') || parsed.data.SETUP_TOKEN.toLowerCase().includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default or insecure SETUP_TOKEN! Halting startup.');
     }
-    if (parsed.data.DATABASE_URL.includes('change_me') || parsed.data.DATABASE_URL.includes('vigilone_dev')) {
+    if (parsed.data.DATABASE_URL.toLowerCase().includes('change_me') || parsed.data.DATABASE_URL.toLowerCase().includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default database credentials! Halting startup.');
     }
     if (
       parsed.data.INTERNAL_API_SECRET.length < 32 ||
-      parsed.data.INTERNAL_API_SECRET.includes('change_me') ||
-      parsed.data.INTERNAL_API_SECRET.includes('vigilone_internal') ||
-      parsed.data.INTERNAL_API_SECRET.includes('vigilone_dev')
+      parsed.data.INTERNAL_API_SECRET.toLowerCase().includes('change_me') ||
+      parsed.data.INTERNAL_API_SECRET.toLowerCase().includes('vigilone_internal') ||
+      parsed.data.INTERNAL_API_SECRET.toLowerCase().includes('vigilone_dev')
     ) {
       throw new Error(
         'FATAL: Production mode detected with default, short (<32 chars), or insecure INTERNAL_API_SECRET! Halting startup.'
@@ -95,9 +95,9 @@ export function loadConfig() {
     }
     if (
       parsed.data.COTURN_SECRET.length < 32 ||
-      parsed.data.COTURN_SECRET.includes('change_me') ||
-      parsed.data.COTURN_SECRET.includes('vigilone_turn_secret_dev') ||
-      parsed.data.COTURN_SECRET.includes('vigilone_dev')
+      parsed.data.COTURN_SECRET.toLowerCase().includes('change_me') ||
+      parsed.data.COTURN_SECRET.toLowerCase().includes('vigilone_turn_secret_dev') ||
+      parsed.data.COTURN_SECRET.toLowerCase().includes('vigilone_dev')
     ) {
       throw new Error(
         'FATAL: Production mode detected with default, short (<32 chars), or insecure COTURN_SECRET! Halting startup.'

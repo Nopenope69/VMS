@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, RecorderState } from '@prisma/client';
+import prisma from '../config/database';
+import { RecorderState } from '@prisma/client';
 import config from '../config/env';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, enforceCameraQuota } from '../middleware/license';
@@ -21,7 +22,6 @@ import streamWatchdogService from '../services/watchdog/streamWatchdog.service';
 import { ZoneType, TourState } from '@prisma/client';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 router.use(loadTenantLicense);

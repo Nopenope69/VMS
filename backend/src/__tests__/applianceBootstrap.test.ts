@@ -191,7 +191,7 @@ describe("Appliance Bootstrap & Concurrency Lifecycle", () => {
       expect(result.body.user.email).toBe("admin@acme.corp");
       expect(result.body.user.role).toBe("SUPER_ADMIN");
       expect(result.body.token).toBeDefined();
-      expect(result.body.message).toContain("Enterprise evaluation license");
+      expect(result.body.message).toContain("evaluation trial");
     });
   });
 

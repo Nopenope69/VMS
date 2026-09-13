@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, RedactionMode, Role } from '@prisma/client';
+import prisma from '../config/database';
+import { RedactionMode, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { PrivacyPolicyService } from '../services/privacy/privacyPolicy.service';
 import { VideoRedactorService } from '../services/privacy/videoRedactor.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const privacyService = new PrivacyPolicyService(prisma);
 const videoRedactor = new VideoRedactorService(prisma);
 

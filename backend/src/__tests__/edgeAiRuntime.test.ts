@@ -91,4 +91,17 @@ describe('EdgeAiRuntimeService - Vision Inference Supervisor & Telemetry', () =>
     expect(telemetryStore).toHaveLength(1);
     expect(telemetryStore[0].modelLoadState).toBe('READY');
   });
+
+  it('reports honest idle telemetry with 0 FPS and UNLOADED state when not running or idle', () => {
+    const freshMockPrisma = {
+      tenant: { findMany: jest.fn().mockResolvedValue([{ id: 'tenant_idle' }]) },
+      aiRuntimeDiagnostic: { create: jest.fn() },
+    };
+    const idleService = new EdgeAiRuntimeService(freshMockPrisma as any);
+
+    const telemetry = idleService.getTelemetry('tenant_idle');
+    expect(telemetry.inferenceFps).toBe(0.0);
+    expect(telemetry.processingLatencyMs).toBe(0.0);
+    expect(telemetry.modelLoadState).toBe('UNLOADED');
+  });
 });

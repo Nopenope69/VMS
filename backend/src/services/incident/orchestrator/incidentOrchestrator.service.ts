@@ -1,3 +1,4 @@
+import prisma from '../../../config/database';
 import { PrismaClient, Alarm, EventSeverity, RuleActionType } from '@prisma/client';
 import { assertTenantBoundary } from '../../rbac/permissions';
 import {
@@ -181,5 +182,5 @@ export class IncidentOrchestrator {
   }
 }
 
-export const incidentOrchestrator = new IncidentOrchestrator(new PrismaClient());
+export const incidentOrchestrator = new IncidentOrchestrator(prisma);
 export default incidentOrchestrator;

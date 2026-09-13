@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, NotificationChannelType, EventSeverity } from '@prisma/client';
+import prisma from '../config/database';
+import { NotificationChannelType, EventSeverity } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
@@ -7,7 +8,6 @@ import { AuditChainService } from '../services/audit/auditChain.service';
 import NotificationDispatcherService from '../services/notification/notificationDispatcher.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const dispatcher = new NotificationDispatcherService(prisma);
 
 // Queue worker managed by server lifecycle (server.ts)

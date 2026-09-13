@@ -90,7 +90,8 @@ export class CameraConnectionManager extends EventEmitter {
    * T_wait = min(60s, 2^retries * 1s) + random(0, 3s)
    */
   public calculateBackoffMs(retries: number): number {
-    const baseBackoff = Math.min(60000, Math.pow(2, retries) * 1000);
+    // Contract Section 3.1: Reconnect <= 15s after network restoration; backoff capped at 30s
+    const baseBackoff = Math.min(30000, Math.pow(2, retries) * 1000);
     const jitter = Math.floor(Math.random() * 3000); // 0-3s random jitter
     return baseBackoff + jitter;
   }

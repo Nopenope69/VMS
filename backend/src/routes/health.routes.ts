@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import mediaProvider from '../services/media/mediamtx.provider';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get('/health', async (req: Request, res: Response) => {
   let dbStatus = 'ok';

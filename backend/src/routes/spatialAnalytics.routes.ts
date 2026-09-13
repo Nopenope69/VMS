@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 /**
  * GET /api/v1/spatial-rules/:cameraId

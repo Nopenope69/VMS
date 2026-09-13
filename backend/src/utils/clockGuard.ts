@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 export interface ClockSanityCheckResult {
   valid: boolean;
   systemTime: Date;
@@ -10,7 +13,71 @@ export interface ClockSanityCheckResult {
 export class ClockGuard {
   // Hardcoded build epoch: 2026-09-01T00:00:00Z
   private static readonly BUILD_EPOCH = new Date('2026-09-01T00:00:00.000Z');
-  private static lastKnownGoodTime: Date = this.BUILD_EPOCH;
+  private static stateFilePath: string = process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+  private static lastKnownGoodTime: Date = ClockGuard.loadPersistedState();
+
+  private static loadPersistedState(): Date {
+    try {
+      const filePath = this.stateFilePath || process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf8').trim();
+        const parsed = new Date(raw);
+        if (!isNaN(parsed.getTime()) && parsed.getTime() > ClockGuard.BUILD_EPOCH.getTime()) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback to build epoch if file unreadable or not present
+    }
+    return ClockGuard.BUILD_EPOCH;
+  }
+
+  private static persistState() {
+    try {
+      const filePath = this.stateFilePath || process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, ClockGuard.lastKnownGoodTime.toISOString(), { encoding: 'utf8', mode: 0o600 });
+      try {
+        fs.chmodSync(filePath, 0o600);
+      } catch {
+        // Ignore chmod on filesystems that do not support POSIX modes
+      }
+    } catch {
+      // Non-fatal if host path is read-only or in non-privileged environment
+    }
+  }
+
+  public static setStateFilePath(filePath: string) {
+    this.stateFilePath = filePath;
+    this.lastKnownGoodTime = this.loadPersistedState();
+  }
+
+  public static getStateFilePath(): string {
+    return this.stateFilePath;
+  }
+
+  public static getLastKnownGoodTime(): Date {
+    return this.lastKnownGoodTime;
+  }
+
+  public static resetToEpoch() {
+    this.lastKnownGoodTime = this.BUILD_EPOCH;
+  }
+
+  /**
+   * Monotonically merges an external floor (e.g. from a backup or audit log).
+   * Ensures the floor can never regress backward.
+   */
+  public static mergeBackupFloor(floor: Date): Date {
+    if (floor.getTime() > this.lastKnownGoodTime.getTime()) {
+      this.lastKnownGoodTime = floor;
+      this.persistState();
+    }
+    return this.lastKnownGoodTime;
+  }
 
   /**
    * Updates the monotonic last known good timestamp from persistent checkpoints
@@ -19,6 +86,7 @@ export class ClockGuard {
   public static recordCheckpoint(checkpoint: Date) {
     if (checkpoint.getTime() > this.lastKnownGoodTime.getTime()) {
       this.lastKnownGoodTime = checkpoint;
+      this.persistState();
     }
   }
 
@@ -58,6 +126,7 @@ export class ClockGuard {
     // Normal forward progression
     if (nowMs > this.lastKnownGoodTime.getTime()) {
       this.lastKnownGoodTime = now;
+      this.persistState();
     }
 
     return {

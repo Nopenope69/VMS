@@ -13,16 +13,15 @@ COPY src ./src/
 
 RUN npm run build
 
-# Stage 2: Distribution stage (copies static files to mounted shared volume)
-FROM alpine:3.20 AS runner
+# Stage 2: Caddy Gateway with baked-in static SPA assets
+FROM caddy:2.9-alpine AS runner
 
 WORKDIR /srv/frontend
 
-RUN addgroup -g 10001 -S vigilone && \
-    adduser -u 10001 -S vigilone -G vigilone
+# Copy compiled static SPA assets into Caddy document root
+COPY --from=builder /app/dist /srv/frontend
 
-COPY --from=builder --chown=vigilone:vigilone /app/dist ./
+EXPOSE 80 443
 
-USER vigilone:vigilone
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 
-CMD ["cp", "-r", "/srv/frontend/.", "/dist/"]

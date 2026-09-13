@@ -28,6 +28,8 @@ describe('EventActionMatrixService (Typed Rule DSL, Execution IDs & Cooldown Sup
 
   describe('Trigger Matching & Cooldown Suppression', () => {
     it('should match rule when event matches triggerType, cameraId and zoneId', async () => {
+      service.registerActionHandler(RuleActionType.FIRE_DO_RELAY, async () => ({ ok: true }));
+
       const mockRule = {
         id: 'rule_01',
         tenantId,
@@ -65,6 +67,40 @@ describe('EventActionMatrixService (Typed Rule DSL, Execution IDs & Cooldown Sup
         where: { id: 'rule_01' },
         data: { lastTriggeredAt: expect.any(Date) },
       });
+    });
+
+    it('should fail action and mark FAILED when no action handler is registered', async () => {
+      const mockRule = {
+        id: 'rule_no_handler',
+        tenantId,
+        enabled: true,
+        triggerType: RuleTriggerType.MOTION_ZONE,
+        cooldownSeconds: 0,
+        lastTriggeredAt: null,
+        triggerConfigJson: {},
+        conditionsJson: [],
+        actionsJson: [
+          {
+            id: 'act_unregistered',
+            type: RuleActionType.FIRE_DO_RELAY,
+            config: { pinNumber: 2 },
+          },
+        ],
+      };
+
+      mockPrisma.automationRule.findMany.mockResolvedValue([mockRule]);
+
+      const event: EventPayload = {
+        tenantId,
+        type: RuleTriggerType.MOTION_ZONE,
+      };
+
+      const results = await service.processEvent(event);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].overallStatus).toBe('FAILED');
+      expect(results[0].actionResults[0].status).toBe('FAILED');
+      expect(results[0].actionResults[0].error).toContain('NO_ACTION_HANDLER_REGISTERED');
     });
 
     it('should suppress rule execution if cooldown period is active', async () => {

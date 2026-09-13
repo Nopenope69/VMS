@@ -1,9 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
-import { PrismaClient, RecorderState } from '@prisma/client';
+import { RecorderState } from '@prisma/client';
+import prisma from '../../config/database';
 import config from '../../config/env';
 import { IMediaProvider, StreamPathConfig, StreamStatus } from './mediaProvider.interface';
 
-const prisma = new PrismaClient();
 
 export class MediaMTXProvider implements IMediaProvider {
   private client: AxiosInstance;

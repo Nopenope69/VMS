@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { GpioRelayService } from '../services/hardware/gpioRelay.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const relayService = new GpioRelayService(prisma);
 
 /**

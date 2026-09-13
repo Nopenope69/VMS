@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, EventType, VehicleCategory, WatchlistCategory } from '@prisma/client';
+import prisma from '../config/database';
+import { EventType, VehicleCategory, WatchlistCategory } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
 import SmartSearchService from '../services/search/smartSearch.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const searchService = new SmartSearchService(prisma);
 
 router.use(requireAuth);

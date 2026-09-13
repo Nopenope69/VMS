@@ -25,6 +25,14 @@ export interface BsaCertificateOptions {
   partBExpertName?: string;
   partBExpertDesignation?: string;
   partBExpertOrganization?: string;
+  startLocal?: string;
+  endLocal?: string;
+  custodyChainHeadHash?: string;
+  assemblySpecification?: {
+    derivationMode?: string;
+    containerFormat?: string;
+    concatTool?: string;
+  };
   signingMode?: SigningMode | string;
 }
 
@@ -38,10 +46,18 @@ export interface Section63BsaCertificateRecord {
   timeRange: {
     startUtc: string;
     endUtc: string;
+    startLocal?: string;
+    endLocal?: string;
   };
   hashAlgorithm: string;
   evidenceMerkleRoot: string;
   masterEvidenceHash: string; // Compatibility alias
+  custodyChainHeadHash?: string;
+  assemblySpecification?: {
+    derivationMode?: string;
+    containerFormat?: string;
+    concatTool?: string;
+  };
   cameras: Array<{
     cameraId: string;
     name?: string;
@@ -60,10 +76,10 @@ export interface Section63BsaCertificateRecord {
 
 export class BsaCertificatePackageBuilder {
   public static readonly STATUTORY_DISCLAIMER =
-    'This certificate package provides technical provenance, cryptographic Merkle tree references, and integrity verification data designed to support evidentiary submission under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023. Software-generated cryptographic keys and appliance hashes certify machine-level non-tampering only and STRICTLY DO NOT substitute for statutory human certifications by the lawful custodian or qualified forensic expert. This system does not warrant or guarantee statutory or judicial admissibility.';
+    'This certificate package provides technical provenance, cryptographic Merkle tree references, and integrity verification data designed to support evidentiary submission under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023. The system generates a cryptographically verifiable technical integrity attestation and chain-of-custody package. It does not certify legal admissibility or make a judicial determination regarding evidentiary acceptance. Software-generated cryptographic keys and appliance hashes attest to machine-level non-tampering only and STRICTLY DO NOT substitute for statutory human certifications by the lawful custodian or qualified forensic expert. This system does not warrant or guarantee statutory or judicial admissibility; judicial admissibility remains under the exclusive purview of the presiding court.';
 
   public static readonly PROVENANCE_NOTICE =
-    'The appliance Ed25519 digital signature certifies the technical provenance, chronological continuity, and immutable media hashes of this export. Statutory Schedule Part A and Part B declarations require independent human execution by authorized personnel.';
+    'The appliance Ed25519 digital signature provides a technical attestation of the chronological continuity, system provenance, and immutable media hashes of this export. Statutory Schedule Part A and Part B declarations require independent human execution by authorized personnel. The software does not determine or warrant legal admissibility.';
 
   /**
    * Builds the structured Section 63 BSA JSON record for manifest storage.
@@ -79,10 +95,14 @@ export class BsaCertificatePackageBuilder {
       timeRange: {
         startUtc: options.startUtc.toISOString(),
         endUtc: options.endUtc.toISOString(),
+        startLocal: options.startLocal,
+        endLocal: options.endLocal,
       },
       hashAlgorithm: 'SHA-256',
       evidenceMerkleRoot: options.evidenceMerkleRoot,
       masterEvidenceHash: options.evidenceMerkleRoot, // backward compatibility
+      custodyChainHeadHash: options.custodyChainHeadHash,
+      assemblySpecification: options.assemblySpecification,
       cameras: options.cameras.map((c) => ({
         cameraId: c.cameraId,
         name: c.name,
@@ -119,15 +139,17 @@ export class BsaCertificatePackageBuilder {
 
       // System Machine Provenance Section
       doc.fontSize(11).font('Helvetica-Bold').text('1. APPLIANCE TECHNICAL PROVENANCE & INTEGRITY', { underline: true });
-      doc.fontSize(8).font('Helvetica-Oblique').text('(Automated System Attestation - Certifies Cryptographic Integrity Only)', { indent: 10 });
+      doc.fontSize(8).font('Helvetica-Oblique').text('(Automated System Attestation - Verifies Cryptographic Integrity Only; Does Not Certify Legal Admissibility)', { indent: 10 });
       doc.moveDown(0.5);
 
       const provItems: [string, string][] = [
         ['Evidence Archive ID', options.evidenceId],
         ['Appliance Identifier', options.applianceIdentifier],
         ['Evidence Merkle Root', options.evidenceMerkleRoot],
-        ['Start UTC', options.startUtc.toISOString()],
-        ['End UTC', options.endUtc.toISOString()],
+        ['Start Time', `${options.startUtc.toISOString()} (UTC)${options.startLocal ? ` | ${options.startLocal} (Local)` : ''}`],
+        ['End Time', `${options.endUtc.toISOString()} (UTC)${options.endLocal ? ` | ${options.endLocal} (Local)` : ''}`],
+        ['Custody Chain Head Hash', options.custodyChainHeadHash || 'GENESIS_RECORDED'],
+        ['Derivation Mode', options.assemblySpecification?.derivationMode || 'STREAM_COPY (Byte-preserving container concatenation)'],
         ['Appliance Ed25519 Provenance Signature', options.applianceSignature ? `${options.applianceSignature.substring(0, 48)}...` : 'PENDING_FINALIZATION'],
       ];
 

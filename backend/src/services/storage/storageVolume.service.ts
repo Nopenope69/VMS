@@ -150,6 +150,12 @@ export class StorageVolumeService {
             reason: 'Filesystem is mounted in READ-ONLY mode (EROFS)',
           };
         }
+        if (err.code === 'ENOSPC') {
+          return {
+            status: VolumeStatus.DEGRADED,
+            reason: 'Storage volume has 0 bytes available (ENOSPC)',
+          };
+        }
         if (err.code === 'EACCES' || err.code === 'EPERM') {
           return {
             status: VolumeStatus.DEGRADED,
@@ -276,12 +282,26 @@ export class StorageVolumeService {
     if (camera.storageVolume) {
       const health = await this.verifyMountHealth(camera.storageVolume.path);
       if (health.status === VolumeStatus.HEALTHY && !camera.storageVolume.isReadOnly) {
-        return { volume: camera.storageVolume, isFallback: false };
+        let isHardFull = false;
+        try {
+          const disk = await checkDiskSpace(camera.storageVolume.path);
+          if (disk.size > 0 && disk.free <= 0) {
+            isHardFull = true;
+          }
+        } catch {}
+
+        if (!isHardFull) {
+          return { volume: camera.storageVolume, isFallback: false };
+        }
+        console.warn(
+          `[StorageVolumeService] Camera ${camera.name} volume ${camera.storageVolume.name} is 100% hard-full (0 free bytes). Resolving fallback.`
+        );
+      } else {
+        // Configured volume is unhealthy -> must select fallback
+        console.warn(
+          `[StorageVolumeService] Camera ${camera.name} volume ${camera.storageVolume.name} is ${health.status} (${health.reason}). Resolving fallback.`
+        );
       }
-      // Configured volume is unhealthy -> must select fallback
-      console.warn(
-        `[StorageVolumeService] Camera ${camera.name} volume ${camera.storageVolume.name} is ${health.status} (${health.reason}). Resolving fallback.`
-      );
     }
 
     // 2. Fallback selection policy:
@@ -320,13 +340,36 @@ export class StorageVolumeService {
       }
     }
 
-    // If no custom volume qualifies, ensure and return default volume
+    // 3. If no custom volume qualifies, evaluate default volume
     const defaultVol = await this.ensureDefaultVolume(camera.tenantId);
-    return {
-      volume: defaultVol,
-      isFallback: true,
-      failureReason: 'Fallback to system default volume',
-    };
+    const defaultHealth = await this.verifyMountHealth(defaultVol.path);
+    if (defaultHealth.status === VolumeStatus.HEALTHY && !defaultVol.isReadOnly) {
+      return {
+        volume: defaultVol,
+        isFallback: true,
+        failureReason: 'Fallback to system default volume',
+      };
+    }
+
+    // 4. Fail-closed invariant (C-018): raise storage alarm and halt recording
+    try {
+      if (typeof (this.prisma as any).alarm?.create === 'function') {
+        await (this.prisma as any).alarm.create({
+          data: {
+            tenantId: camera.tenantId,
+            cameraId: camera.id,
+            title: `Storage Volume Failure: ${camera.name}`,
+            description: `All configured and fallback storage volumes for camera ${camera.name} are degraded or unavailable. Recording halted to protect data integrity.`,
+            severity: EventSeverity.CRITICAL,
+            state: AlarmState.ACTIVE,
+          },
+        });
+      }
+    } catch {}
+
+    throw new Error(
+      `NO_HEALTHY_STORAGE_VOLUME_AVAILABLE: No healthy recording storage volume available for camera ${camera.name} (${camera.id})`
+    );
   }
 
   /**

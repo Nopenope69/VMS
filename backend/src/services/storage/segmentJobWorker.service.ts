@@ -1,12 +1,15 @@
 import fs from 'fs';
-import { PrismaClient, JobStatus, SegmentStatus } from '@prisma/client';
+import { JobStatus, SegmentStatus } from '@prisma/client';
+import prisma from '../../config/database';
 import { FFmpegService } from '../ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../../utils/crypto';
 import StorageVolumeService from './storageVolume.service';
 import StorageEpochService from './storageEpoch.service';
+import { calculateSegmentBounds } from '../../utils/segmentPath';
 
 export class SegmentJobWorkerService {
-  private static prisma = new PrismaClient();
+  private static prisma = prisma;
+  public static setPrismaForTesting(p: any) { this.prisma = p; }
   private static isRunning = false;
   private static activeWorkers = 0;
   private static readonly MAX_CONCURRENCY = 2;
@@ -96,10 +99,19 @@ export class SegmentJobWorkerService {
       // 2. Compute streaming SHA-256
       const sha256 = await computeFileSha256(filePath);
 
-      // 3. Determine start and end time
+      // 3. Determine start and end time using filename-based timestamp authority (C-011)
       const durationMs = Math.round(probe.durationSeconds * 1000);
-      const endTime = stats.mtime;
-      const startTime = new Date(endTime.getTime() - durationMs);
+      let startTime: Date;
+      let endTime: Date;
+      try {
+        const bounds = calculateSegmentBounds(filePath, durationMs);
+        startTime = bounds.startTime;
+        endTime = bounds.endTime;
+      } catch {
+        // Fallback only if filename lacks standard timestamp convention
+        endTime = stats.mtime;
+        startTime = new Date(endTime.getTime() - durationMs);
+      }
 
       // 4. Resolve active storage volume and epoch for provenance
       let activeVolumeId: string | undefined = undefined;

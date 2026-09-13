@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import { PrismaClient, TourState } from '@prisma/client';
 import onvifManager, { OnvifCredentials } from '../onvif/client';
 
@@ -263,5 +264,5 @@ export class PtzArbiterService {
   }
 }
 
-export const ptzArbiterService = new PtzArbiterService(new PrismaClient());
+export const ptzArbiterService = new PtzArbiterService(prisma);
 export default ptzArbiterService;

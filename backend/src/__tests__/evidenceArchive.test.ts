@@ -327,13 +327,14 @@ describe('Authoritative EvidenceArchive Deep Module Tests', () => {
 
       const certRecord = BsaCertificatePackageBuilder.buildCertificateData(certOptions);
 
-      // Software labels signature strictly as machine provenance
-      expect(certRecord.systemProvenanceNotice).toContain('appliance Ed25519 digital signature certifies the technical provenance');
+      // Software labels signature strictly as machine provenance / technical attestation
+      expect(certRecord.systemProvenanceNotice).toContain('appliance Ed25519 digital signature provides a technical attestation');
       expect(certRecord.systemProvenanceNotice).toContain('Statutory Schedule Part A and Part B declarations require independent human execution');
 
-      // Statutory disclaimer must emphasize machine non-tampering != human testimony
-      expect(certRecord.disclaimer).toContain('certify machine-level non-tampering only and STRICTLY DO NOT substitute for statutory human certifications');
+      // Statutory disclaimer must emphasize machine non-tampering != human testimony and non-certifying admissibility
+      expect(certRecord.disclaimer).toContain('attest to machine-level non-tampering only and STRICTLY DO NOT substitute for statutory human certifications');
       expect(certRecord.disclaimer).toContain('does not warrant or guarantee statutory or judicial admissibility');
+      expect(certRecord.disclaimer).toContain('does not certify legal admissibility');
     });
   });
 

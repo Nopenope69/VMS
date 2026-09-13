@@ -1,5 +1,7 @@
+import jwt from 'jsonwebtoken';
+import config from '../config/env';
 import { AuthRateLimiter } from '../middleware/rateLimiter';
-import { getActiveUser } from '../middleware/auth';
+import { getActiveUser, requireAuth } from '../middleware/auth';
 import { PrismaClient } from '@prisma/client';
 
 describe('Auth Security, Throttling & Immediate Revocation Invariant', () => {
@@ -106,6 +108,56 @@ describe('Auth Security, Throttling & Immediate Revocation Invariant', () => {
       const user = await mockPrisma.user.findUnique({ where: { id: 'u2' } });
       expect(user.active).toBe(true);
       expect(user.role).toBe('OPERATOR');
+    });
+  });
+
+  describe('Strict Token-Type Enforcement Invariant (C-003)', () => {
+    it('should reject refresh tokens used as bearer access tokens', async () => {
+      const refreshToken = jwt.sign(
+        { id: 'u1', type: 'REFRESH', tenantId: 't1' },
+        config.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      const req: any = {
+        headers: { authorization: `Bearer ${refreshToken}` },
+      };
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'INVALID_TOKEN_TYPE' })
+      );
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should reject media tokens used as bearer access tokens', async () => {
+      const mediaToken = jwt.sign(
+        { id: 'u1', type: 'MEDIA', tenantId: 't1', streamPath: 'cam1' },
+        config.JWT_SECRET,
+        { expiresIn: '60s' }
+      );
+
+      const req: any = {
+        headers: { authorization: `Bearer ${mediaToken}` },
+      };
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      await requireAuth(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'INVALID_TOKEN_TYPE' })
+      );
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });

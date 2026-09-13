@@ -1,15 +1,16 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, LicenseTier } from '@prisma/client';
+import { LicenseTier } from '@prisma/client';
+import prismaInstance from '../config/database';
 import config from '../config/env';
 import { requireAuth } from '../middleware/auth';
-import { signLicensePayload, LicenseClaims } from '../utils/license';
+import { LicenseClaims } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
-let prisma = new PrismaClient();
+let prisma = prismaInstance;
 
 export function setAuthPrismaClient(client: any) {
   prisma = client;
@@ -49,6 +50,7 @@ async function createAuthSession(
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
+      type: 'ACCESS',
       ...(sessionId ? { sessionId } : {}),
     },
     config.JWT_SECRET,
@@ -58,8 +60,9 @@ async function createAuthSession(
   const refreshToken = jwt.sign(
     {
       id: user.id,
+      tenantId: user.tenantId,
+      type: 'REFRESH',
       ...(sessionId ? { sessionId } : {}),
-      type: 'refresh',
     },
     config.JWT_SECRET,
     { expiresIn: '7d' }
@@ -126,9 +129,7 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
     const result = await prisma.$transaction(async (tx) => {
       // 1. Acquire transactional advisory lock to eliminate concurrent bootstrap race conditions
       if (typeof (tx as any).$executeRawUnsafe === 'function') {
-        try {
-          await (tx as any).$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('vigilone_bootstrap_lock'))`);
-        } catch {}
+        await (tx as any).$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('vigilone_bootstrap_lock'))`);
       }
 
       // 2. Check durable ApplianceState singleton
@@ -175,29 +176,30 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
         include: { sites: true },
       });
 
-      // Automatically mint an initial evaluation Enterprise License (16 cameras)
+      // Provision an initial unsigned 30-day evaluation trial (4 cameras)
       const now = new Date();
-      const evaluationClaims: LicenseClaims = {
-        licenseId: `lic_eval_${Date.now()}`,
+      const trialExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30-day evaluation
+      const trialClaims: LicenseClaims = {
+        licenseId: `lic_trial_${Date.now()}`,
         tenantId: tenant.id,
-        tier: 'ENTERPRISE',
-        maxCameras: 16,
-        features: ['EVIDENCE_EXPORT', 'ADVANCED_PTZ', 'MULTI_SITE', 'ANPR', 'AUDIT_INTEGRITY'],
+        tier: 'BASIC',
+        maxCameras: 4,
+        features: ['EVIDENCE_EXPORT'],
         issuedAt: now.toISOString(),
-        expiresAt: null, // Perpetual evaluation on appliance
+        expiresAt: trialExpiresAt.toISOString(),
+        isTrial: true,
       };
-
-      const licenseArtifact = signLicensePayload(evaluationClaims);
 
       await tx.license.create({
         data: {
           tenantId: tenant.id,
-          licenseId: evaluationClaims.licenseId,
-          tier: LicenseTier.ENTERPRISE,
-          maxCameras: 16,
-          features: evaluationClaims.features,
-          signedPayload: licenseArtifact.signedPayload,
-          signatureEd25519: licenseArtifact.signatureEd25519,
+          licenseId: trialClaims.licenseId,
+          tier: LicenseTier.BASIC,
+          maxCameras: 4,
+          features: trialClaims.features,
+          signedPayload: JSON.stringify(trialClaims),
+          signatureEd25519: 'TRIAL_UNSIGNED',
+          expiresAt: trialExpiresAt,
         },
       });
 
@@ -215,39 +217,35 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
 
       // Mark appliance as durably initialized
       if (typeof (tx as any).applianceState?.upsert === 'function') {
-        try {
-          await (tx as any).applianceState.upsert({
-            where: { id: 'SINGLETON' },
-            create: {
-              id: 'SINGLETON',
-              isBootstrapped: true,
-              bootstrappedAt: now,
-              initializationVersion: '1.0.0',
-            },
-            update: {
-              isBootstrapped: true,
-              bootstrappedAt: now,
-            },
-          });
-        } catch {}
+        await (tx as any).applianceState.upsert({
+          where: { id: 'SINGLETON' },
+          create: {
+            id: 'SINGLETON',
+            isBootstrapped: true,
+            bootstrappedAt: now,
+            initializationVersion: '1.0.0',
+          },
+          update: {
+            isBootstrapped: true,
+            bootstrappedAt: now,
+          },
+        });
       }
 
       return { tenant, user };
     });
 
-    // Record bootstrap audit event
-    try {
-      await AuditChainService.record(prisma, {
-        tenantId: result.tenant.id,
-        userId: result.user.id,
-        action: 'SYSTEM_BOOTSTRAP',
-        resourceType: 'Tenant',
-        resourceId: result.tenant.id,
-        ipAddress: req.ip || '127.0.0.1',
-        userAgent: req.headers['user-agent'],
-        metadata: { adminEmail: result.user.email, tenantName: result.tenant.name },
-      });
-    } catch {}
+    // Record bootstrap audit event (fail-closed invariant C-012)
+    await AuditChainService.record(prisma, {
+      tenantId: result.tenant.id,
+      userId: result.user.id,
+      action: 'SYSTEM_BOOTSTRAP',
+      resourceType: 'Tenant',
+      resourceId: result.tenant.id,
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+      metadata: { adminEmail: result.user.email, tenantName: result.tenant.name },
+    });
 
     const { token, refreshToken } = await createAuthSession(
       { id: result.user.id, email: result.user.email, role: result.user.role, tenantId: result.tenant.id },
@@ -255,12 +253,11 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
     );
 
     return res.status(201).json({
-      message: 'Appliance bootstrapped successfully with Enterprise evaluation license',
+      message: 'Appliance bootstrapped successfully with initial evaluation trial',
       tenant: { id: result.tenant.id, name: result.tenant.name },
       site: result.tenant.sites[0],
       user: { id: result.user.id, email: result.user.email, role: result.user.role, name: result.user.name },
       token,
-      refreshToken,
     });
   } catch (err: any) {
     if (err.statusCode === 410 || err.code === 'BOOTSTRAP_ALREADY_COMPLETED') {
@@ -329,7 +326,6 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
 
     return res.json({
       token,
-      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -358,7 +354,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
   try {
     const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
-    if (decoded.type !== 'refresh' || !decoded.id) {
+    if ((decoded.type !== 'refresh' && decoded.type !== 'REFRESH') || !decoded.id) {
       return res.status(401).json({ error: 'Unauthorized: Invalid refresh token claims' });
     }
 
@@ -409,6 +405,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
         email: user.email,
         role: user.role,
         tenantId: user.tenantId,
+        type: 'ACCESS',
         ...(decoded.sessionId ? { sessionId: decoded.sessionId } : {}),
       },
       config.JWT_SECRET,

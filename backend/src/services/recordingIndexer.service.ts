@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import config from '../config/env';
 import { FFmpegService } from './ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../utils/crypto';
+import { parseSegmentFilenameTimestamp } from '../utils/segmentPath';
 
 export class RecordingIndexerService {
   private prisma: PrismaClient;
@@ -38,21 +39,11 @@ export class RecordingIndexerService {
    * e.g. "2026-09-04_01-30-00-123456.mp4"
    */
   private parseStartTimeFromFilename(filename: string, fileMtime: Date): Date {
-    const match = filename.match(/(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/);
-    if (match) {
-      const [_, year, month, day, hour, min, sec] = match;
-      return new Date(
-        Date.UTC(
-          parseInt(year, 10),
-          parseInt(month, 10) - 1,
-          parseInt(day, 10),
-          parseInt(hour, 10),
-          parseInt(min, 10),
-          parseInt(sec, 10)
-        )
-      );
+    try {
+      return parseSegmentFilenameTimestamp(filename);
+    } catch {
+      return fileMtime;
     }
-    return fileMtime;
   }
 
   async scan(): Promise<number> {

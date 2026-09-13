@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, RecordingMode, RetentionPriority } from '@prisma/client';
+import prisma from '../config/database';
+import { RecordingMode, RetentionPriority } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense } from '../middleware/license';
 import { authorize, Permission } from '../services/rbac/permissions';
@@ -10,7 +11,6 @@ import CrashRecoveryService from '../services/reconciliation/crashRecovery.servi
 import config from '../config/env';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const volumeService = StorageVolumeService.getInstance(prisma);
 const degradeManager = new StorageDegradeManagerService(prisma);

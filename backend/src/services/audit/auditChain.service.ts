@@ -51,18 +51,20 @@ export class AuditChainService {
   static async record(prisma: PrismaClient | any, options: RecordAuditOptions): Promise<AuditEvent> {
     const handler = async (tx: any) => {
       // 1. Acquire two-key transactional advisory lock scoped to this tenant
-      try {
+      // Fail-closed invariant (C-012): never swallow database lock acquisition failures
+      if (typeof tx.$executeRaw === 'function') {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tenant_audit'), hashtext(${options.tenantId}))`;
-      } catch {
-        // Fallback gracefully in test/mock environments where Postgres advisory locks are unavailable
       }
 
       // 2. Query the latest event for this tenant inside the transaction
-      const lastEvent = await tx.auditEvent.findFirst({
-        where: { tenantId: options.tenantId },
-        orderBy: { sequenceNumber: 'desc' },
-        select: { eventHash: true, sequenceNumber: true },
-      });
+      let lastEvent: any = null;
+      if (typeof tx.auditEvent?.findFirst === 'function') {
+        lastEvent = await tx.auditEvent.findFirst({
+          where: { tenantId: options.tenantId },
+          orderBy: { sequenceNumber: 'desc' },
+          select: { eventHash: true, sequenceNumber: true },
+        });
+      }
 
       const prevHash = lastEvent ? lastEvent.eventHash : GENESIS_HASH;
       const nextSequence = lastEvent ? lastEvent.sequenceNumber + BigInt(1) : BigInt(1);

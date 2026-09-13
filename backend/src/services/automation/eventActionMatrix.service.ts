@@ -184,7 +184,10 @@ export class EventActionMatrixService {
         );
 
         const executionPromise = this.dispatchAction(action, event);
-        await Promise.race([executionPromise, timeoutPromise]);
+        const actionResult = await Promise.race([executionPromise, timeoutPromise]);
+        if (actionResult && (actionResult as any).ok === false) {
+          throw new Error((actionResult as any).error || `Action '${action.type}' returned failure status`);
+        }
         hasSuccess = true;
       } catch (err: any) {
         status = err.message.includes('timeout') ? 'TIMEOUT' : 'FAILED';
@@ -243,7 +246,6 @@ export class EventActionMatrixService {
       return customHandler(action.config, event);
     }
 
-    // Default simulation for unconfigured hardware or test mock
-    return Promise.resolve({ action: action.type, ok: true });
+    throw new Error(`NO_ACTION_HANDLER_REGISTERED: No handler registered for action type '${action.type}'`);
   }
 }

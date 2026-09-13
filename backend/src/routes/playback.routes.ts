@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { RecordingCatalog } from '../services/recording/catalog/recordingCatalog.service';
 import { PlaybackSyncService } from '../services/playback/playbackSync.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const recordingCatalog = new RecordingCatalog(prisma);
 const playbackSyncService = new PlaybackSyncService(prisma, recordingCatalog);
 

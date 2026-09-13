@@ -45,4 +45,46 @@ describe('ClockGuard Monotonic Floor & License Anti-Rollback', () => {
     expect(status.active).toBe(false);
     expect(status.reason).toBe('LICENSE_EXPIRED');
   });
+
+  it('should persist lastKnownGoodTime to protected state file and survive re-initialization', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const tmpStateFile = path.join(__dirname, 'test_clock_guard.state');
+
+    try {
+      // Configure temporary state file
+      process.env.CLOCK_GUARD_STATE_PATH = tmpStateFile;
+      ClockGuard.setStateFilePath(tmpStateFile);
+
+      // Record a checkpoint into future
+      const checkpoint = new Date('2026-10-15T08:30:00Z');
+      ClockGuard.recordCheckpoint(checkpoint);
+
+      // Verify state file was written to disk
+      expect(fs.existsSync(tmpStateFile)).toBe(true);
+      const savedContent = fs.readFileSync(tmpStateFile, 'utf8');
+      expect(savedContent).toBe(checkpoint.toISOString());
+
+      // Simulate process crash / DB wipe: Reset in-memory clock to build epoch
+      ClockGuard.resetToEpoch();
+
+      // Reload state from disk (simulating service reboot after DB wipe)
+      ClockGuard.setStateFilePath(tmpStateFile);
+
+      // Check sanity against an earlier date (e.g. Sep 2026)
+      const earlierDate = new Date('2026-09-01T00:00:00Z');
+      const check = ClockGuard.checkClockSanity(earlierDate);
+
+      // Must detect rollback because the persisted high-water mark (Oct 15) survived!
+      expect(check.valid).toBe(false);
+      expect(check.skewDetected).toBe(true);
+      expect(check.trustedFloor.toISOString()).toBe(checkpoint.toISOString());
+    } finally {
+      // Clean up test file
+      if (fs.existsSync(tmpStateFile)) {
+        fs.unlinkSync(tmpStateFile);
+      }
+      delete process.env.CLOCK_GUARD_STATE_PATH;
+    }
+  });
 });

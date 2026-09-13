@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import { PrismaClient, EventType, EventSeverity, AlarmState } from '@prisma/client';
 
 export interface RecordingGap {
@@ -211,5 +212,5 @@ export class RecordingWatchdogService {
   }
 }
 
-export const recordingWatchdogService = new RecordingWatchdogService(new PrismaClient());
+export const recordingWatchdogService = new RecordingWatchdogService(prisma);
 export default RecordingWatchdogService;

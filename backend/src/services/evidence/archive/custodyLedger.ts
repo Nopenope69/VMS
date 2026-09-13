@@ -66,12 +66,9 @@ export class CustodyLedger {
   public async recordEvent(input: LogCustodyEventInput): Promise<ChainOfCustodyLog> {
     const handler = async (tx: any) => {
       // 1. Acquire two-key transactional advisory lock scoped to this tenant and evidence item
-      try {
-        if (typeof tx.$executeRaw === 'function') {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tenant_custody'), hashtext(${input.tenantId + '_' + input.evidenceId}))`;
-        }
-      } catch {
-        // Fallback gracefully in mock testing environments where Postgres advisory locks are unavailable
+      // Fail-closed invariant (C-012): never swallow database lock acquisition failures
+      if (typeof tx.$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('tenant_custody'), hashtext(${input.tenantId + '_' + input.evidenceId}))`;
       }
 
       // 2. Query the latest event for this evidence item inside the transaction

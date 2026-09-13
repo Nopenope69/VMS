@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import { PrismaClient, RecordingMode } from '@prisma/client';
 import mediaProvider from '../media/mediamtx.provider';
 
@@ -210,5 +211,5 @@ export class RecordingScheduleService {
   }
 }
 
-export const recordingScheduleService = new RecordingScheduleService(new PrismaClient());
+export const recordingScheduleService = new RecordingScheduleService(prisma);
 export default recordingScheduleService;

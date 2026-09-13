@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { verifyLicenseArtifact, isLicenseActive, LicenseClaims } from '../utils/license';
-
-const prisma = new PrismaClient();
 
 // Extend Express Request
 declare global {

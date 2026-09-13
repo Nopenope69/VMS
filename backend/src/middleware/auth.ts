@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import config from '../config/env';
-
-const prisma = new PrismaClient();
 
 export interface AuthUser {
   id: string;
@@ -100,6 +98,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET) as any;
+
+    // Strict token-type enforcement: Reject refresh or media tokens used as bearer authorization
+    if (decoded.type === 'REFRESH' || decoded.type === 'refresh' || decoded.type === 'MEDIA' || (decoded.type && decoded.type !== 'ACCESS')) {
+      return res.status(401).json({
+        error: 'Unauthorized: Invalid token type for API access',
+        code: 'INVALID_TOKEN_TYPE',
+      });
+    }
 
     // Immediate account & session revocation check: ensure user exists, is active, and session is valid
     const activeUser = await getActiveUser(decoded.id, decoded.sessionId);

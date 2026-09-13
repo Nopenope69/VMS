@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient, RecordingSegment, EvidencePin } from '@prisma/client';
 import { StorageAdapter, LocalStorageAdapter } from './storageAdapter';
 import { MediaProbeAdapter, FfprobeMediaAdapter } from './mediaProbeAdapter';
@@ -7,6 +9,7 @@ import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
 import { computeFileSha256 } from '../../../utils/crypto';
+import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
 import config from '../../../config/env';
 
 export interface RegisterSegmentInput {
@@ -112,7 +115,14 @@ export class RecordingCatalog {
     }
 
     const safeDurationMs = durationMs ?? 1000;
-    const startTime = input.startTime ?? new Date(fileStat.mtime.getTime() - safeDurationMs);
+    let startTime = input.startTime;
+    if (!startTime) {
+      try {
+        startTime = parseSegmentFilenameTimestamp(input.filePath);
+      } catch {
+        startTime = new Date(fileStat.mtime.getTime() - safeDurationMs);
+      }
+    }
     const endTime = input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
 
     // Compute presentation timestamps
@@ -397,7 +407,18 @@ export class RecordingCatalog {
           select: { id: true, tenantId: true },
         });
 
-        if (!camera) continue;
+        if (!camera) {
+          // Admission Control (C-018): unmappable files must be isolated to .quarantine and never indexed
+          const dir = path.dirname(filePath);
+          const qDir = path.join(dir, '.quarantine');
+          if (!fs.existsSync(qDir)) {
+            try { fs.mkdirSync(qDir, { recursive: true }); } catch {}
+          }
+          try {
+            fs.renameSync(filePath, path.join(qDir, fileName));
+          } catch {}
+          continue;
+        }
 
         await this.registerSegment({
           tenantId: camera.tenantId,

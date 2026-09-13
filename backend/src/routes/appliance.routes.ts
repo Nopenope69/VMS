@@ -2,12 +2,11 @@ import { Router, Request, Response } from "express";
 import path from "path";
 import os from "os";
 import fs from "fs";
-import { PrismaClient } from "@prisma/client";
+import prisma from '../config/database';
 import { requireAuth } from "../middleware/auth";
 import { ApplianceService } from "../services/system/appliance.service";
 
 const router = Router();
-const prisma = new PrismaClient();
 const applianceService = new ApplianceService(prisma);
 
 /**

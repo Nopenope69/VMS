@@ -13,7 +13,10 @@
 
 services:
   caddy:
-    image: caddy:2.9-alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: vigilone-gateway:latest
     container_name: vigilone-gateway
     restart: unless-stopped
     security_opt:
@@ -23,7 +26,6 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - frontend_dist:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -67,6 +69,7 @@ services:
       - MTX_WEBRTCADDITIONALHOSTS=${LAN_IP:-127.0.0.1}
       - RECORD_SEGMENT_DURATION=${RECORD_SEGMENT_DURATION:-10m}
       - RECORD_PART_DURATION=${RECORD_PART_DURATION:-1s}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
       - recordings_data:/recordings
@@ -172,29 +175,6 @@ services:
     networks:
       - vigilone-net
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: vigilone-frontend
-    restart: "no"
-    security_opt:
-      - no-new-privileges:true
-    volumes:
-      - frontend_dist:/srv/frontend
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - vigilone-net
-
   # Synthetic test camera - isolated under profile 'test' (never runs in production)
   synthetic-camera:
     image: bluenviron/mediamtx:1.9.3-ffmpeg
@@ -248,4 +228,4 @@ volumes:
   appliance_keys:
   caddy_data:
   caddy_config:
-  frontend_dist:
+

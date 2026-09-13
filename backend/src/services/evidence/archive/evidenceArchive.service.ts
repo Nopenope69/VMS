@@ -253,26 +253,28 @@ export class EvidenceArchive {
       const videoOutPath = path.join(workDir, 'video.mp4');
 
       if (segments.length === 0) {
-        // Fallback for mock/test environments without physical footage
-        fs.writeFileSync(videoOutPath, Buffer.from('VIGILONE_STRUCTURED_EVIDENCE_MEDIA_PAYLOAD'));
-      } else {
-        const segmentFilePaths = segments
-          .map((s) => s.filePath)
-          .filter((p): p is string => Boolean(p) && fs.existsSync(p));
-
-        if (segmentFilePaths.length === 0) {
-          throw new Error('Associated recording segment files not found on disk');
-        }
-
-        await FFmpegService.concatSegments(
-          segmentFilePaths,
-          videoOutPath,
-          params.exportMode === 'FRAME_ACCURATE' ? 'FRAME_ACCURATE' : 'STREAM_COPY'
-        );
+        throw new Error('NO_RECORDING_SEGMENTS_FOUND: No recording segments found within specified time range');
       }
+
+      const segmentFilePaths = segments
+        .map((s) => s.filePath)
+        .filter((p): p is string => Boolean(p) && fs.existsSync(p));
+
+      if (segmentFilePaths.length === 0) {
+        throw new Error('NO_RECORDING_SEGMENTS_FOUND: Associated recording segment files not found on disk');
+      }
+
+      await FFmpegService.concatSegments(
+        segmentFilePaths,
+        videoOutPath,
+        params.exportMode === 'FRAME_ACCURATE' ? 'FRAME_ACCURATE' : 'STREAM_COPY'
+      );
 
       // Compute SHA-256 of final clip
       const videoSha256 = await computeFileSha256(videoOutPath);
+
+      // Sort segments chronologically to ensure deterministic monotonic sequence
+      segments.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
       // Build Merkle leaves from segments
       const leavesInput: SegmentLeafInput[] = segments.map((s) => ({
@@ -283,14 +285,97 @@ export class EvidenceArchive {
         mediaSha256: s.sha256Hash,
       }));
 
-      const { rootHash: evidenceMerkleRoot, leafEntries } = MerkleTree.buildTree(leavesInput);
+      const { rootHash: evidenceMerkleRoot, leafEntries, levels } = MerkleTree.buildTree(leavesInput);
+
+      // Explicit Derivation Chain: ordered source segments with individual Merkle inclusion proofs
+      const sourceSegments = segments.map((s, idx) => {
+        const segLeaf: SegmentLeafInput = {
+          segmentId: s.id,
+          cameraId: params.cameraId,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          mediaSha256: s.sha256Hash,
+        };
+        const merkleLeafHash = MerkleTree.computeLeafHash(segLeaf);
+        const merkleProof = MerkleTree.generateInclusionProof(levels, idx);
+        return {
+          segmentId: s.id,
+          sequenceIndex: idx,
+          filePath: s.filePath,
+          startTimeUtc: new Date(s.startTime).toISOString(),
+          endTimeUtc: new Date(s.endTime).toISOString(),
+          durationMs: new Date(s.endTime).getTime() - new Date(s.startTime).getTime(),
+          mediaSha256: s.sha256Hash,
+          merkleLeafHash,
+          merkleProof,
+        };
+      });
+
+      // Explicit assembly & derivation specification
+      const derivationMode = params.exportMode === 'FRAME_ACCURATE' ? 'FRAME_ACCURATE' : 'STREAM_COPY';
+      const assemblySpecification = {
+        derivationMode,
+        containerFormat: 'mp4',
+        concatTool: 'ffmpeg-v6.1',
+        derivationDescription:
+          derivationMode === 'FRAME_ACCURATE'
+            ? 'Frame-accurate re-encoded derivative clip with keyframe alignment (libx264, yuv420p) derived from listed source segments.'
+            : 'Byte-preserving container-level stream concatenation via FFmpeg concat demuxer (-c copy) preserving original bitstreams without transcoding.',
+      };
+
+      // Dual UTC and Local Timezone Representation
+      const now = new Date();
+      const tzOffsetMinutes = -now.getTimezoneOffset();
+      const formatLocalIso = (d: Date) => {
+        const tzOffsetMs = d.getTimezoneOffset() * 60000;
+        const localDate = new Date(d.getTime() - tzOffsetMs);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const offsetHours = Math.floor(Math.abs(tzOffsetMinutes) / 60);
+        const offsetMins = Math.abs(tzOffsetMinutes) % 60;
+        const sign = tzOffsetMinutes >= 0 ? '+' : '-';
+        return localDate.toISOString().replace('Z', '') + `${sign}${pad(offsetHours)}:${pad(offsetMins)}`;
+      };
+
+      const timeWindow = {
+        startUtc: params.startTime.toISOString(),
+        startLocal: formatLocalIso(params.startTime),
+        endUtc: params.endTime.toISOString(),
+        endLocal: formatLocalIso(params.endTime),
+        exportTimestampUtc: now.toISOString(),
+        exportTimestampLocal: formatLocalIso(now),
+        timezoneOffsetMinutes: tzOffsetMinutes,
+        timezoneIdentifier: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      };
+
+      // Authoritative Custody Ledger Event Recording
+      await this.custodyLedger.recordEvent({
+        tenantId: params.tenantId,
+        evidenceId: exportId,
+        actorUserId: user.id,
+        action: 'EVIDENCE_EXPORTED',
+        sourceHash: evidenceMerkleRoot,
+        resultHash: videoSha256,
+        metadata: {
+          cameraId: camera.id,
+          startUtc: params.startTime.toISOString(),
+          endUtc: params.endTime.toISOString(),
+          segmentCount: segments.length,
+          exportMode: derivationMode,
+          operatorName: user.name,
+          operatorEmail: user.email,
+          assemblySpecification,
+        },
+      });
+
+      const custodyHistory = await this.custodyLedger.getHistory(params.tenantId, exportId);
+      const custodyVerification = await this.custodyLedger.verifyChain(params.tenantId, exportId);
 
       // Canonical manifest structure
       const applianceIdentifier = `VIGILONE-EDGE-${params.tenantId.substring(0, 8).toUpperCase()}`;
-      const manifestData = {
+      const manifestData: any = {
         exportId,
         applianceIdentifier,
-        timestamp: new Date().toISOString(),
+        timestamp: now.toISOString(),
         requestingUser: {
           id: user.id,
           name: user.name,
@@ -305,15 +390,21 @@ export class EvidenceArchive {
           macAddress: camera.macAddress || 'Unknown',
           ipAddress: camera.ipAddress,
         },
-        timeWindow: {
-          startUtc: params.startTime.toISOString(),
-          endUtc: params.endTime.toISOString(),
-        },
-        exportMode: params.exportMode || 'STREAM_COPY',
+        timeWindow,
+        exportMode: derivationMode,
+        assemblySpecification,
+        sourceSegments,
         videoChecksumSha256: videoSha256,
         evidenceMerkleRoot,
         segmentCount: segments.length,
         leaves: leafEntries,
+        custodySummary: {
+          chainIntegrityValid: custodyVerification.chainIntegrityValid,
+          entriesCount: custodyVerification.entriesCount,
+          initialHash: custodyVerification.initialHash,
+          headHash: custodyVerification.headHash,
+          unbrokenAncestry: custodyVerification.unbrokenAncestry,
+        },
         bsaSection63Details: {
           complianceFramework: 'BHARATIYA_SAKSHYA_ADHINIYAM_2023_SEC_63',
           disclaimer: BsaCertificatePackageBuilder.STATUTORY_DISCLAIMER,
@@ -331,19 +422,19 @@ export class EvidenceArchive {
         },
       };
 
-      const manifestJsonString = canonicalizeJson(manifestData);
-      const signature = signEvidenceManifest(manifestJsonString);
-
       // Generate Section 63 BSA Part A & Part B PDF certificate
       const pdfCertificatePath = path.join(workDir, 'certificate_sec63.pdf');
       await BsaCertificatePackageBuilder.generatePdf(pdfCertificatePath, {
         evidenceId: exportId,
         tenantId: params.tenantId,
         applianceIdentifier,
-        applianceSignature: signature,
         evidenceMerkleRoot,
         startUtc: params.startTime,
         endUtc: params.endTime,
+        startLocal: timeWindow.startLocal,
+        endLocal: timeWindow.endLocal,
+        custodyChainHeadHash: custodyVerification.headHash,
+        assemblySpecification,
         cameras: [
           {
             cameraId: camera.id,
@@ -360,18 +451,20 @@ export class EvidenceArchive {
         partBExpertOrganization: params.partBExpertOrganization,
       });
 
-      // Package everything into structured export archive
+      // Package everything into structured export archive with complete artifacts binding
       const zipPath = path.join(exportsDir, `Evidence_${exportId}.zip`);
-      await PackageAssembler.assemblePackage({
+      const packageResult = await PackageAssembler.assemblePackage({
         exportId,
         targetZipPath: zipPath,
         videoFilePath: videoOutPath,
         manifestData,
-        applianceSignature: signature,
+        applianceSignature: '', // PackageAssembler signs canonical manifest with artifacts[] included
         certificatePdfPath: pdfCertificatePath,
+        custodyHistory,
       });
 
       // Update DB record
+      manifestData.artifacts = packageResult.artifacts;
       await this.prisma.evidenceExport.update({
         where: { id: exportId },
         data: {
@@ -379,7 +472,7 @@ export class EvidenceArchive {
           outputFilePath: zipPath,
           fileSizeBytes: BigInt(fs.statSync(zipPath).size),
           sha256Hash: videoSha256,
-          signatureEd25519: signature,
+          signatureEd25519: packageResult.manifestSignature,
           manifestJson: manifestData as any,
           completedAt: new Date(),
         },

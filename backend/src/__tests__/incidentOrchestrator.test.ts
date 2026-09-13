@@ -444,6 +444,10 @@ describe('Candidate 04: Authoritative IncidentOrchestrator Deep-Module', () => {
 
       // New orchestrator instance starts up (simulating process restart)
       const freshOrchestrator = new IncidentOrchestrator(mockPrisma);
+      freshOrchestrator.registerCustomActionHandler(
+        RuleActionType.START_HIGH_RES_RECORDING,
+        async () => ({ started: true })
+      );
       const drained = await freshOrchestrator.drainOutbox();
 
       expect(drained).toBe(1);

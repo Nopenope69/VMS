@@ -32,9 +32,9 @@ describe('CameraConnectionManager Reconnect Storm Mitigation', () => {
     expect(backoff2).toBeLessThanOrEqual(7500);
   });
 
-  it('should cap exponential backoff at 60 seconds plus jitter', () => {
-    const backoff10 = manager.calculateBackoffMs(10); // capped at 60s + jitter
-    expect(backoff10).toBeGreaterThanOrEqual(60000);
-    expect(backoff10).toBeLessThanOrEqual(63500);
+  it('should cap exponential backoff at 30 seconds plus jitter per Contract Section 3.1', () => {
+    const backoff10 = manager.calculateBackoffMs(10); // capped at 30s + jitter
+    expect(backoff10).toBeGreaterThanOrEqual(30000);
+    expect(backoff10).toBeLessThanOrEqual(33500);
   });
 });

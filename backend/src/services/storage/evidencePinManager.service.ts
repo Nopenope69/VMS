@@ -1,5 +1,6 @@
 import fs from 'fs';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../config/database';
+import PinStateMirrorService from '../evidence/pinStateMirror.service';
 
 export interface AdmissionStatus {
   admitted: boolean;
@@ -12,7 +13,8 @@ export interface AdmissionStatus {
 }
 
 export class EvidencePinManager {
-  private static prisma = new PrismaClient();
+  private static prisma = prisma;
+  public static setPrismaForTesting(p: any) { this.prisma = p; }
 
   /**
    * Acquire a time-bounded lease for a set of recording segments.
@@ -42,6 +44,28 @@ export class EvidencePinManager {
     await this.prisma.evidencePin.createMany({
       data: pinRecords,
     });
+
+    // Mirror pinned segments to protected host state outside Postgres
+    try {
+      const segments = await this.prisma.recordingSegment.findMany({
+        where: { id: { in: segmentIds } },
+        select: { id: true, sha256Hash: true, cameraId: true },
+      });
+      for (const seg of segments) {
+        if (seg.sha256Hash) {
+          PinStateMirrorService.recordPin({
+            sha256: seg.sha256Hash,
+            segmentId: seg.id,
+            cameraId: seg.cameraId,
+            pinnedAt: new Date().toISOString(),
+            pinnedBy: exportJobId,
+            reason,
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[EvidencePinManager] Warning: failed to mirror pin to host state: ${err.message}`);
+    }
 
     return await this.prisma.evidencePin.findMany({
       where: { exportJobId, releasedAt: null },

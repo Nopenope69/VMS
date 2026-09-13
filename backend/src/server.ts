@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { PrismaClient } from '@prisma/client';
+import prisma from './config/database';
 import config from './config/env';
 
 // Global defense-in-depth polyfill: serialize BigInt primitives to string in JSON.stringify / Express res.json
@@ -45,9 +45,10 @@ import SegmentJobWorkerService from './services/storage/segmentJobWorker.service
 import StartupReconcilerService from './services/reconciliation/startupReconciler.service';
 import recordingScheduleService from './services/schedule/recordingSchedule.service';
 import streamWatchdogService from './services/watchdog/streamWatchdog.service';
+import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
+import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
 
 const app = express();
-const prisma = new PrismaClient();
 
 // Configure trust proxy for Caddy reverse proxy to correctly evaluate client IPs
 app.set('trust proxy', 1);
@@ -142,7 +143,12 @@ app.use('/api/v1/automation', automationRoutes);
 app.use('/api/v1/spatial-rules', spatialAnalyticsRoutes);
 app.use('/api/v1/relays', relayRoutes);
 app.use('/api/v1/archive', archiveRoutes);
-app.use('/api/v1/sso', ssoRoutes);
+app.use('/api/v1/sso', (_req, res) => {
+  res.status(501).json({
+    error: 'SSO is disabled in VigilOne v1 core edge appliance.',
+    code: 'FEATURE_DISABLED_FOR_V1',
+  });
+});
 app.use('/api/v1/privacy', privacyRoutes);
 app.use('/api/v1/floorplans', floorplanRoutes);
 app.use('/api/v1/webrtc', webrtcRoutes);
@@ -171,6 +177,7 @@ export const server = app.listen(config.PORT, () => {
     recordingScheduleService.start(60000);
     streamWatchdogService.start(30000);
     recordingCatalog.startRetention(3600000);
+    recordingWatchdogService.start(30000);
     aggregator.start();
     aiRuntime.start();
     dispatcher.start();
@@ -189,6 +196,8 @@ process.on('SIGTERM', async () => {
   storageSentinel.stop();
   recordingScheduleService.stop();
   streamWatchdogService.stop();
+  recordingWatchdogService.stop();
+  cameraConnectionManager.stop();
   aggregator.stop();
   aiRuntime.stop();
   dispatcher.stop();

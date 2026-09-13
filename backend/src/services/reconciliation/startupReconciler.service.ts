@@ -1,5 +1,6 @@
 import axios from 'axios';
-import { PrismaClient, RecorderState } from '@prisma/client';
+import { RecorderState } from '@prisma/client';
+import prisma from '../../config/database';
 import config from '../../config/env';
 import mediaProvider from '../media/mediamtx.provider';
 
@@ -11,7 +12,8 @@ export interface ReconciliationReport {
 }
 
 export class StartupReconcilerService {
-  private static prisma = new PrismaClient();
+  private static prisma = prisma;
+  public static setPrismaForTesting(p: any) { this.prisma = p; }
 
   /**
    * Reconciles desired recorder state in PostgreSQL with actual MediaMTX engine status.
@@ -96,6 +98,14 @@ export class StartupReconcilerService {
         await recoveryService.recoverStorage();
       } catch (err: any) {
         console.warn('[StartupReconciler] Boot storage crash recovery warning:', err.message);
+      }
+
+      // 5. Host license auto-ingestion if DB is unlicensed (e.g. after catastrophic DB loss)
+      try {
+        const { LicenseHostMirrorService } = await import('../appliance/licenseHostMirror.service');
+        await LicenseHostMirrorService.reconcileLicenseFromHost(this.prisma);
+      } catch (err: any) {
+        console.warn('[StartupReconciler] License host mirror reconciliation warning:', err.message);
       }
 
       console.info(

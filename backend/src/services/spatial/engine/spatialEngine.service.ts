@@ -1,3 +1,4 @@
+import defaultPrisma from '../../../config/database';
 import {
   CameraSpatialPlacement,
   DetectionZone,
@@ -121,7 +122,7 @@ export class SpatialEngine {
     prisma?: PrismaClient,
     config?: { ledgerConfig?: TrackStateLedgerConfig }
   ) {
-    this.prisma = prisma || new PrismaClient();
+    this.prisma = prisma || defaultPrisma;
     this.trackLedger = new TrackStateLedger(config?.ledgerConfig);
   }
 

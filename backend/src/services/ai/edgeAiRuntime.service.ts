@@ -30,7 +30,7 @@ export interface AiRuntimeTelemetry {
   processingLatencyMs: number;
   queueDepth: number;
   droppedFrames: number;
-  modelLoadState: 'READY' | 'WARMING' | 'DEGRADED' | 'ERROR';
+  modelLoadState: 'READY' | 'WARMING' | 'DEGRADED' | 'ERROR' | 'UNLOADED';
   memoryMb: number;
   checkedAt: Date;
 }
@@ -46,6 +46,7 @@ export class EdgeAiRuntimeService {
   private readonly MAX_QUEUE_DEPTH = 100;
   private droppedFrameCount = 0;
   private processedFrameCount = 0;
+  private totalDetectionsProcessed = 0;
   private lastFpsSampleTime = Date.now();
   private currentFps = 0.0;
   private avgLatencyMs = 12.5;
@@ -115,6 +116,7 @@ export class EdgeAiRuntimeService {
       });
 
       this.processedFrameCount++;
+      this.totalDetectionsProcessed++;
       const latency = Date.now() - startTime;
       this.avgLatencyMs = (this.avgLatencyMs * 0.9) + (latency * 0.1);
 
@@ -139,12 +141,19 @@ export class EdgeAiRuntimeService {
    * Retrieves active runtime telemetry for a tenant
    */
   public getTelemetry(tenantId: string): AiRuntimeTelemetry {
+    let modelLoadState: AiRuntimeTelemetry['modelLoadState'] = 'UNLOADED';
+    if (this.isRunning) {
+      modelLoadState = (this.totalDetectionsProcessed > 0 || this.currentFps > 0) ? 'READY' : 'WARMING';
+    } else if (this.totalDetectionsProcessed > 0) {
+      modelLoadState = 'READY';
+    }
+
     return {
-      inferenceFps: this.currentFps > 0 ? this.currentFps : 15.0, // baseline active fps
-      processingLatencyMs: Number(this.avgLatencyMs.toFixed(2)),
+      inferenceFps: this.currentFps, // Honest FPS (0.0 when idle, never fake 15.0)
+      processingLatencyMs: this.totalDetectionsProcessed > 0 ? Number(this.avgLatencyMs.toFixed(2)) : 0.0,
       queueDepth: this.frameQueue.length,
       droppedFrames: this.droppedFrameCount,
-      modelLoadState: 'READY',
+      modelLoadState,
       memoryMb: Number((process.memoryUsage().heapUsed / (1024 * 1024)).toFixed(1)),
       checkedAt: new Date(),
     };

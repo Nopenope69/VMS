@@ -1,0 +1,143 @@
+name: VigilOne Commercial CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-checks:
+    name: Backend Typecheck, Migrations & Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vigilone
+          POSTGRES_PASSWORD: vigilone_ci_secret_password_2026!
+          POSTGRES_DB: vigilone_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Prisma Client Generation
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Backend Build & Typecheck (tsc)
+        working-directory: ./backend
+        run: npm run build
+
+      - name: Verify Clean Database Migration Deploy
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
+        run: |
+          echo "Applying migrations to fresh PostgreSQL service container..."
+          npx prisma migrate deploy
+
+      - name: Run Backend Regression Test Suite
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
+          JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
+          CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+          INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
+        run: npm test
+
+  frontend-checks:
+    name: Frontend Typecheck & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend Build (tsc & vite build)
+        working-directory: ./frontend
+        run: npm run build
+
+  packaging-and-installer-checks:
+    name: Packaging, vigilonectl & Installer Invariants
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Installer & Packaging Test Suite
+        run: bash scripts/__tests__/installer.test.sh
+
+  docker-compose-validation:
+    name: Docker Compose Configuration Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate base docker-compose.yml
+        run: docker compose config -q
+
+      - name: Validate production docker-compose override
+        run: docker compose -f docker-compose.yml -f deploy/packaging/docker-compose.prod.yml config -q
+
+  security-and-secret-scan:
+    name: Secrets & Key Material Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run Permanent Secret & Compromised Key Scanning Suite
+        working-directory: ./backend
+        run: npx jest src/__tests__/secretsAudit.test.ts --runInBand
+

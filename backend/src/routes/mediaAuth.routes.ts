@@ -1,10 +1,10 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import config from '../config/env';
+import { getActiveUser } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 interface MediaMtxAuthPayload {
   user?: string;
@@ -70,17 +70,33 @@ router.post('/auth', async (req: Request, res: Response) => {
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET) as any;
 
-    // Check token scope
+    // 1. Strict rejection of refresh tokens
+    if (decoded.type === 'REFRESH' || decoded.type === 'refresh') {
+      console.warn(`[MediaAuth] Denied refresh token used for media auth: ${payload.path}`);
+      return res.status(403).json({ error: 'Forbidden: Refresh token cannot be used for media access' });
+    }
+
+    // 2. Check token action scope
+    if (decoded.action && decoded.action !== 'read') {
+      return res.status(403).json({ error: 'Forbidden: Invalid token action scope' });
+    }
+
+    // 3. If token is scoped to specific stream path, verify match
     if (decoded.streamPath && decoded.streamPath !== payload.path) {
       console.warn(`[MediaAuth] Token path mismatch: token=${decoded.streamPath}, req=${payload.path}`);
       return res.status(403).json({ error: 'Forbidden: Token is not valid for this stream path' });
     }
 
-    if (decoded.action && decoded.action !== 'read') {
-      return res.status(403).json({ error: 'Forbidden: Invalid token action scope' });
+    // 4. Verify user exists and is active (for user access tokens)
+    if (decoded.id) {
+      const activeUser = await getActiveUser(decoded.id, decoded.sessionId);
+      if (!activeUser || !activeUser.active) {
+        console.warn(`[MediaAuth] Denied inactive or revoked user ${decoded.id} for path: ${payload.path}`);
+        return res.status(403).json({ error: 'Forbidden: User account is inactive or session is invalid' });
+      }
     }
 
-    // Verify camera exists and matches tenant
+    // 5. Verify camera exists and enforce strict tenant isolation
     const camera = await prisma.camera.findUnique({
       where: { streamPath: payload.path },
     });
@@ -89,7 +105,8 @@ router.post('/auth', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Stream path not found' });
     }
 
-    if (decoded.tenantId && camera.tenantId !== decoded.tenantId) {
+    if (!decoded.tenantId || camera.tenantId !== decoded.tenantId) {
+      console.warn(`[MediaAuth] Tenant isolation mismatch: token tenant=${decoded.tenantId}, camera tenant=${camera.tenantId}`);
       return res.status(403).json({ error: 'Forbidden: Tenant isolation mismatch' });
     }
 

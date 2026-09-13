@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient, VehicleCategory, WatchlistCategory, EventSeverity } from '@prisma/client';
+import prisma from '../config/database';
+import { VehicleCategory, WatchlistCategory, EventSeverity } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
@@ -8,7 +9,6 @@ import PlateTrackAggregatorService from '../services/anpr/plateTrackAggregator.s
 import EdgeAiRuntimeService from '../services/ai/edgeAiRuntime.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const aggregator = new PlateTrackAggregatorService(prisma);
 const aiRuntime = new EdgeAiRuntimeService(prisma);
 

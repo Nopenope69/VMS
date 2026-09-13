@@ -93,6 +93,12 @@ export class ObjectStorageArchiveService {
       throw new Error(`Archive job ${jobId} not found`);
     }
 
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'FEATURE_DEFERRED_FOR_V1: Offsite S3 object storage archival is deferred for v1 edge NVR release. In-memory store is prohibited in production.'
+      );
+    }
+
     const config = job.tenant.objectStorageConfig;
     if (!config || !config.enabled) {
       throw new Error('Object storage archival is not configured or disabled for this tenant');

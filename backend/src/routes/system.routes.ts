@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense } from '../middleware/license';
 import { authorize, Permission } from '../services/rbac/permissions';
@@ -7,7 +7,6 @@ import turnAuthService from '../services/webrtc/turnAuth.service';
 import DisasterRecoveryService from '../services/system/disasterRecovery.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const drService = new DisasterRecoveryService(prisma);
 
 router.use(requireAuth);

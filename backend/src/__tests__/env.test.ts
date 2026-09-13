@@ -62,4 +62,14 @@ describe('Environment & Secrets Configuration', () => {
 
     expect(() => loadConfig()).toThrow(/FATAL: Production mode detected with default, short \(<32 chars\), or insecure COTURN_SECRET/);
   });
+
+  it('should fail fast in production if JWT_SECRET contains uppercase CHANGE_ME from .env.example', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgresql://vigilone:secret@localhost:5432/vigilone_db';
+    process.env.JWT_SECRET = 'CHANGE_ME_GENERATE_RANDOM_JWT_SECRET_32_CHARS_MIN';
+    process.env.SETUP_TOKEN = 'real_setup_token_98231';
+    process.env.INTERNAL_API_SECRET = 'secure_production_internal_secret_32bytes_long!!';
+
+    expect(() => loadConfig()).toThrow(/FATAL: Production mode detected with default or insecure JWT_SECRET/);
+  });
 });

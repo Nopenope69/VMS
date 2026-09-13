@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { FederationService } from '../services/federation/federation.service';
@@ -8,7 +8,6 @@ import { ConfigSyncService } from '../services/federation/configSync.service';
 import { createRequireNodeSignature } from '../middleware/federationAuth';
 
 const router = Router();
-const prisma = new PrismaClient();
 const federationService = new FederationService(prisma);
 const syncEngineService = new SyncEngineService(prisma);
 const configSyncService = new ConfigSyncService(prisma);

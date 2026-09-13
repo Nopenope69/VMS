@@ -51,27 +51,24 @@ export class RetentionPolicyEngine {
    */
   async atomicDeleteSegmentIfUnpinned(segmentId: string, filePath: string): Promise<boolean> {
     // Check if running in a full Prisma client with raw query support
+    // Fail-closed invariant (C-012): database failure MUST NOT fall back to unverified deletion
     if (typeof (this.prisma as any).$executeRaw === 'function') {
-      try {
-        const deletedRows: number = await (this.prisma as any).$executeRaw`
-          DELETE FROM "RecordingSegment"
-          WHERE id = ${segmentId}
-            AND NOT EXISTS (
-              SELECT 1 FROM "EvidencePin"
-              WHERE "segmentId" = ${segmentId}
-                AND "releasedAt" IS NULL
-                AND "expiresAt" > NOW()
-            )
-        `;
+      const deletedRows: number = await (this.prisma as any).$executeRaw`
+        DELETE FROM "RecordingSegment"
+        WHERE id = ${segmentId}
+          AND NOT EXISTS (
+            SELECT 1 FROM "EvidencePin"
+            WHERE "segmentId" = ${segmentId}
+              AND "releasedAt" IS NULL
+              AND "expiresAt" > NOW()
+          )
+      `;
 
-        if (deletedRows > 0) {
-          await this.storageAdapter.deleteFile(filePath);
-          return true;
-        }
-        return false;
-      } catch (err: any) {
-        // In case of database constraint or mock fallback
+      if (deletedRows > 0) {
+        await this.storageAdapter.deleteFile(filePath);
+        return true;
       }
+      return false;
     }
 
     // Fallback path for mocked in-memory environments

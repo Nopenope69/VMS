@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient, EventSeverity, EventType } from '@prisma/client';
+import prisma from '../config/database';
+import { EventSeverity, EventType } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 

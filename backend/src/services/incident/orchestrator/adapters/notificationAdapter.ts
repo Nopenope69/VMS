@@ -232,6 +232,9 @@ export class NotificationAdapter {
         const result = await this.dispatchToAdapter(job.channel, job.payloadJson);
         success = result.success;
         responseCode = result.statusCode;
+        if (!success) {
+          errorMsg = result.error || 'Notification dispatch failed';
+        }
       } catch (err: any) {
         success = false;
         errorMsg = err.message || 'Unknown network error';
@@ -304,7 +307,7 @@ export class NotificationAdapter {
   public async dispatchToAdapter(
     channel: any,
     payload: any
-  ): Promise<{ success: boolean; statusCode?: number }> {
+  ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
     const rawBody = JSON.stringify(payload);
 
     if (channel.type === NotificationChannelType.WEBHOOK) {
@@ -362,10 +365,18 @@ export class NotificationAdapter {
     }
 
     if (channel.type === NotificationChannelType.EMAIL) {
-      return { success: true, statusCode: 250 };
+      return {
+        success: false,
+        statusCode: 501,
+        error: 'SMTP_TRANSPORT_NOT_CONFIGURED: Native SMTP delivery is deferred for v1. Use Webhook or Slack notifications.',
+      };
     }
 
-    return { success: false, statusCode: 400 };
+    return {
+      success: false,
+      statusCode: 400,
+      error: `Unsupported notification channel type: ${channel.type}`,
+    };
   }
 
   private consumeRateToken(channelId: string): boolean {

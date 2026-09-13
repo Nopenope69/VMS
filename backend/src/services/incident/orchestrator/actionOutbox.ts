@@ -1,4 +1,4 @@
-import { PrismaClient, RuleActionType } from '@prisma/client';
+import { PrismaClient, RuleActionType, RelayCommandState } from '@prisma/client';
 import { RelayAdapter } from './adapters/relayAdapter';
 import { NotificationAdapter } from './adapters/notificationAdapter';
 import { PtzAdapter } from './adapters/ptzAdapter';
@@ -164,13 +164,18 @@ export class ActionOutbox {
         const command = actionConfig.config.command || 'SET_HIGH';
         const pulseDurationMs = actionConfig.config.durationMs || actionConfig.config.pulseDurationMs;
 
-        return await this.relayAdapter.execute({
+        const relayResult = await this.relayAdapter.execute({
           tenantId: context.tenantId,
           pinNumber,
           command,
           pulseDurationMs,
           issuedBy: context.correlationId || 'AutomatedRule',
         });
+
+        if (relayResult.lifecycleState === RelayCommandState.COMMAND_FAILED) {
+          throw new Error(relayResult.error || `Relay pin ${pinNumber} command execution failed`);
+        }
+        return relayResult;
       }
 
       case RuleActionType.DISPATCH_NOTIFICATION: {
@@ -200,12 +205,17 @@ export class ActionOutbox {
       }
 
       case RuleActionType.PTZ_PRESET_GOTO: {
-        return await this.ptzAdapter.gotoPreset({
+        const ptzResult = await this.ptzAdapter.gotoPreset({
           tenantId: context.tenantId,
           cameraId: actionConfig.config.cameraId,
           presetToken: actionConfig.config.presetToken,
           presetName: actionConfig.config.presetName,
         });
+
+        if (!ptzResult.success) {
+          throw new Error(ptzResult.message || `PTZ goto preset failed for camera ${actionConfig.config.cameraId}`);
+        }
+        return ptzResult;
       }
 
       case RuleActionType.BOOKMARK_SEGMENT: {
@@ -219,11 +229,11 @@ export class ActionOutbox {
       }
 
       case RuleActionType.START_HIGH_RES_RECORDING: {
-        return { started: true, cameraId: actionConfig.config.cameraId };
+        throw new Error('FEATURE_DEFERRED_FOR_V1: Dynamic high-resolution stream profile switching is deferred for v1');
       }
 
       default:
-        return { ok: true, action: actionConfig.type };
+        throw new Error(`UNSUPPORTED_ACTION_TYPE: Action type '${actionConfig.type}' is not supported or deferred for v1`);
     }
   }
 

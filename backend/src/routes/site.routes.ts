@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 

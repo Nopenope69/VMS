@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { verifyLicenseArtifact, isLicenseActive } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
+import LicenseHostMirrorService from '../services/appliance/licenseHostMirror.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(requireAuth);
 
@@ -98,6 +98,16 @@ router.post('/apply', authorize(Permission.LICENSE_MANAGE), async (req, res) => 
       return;
     }
 
+    // Verify that license is active, not expired, and hardware binding matches if present
+    const activeCheck = isLicenseActive(claims);
+    if (!activeCheck.active) {
+      res.status(400).json({
+        error: `License cannot be applied: ${activeCheck.reason}`,
+        code: activeCheck.reason,
+      });
+      return;
+    }
+
     // Save verified license
     const newLicense = await prisma.license.create({
       data: {
@@ -113,6 +123,9 @@ router.post('/apply', authorize(Permission.LICENSE_MANAGE), async (req, res) => 
         deviceBinding: claims.deviceBinding,
       },
     });
+
+    // Mirror active license to host appliance filesystem (/etc/vigilone/license.json, mode 0600)
+    LicenseHostMirrorService.saveLicenseMirror({ signedPayload, signatureEd25519 });
 
     await AuditChainService.record(prisma, {
       tenantId,

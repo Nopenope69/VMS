@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import { PrismaClient, TourState } from '@prisma/client';
 import onvifManager, { OnvifCredentials } from '../onvif/client';
 import ptzArbiterService from './ptzArbiter.service';
@@ -142,5 +143,5 @@ export class GuardTourService {
   }
 }
 
-export const guardTourService = new GuardTourService(new PrismaClient());
+export const guardTourService = new GuardTourService(prisma);
 export default guardTourService;

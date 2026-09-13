@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { ExportStatus, PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
+import { ExportStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { EvidenceArchive } from '../services/evidence/archive';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const evidenceArchive = new EvidenceArchive(prisma);
 
 router.use(requireAuth);
@@ -80,6 +80,9 @@ router.post('/export', authorize(Permission.EVIDENCE_EXPORT), async (req: Reques
       filename: path.basename(zipPath),
     });
   } catch (err: any) {
+    if (err.message?.includes('NO_RECORDING_SEGMENTS_FOUND')) {
+      return res.status(404).json({ error: err.message, code: 'NO_RECORDING_SEGMENTS_FOUND' });
+    }
     return res.status(500).json({ error: `Export failed: ${err.message}` });
   }
 });

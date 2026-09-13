@@ -1,3 +1,4 @@
+import prisma from '../../config/database';
 import axios from 'axios';
 import { PrismaClient, EventType, EventSeverity, AlarmState } from '@prisma/client';
 import config from '../../config/env';
@@ -144,6 +145,12 @@ export class StreamWatchdogService {
 
     if (isDegraded && !wasDegraded) {
       await this.raiseDegradedAlarm(camera.tenantId, camera.id, camera.name, primaryIssue || 'DEVIATION_HIGH', deviationScore);
+      if (primaryIssue === 'STREAM_STALLED') {
+        try {
+          const { cameraConnectionManager } = await import('../camera/cameraConnectionManager.service');
+          cameraConnectionManager.reportDisconnect(cameraId, primaryIssue);
+        } catch {}
+      }
     } else if (!isDegraded && wasDegraded) {
       await this.resolveDegradedAlarm(camera.tenantId, camera.id, camera.name);
     }
@@ -282,5 +289,5 @@ export class StreamWatchdogService {
   }
 }
 
-export const streamWatchdogService = new StreamWatchdogService(new PrismaClient());
+export const streamWatchdogService = new StreamWatchdogService(prisma);
 export default streamWatchdogService;

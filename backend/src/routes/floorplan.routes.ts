@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { FloorplanService } from '../services/spatial/floorplan.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const floorplanService = new FloorplanService(prisma);
 
 router.use(requireAuth);

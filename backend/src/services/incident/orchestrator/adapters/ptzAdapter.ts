@@ -40,24 +40,38 @@ export class PtzAdapter {
         }
       }
 
-      // Attempt ONVIF preset goto if onvif credentials exist
-      if (camera.ipAddress && (params.presetToken || params.presetName)) {
-        try {
-          const device = await onvifManager.getCam({
-            hostname: camera.ipAddress,
-            port: camera.onvifPort || 80,
-            username: 'admin',
-            password: '',
-          });
-          if (device && typeof (device as any).gotoPreset === 'function') {
-            await (device as any).gotoPreset({ preset: params.presetToken || params.presetName });
-          }
-        } catch {
-          // Graceful fallback for mock/simulation
-        }
+      // Validate camera network configuration and target preset
+      if (!camera.ipAddress) {
+        return { success: false, message: `Camera ${params.cameraId} has no IP address configured for PTZ` };
       }
 
-      return { success: true, message: `PTZ moved to preset on camera ${params.cameraId}` };
+      const targetPreset = params.presetToken || params.presetName;
+      if (!targetPreset) {
+        return { success: false, message: `Neither presetToken nor presetName provided for camera ${params.cameraId}` };
+      }
+
+      // Attempt ONVIF preset goto
+      try {
+        const device = await onvifManager.getCam({
+          hostname: camera.ipAddress,
+          port: camera.onvifPort || 80,
+          username: 'admin',
+          password: '',
+        });
+        if (!device || typeof (device as any).gotoPreset !== 'function') {
+          return {
+            success: false,
+            message: `ONVIF device for camera ${params.cameraId} does not support gotoPreset`,
+          };
+        }
+        await (device as any).gotoPreset({ preset: targetPreset });
+        return { success: true, message: `PTZ moved to preset on camera ${params.cameraId}` };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `ONVIF PTZ command failed for camera ${params.cameraId}: ${err.message}`,
+        };
+      }
     } catch (err: any) {
       return { success: false, message: err.message };
     }

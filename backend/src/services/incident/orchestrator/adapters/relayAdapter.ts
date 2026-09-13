@@ -25,7 +25,10 @@ export type HardwareDriver = (
 
 export class RelayAdapter {
   private prisma: PrismaClient;
-  private hardwareDriver: HardwareDriver = async () => ({ confirmed: true });
+  private hardwareDriver: HardwareDriver = async () => ({
+    confirmed: false,
+    error: 'NO_PHYSICAL_RELAY_DRIVER_ATTACHED',
+  });
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -104,9 +107,15 @@ export class RelayAdapter {
         const pulseMs = params.pulseDurationMs || pin.pulseDurationMs || 1000;
 
         const pulsePromise: Promise<{ confirmed: boolean; error?: string }> = (async () => {
-          await this.hardwareDriver(params.pinNumber, 'HIGH');
+          const highRes = await this.hardwareDriver(params.pinNumber, 'HIGH');
+          if (!highRes.confirmed) {
+            return highRes;
+          }
           await new Promise((r) => setTimeout(r, Math.min(pulseMs, 500))); // bounded wait in test/production
-          await this.hardwareDriver(params.pinNumber, 'LOW');
+          const lowRes = await this.hardwareDriver(params.pinNumber, 'LOW');
+          if (!lowRes.confirmed) {
+            return lowRes;
+          }
           return { confirmed: true };
         })();
 

@@ -1,5 +1,6 @@
 import checkDiskSpace from 'check-disk-space';
-import { PrismaClient, SegmentStatus } from '@prisma/client';
+import { SegmentStatus } from '@prisma/client';
+import prisma from '../../config/database';
 import config from '../../config/env';
 
 export interface MetricLabelSet {
@@ -7,7 +8,8 @@ export interface MetricLabelSet {
 }
 
 export class MetricsService {
-  private static prisma = new PrismaClient();
+  private static prisma = prisma;
+  public static setPrismaForTesting(p: any) { this.prisma = p; }
 
   // In-memory request metric counters
   private static httpRequestsTotal: Map<string, number> = new Map();

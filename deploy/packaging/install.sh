@@ -12,6 +12,8 @@ YELLOW="\033[1;33m"
 BLUE="\033[0;34m"
 NC="\033[0m" # No Color
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 INSTALL_DIR="/opt/vigilone"
 CONFIG_DIR="/etc/vigilone"
 DATA_DIR="/var/lib/vigilone"
@@ -23,6 +25,8 @@ UNATTENDED=false
 TARGET_DISK=""
 FORCE_WIPE=false
 CUSTOM_LAN_IP=""
+OFFLINE_BUNDLE=""
+
 
 print_banner() {
     echo -e "${BLUE}"
@@ -54,7 +58,7 @@ fatal() {
 # ------------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --unattended|-y)
+        --unattended|-y|--non-interactive)
             UNATTENDED=true
             shift
             ;;
@@ -70,15 +74,20 @@ while [[ $# -gt 0 ]]; do
             CUSTOM_LAN_IP="$2"
             shift 2
             ;;
+        --offline-bundle)
+            OFFLINE_BUNDLE="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: sudo ./install.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --unattended, -y        Run without interactive prompts"
-            echo "  --disk <path>           Dedicated block device for CCTV storage (e.g. /dev/sdb)"
-            echo "  --force-wipe-disk       Allow wiping disk with existing partitions in unattended mode"
-            echo "  --lan-ip <ip>           Manually specify primary LAN IP address"
-            echo "  --help, -h              Show this help menu"
+            echo "  --unattended, -y, --non-interactive  Run without interactive prompts"
+            echo "  --disk <path>                        Dedicated block device for CCTV storage (e.g. /dev/sdb)"
+            echo "  --force-wipe-disk                    Allow wiping disk with existing partitions in unattended mode"
+            echo "  --lan-ip <ip>                        Manually specify primary LAN IP address"
+            echo "  --offline-bundle <path>              Path to pre-exported docker images tarball (air-gapped)"
+            echo "  --help, -h                           Show this help menu"
             exit 0
             ;;
         *)
@@ -236,7 +245,9 @@ mount_and_persist_disk() {
         echo "UUID=${DISK_UUID} ${RECORDINGS_DIR} ext4 defaults,noatime,nodiratime,nofail 0 2" >> /etc/fstab
     fi
 
-    mount -a 2>/dev/null || mount "${disk}" "${RECORDINGS_DIR}" 2>/dev/null || true
+    if ! mount -a 2>/dev/null && ! mount "${disk}" "${RECORDINGS_DIR}" 2>/dev/null; then
+        fatal "Failed to mount target storage disk ${disk} to ${RECORDINGS_DIR}!"
+    fi
     log_info "Disk successfully mounted and registered in /etc/fstab."
 }
 
@@ -266,6 +277,42 @@ init_directories_and_mountguard() {
 
     # Ensure unprivileged container user (UID 10001) owns recording paths
     chown -R 10001:10001 "${RECORDINGS_DIR}" "${POSTGRES_DIR}" 2>/dev/null || true
+}
+
+# ------------------------------------------------------------------------------
+# 4a. Application Files Placement
+# ------------------------------------------------------------------------------
+install_application_files() {
+    log_info "Synchronizing VigilOne application files to ${INSTALL_DIR}..."
+    mkdir -p "${INSTALL_DIR}"
+
+    if [[ "${SOURCE_DIR}" != "${INSTALL_DIR}" ]]; then
+        log_info "Deploying appliance files from ${SOURCE_DIR} to ${INSTALL_DIR}..."
+
+        # Verify source directory contains expected root assets
+        if [[ ! -f "${SOURCE_DIR}/docker-compose.yml" || ! -d "${SOURCE_DIR}/backend" ]]; then
+            fatal "Source directory ${SOURCE_DIR} does not contain valid VigilOne appliance files."
+        fi
+
+        cp -f "${SOURCE_DIR}/docker-compose.yml" "${INSTALL_DIR}/docker-compose.yml"
+        cp -f "${SOURCE_DIR}/Caddyfile" "${INSTALL_DIR}/Caddyfile"
+        cp -f "${SOURCE_DIR}/mediamtx.yml" "${INSTALL_DIR}/mediamtx.yml"
+
+        mkdir -p "${INSTALL_DIR}/deploy"
+        cp -rf "${SOURCE_DIR}/deploy/." "${INSTALL_DIR}/deploy/"
+
+        mkdir -p "${INSTALL_DIR}/backend"
+        cp -rf "${SOURCE_DIR}/backend/." "${INSTALL_DIR}/backend/"
+
+        mkdir -p "${INSTALL_DIR}/frontend"
+        cp -rf "${SOURCE_DIR}/frontend/." "${INSTALL_DIR}/frontend/"
+
+        if [[ -d "${SOURCE_DIR}/docs" ]]; then
+            mkdir -p "${INSTALL_DIR}/docs"
+            cp -rf "${SOURCE_DIR}/docs/." "${INSTALL_DIR}/docs/"
+        fi
+        log_info "Application files successfully deployed to ${INSTALL_DIR}."
+    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -382,6 +429,35 @@ install_docker_if_missing() {
 }
 
 # ------------------------------------------------------------------------------
+# 6a. Offline / Air-gapped Image Archive Loader
+# ------------------------------------------------------------------------------
+load_offline_images() {
+    local bundle=""
+    if [[ -n "$OFFLINE_BUNDLE" ]]; then
+        if [[ ! -f "$OFFLINE_BUNDLE" ]]; then
+            fatal "Specified offline image bundle does not exist: $OFFLINE_BUNDLE"
+        fi
+        bundle="$OFFLINE_BUNDLE"
+    elif [[ -f "${SOURCE_DIR}/vigilone-images.tar.gz" ]]; then
+        bundle="${SOURCE_DIR}/vigilone-images.tar.gz"
+    elif [[ -f "${SOURCE_DIR}/vigilone-images.tar" ]]; then
+        bundle="${SOURCE_DIR}/vigilone-images.tar"
+    elif [[ -f "${INSTALL_DIR}/vigilone-images.tar.gz" ]]; then
+        bundle="${INSTALL_DIR}/vigilone-images.tar.gz"
+    elif [[ -f "${INSTALL_DIR}/vigilone-images.tar" ]]; then
+        bundle="${INSTALL_DIR}/vigilone-images.tar"
+    fi
+
+    if [[ -n "$bundle" ]]; then
+        log_info "Air-gapped deployment: Loading container images from ${bundle}..."
+        if ! docker load -i "$bundle"; then
+            fatal "Failed to load container images from offline bundle: $bundle"
+        fi
+        log_info "Container images successfully loaded into Docker engine."
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # 7. Local Network Discovery (Avahi mDNS -> vigilone.local) & Firewall
 # ------------------------------------------------------------------------------
 setup_network_services() {
@@ -429,23 +505,70 @@ install_systemd_service() {
 # ------------------------------------------------------------------------------
 # 9. CLI Link & Start Appliance
 # ------------------------------------------------------------------------------
-link_cli_and_start() {
+start_appliance_stack() {
     log_info "Installing /usr/local/bin/vigilonectl CLI..."
     if [[ -f "${INSTALL_DIR}/deploy/packaging/vigilonectl" ]]; then
-        chmod +x "${INSTALL_DIR}/deploy/packaging/vigilonectl" 2>/dev/null || true
-        ln -sf "${INSTALL_DIR}/deploy/packaging/vigilonectl" /usr/local/bin/vigilonectl 2>/dev/null || true
+        chmod +x "${INSTALL_DIR}/deploy/packaging/vigilonectl"
+        ln -sf "${INSTALL_DIR}/deploy/packaging/vigilonectl" /usr/local/bin/vigilonectl
+    else
+        fatal "Appliance control binary not found at ${INSTALL_DIR}/deploy/packaging/vigilonectl."
     fi
 
-    if command -v docker &>/dev/null; then
-        log_info "Starting VigilOne CCTV appliance stack via Docker Compose..."
-        cd "${INSTALL_DIR}" 2>/dev/null || true
-        docker compose -f docker-compose.yml -f deploy/packaging/docker-compose.prod.yml up -d --build 2>/dev/null || true
-
-        # Run database migration deploy inside container
-        log_info "Applying database migrations..."
-        sleep 5 2>/dev/null || true
-        docker compose exec -T backend npx prisma migrate deploy 2>/dev/null || true
+    if ! command -v docker &>/dev/null; then
+        fatal "Docker engine not found. Cannot start appliance stack."
     fi
+
+    log_info "Starting VigilOne CCTV appliance stack via Docker Compose..."
+    cd "${INSTALL_DIR}"
+
+    if ! docker compose -f docker-compose.yml -f deploy/packaging/docker-compose.prod.yml up -d --build --remove-orphans; then
+        fatal "Docker Compose failed to start the VigilOne appliance stack."
+    fi
+
+    # Wait for PostgreSQL container to achieve readiness (max 45 seconds)
+    log_info "Waiting for database readiness..."
+    local max_retries=45
+    local count=0
+    local db_ready=false
+
+    while [[ $count -lt $max_retries ]]; do
+        if docker compose exec -T postgres pg_isready -U vigilone -d vigilone_db &>/dev/null; then
+            db_ready=true
+            break
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    if [[ "$db_ready" != "true" ]]; then
+        fatal "PostgreSQL container failed to achieve readiness within ${max_retries} seconds."
+    fi
+    log_info "Database is ready."
+
+    # Run database migration deploy inside container
+    log_info "Applying database migrations (prisma migrate deploy)..."
+    if ! docker compose exec -T backend npx prisma migrate deploy; then
+        fatal "Database migration failed during deployment!"
+    fi
+    log_info "Database migrations applied successfully."
+
+    # Verify appliance healthcheck
+    log_info "Verifying appliance healthcheck..."
+    local backend_ready=false
+    count=0
+    while [[ $count -lt 45 ]]; do
+        if curl -f -s http://localhost:80/api/v1/health &>/dev/null || curl -k -f -s https://localhost/api/v1/health &>/dev/null || docker compose exec -T backend curl -f -s http://localhost:4000/api/v1/health &>/dev/null; then
+            backend_ready=true
+            break
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+
+    if [[ "$backend_ready" != "true" ]]; then
+        fatal "Appliance healthcheck verification failed! Service did not achieve readiness within 45s. Check container logs with 'vigilonectl logs backend'."
+    fi
+    log_info "Appliance stack is online and healthy."
 }
 
 # ------------------------------------------------------------------------------
@@ -455,12 +578,15 @@ main() {
     print_banner
     preflight_checks
     init_directories_and_mountguard
+    install_application_files
     provision_storage_disk
     generate_secrets_idempotent
     install_docker_if_missing
+    load_offline_images
     setup_network_services
     install_systemd_service
-    link_cli_and_start
+    start_appliance_stack
+
 
     SETUP_TOKEN="$(cat "${CONFIG_DIR}/setup-token.txt" 2>/dev/null || echo "N/A")"
     PRIMARY_IP="$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")"
