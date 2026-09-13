@@ -151,6 +151,40 @@ export class StreamWatchdogService {
           cameraConnectionManager.reportDisconnect(cameraId, primaryIssue);
         } catch {}
       }
+
+      // Ingest into authoritative IncidentOrchestrator pipeline
+      try {
+        const { incidentOrchestrator } = await import('../incident/orchestrator/incidentOrchestrator.service');
+        const isOffline = primaryIssue === 'STREAM_STALLED';
+        const eventId = `watchdog-${cameraId}-${Date.now()}`;
+        await incidentOrchestrator.ingestEvent({
+          id: eventId,
+          correlationId: eventId,
+          source: 'WATCHDOG',
+          type: isOffline ? 'CAMERA_OFFLINE' : 'STREAM_DEGRADED',
+          severity: isOffline ? EventSeverity.CRITICAL : EventSeverity.WARNING,
+          timestampUtc: new Date(),
+          tenantId: camera.tenantId,
+          cameraId: camera.id,
+          siteId: camera.siteId || undefined,
+          payload: isOffline
+            ? {
+                kind: 'CAMERA_OFFLINE',
+                cameraId: camera.id,
+                lastSeenUtc: new Date(),
+                reason: primaryIssue,
+              }
+            : {
+                kind: 'STREAM_DEGRADED',
+                cameraId: camera.id,
+                fps: metrics.fps,
+                expectedFps: baseline.expectedFps,
+              },
+          dedupKey: `watchdog:${cameraId}:${isOffline ? 'offline' : 'degraded'}`,
+        });
+      } catch (err: any) {
+        console.warn(`[StreamWatchdog] Ingest into IncidentOrchestrator warning: ${err.message}`);
+      }
     } else if (!isDegraded && wasDegraded) {
       await this.resolveDegradedAlarm(camera.tenantId, camera.id, camera.name);
     }

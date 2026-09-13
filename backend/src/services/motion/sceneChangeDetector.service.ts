@@ -103,6 +103,34 @@ export class SceneChangeDetectorService {
 
         this.scheduleCooldown(cameraId, stateObj);
         this.cameraStates.set(cameraId, stateObj);
+
+        // Ingest into authoritative IncidentOrchestrator pipeline
+        try {
+          const camera = prisma.camera
+            ? await prisma.camera.findUnique({
+                where: { id: cameraId },
+                select: { tenantId: true, siteId: true },
+              })
+            : null;
+          const { incidentOrchestrator } = await import('../incident/orchestrator/incidentOrchestrator.service');
+          await incidentOrchestrator.ingestEvent({
+            id: event.id,
+            source: 'VISION_AI',
+            type: 'MOTION',
+            severity: EventSeverity.INFO,
+            timestampUtc: now,
+            tenantId: camera?.tenantId || 'system-tenant',
+            cameraId,
+            siteId: camera?.siteId || undefined,
+            correlationId: event.id,
+            payload: {
+              kind: 'MOTION',
+              score: confidence,
+            },
+          });
+        } catch (orchestratorErr: any) {
+          console.warn(`[SceneDetector] IncidentOrchestrator ingest warning: ${orchestratorErr.message}`);
+        }
       } catch (err: any) {
         console.error(`[SceneDetector] Failed to activate episode for camera ${cameraId}:`, err.message);
       }

@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
+import { execSync } from 'child_process';
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { VENDOR_OTA_PUBLIC_KEY, OTA_KEY_ID } from '../../config/otaKeys';
@@ -586,6 +588,193 @@ export class OtaUpdateService {
       });
     } catch {
       // Best-effort alarm creation
+    }
+  }
+
+  public getCurrentVersion(): string {
+    return this.currentVersion;
+  }
+
+  public getCurrentEpoch(): number {
+    return this.currentEpoch;
+  }
+
+  /**
+   * Scans backups directory for available pre-OTA snapshots with valid metadata.json
+   */
+  public hasRollbackSnapshot(): boolean {
+    return this.getLatestSnapshot() !== null;
+  }
+
+  /**
+   * Retrieves the most recent pre-update snapshot metadata.
+   */
+  public getLatestSnapshot(): OtaSnapshotMetadata | null {
+    if (!fs.existsSync(this.backupsDir)) {
+      return null;
+    }
+    try {
+      const entries = fs
+        .readdirSync(this.backupsDir)
+        .filter((dir) => dir.startsWith('pre-ota-'))
+        .sort()
+        .reverse();
+
+      for (const entry of entries) {
+        const metaPath = path.join(this.backupsDir, entry, 'metadata.json');
+        if (fs.existsSync(metaPath)) {
+          const raw = fs.readFileSync(metaPath, 'utf8');
+          const meta = JSON.parse(raw);
+          if (meta && meta.snapshotId) {
+            return meta as OtaSnapshotMetadata;
+          }
+        }
+      }
+    } catch {
+      // Return null on error
+    }
+    return null;
+  }
+
+  /**
+   * Manually trigger rollback to the latest pre-update snapshot.
+   */
+  public async triggerRollback(): Promise<{ success: boolean; error?: string }> {
+    const snapshot = this.getLatestSnapshot();
+    if (!snapshot) {
+      return { success: false, error: 'NO_ROLLBACK_SNAPSHOT_AVAILABLE' };
+    }
+
+    try {
+      await this.triggerAutomaticRollback(snapshot, {
+        reason: 'MANUAL_CLI_ROLLBACK',
+        detail: { initiatedAt: new Date().toISOString() },
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: `ROLLBACK_FAILED: ${err.message}` };
+    }
+  }
+
+  /**
+   * Applies a cryptographic OTA update bundle:
+   * 1. Extracts or inspects bundle files in a secure temporary directory.
+   * 2. Validates Ed25519 digital signature of manifest against VENDOR_OTA_PUBLIC_KEY.
+   * 3. Validates SHA-256 hashes and path traversal of all payload files.
+   * 4. Creates an atomic pre-update backup snapshot.
+   * 5. Deploys verified payload files to destination.
+   * 6. Commits update (advances version & monotonic release floor).
+   * 7. Runs deep healthcheck with automatic rollback on failure.
+   */
+  public async applyUpdate(
+    bundleTarOrDir: string,
+    options: {
+      skipHealthCheck?: boolean;
+      mediamtxApiUrl?: string;
+      targetInstallDir?: string;
+      publicKeyPem?: string;
+      mockHealthCheck?: () => Promise<HealthCheckResult>;
+    } = {}
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
+    if (!fs.existsSync(bundleTarOrDir)) {
+      return { success: false, error: `OTA_BUNDLE_NOT_FOUND: Path does not exist: ${bundleTarOrDir}` };
+    }
+
+    let stagingDir = bundleTarOrDir;
+    let isTempStaging = false;
+
+    // If path is a tar.gz / tar archive, extract safely into temporary directory
+    const stat = fs.statSync(bundleTarOrDir);
+    if (stat.isFile()) {
+      stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vigilone-ota-unpack-'));
+      isTempStaging = true;
+      try {
+        execSync(`tar -xzf "${bundleTarOrDir}" -C "${stagingDir}"`, { stdio: 'pipe' });
+      } catch (tarErr: any) {
+        if (isTempStaging && fs.existsSync(stagingDir)) {
+          fs.rmSync(stagingDir, { recursive: true, force: true });
+        }
+        return { success: false, error: `TAR_EXTRACTION_FAILED: ${tarErr.message}` };
+      }
+    }
+
+    try {
+      // 1. Locate manifest.json and manifest.sig
+      const manifestPath = path.join(stagingDir, 'manifest.json');
+      const sigPath = path.join(stagingDir, 'manifest.sig');
+
+      if (!fs.existsSync(manifestPath)) {
+        return { success: false, error: 'OTA_MANIFEST_MISSING: manifest.json not found in bundle' };
+      }
+      if (!fs.existsSync(sigPath)) {
+        return { success: false, error: 'OTA_SIGNATURE_MISSING: manifest.sig not found in bundle' };
+      }
+
+      const manifestRaw = fs.readFileSync(manifestPath, 'utf8');
+      const signatureHex = fs.readFileSync(sigPath, 'utf8').trim();
+
+      // 2. Cryptographic signature and purpose verification
+      const verifyResult = this.verifyManifest(
+        manifestRaw,
+        signatureHex,
+        options.publicKeyPem || VENDOR_OTA_PUBLIC_KEY
+      );
+      if (!verifyResult.valid || !verifyResult.manifest) {
+        return { success: false, error: verifyResult.error || 'MANIFEST_VERIFICATION_FAILED' };
+      }
+
+      const manifest = verifyResult.manifest;
+
+      // 3. Payload integrity and path-traversal check
+      const payloadCheck = this.verifyPayloadFiles(stagingDir, manifest);
+      if (!payloadCheck.valid) {
+        return { success: false, error: payloadCheck.error || 'PAYLOAD_VERIFICATION_FAILED' };
+      }
+
+      // 4. Create Pre-Update Snapshot before touching any active files
+      const snapshot = await this.createPreUpdateSnapshot();
+
+      // 5. Deploy verified payload files if targetInstallDir specified
+      const targetDir = options.targetInstallDir || process.env.VIGILONE_INSTALL_DIR || '/opt/vigilone';
+      for (const file of manifest.files) {
+        const srcPath = path.join(stagingDir, file.path);
+        const destPath = path.join(targetDir, file.path);
+        const destDir = path.dirname(destPath);
+        if (!fs.existsSync(destDir)) {
+          fs.mkdirSync(destDir, { recursive: true });
+        }
+        fs.copyFileSync(srcPath, destPath);
+      }
+
+      // 6. Commit Update: advance version and monotonic floor
+      this.commitUpdate(manifest);
+
+      // 7. Verification: Deep healthcheck with automatic monotonic rollback
+      if (!options.skipHealthCheck) {
+        try {
+          await this.verifyOtaHealthOrRollback(snapshot, {
+            timeoutMs: 30000,
+            mediamtxApiUrl: options.mediamtxApiUrl,
+            mockHealthCheck: options.mockHealthCheck,
+          });
+        } catch (healthErr: any) {
+          return {
+            success: false,
+            version: this.currentVersion,
+            error: `POST_UPDATE_HEALTHCHECK_FAILED: Rolled back to ${snapshot.version} (${healthErr.message})`,
+          };
+        }
+      }
+
+      return { success: true, version: manifest.version };
+    } catch (err: any) {
+      return { success: false, error: `OTA_APPLY_UNEXPECTED_ERROR: ${err.message}` };
+    } finally {
+      if (isTempStaging && fs.existsSync(stagingDir)) {
+        try {
+          fs.rmSync(stagingDir, { recursive: true, force: true });
+        } catch {}
+      }
     }
   }
 }

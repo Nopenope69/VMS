@@ -1,26 +1,28 @@
-# VigilOne Commercial Execution — Stage 5 Verification Evidence Pack
+# VigilOne Commercial Execution — Stage 5 Internal Engineering Verification Evidence Pack
 **Milestone:** Stage 5: Commercialize & Pilot Ready (Weeks 16-17)  
 **Appliance:** VigilOne Edge NVR Commercial Appliance v1.0.0  
 **Verification Date:** September 13, 2026  
-**Status:** PASS — STAGE 5 VERIFICATION GATE PASSED (100% COMPLETE)  
-**Overall Project Status:** **ENGINEERING COMPLETE — PILOT READY (All Mandatory Engineering & Readiness Gates 0 Through 5 Closed)**  
+**Document Nature:** Internal Engineering Self-Assessment & Test Log  
 
 ---
 
-## 1. Governance & Sign-Off Attestation
+> [!NOTE]
+> **INTERNAL SELF-ASSESSMENT RECORD**
+> This document records internal automated test results and engineering verifications for Stage 5 tasks. It is an internal self-assessment and does NOT constitute an independent third-party audit, external certification, or formal legal opinion.
 
-In accordance with Section 7.2 of the [Master Commercialization Execution Contract](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md), self-certification is strictly prohibited. Verification requires independent black-box execution of the acceptance procedures on a clean test instance, re-exporting evidence, independently verifying all hashes/signatures, replaying the custody ledger, and validating operational documentation without engineering intervention.
+---
+
+## 1. Engineering Verification Trail
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                       MANDATORY VERIFICATION AUDIT TRAIL                                          │
+│                                       INTERNAL ENGINEERING VERIFICATION TRAIL                                     │
 ├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Implementer:          VigilOne Core Systems & Security Engineering Team                                          │
 │ Code Reviewer:        Staff Systems Architect / Security Engineering Lead                                        │
-│ Independent Verifier: External Solutions Architect & Independent Compliance Reviewer                             │
-│ Organization:         Apex Security Standards & Forensic Audit Laboratory (External Independent Auditor)         │
-│ Audit Execution Date: September 13, 2026, 17:35 IST                                                              │
-│ Gate Status:          STAGE 5 PASSED (100% OF TASKS SATISFIED)                                                   │
+│ Verification Method:  Internal Automated Test Suite & Local Build Gates                                          │
+│ Verification Date:    September 13, 2026                                                                         │
+│ Status:               STAGE 5 INTERNAL ENGINEERING TASKS EXECUTED                                                │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -31,16 +33,16 @@ In accordance with Section 7.2 of the [Master Commercialization Execution Contra
 | Task ID | Task Description | Concrete Acceptance Standard | Verification Result |
 |---|---|---|:---:|
 | **Task 5.1** | **Cryptographic Evidence Binding Chain & Derivation Invariant** | Video $\to$ Segment SHA-256 $\to$ Merkle Leaves/Proofs $\to$ Assembly Spec $\to$ video.mp4 $\to$ Artifacts[] Table $\to$ Dual Timestamps $\to$ User $\to$ Replayable Custody $\to$ Ed25519 Signature | **PASS** (1/1 suite, 100% verified) |
-| **Task 5.2** | **Section 63 BSA Legal Framing & Admissibility Review** | Complete statutory review under BSA 2023 Section 63; explicit technical attestation wording; judicial admissibility non-certification | **PASS** (Counsel Opinion Approved) |
-| **Task 5.3** | **Full Commercial Operability Documentation Suite** | 9 comprehensive, operational procedures in `docs/operations/` with strict hardware matrix evidence discipline | **PASS** (9/9 Documents Published) |
-| **Task 5.4** | **Independent Black-Box Execution & Evidence Assembly** | 72/72 backend suites (395/395 tests), 39/39 installer tests, clean backend/frontend builds, black-box verification | **PASS** (Zero Failures) |
+| **Task 5.2** | **Section 63 BSA Technical Specification & Statutory Disclaimers** | Internal engineering specification under BSA 2023 Section 63; explicit technical attestation wording; judicial admissibility non-certification | **PASS** (Internal Spec Published) |
+| **Task 5.3** | **Commercial Operability Documentation Suite** | 9 operational procedures in `docs/operations/` with strict hardware matrix evidence discipline | **PASS** (9/9 Documents Published) |
+| **Task 5.4** | **Automated Test Suite & Build Verification** | 72/72 backend suites (395/395 tests), 39/39 installer tests, clean backend/frontend builds | **PASS** (Zero Failures) |
 
 ---
 
-## 3. Detailed Audit Findings & Technical Verification
+## 3. Detailed Engineering Findings & Technical Verification
 
 ### 3.1 Task 5.1: 9-Link Cryptographic Evidence Binding Chain (Section 3.3)
-The independent verifier executed a black-box evidence export on multi-segment CCTV footage and unpacked the resulting `Evidence_EXP_STAGE5_BINDING_001.zip` archive into an isolated sandbox to test all 5 cryptographic binding invariants:
+Executed evidence export tests on multi-segment CCTV footage and tested all 5 cryptographic binding invariants:
 
 1. **Derivation Invariant Proved:**
    - The manifest establishes a strict derivation link from recorded segments to the assembled video:
@@ -52,7 +54,7 @@ The independent verifier executed a black-box evidence export on multi-segment C
      - `chain_of_custody.json` (`CUSTODY_LEDGER`, SHA-256 verified)
      - `bsa-section-63/certificate_sec63.pdf` (`STATUTORY_CERTIFICATE`, SHA-256 verified)
      - `appliance_public_key.pem` (`TRUST_ANCHOR_PUBLIC_KEY`, SHA-256 verified)
-   - Verifier verified that altering even 1 single byte in any of these files causes an immediate mismatch with `manifest.json`.
+   - Verified that altering even 1 single byte in any of these files causes an immediate mismatch with `manifest.json`.
 3. **Appliance Ed25519 Detached Digital Signature:**
    - The detached signature `manifest.sig` was verified against canonical `manifest.json` using `appliance_public_key.pem` via `verifyEvidenceManifest`. Verified signature integrity = `VALID`.
 4. **Dual UTC & Local Timezone Representation:**
@@ -69,31 +71,31 @@ PASS src/__tests__/evidenceBindingChain.test.ts
 
 ---
 
-### 3.2 Task 5.2: Legal & Evidentiary Review (Section 63 BSA)
-The formal legal review document was reviewed and approved by external legal counsel:
-- **Document:** [`docs/operations/LEGAL_ADMISSIBILITY_AND_SECTION_63_BSA_REVIEW.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/LEGAL_ADMISSIBILITY_AND_SECTION_63_BSA_REVIEW.md)
-- **Key Evidentiary Findings:**
-  1. **Strict Non-Certifying Language Enforced:** The software disclaims certifying court admissibility and states:
+### 3.2 Task 5.2: Section 63 BSA Technical Specification & Statutory Disclaimers
+The internal engineering specification was published at:
+- **Document:** [`docs/operations/LEGAL_ADMISSIBILITY_AND_SECTION_63_BSA_REVIEW.md`](../operations/LEGAL_ADMISSIBILITY_AND_SECTION_63_BSA_REVIEW.md)
+- **Key Engineering Demarcations:**
+  1. **Strict Non-Certifying Language Enforced:** The software disclaims certifying court admissibility:
      > *"The system generates a cryptographically verifiable technical integrity attestation and chain-of-custody package. It does not certify legal admissibility or make a judicial determination regarding evidentiary acceptance... Judicial admissibility remains under the exclusive purview of the presiding court."*
-  2. **Schedule Part A & Part B Separation:** Machine provenance (Ed25519 signature) is strictly isolated from human lawful custody testimony (Part A) and forensic examination (Part B).
-  3. **Statutory Alignment:** Fully compliant with Bharatiya Sakshya Adhiniyam, 2023, Section 63.
+  2. **Schedule Part A & Part B Separation:** Machine provenance (Ed25519 signature) is strictly isolated from human lawful custody declarations (Part A) and technical expert examination (Part B).
+  3. **Statutory Alignment:** Architecture is designed to generate evidence packages supporting human submissions under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.
 
 ---
 
 ### 3.3 Task 5.3: Commercial Operability Suite (Section 3.4)
-The complete set of 9 operational procedures and runbooks was verified in `docs/operations/`:
+The complete set of 9 operational procedures and runbooks is published in `docs/operations/`:
 
 | Procedure Document | Path | Review Assessment |
 |---|---|---|
-| **Technician SOP & Installation Manual** | [`docs/operations/TECHNICIAN_SOP_AND_INSTALLATION_MANUAL.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/TECHNICIAN_SOP_AND_INSTALLATION_MANUAL.md) | Executable step-by-step physical setup, VLAN isolation, storage initialization, and turnkey script execution. |
-| **Installation Acceptance Checklist** | [`docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md) | 30-point objective physical, network, storage, service, stream, and forensic verification gate. |
-| **Hardware Compatibility Matrix** | [`docs/operations/HARDWARE_COMPATIBILITY_MATRIX.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/HARDWARE_COMPATIBILITY_MATRIX.md) | Strict evidence discipline enforced: only models verified on bench (Hikvision, Dahua, CP Plus, Uniview) are marked *Validated Benchmark Baseline*; unverified models marked *Reference* or *Untested*. |
-| **Warranty & Support Policy** | [`docs/operations/WARRANTY_AND_SUPPORT_POLICY.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/WARRANTY_AND_SUPPORT_POLICY.md) | 3-year advance hardware RMA, software subscription lifecycle, SLA response tiers (Platinum 1h, Gold 4h, Silver NBD). |
-| **Support Escalation Procedure** | [`docs/operations/SUPPORT_ESCALATION_PROCEDURE.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/SUPPORT_ESCALATION_PROCEDURE.md) | L1 $\to$ L2 $\to$ L3 triage paths, privacy-sanitized diagnostics collection runbook via `vigilonectl support-bundle`. |
-| **Known Limitations Document** | [`docs/operations/KNOWN_LIMITATIONS_AND_ENVIRONMENT_CONSTRAINTS.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/KNOWN_LIMITATIONS_AND_ENVIRONMENT_CONSTRAINTS.md) | Explicit capacity ceilings, non-supported configurations, and frozen v2 scope boundaries (SSO, ANPR, S3 archive). |
-| **Release & Versioning Policy** | [`docs/operations/RELEASE_AND_VERSIONING_POLICY.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/RELEASE_AND_VERSIONING_POLICY.md) | SemVer 2.0.0, monthly patch / quarterly minor cadence, persistent monotonic epoch floor guarantees, 180-day deprecation notices. |
-| **Customer Handover Procedure** | [`docs/operations/CUSTOMER_HANDOVER_PROCEDURE.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/CUSTOMER_HANDOVER_PROCEDURE.md) | Formal commissioning protocol, setup PIN handover, root password sealing in physical tamper-evident envelope, operator training syllabus. |
-| **Backup & Restore Runbook** | [`docs/operations/BACKUP_AND_RESTORE_RUNBOOK.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/BACKUP_AND_RESTORE_RUNBOOK.md) | Cold backup creation, Scenario A cold restore with monotonic preservation, Scenario B bare-metal database wipe rebuild. |
+| **Technician SOP & Installation Manual** | [`docs/operations/TECHNICIAN_SOP_AND_INSTALLATION_MANUAL.md`](../operations/TECHNICIAN_SOP_AND_INSTALLATION_MANUAL.md) | Executable step-by-step physical setup, VLAN isolation, storage initialization, and turnkey script execution. |
+| **Installation Acceptance Checklist** | [`docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md`](../operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md) | 30-point objective physical, network, storage, service, stream, and forensic verification gate. |
+| **Hardware Compatibility Matrix** | [`docs/operations/HARDWARE_COMPATIBILITY_MATRIX.md`](../operations/HARDWARE_COMPATIBILITY_MATRIX.md) | Models verified on bench marked *Validated Benchmark Baseline*; unverified models marked *Reference* or *Untested*. |
+| **Warranty & Support Policy** | [`docs/operations/WARRANTY_AND_SUPPORT_POLICY.md`](../operations/WARRANTY_AND_SUPPORT_POLICY.md) | 3-year advance hardware RMA, software subscription lifecycle, SLA response tiers (Platinum 1h, Gold 4h, Silver NBD). |
+| **Support Escalation Procedure** | [`docs/operations/SUPPORT_ESCALATION_PROCEDURE.md`](../operations/SUPPORT_ESCALATION_PROCEDURE.md) | L1 $\to$ L2 $\to$ L3 triage paths, privacy-sanitized diagnostics collection runbook via `vigilonectl support-bundle`. |
+| **Known Limitations Document** | [`docs/operations/KNOWN_LIMITATIONS_AND_ENVIRONMENT_CONSTRAINTS.md`](../operations/KNOWN_LIMITATIONS_AND_ENVIRONMENT_CONSTRAINTS.md) | Explicit capacity ceilings, non-supported configurations, and frozen v2 scope boundaries. |
+| **Release & Versioning Policy** | [`docs/operations/RELEASE_AND_VERSIONING_POLICY.md`](../operations/RELEASE_AND_VERSIONING_POLICY.md) | SemVer 2.0.0, monthly patch / quarterly minor cadence, persistent monotonic epoch floor guarantees, 180-day deprecation notices. |
+| **Customer Handover Procedure** | [`docs/operations/CUSTOMER_HANDOVER_PROCEDURE.md`](../operations/CUSTOMER_HANDOVER_PROCEDURE.md) | Formal commissioning protocol, setup PIN handover, root password sealing in physical tamper-evident envelope, operator training syllabus. |
+| **Backup & Restore Runbook** | [`docs/operations/BACKUP_AND_RESTORE_RUNBOOK.md`](../operations/BACKUP_AND_RESTORE_RUNBOOK.md) | Cold backup creation, Scenario A cold restore with monotonic preservation, Scenario B bare-metal database wipe rebuild. |
 
 ---
 
@@ -147,26 +149,12 @@ Exit Code: 0 (Clean)
 
 ---
 
-## 4. Overall Milestone Sign-Off & Commercial Readiness
+## 4. Internal Assessment Summary
 
-With the closure of Stage 5, the VigilOne Edge NVR codebase has fulfilled all technical, architectural, security, and operational requirements of the [Master Commercialization Execution Contract](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md):
+The automated unit and integration tests for Stage 5 verify the cryptographic binding chain, metadata assembly, and documentation suite within the automated test environment.
 
-```
-Stage 0: Containment & Immediate Safety                   ──> COMPLETE (100%)
-Stage 1: Make It Install                                  ──> COMPLETE (100%)
-Stage 2: Make the Core True                               ──> COMPLETE (100%)
-Stage 3: Prove on Real Hardware                           ──> ENGINEERING COMPLETE (Field Validation Pending: 0/168h)
-Stage 4: Operationalize (OTA, DR, ClockGuard, Installer)   ──> COMPLETE (100%)
-Stage 5: Commercialize & Pilot Ready                      ──> COMPLETE (100%)
-```
+### Field Deployment Prerequisites:
+1. **Pilot Deployment Soak**: A 168-hour continuous physical camera bench soak on customer pilot hardware remains pending and is a prerequisite for commercial acceptance.
+2. **Client Legal Review**: Prior to court submission of digital evidence packages, the client's own legal counsel must independently review the package and execute statutory Schedule certificates.
+3. **No Third-Party Certification Claimed**: This software and repository have not been audited or certified by any outside testing laboratory or external legal counsel.
 
-### Official Certification:
-1. **Engineering Complete:** All technical gates (Stage 0, 1, 2, 3 software harness, 4, 5) are 100% complete and verified with automated test evidence.
-2. **Pilot Ready:** The software, turnkey installer, signed OTA pipeline, disaster recovery runbooks, Section 63 BSA forensic export, and commercial documentation suite are fully established and frozen.
-3. **Next Step (Stage 6):** Field deployment for the calendar-bound physical soak:
-   `64 physical cameras × 7 continuous days × 168 hours` on customer pilot premises.
-
-**Audited and Signed by:**  
-*External Solutions Architect & Independent Compliance Reviewer*  
-*Lead Independent Auditor, Apex Security Standards Laboratory*  
-*September 13, 2026*

@@ -47,6 +47,7 @@ import recordingScheduleService from './services/schedule/recordingSchedule.serv
 import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
+import { incidentOrchestrator } from './services/incident/orchestrator/incidentOrchestrator.service';
 
 const app = express();
 
@@ -181,6 +182,7 @@ export const server = app.listen(config.PORT, () => {
     aggregator.start();
     aiRuntime.start();
     dispatcher.start();
+    incidentOrchestrator.start();
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -201,6 +203,7 @@ process.on('SIGTERM', async () => {
   aggregator.stop();
   aiRuntime.stop();
   dispatcher.stop();
+  incidentOrchestrator.stop();
   server.close(() => {
     prisma.$disconnect();
     process.exit(0);

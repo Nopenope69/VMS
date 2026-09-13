@@ -367,9 +367,68 @@ describe('Stage 4 Task 4.2: Signed OTA Updates & Monotonic Rollback', () => {
     const canonical = service.canonicalizeJson(epoch2Manifest);
     const sig = crypto.sign(null, Buffer.from(canonical, 'utf8'), otaPrivKeyPem).toString('hex');
     const result = service.verifyManifest(JSON.stringify(epoch2Manifest), sig, otaPubKeyPem);
-
     expect(result.valid).toBe(false);
     expect(result.error).toContain('DOWNGRADE_NOT_PERMITTED');
     expect(result.error).toContain('monotonic appliance release floor (3)');
   });
+
+  it('provides getCurrentVersion, getCurrentEpoch, and snapshot discovery for vigilonectl CLI', async () => {
+    expect(otaService.getCurrentVersion()).toBe('1.0.0');
+    expect(otaService.getCurrentEpoch()).toBe(1);
+    expect(otaService.hasRollbackSnapshot()).toBe(false);
+
+    // Create a snapshot
+    const snapshot = await otaService.createPreUpdateSnapshot();
+    expect(otaService.hasRollbackSnapshot()).toBe(true);
+
+    const latest = otaService.getLatestSnapshot();
+    expect(latest?.snapshotId).toBe(snapshot.snapshotId);
+    expect(latest?.version).toBe('1.0.0');
+
+    // Trigger rollback via CLI method
+    const rollbackRes = await otaService.triggerRollback();
+    expect(rollbackRes.success).toBe(true);
+  });
+
+  it('applies a complete signed OTA update bundle via applyUpdate', async () => {
+    const bundleDir = path.join(testDir, 'ota-bundle-1.1.0');
+    fs.mkdirSync(bundleDir, { recursive: true });
+
+    const payloadFile = path.join(bundleDir, 'app-payload.txt');
+    fs.writeFileSync(payloadFile, 'new-version-app-code-1.1.0');
+    const hash = otaService.computeFileSha256(payloadFile);
+
+    const manifest: OtaManifest = {
+      version: '1.1.0',
+      versionEpoch: 1,
+      releaseDate: new Date().toISOString(),
+      keyId: OTA_KEY_ID,
+      artifactPurpose: 'APPLIANCE_OTA_UPDATE',
+      files: [{ path: 'app-payload.txt', sha256: hash, sizeBytes: 26 }],
+    };
+
+    const canonical = otaService.canonicalizeJson(manifest);
+    const signature = crypto.sign(null, Buffer.from(canonical, 'utf8'), otaPrivKeyPem).toString('hex');
+
+    fs.writeFileSync(path.join(bundleDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(bundleDir, 'manifest.sig'), signature);
+
+    const destDir = path.join(testDir, 'installed-app');
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const applyRes = await otaService.applyUpdate(bundleDir, {
+      publicKeyPem: otaPubKeyPem,
+      targetInstallDir: destDir,
+      skipHealthCheck: true,
+    });
+
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.version).toBe('1.1.0');
+    expect(otaService.getCurrentVersion()).toBe('1.1.0');
+
+    // Verify deployed file exists at target
+    expect(fs.existsSync(path.join(destDir, 'app-payload.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(destDir, 'app-payload.txt'), 'utf8')).toBe('new-version-app-code-1.1.0');
+  });
 });
+

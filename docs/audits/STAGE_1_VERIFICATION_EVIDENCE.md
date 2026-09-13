@@ -3,7 +3,7 @@
 > **Gate:** Stage 1 — Make It Install  
 > **Status:** PASSED (100% Verified)  
 > **Execution Date:** 2026-09-12  
-> **Authority:** [`docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md)  
+> **Authority:** [`docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md`](./CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md)  
 > **Independent Verification Rule:** Strict adherence to zero fake-success, automated boundary regressions, and verifiable evidence trail.
 
 ---
@@ -21,20 +21,20 @@
 - **Problem:** Prior to Stage 1, the repository had 3 partial incremental migrations that ran `ALTER TABLE` on tables never created by any preceding migration (due to previous developers relying on `prisma db push`). As a result, running `prisma migrate deploy` against a clean PostgreSQL instance crashed immediately.
 - **Remediation:**
   1. Generated an authoritative, consolidated baseline migration SQL file:
-     [`backend/prisma/migrations/20260901000000_init/migration.sql`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/prisma/migrations/20260901000000_init/migration.sql) (1,565 lines, creating all 51 models, tables, indexes, constraints, and foreign keys).
+     [`backend/prisma/migrations/20260901000000_init/migration.sql`](../../backend/prisma/migrations/20260901000000_init/migration.sql) (1,565 lines, creating all 51 models, tables, indexes, constraints, and foreign keys).
   2. Permanently deleted the orphaned partial migrations:
      - `backend/prisma/migrations/20260909135700_add_custody_sequence_unique`
      - `backend/prisma/migrations/20260909163000_add_storage_volumes_and_camera_quotas`
      - `backend/prisma/migrations/20260911010000_add_appliance_state`
-  3. Added explicit migration and database management scripts to [`backend/package.json`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/package.json):
+  3. Added explicit migration and database management scripts to [`backend/package.json`](../../backend/package.json):
      `db:migrate:deploy`, `db:migrate:dev`, `db:migrate:status`.
 
 ### 2.2 Prisma Client Singleton Hardening (C-006)
 - **Problem:** 44 distinct routes, middleware, and background services instantiated their own `new PrismaClient()` instances. Under standard PostgreSQL connection limits (default 100 max connections), 44 client instances with 5-10 connections each exhausted available pool connections during multi-camera workloads, triggering connection refusal errors.
 - **Remediation:**
-  1. Established a single authoritative Prisma client singleton at [`backend/src/config/database.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/config/database.ts).
+  1. Established a single authoritative Prisma client singleton at [`backend/src/config/database.ts`](../../backend/src/config/database.ts).
   2. Refactored all 44 call-sites across `server.ts`, middleware, routes, and services to import the single client.
-  3. Added permanent architectural boundary test at [`backend/src/__tests__/prismaSingleton.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/prismaSingleton.test.ts) enforcing reference identity and statically banning `new PrismaClient()` in any file outside `config/database.ts`.
+  3. Added permanent architectural boundary test at [`backend/src/__tests__/prismaSingleton.test.ts`](../../backend/src/__tests__/prismaSingleton.test.ts) enforcing reference identity and statically banning `new PrismaClient()` in any file outside `config/database.ts`.
 
 ### 2.3 Caddy / Docker Frontend Volume Fix (C-008)
 - **Problem:** `docker-compose.yml` mounted a shared named volume `frontend_dist` at `/srv/frontend` for Caddy, while a separate transient `frontend` container ran `CMD ["cp", "-r", "/srv/frontend/.", "/dist/"]`. This had multiple critical bugs:
@@ -42,27 +42,27 @@
   - The named volume masked new assets during upgrades.
   - If Caddy started before the frontend container finished copying, Caddy served a blank document root (404/500).
 - **Remediation:**
-  1. Refactored [`frontend/Dockerfile`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/frontend/Dockerfile) into a multi-stage gateway image:
+  1. Refactored [`frontend/Dockerfile`](../../frontend/Dockerfile) into a multi-stage gateway image:
      - Stage 1 (`builder`): Compiles TypeScript and Vite assets to `/app/dist`.
      - Stage 2 (`runner`): Uses `caddy:2.9-alpine` and directly bakes static assets into `/srv/frontend` with `COPY --from=builder /app/dist /srv/frontend`.
-  2. Updated [`docker-compose.yml`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docker-compose.yml):
+  2. Updated [`docker-compose.yml`](../../docker-compose.yml):
      - `caddy` service builds directly from `./frontend`.
      - Completely removed the redundant `frontend` container service.
      - Completely removed `frontend_dist` volume definitions and volume mounts.
-  3. Added `INTERNAL_API_SECRET` to `mediamtx` service environment in `docker-compose.yml` and updated [`mediamtx.yml`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/mediamtx.yml) webhook to expand `$INTERNAL_API_SECRET` cleanly without Go template parser conflicts.
+  3. Added `INTERNAL_API_SECRET` to `mediamtx` service environment in `docker-compose.yml` and updated [`mediamtx.yml`](../../mediamtx.yml) webhook to expand `$INTERNAL_API_SECRET` cleanly without Go template parser conflicts.
   4. Moved `prisma` to production `dependencies` in `backend/package.json` to ensure offline Docker builds execute `npx prisma generate` and `npx prisma migrate deploy` locally without fetching binaries from the internet.
 
 ### 2.4 CI Pipeline Construction (C-010)
 - **Problem:** No continuous integration workflow existed to enforce regressions, typechecking, migration application, or container build integrity.
 - **Remediation:**
-  1. Created [`.github/workflows/ci.yml`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/.github/workflows/ci.yml) with 4 concurrent verification jobs:
+  1. Created [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) with 4 concurrent verification jobs:
      - `backend-checks`: Node 20 typecheck (`tsc`), Prisma client generation, migration deployment against a fresh PostgreSQL 16 container (`prisma migrate deploy`), and full Jest test execution (`npm test`).
      - `frontend-checks`: Node 20 typecheck and Vite production build (`npm run build`).
      - `packaging-and-installer-checks`: Automated shell syntax, security invariants, and packaging regression checks (`scripts/__tests__/installer.test.sh`).
      - `docker-compose-validation`: Syntax and config validation for base and production compose files (`docker compose config -q`).
 
 ### 2.5 Installer Script Hardening & Offline Air-Gapped Idempotency (C-005 + Installer Audit)
-- **Problem:** [`deploy/packaging/install.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/deploy/packaging/install.sh) previously assumed all application files were already placed in `/opt/vigilone`, yet contained no copy or sync step. Critical Compose and migration commands used `2>/dev/null || true`, silently masking failures and printing "Successfully Completed" even when nothing was installed.
+- **Problem:** [`deploy/packaging/install.sh`](../../deploy/packaging/install.sh) previously assumed all application files were already placed in `/opt/vigilone`, yet contained no copy or sync step. Critical Compose and migration commands used `2>/dev/null || true`, silently masking failures and printing "Successfully Completed" even when nothing was installed.
 - **Remediation:**
   1. Added `install_application_files()` to synchronize appliance files (`docker-compose.yml`, `Caddyfile`, `mediamtx.yml`, `backend/`, `frontend/`, `deploy/`) into `/opt/vigilone`.
   2. Added `load_offline_images()` supporting `--offline-bundle <path>` and auto-detecting `vigilone-images.tar.gz` for air-gapped deployments without internet connectivity.

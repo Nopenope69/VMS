@@ -121,6 +121,8 @@ export interface VigilOneEvent<T extends VigilOneEventPayload = VigilOneEventPay
   id: string;                      // Canonical deduplication ID
   tenantId: string;
   cameraId?: string;
+  siteId?: string;
+  dedupKey?: string;
   source: EventSource;
   type: VigilOneEventType;
   timestampUtc: Date;

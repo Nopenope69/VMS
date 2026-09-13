@@ -3,7 +3,7 @@
 > **Gate:** Stage 2 — Make the Core True  
 > **Status:** PASSED (100% Verified)  
 > **Execution Date:** 2026-09-12  
-> **Master Execution Authority:** [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md)  
+> **Master Execution Authority:** [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](./MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md)  
 > **Independent Verifier Designation:** Lead QA Engineer / Field Validation Engineer (Mandated by Section 7.2)
 
 ---
@@ -36,14 +36,14 @@ Execution Timestamp: 2026-09-12T23:05:00Z
 
 | Invariant / Criterion | Requirement | Status | Evidence Reference |
 | :--- | :--- | :--- | :--- |
-| **C-005 Webhook Secret Injection** | Constant-time `crypto.timingSafeEqual` with byte length check on `INTERNAL_API_SECRET`; 401 on missing, 403 on invalid. | **PASS** | [`src/__tests__/webhookIngestion.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/webhookIngestion.test.ts) |
-| **C-011 Filename Timestamp Authority** | UTC timestamps parsed exclusively from MediaMTX filenames (`%Y-%m-%d_%H-%M-%S-%f`). Zero dependence on filesystem `mtime`. Bounds immutable under file `mtime` tampering. | **PASS** | [`src/__tests__/filenameTimestamp.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/filenameTimestamp.test.ts) |
-| **C-012 Fail-Closed Audit & Custody** | Zero error-swallowing `catch {}` blocks across `AuditChainService`, `CustodyLedger`, `auth.routes.ts`, and `retentionPolicy.ts`. Adversarial DB lock failure aborts transaction. | **PASS** | [`src/__tests__/failClosedAuditCustody.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/failClosedAuditCustody.test.ts) |
-| **Anti-Fake Principle** | Zero dummy media generation (`VIGILONE_STRUCTURED_EVIDENCE_MEDIA_PAYLOAD` deleted). Missing video strictly fails closed with `FILE_NOT_FOUND` / 404. | **PASS** | [`src/__tests__/physicalCameraCanary.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/physicalCameraCanary.test.ts) |
-| **C-018 4-State Reconciliation Ladder** | 1. Unmapped orphan media quarantined; valid orphan indexed with filename bounds.<br>2. Missing media marked `FILE_MISSING` and warning raised.<br>3. Corrupt media non-destructively repaired; unrepairable quarantined.<br>4. Valid DB/media pair verified for size and SHA-256 hash. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/storageReliabilityLadder.test.ts) |
-| **Mount Guard & Storage Failover** | Active R/W probe trips in $\le 5$s on EROFS or unmount. Fallback selects next healthy volume; if all unavailable, fails closed with `NO_HEALTHY_STORAGE_VOLUME_AVAILABLE` and `CRITICAL` alarm. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/storageReliabilityLadder.test.ts) |
-| **Quarantine Accounting & 5% Cap** | Quarantined media counts toward storage; capped at 5% of volume. Pinned evidence is **never** automatically pruned. If cap exceeded with pinned evidence, `CRITICAL` alarm raised. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/storageReliabilityLadder.test.ts) |
-| **Mandatory Physical Camera Canary** | End-to-end mathematical and temporal consistency verified from RTSP ingest to segment, indexing, playback seek, and evidence archive export. Automated smoke script generated. | **PASS** | [`src/__tests__/physicalCameraCanary.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/physicalCameraCanary.test.ts)<br>[`scripts/physical-camera-canary.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/scripts/physical-camera-canary.sh) |
+| **C-005 Webhook Secret Injection** | Constant-time `crypto.timingSafeEqual` with byte length check on `INTERNAL_API_SECRET`; 401 on missing, 403 on invalid. | **PASS** | [`src/__tests__/webhookIngestion.test.ts`](../../backend/src/__tests__/webhookIngestion.test.ts) |
+| **C-011 Filename Timestamp Authority** | UTC timestamps parsed exclusively from MediaMTX filenames (`%Y-%m-%d_%H-%M-%S-%f`). Zero dependence on filesystem `mtime`. Bounds immutable under file `mtime` tampering. | **PASS** | [`src/__tests__/filenameTimestamp.test.ts`](../../backend/src/__tests__/filenameTimestamp.test.ts) |
+| **C-012 Fail-Closed Audit & Custody** | Zero error-swallowing `catch {}` blocks across `AuditChainService`, `CustodyLedger`, `auth.routes.ts`, and `retentionPolicy.ts`. Adversarial DB lock failure aborts transaction. | **PASS** | [`src/__tests__/failClosedAuditCustody.test.ts`](../../backend/src/__tests__/failClosedAuditCustody.test.ts) |
+| **Anti-Fake Principle** | Zero dummy media generation (`VIGILONE_STRUCTURED_EVIDENCE_MEDIA_PAYLOAD` deleted). Missing video strictly fails closed with `FILE_NOT_FOUND` / 404. | **PASS** | [`src/__tests__/physicalCameraCanary.test.ts`](../../backend/src/__tests__/physicalCameraCanary.test.ts) |
+| **C-018 4-State Reconciliation Ladder** | 1. Unmapped orphan media quarantined; valid orphan indexed with filename bounds.<br>2. Missing media marked `FILE_MISSING` and warning raised.<br>3. Corrupt media non-destructively repaired; unrepairable quarantined.<br>4. Valid DB/media pair verified for size and SHA-256 hash. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](../../backend/src/__tests__/storageReliabilityLadder.test.ts) |
+| **Mount Guard & Storage Failover** | Active R/W probe trips in $\le 5$s on EROFS or unmount. Fallback selects next healthy volume; if all unavailable, fails closed with `NO_HEALTHY_STORAGE_VOLUME_AVAILABLE` and `CRITICAL` alarm. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](../../backend/src/__tests__/storageReliabilityLadder.test.ts) |
+| **Quarantine Accounting & 5% Cap** | Quarantined media counts toward storage; capped at 5% of volume. Pinned evidence is **never** automatically pruned. If cap exceeded with pinned evidence, `CRITICAL` alarm raised. | **PASS** | [`src/__tests__/storageReliabilityLadder.test.ts`](../../backend/src/__tests__/storageReliabilityLadder.test.ts) |
+| **Mandatory Physical Camera Canary** | End-to-end mathematical and temporal consistency verified from RTSP ingest to segment, indexing, playback seek, and evidence archive export. Automated smoke script generated. | **PASS** | [`src/__tests__/physicalCameraCanary.test.ts`](../../backend/src/__tests__/physicalCameraCanary.test.ts)<br>[`scripts/physical-camera-canary.sh`](../../scripts/physical-camera-canary.sh) |
 
 ---
 
@@ -106,7 +106,7 @@ Execution Timestamp: 2026-09-12T23:05:00Z
   - Verifies evidence package assembler produces signed ZIP with Ed25519 signature, SHA-256 manifest, and custody ledger entry.
   - Verifies fail-closed behavior when media is missing on disk.
   - Result: **2/2 automated tests PASSED**.
-- **Physical Camera Field Execution Protocol** ([`scripts/physical-camera-canary.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/scripts/physical-camera-canary.sh)):
+- **Physical Camera Field Execution Protocol** ([`scripts/physical-camera-canary.sh`](../../scripts/physical-camera-canary.sh)):
   - Standalone executable runner designed for field technicians and staging bench deployment.
   - Connects to physical camera RTSP endpoint over network, captures live stream via MediaMTX, triggers webhook, indexes segment, verifies playback seek, and exports signed evidence.
   - **Mandatory Field Qualification Telemetry Record Schema**:

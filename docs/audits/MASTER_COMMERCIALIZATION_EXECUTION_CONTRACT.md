@@ -2,7 +2,7 @@
 
 > **Status:** FROZEN MASTER EXECUTION CONTRACT (v1.0 Immutable)  
 > **Rating:** 9.7/10 Hardened  
-> **Authority:** Derived from [`docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md) and finalized through architectural synthesis on 2026-09-12.  
+> **Authority:** Derived from [`docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md`](./CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md) and finalized through architectural synthesis on 2026-09-12.  
 > **Core Mandate:** Freeze non-essential feature sprawl (federation, ANPR, S3 archive, SSO, redaction, floorplans, relays). Deliver the narrow **v1 core NVR**: Live View, Continuous & Scheduled Recording, Segment Indexing, Playback, Section 63 BSA Evidentiary Export, RBAC, Offline Licensing, and Zero-Terminal Appliance Deployment.  
 > **Execution Rule:** Do not invent scope. Do not declare completion based on implementation alone. Execute stage-by-stage, produce objective evidence, and advance a gate only when its acceptance criteria and independent verification are complete.
 

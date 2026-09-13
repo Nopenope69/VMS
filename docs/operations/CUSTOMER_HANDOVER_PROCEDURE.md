@@ -21,7 +21,7 @@ The commercial handover procedure marks the formal boundary where operational ow
 
 ### Step 1: Verification of Commissioning Checklist
 Prior to scheduling the handover meeting:
-1. Ensure all 30 points of the [Installation Acceptance Checklist](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md) are completed and signed.
+1. Ensure all 30 points of the [Installation Acceptance Checklist](./INSTALLATION_ACCEPTANCE_CHECKLIST.md) are completed and signed.
 2. Confirm all live camera feeds are recording continuously without dropped segments.
 3. Verify that the appliance storage pool is mounted, healthy, and reporting correct capacity in `vigilonectl status`.
 

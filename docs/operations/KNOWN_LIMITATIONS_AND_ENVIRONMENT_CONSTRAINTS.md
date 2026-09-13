@@ -33,13 +33,14 @@ Deploying the appliance in any of the following configurations is strictly **not
 
 ---
 
-## 3. Explicit v2 Feature Boundary (Frozen Scope)
+## 3. Explicit v1 Scope Cuts (Deferred to v2)
 
-In accordance with the [Master Commercialization Execution Contract](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md), VigilOne v1.0.0 is deliberately and intentionally scoped as a **rock-solid, tamper-evident, fail-closed Edge NVR appliance**. 
+In accordance with the [Master Commercialization Execution Contract](../audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md) and commercial review, VigilOne v1.0.0 is deliberately scoped to **core NVR functionality**: live view, continuous/scheduled recording, playback, hashed local evidence export, RBAC, licensing, and turnkey installer/upgrades.
 
-The following capabilities are **explicitly frozen for v2** and are not present or supported in the v1 commercial deployment:
-- **Enterprise Single Sign-On (SSO / OIDC / SAML):** Hard-disabled in v1 (C-002) to eliminate external authentication attack surfaces. v1 uses secure local cryptographic credentials.
-- **On-Box ML Inference & ANPR:** Edge AI runtime features (license plate recognition, facial analysis) are deferred to v2. v1 focuses entirely on flawless 24/7 video capture, indexing, and Section 63 BSA forensic custody.
-- **Physical GPIO Relay Controllers:** Deferred to v2. Simulated relay pulses have been hardened and fail closed (C-013).
-- **Public Cloud Object Storage Federation:** S3/GCS archival sync is deferred to v2. All v1 recordings reside on local, high-reliability appliance storage pools.
-- **Multi-Tenant Cloud Federation:** Appliances operate as self-contained edge NVRs; central multi-appliance cloud federation is scheduled for v2.
+The following capabilities are **explicitly OUT-OF-SCOPE for v1** and must not be marketed or deployed as functional:
+- **ANPR / License Plate Recognition:** No frame-level OCR/inference engine exists. Watchlist algorithms exist for testing only.
+- **Multi-Site Federation:** Local Ed25519 pairing exists, but no outbound HTTP/network sync client is implemented.
+- **S3 / Offsite Cloud Archive:** No AWS/cloud SDK exists. Production calls fail closed. Evidence must be exported locally.
+- **Email (SMTP) Notifications:** Disabled (501). Supported alert channels for v1 are webhooks and Slack.
+- **Physical Relay / Access Control Hardware:** No physical hardware driver (GPIO/serial/Modbus) is attached. Commands fail closed with `NO_PHYSICAL_RELAY_DRIVER_ATTACHED`.
+- **Enterprise Single Sign-On (SSO / OIDC / SAML):** Hard-disabled (501). v1 uses secure local cryptographic credentials.

@@ -131,47 +131,17 @@ cmd_restart() {
 }
 
 cmd_update() {
-    cd "${INSTALL_DIR}" 2>/dev/null || fatal "Install directory ${INSTALL_DIR} not found."
-    log_info "Initiating safe appliance update..."
-
-    # 1. Pre-update PostgreSQL backup snapshot
-    BACKUP_DIR="${DATA_DIR}/backups"
-    mkdir -p "${BACKUP_DIR}"
-    BACKUP_FILE="${BACKUP_DIR}/pre-update-$(date +%Y%m%d%H%M%S).sql"
-    log_info "Creating pre-update database snapshot at ${BACKUP_FILE}..."
-    docker compose exec -T postgres pg_dump -U vigilone vigilone_db > "${BACKUP_FILE}" || log_warn "Pre-update DB dump skipped (container may be offline)."
-
-    # 2. Pull pinned release images
-    log_info "Pulling release container images..."
-    docker compose pull
-
-    # 3. Apply database migrations
-    log_info "Applying database migrations..."
-    docker compose run --rm backend npx prisma migrate deploy
-
-    # 4. Restart services with new containers
-    log_info "Restarting services with updated containers..."
-    docker compose -f docker-compose.yml -f deploy/packaging/docker-compose.prod.yml up -d --remove-orphans
-
-    # 5. Verify healthcheck probe
-    log_info "Verifying healthcheck probe..."
-    HEALTH_OK=false
-    for i in {1..12}; do
-        if curl -k -s -f https://127.0.0.1/api/v1/health &>/dev/null; then
-            HEALTH_OK=true
-            break
-        fi
-        sleep 3
-    done
-
-    if [[ "$HEALTH_OK" == "true" ]]; then
-        log_info "Appliance update succeeded! All healthchecks passing."
-    else
-        log_err "Healthcheck failed after update! Triggering automatic rollback..."
-        docker compose down
-        docker compose up -d
-        fatal "Update failed healthcheck verification. Rolling back."
+    local BUNDLE="${1:-}"
+    if [[ -z "$BUNDLE" ]]; then
+        echo -e "${YELLOW}VigilOne Appliance Update requires a cryptographically signed OTA bundle (.tar.gz).${NC}"
+        echo "Usage: vigilonectl update <path-to-bundle.tar.gz> (or: vigilonectl ota apply <path-to-bundle.tar.gz>)"
+        echo ""
+        echo "To inspect current release version and epoch: vigilonectl ota status"
+        exit 1
     fi
+
+    log_info "Initiating cryptographic OTA appliance update: $BUNDLE"
+    cmd_ota apply "$BUNDLE"
 }
 
 cmd_support_bundle() {

@@ -1,6 +1,6 @@
 import checkDiskSpace from 'check-disk-space';
 import fs from 'fs';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, EventSeverity } from '@prisma/client';
 import config from '../config/env';
 import EvidencePinManager from './storage/evidencePinManager.service';
 import StorageDegradeManagerService, {
@@ -139,6 +139,30 @@ export class StorageSentinelService {
                 metadata: { usagePercent: currentUsagePercent, freeGb },
               },
             });
+
+            // Ingest into authoritative IncidentOrchestrator pipeline
+            try {
+              const { incidentOrchestrator } = await import('./incident/orchestrator/incidentOrchestrator.service');
+              const alertId = `storage-${Date.now()}`;
+              await incidentOrchestrator.ingestEvent({
+                id: alertId,
+                correlationId: alertId,
+                source: 'SYSTEM',
+                type: 'SYSTEM_ALERT',
+                severity: EventSeverity.CRITICAL,
+                timestampUtc: new Date(),
+                tenantId: 'system-appliance',
+                payload: {
+                  kind: 'SYSTEM_ALERT',
+                  subsystem: 'STORAGE',
+                  alertCode: 'PINNED_STORAGE_EXHAUSTION',
+                  message: `Disk capacity critical (${freeGb} GB free), all candidate recordings are pinned under active Section 63 evidence exports.`,
+                  details: { usagePercent: currentUsagePercent, freeGb },
+                },
+              });
+            } catch (err: any) {
+              console.warn(`[StorageSentinel] Ingest into IncidentOrchestrator warning: ${err.message}`);
+            }
             break;
           }
 

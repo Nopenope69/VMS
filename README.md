@@ -43,32 +43,29 @@ VigilOne is a vendor-neutral, commercial CCTV Video Management System (VMS) engi
 
 ---
 
-## 2. Module Implementation Status
+## 2. Commercial V1 Shipping Scope & Explicit Boundaries
 
-| Subsystem / Module | Maturity Status | Technical Description |
-| :--- | :--- | :--- |
-| **Caddy Gateway & Single Origin** | **Verified in Repository** | Reverse proxies `/api/*`, `/whep/*`, `/hls/*`, and static SPA assets. |
-| **MediaMTX Engine Integration** | **Verified in Repository** | REST path injection via internal API `:9997`; HTTP webhook media authentication. |
-| **Streaming Security & Auth** | **Verified in Repository** | Short-lived Bearer tokens (60s validity) minted per camera; auto-refresh on reconnect. |
-| **ONVIF Discovery & Control** | **Verified in Repository** | WS-Discovery multicast + manual IP probe + RFC1918 rate-limited subnet scan; PTZ ContinuousMove. |
-| **Encrypted Credentials** | **Verified in Repository** | AES-256-GCM encryption at rest; appliance key management. |
-| **Fragmented MP4 Recording** | **Verified in Repository** | 10-minute production segments (30s test segments), 1s part duration for crash-resilience. |
-| **Recording Indexer & Sentinel** | **Verified in Repository** | Automated segment indexing, corrupted file quarantine heuristic, gap detection (>15s), and circular buffer purge. |
-| **Section 63 BSA Evidence Engine** | **Verified in Repository** | `STREAM_COPY` (lossless) and `FRAME_ACCURATE` (libx264) export; SHA-256 manifest; Ed25519 signature; Part A & B PDFs. |
-| **CCTV Operator UI Console** | **Verified in Repository** | 1x1, 2x2, 3x3, 1+5 grid layouts; OSD monospace clock; REC indicator; 24h canvas timeline scrubber. |
-| **Offline Ed25519 Licensing Engine** | **Verified in Repository** | Signed artifact authority, camera quota meter, non-disruptive continuity invariant. |
-| **Multi-Site Tenancy Boundaries** | **Verified in Repository** | Multi-facility isolation, per-site timezones, strict cross-tenant object access prevention. |
-| **Permission-Based RBAC & Staff** | **Verified in Repository** | `SUPER_ADMIN`, `TENANT_ADMIN`, `OPERATOR`, `VIEWER` roles; in-app staff onboarding & account deactivation. |
-| **Scene-Change Detection & Events** | **Verified in Repository** | Substream-only decode (320x180 @ 1fps), 60s debounce episode state machine, auto-recording. |
-| **Durable Segment Ingestion Queue** | **Verified in Repository** | MediaMTX `runOnRecordSegmentComplete` webhook, PostgreSQL `SegmentJob` inbox, bounded concurrency (2). |
-| **Evidence Pin Lease Manager** | **Verified in Repository** | Time-bounded `EvidencePin` leases with crash reclamation, concurrent export support, and admission control. |
-| **Camera Reconnect Storm Protection** | **Verified in Repository** | `CameraConnectionManager` state machine, jittered exponential backoff, bounded concurrent handshakes (max 3). |
-| **Event Storm Rate Limiting** | **Verified in Repository** | `EventRateLimiter` per-camera token bucket suppressing oscillating camera sensor storms. |
-| **Startup State Reconciler** | **Verified in Repository** | Self-healing boot sequence reconciling desired vs observed recorder state from MediaMTX paths. |
-| **Clock Sanity & Anti-Rollback** | **Verified in Repository** | `ClockGuard` monotonic floor preventing CMOS battery reset (1970) or clock rollback attacks. |
-| **Tamper-Evident Audit Registry** | **Verified in Repository** | Cryptographic SHA-256 hash chaining with two-key PostgreSQL advisory transaction locks and unique constraints. |
-| **Indian ANPR Microservice** | **Planned (Phase 4)** | MMDetection / LPRNet (Apache-2.0) + PaddleOCR + Indian state code parser. |
-| **Remote WAN Tunneling & TURN** | **Planned (Phase 3)** | coturn STUN/TURN server + WireGuard/frp cloud connection. |
+VigilOne v1.0.0 is strictly scoped as a self-contained, rock-solid **Edge NVR Appliance**. To ensure absolute operational reliability and prevent misleading commercial claims, feature boundaries are frozen as follows:
+
+### Supported V1 Commercial Scope (Production Ready):
+- **Live Multi-Camera View:** Low-latency WebRTC (WHEP) sub-500ms streaming with HLS fallback via MediaMTX.
+- **Continuous & Scheduled Recording:** Fragmented MP4 (`fmp4`) chunked recording with crash-resilient metadata.
+- **Playback & Timeline Seeking:** Time-indexed playback, 24h timeline scrubbing, and gap detection (>15s).
+- **Hashed Local Evidence Export (Section 63 BSA):** Cryptographically bound export archives with SHA-256 Merkle trees, detached Ed25519 appliance digital signatures, unbroken chain-of-custody ledger, and statutory Schedule Part A & B certificate templates.
+- **Role-Based Access Control (RBAC):** Enforced roles (`SUPER_ADMIN`, `TENANT_ADMIN`, `OPERATOR`, `VIEWER`), tenant boundaries, and immutable audit logging.
+- **Commercial Offline Licensing:** Ed25519 signed license certificates with camera quota limits and non-disruptive continuity invariant (live view never cut on expiration).
+- **Turnkey Appliance Installer & Maintenance:** Single-command installer (`install.sh`), disk partitioning/Mount Guard, and CLI management (`vigilonectl`).
+
+### Explicitly OUT-OF-SCOPE for V1 (Do Not Deploy / Market as Functional):
+> [!WARNING]
+> The following subsystems exist in the codebase as architectural stubs or future modules, but are **NOT operational in v1.0.0**. Do not deploy them in production or present them to clients as working features:
+>
+> 1. **ANPR / License Plate Recognition:** **OUT OF SCOPE FOR V1**. No frame-level computer vision or OCR inference engine is attached. The codebase contains only watchlist matching algorithms and a synthetic test endpoint.
+> 2. **Multi-Site Federation:** **OUT OF SCOPE FOR V1**. While local Ed25519 pairing exists, no outbound HTTP/network client exists to sync data between appliances across WAN.
+> 3. **S3 / Offsite Cloud Archive:** **OUT OF SCOPE FOR V1**. No AWS SDK or cloud storage client exists. All offsite archive attempts throw and fail closed. Evidence must be exported locally.
+> 4. **Email Notifications:** **OUT OF SCOPE FOR V1**. SMTP dispatch is disabled (501). Supported alert channels for v1 are HTTP webhooks and Slack.
+> 5. **Physical Relay / Access Control Integration:** **OUT OF SCOPE FOR V1**. No physical hardware driver (GPIO / serial / Modbus) is attached. Relay commands will fail closed with `NO_PHYSICAL_RELAY_DRIVER_ATTACHED`.
+> 6. **Enterprise SSO (OIDC / SAML):** **OUT OF SCOPE FOR V1**. Hard-disabled (501). Authentication uses local cryptographic credentials.
 
 ---
 

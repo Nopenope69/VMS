@@ -1,16 +1,16 @@
-# Stage 4 Verification Gate & Evidence Pack
+# Stage 4 Internal Engineering Verification Gate & Evidence Pack
 
 > **Gate:** Stage 4 — Operationalize (Weeks 13–15)  
-> **Status:** PASSED (100% Verified)  
+> **Status:** PASSED (Internal Automated Engineering Gates)  
 > **Execution Date:** 2026-09-13  
-> **Master Execution Authority:** [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md)  
-> **Independent Verifier Designation:** External Solutions Architect / Independent Compliance Reviewer (Mandated by Section 7.2)
+> **Master Execution Authority:** [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](./MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md)  
+> **Verification Type:** Internal Automated Test & Build Suite (Self-Assessment)
 
 ---
 
-## 1. Traceability & Formal Sign-Off Chain
+## 1. Traceability & Engineering Verification Chain
 
-As mandated by Section 7.2 of the Master Commercialization Execution Contract, self-certification is strictly forbidden. The verification chain for Stage 4 is recorded below:
+The verification chain for Stage 4 engineering gates is recorded below:
 
 ```
 [Implementer]
@@ -21,8 +21,8 @@ Senior Backend & Systems Engineer
 Core Architecture Reviewer
   │
   ▼
-[Designated Independent Verifier]
-External Solutions Architect / Independent Compliance Reviewer
+[Verification Method]
+Automated Jest Regression Suites, Installer Syntax/Invariants, and Build Gates
   │
   ▼
 [Verification Status]
@@ -36,11 +36,11 @@ Execution Timestamp: 2026-09-13T07:15:00Z
 
 | Task & Requirement | Specification & Mandate | Status | Evidence Reference |
 | :--- | :--- | :--- | :--- |
-| **Task 4.1: Turnkey Single-Command Installer** | Zero-terminal unattended deployment with `--non-interactive`; strict mount failure exit 1; 45s post-install health verification probe with fatal exit on degradation. | **PASS** | [`deploy/packaging/install.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/deploy/packaging/install.sh)<br>[`scripts/__tests__/installer.test.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/scripts/__tests__/installer.test.sh) (39/39 passed) |
-| **Task 4.2: Cryptographic OTA Updates** | Dedicated Ed25519 OTA signing key distinct from commercial license domain; manifest and payload verification prior to extraction; path traversal defense; semver/epoch downgrade prevention against persistent monotonic release floor; automated pre-update PostgreSQL database dump (`database.sql`) + `/etc/vigilone` configuration snapshot; deep stream healthcheck (backend + MediaMTX with 5% tolerance); automatic snapshot rollback with database restoration and strict monotonic security state preservation (Clock floor + license revocation floor + trust-anchor floor + OTA release floor). | **PASS** | [`backend/src/config/otaKeys.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/config/otaKeys.ts)<br>[`backend/src/services/appliance/otaUpdate.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/appliance/otaUpdate.service.ts)<br>[`backend/src/scripts/packageOta.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/scripts/packageOta.ts)<br>[`backend/src/__tests__/otaUpdate.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/otaUpdate.test.ts) (10/10 passed) |
-| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest ([`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)); unmappable media quarantined; pinned segments restored from host mirror ([`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state), mode 0600) with honest audit logging. | **PASS** | [`backend/src/services/evidence/pinStateMirror.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed) |
-| **Task 4.4: ClockGuard Host State & Hardware Binding** | Monotonic `/etc/vigilone/clock_guard.state` (`0o600`); clock rollback detection clamps license evaluation to trusted floor; DMI board UUID primary hardware binding corroborated with `machine-id`; active commercial license host mirroring to `/etc/vigilone/license.json` (`0o600`) and boot-time auto-reconciliation on bare-metal DB rebuild. | **PASS** | [`backend/src/utils/clockGuard.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/utils/clockGuard.ts)<br>[`backend/src/utils/license.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/utils/license.ts)<br>[`backend/src/services/appliance/licenseHostMirror.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/appliance/licenseHostMirror.service.ts)<br>[`backend/src/routes/license.routes.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/routes/license.routes.ts)<br>[`backend/src/services/reconciliation/startupReconciler.service.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/services/reconciliation/startupReconciler.service.ts)<br>[`backend/src/__tests__/clockGuardHostState.test.ts`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/backend/src/__tests__/clockGuardHostState.test.ts) (9/9 passed) |
-| **CLI Operations (vigilonectl)** | Production appliance CLI support for `ota <apply\|rollback\|status>` and `backup <create\|restore>`. | **PASS** | [`deploy/packaging/vigilonectl`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/deploy/packaging/vigilonectl)<br>[`scripts/__tests__/installer.test.sh`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/scripts/__tests__/installer.test.sh) |
+| **Task 4.1: Turnkey Single-Command Installer** | Zero-terminal unattended deployment with `--non-interactive`; strict mount failure exit 1; 45s post-install health verification probe with fatal exit on degradation. | **PASS** | [`deploy/packaging/install.sh`](../../deploy/packaging/install.sh)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) (39/39 passed) |
+| **Task 4.2: Cryptographic OTA Updates** | Dedicated Ed25519 OTA signing key distinct from commercial license domain; manifest and payload verification prior to extraction; path traversal defense; semver/epoch downgrade prevention against persistent monotonic release floor; automated pre-update PostgreSQL database dump (`database.sql`) + `/etc/vigilone` configuration snapshot; deep stream healthcheck (backend + MediaMTX with 5% tolerance); automatic snapshot rollback with database restoration and strict monotonic security state preservation (Clock floor + license revocation floor + trust-anchor floor + OTA release floor). | **PASS** | [`backend/src/config/otaKeys.ts`](../../backend/src/config/otaKeys.ts)<br>[`backend/src/services/appliance/otaUpdate.service.ts`](../../backend/src/services/appliance/otaUpdate.service.ts)<br>[`backend/src/scripts/packageOta.ts`](../../backend/src/scripts/packageOta.ts)<br>[`backend/src/__tests__/otaUpdate.test.ts`](../../backend/src/__tests__/otaUpdate.test.ts) (10/10 passed) |
+| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest ([`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)); unmappable media quarantined; pinned segments restored from host mirror ([`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state), mode 0600) with honest audit logging. | **PASS** | [`backend/src/services/evidence/pinStateMirror.service.ts`](../../backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](../../backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](../../backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](../../backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](../../backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed) |
+| **Task 4.4: ClockGuard Host State & Hardware Binding** | Monotonic `/etc/vigilone/clock_guard.state` (`0o600`); clock rollback detection clamps license evaluation to trusted floor; DMI board UUID primary hardware binding corroborated with `machine-id`; active commercial license host mirroring to `/etc/vigilone/license.json` (`0o600`) and boot-time auto-reconciliation on bare-metal DB rebuild. | **PASS** | [`backend/src/utils/clockGuard.ts`](../../backend/src/utils/clockGuard.ts)<br>[`backend/src/utils/license.ts`](../../backend/src/utils/license.ts)<br>[`backend/src/services/appliance/licenseHostMirror.service.ts`](../../backend/src/services/appliance/licenseHostMirror.service.ts)<br>[`backend/src/routes/license.routes.ts`](../../backend/src/routes/license.routes.ts)<br>[`backend/src/services/reconciliation/startupReconciler.service.ts`](../../backend/src/services/reconciliation/startupReconciler.service.ts)<br>[`backend/src/__tests__/clockGuardHostState.test.ts`](../../backend/src/__tests__/clockGuardHostState.test.ts) (9/9 passed) |
+| **CLI Operations (vigilonectl)** | Production appliance CLI support for `ota <apply\|rollback\|status>` and `backup <create\|restore>`. | **PASS** | [`deploy/packaging/vigilonectl`](../../deploy/packaging/vigilonectl)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) |
 
 ---
 
@@ -183,15 +183,15 @@ PASS src/__tests__/clockGuardHostState.test.ts
 
 ---
 
-## 5. Independent Verifier Conclusion
+## 5. Internal Engineering Assessment
 
-> **Verification Statement:**  
-> All requirements for Stage 4: "Operationalize (Weeks 13–15)" defined in [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md) have been implemented and validated through black-box testing.
+> **Engineering Assessment:**  
+> The automated test gates for Stage 4: "Operationalize (Weeks 13–15)" defined in [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](./MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md) have been verified in the internal test environment:
 > 
 > 1. Unattended turnkey installer behaves deterministically with strict non-zero exit on mount and health failures. Field qualification protocol established for physical hardware burn-in.
-> 2. OTA updates are cryptographically bound to a dedicated trust domain, protected against downgrades via a persistent monotonic appliance release floor (`/etc/vigilone/ota_release.state`), and capture automated PostgreSQL database dumps alongside configuration snapshots. Automatic rollback cleanly restores the database while strictly enforcing the complete 4-pillar monotonic security state stack:
+> 2. OTA updates are cryptographically bound to a dedicated trust domain, protected against downgrades via a persistent monotonic appliance release floor (`/etc/vigilone/ota_release.state`), and capture automated PostgreSQL database dumps alongside configuration snapshots. Automatic rollback restores the database while enforcing the monotonic security state stack:
 >    $$\text{Clock Floor} + \text{License Revocation Floor} + \text{Trust-Anchor Floor} + \text{OTA Release Floor}$$
-> 3. Disaster recovery mechanisms successfully survive catastrophic database loss, restoring media metadata, admission-controlled camera feeds, and legal hold pins from host mirrors with complete audit honesty.
+> 3. Disaster recovery mechanisms survive catastrophic database loss, restoring media metadata, admission-controlled camera feeds, and legal hold pins from host mirrors with complete audit honesty.
 > 4. ClockGuard enforces monotonic time floors and hardware bindings, preventing time-rollback attacks and license tampering.
 > 
-> **Stage 4 is hereby certified as COMPLETE.** The appliance is cleared to advance to **Stage 5: Commercialize & Pilot Ready (Weeks 16–17)**.
+> *Note: This assessment reflects automated engineering tests only. No third-party certification is claimed.*

@@ -1,4 +1,8 @@
 import { EventEmitter } from 'events';
+import net from 'net';
+import prisma from '../../config/database';
+import mediaProvider from '../media/mediamtx.provider';
+import { decryptCredential } from '../../utils/crypto';
 
 export type CameraConnectionState =
   | 'OFFLINE'
@@ -16,6 +20,8 @@ export interface CameraConnectionInfo {
   nextAttemptAt?: Date;
 }
 
+export type ReconnectionHandler = (cameraId: string) => Promise<{ success: boolean; error?: string }>;
+
 export class CameraConnectionManager extends EventEmitter {
   private static instance: CameraConnectionManager;
   private cameras = new Map<string, CameraConnectionInfo>();
@@ -23,6 +29,7 @@ export class CameraConnectionManager extends EventEmitter {
   public static readonly MAX_CONCURRENT_HANDSHAKES = 3;
   private queue: string[] = [];
   private processInterval: NodeJS.Timeout | null = null;
+  private customHandler: ReconnectionHandler | null = null;
 
   public static getInstance(): CameraConnectionManager {
     if (!this.instance) {
@@ -36,11 +43,26 @@ export class CameraConnectionManager extends EventEmitter {
     this.startQueueProcessor();
   }
 
+  public setReconnectionHandler(handler: ReconnectionHandler | null) {
+    this.customHandler = handler;
+  }
+
+  public getActiveHandshakes(): number {
+    return this.activeHandshakes;
+  }
+
+  public getQueueLength(): number {
+    return this.queue.length;
+  }
+
   private startQueueProcessor(intervalMs = 1000) {
     if (this.processInterval) return;
     this.processInterval = setInterval(() => {
       this.processQueue();
     }, intervalMs);
+    if (this.processInterval.unref) {
+      this.processInterval.unref();
+    }
   }
 
   public registerCamera(cameraId: string): CameraConnectionInfo {
@@ -87,7 +109,7 @@ export class CameraConnectionManager extends EventEmitter {
 
   /**
    * Calculate exponential backoff with full randomized jitter.
-   * T_wait = min(60s, 2^retries * 1s) + random(0, 3s)
+   * T_wait = min(30s, 2^retries * 1s) + random(0, 3s)
    */
   public calculateBackoffMs(retries: number): number {
     // Contract Section 3.1: Reconnect <= 15s after network restoration; backoff capped at 30s
@@ -96,7 +118,7 @@ export class CameraConnectionManager extends EventEmitter {
     return baseBackoff + jitter;
   }
 
-  private async processQueue() {
+  public async processQueue() {
     if (this.activeHandshakes >= CameraConnectionManager.MAX_CONCURRENT_HANDSHAKES || this.queue.length === 0) {
       return;
     }
@@ -120,9 +142,16 @@ export class CameraConnectionManager extends EventEmitter {
     info.state = 'CONNECTING';
     this.emit('stateChange', cameraId, 'CONNECTING');
 
-    // Emit event so media / ONVIF layer performs connection
-    this.emit('connectRequest', cameraId, (success: boolean, errorMsg?: string) => {
-      this.activeHandshakes--;
+    let finished = false;
+    const safetyTimer = setTimeout(() => {
+      finishHandshake(false, 'RECONNECTION_TIMEOUT');
+    }, 15000);
+
+    const finishHandshake = (success: boolean, errorMsg?: string) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(safetyTimer);
+      this.activeHandshakes = Math.max(0, this.activeHandshakes - 1);
 
       if (success) {
         info.state = 'ONLINE';
@@ -142,7 +171,99 @@ export class CameraConnectionManager extends EventEmitter {
         // Re-queue with backoff delay
         this.queue.push(cameraId);
       }
-    });
+    };
+
+    // 1. If explicit listener attached via .on('connectRequest', ...), dispatch to it
+    if (this.listenerCount('connectRequest') > 0) {
+      this.emit('connectRequest', cameraId, finishHandshake);
+    } else if (this.customHandler) {
+      // 2. If custom handler set via setReconnectionHandler, invoke it
+      this.customHandler(cameraId)
+        .then((res) => finishHandshake(res.success, res.error))
+        .catch((err) => finishHandshake(false, err.message));
+    } else {
+      // 3. Default built-in reconnection handler: probes network socket & re-registers path with MediaMTX
+      this.defaultReconnectionHandler(cameraId)
+        .then((res) => finishHandshake(res.success, res.error))
+        .catch((err) => finishHandshake(false, err.message));
+    }
+  }
+
+  /**
+   * Default production camera reconnection handler:
+   * 1. Fetches camera from database
+   * 2. Tests TCP reachability to camera RTSP port
+   * 3. If reachable, re-asserts MediaMTX path configuration
+   */
+  public async defaultReconnectionHandler(cameraId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const camera = await prisma.camera.findUnique({
+        where: { id: cameraId },
+      });
+
+      if (!camera) {
+        return { success: false, error: `Camera ${cameraId} not found` };
+      }
+
+      // Check TCP socket reachability on camera RTSP or ONVIF port
+      const targetPort = camera.rtspPort || 554;
+      const targetHost = camera.ipAddress;
+
+      const isReachable = await new Promise<boolean>((resolve) => {
+        const socket = new net.Socket();
+        socket.setTimeout(2500);
+
+        socket.on('connect', () => {
+          socket.destroy();
+          resolve(true);
+        });
+
+        socket.on('timeout', () => {
+          socket.destroy();
+          resolve(false);
+        });
+
+        socket.on('error', () => {
+          socket.destroy();
+          resolve(false);
+        });
+
+        socket.connect(targetPort, targetHost);
+      });
+
+      if (!isReachable) {
+        return {
+          success: false,
+          error: `Camera ${camera.name} (${targetHost}:${targetPort}) unreachable on network`,
+        };
+      }
+
+      // Camera is alive: re-assert / inject path configuration into MediaMTX
+      let creds = '';
+      if (camera.encryptedAuth) {
+        try {
+          const parsed = JSON.parse(decryptCredential(camera.encryptedAuth));
+          if (parsed.username && parsed.password) {
+            creds = `${encodeURIComponent(parsed.username)}:${encodeURIComponent(parsed.password)}@`;
+          }
+        } catch {
+          // Fallback without credentials if decryption fails
+        }
+      }
+
+      const rtspUrl =
+        camera.mainRtspUri || `rtsp://${creds}${camera.ipAddress}:${camera.rtspPort || 554}/live`;
+
+      await mediaProvider.createOrUpdateStream({
+        path: camera.streamPath,
+        sourceRtspUrl: rtspUrl,
+        record: camera.desiredRecorderState !== 'STOPPED',
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   }
 
   public reportDisconnect(cameraId: string, reason?: string) {
@@ -160,8 +281,10 @@ export class CameraConnectionManager extends EventEmitter {
     }
     this.queue = [];
     this.cameras.clear();
+    this.activeHandshakes = 0;
   }
 }
 
 export const cameraConnectionManager = CameraConnectionManager.getInstance();
 export default cameraConnectionManager;
+
