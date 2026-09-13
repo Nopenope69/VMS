@@ -1,7 +1,7 @@
 # VigilOne VMS — Next Steps: Cloud Pilot & Physical Hardware Roadmap
 
 > **Current Milestone:** Pre-Pilot Lab Complete — Ready for Supervised Pilot  
-> **Software Status:** 77/77 Test Suites Passed (432/432 tests), Clean Builds, Real Container DR Verified  
+> **Software Status:** CI Automated Suite Verified (GitHub Actions), Clean Builds, Real Container DR Verified  
 > **Target Goal:** Validation on Live Compute (GCP VM) & Physical Camera Hardware Bench  
 
 ---

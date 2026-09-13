@@ -19,6 +19,24 @@ describe('Frontend Static Distribution & Contract Validation Test Suite', () => 
   const frontendE2E = path.join(rootDir, 'frontend/e2e/operations.spec.ts');
   const frontendApi = path.join(rootDir, 'frontend/src/services/api.ts');
 
+  beforeAll(() => {
+    // If frontend/dist is missing on local dev or fresh clone, auto-build it if frontend source exists
+    if (!fs.existsSync(frontendDist)) {
+      const frontendDir = path.join(rootDir, 'frontend');
+      if (fs.existsSync(path.join(frontendDir, 'package.json'))) {
+        try {
+          const { execSync } = require('child_process');
+          if (!fs.existsSync(path.join(frontendDir, 'node_modules'))) {
+            execSync('npm ci', { cwd: frontendDir, stdio: 'pipe' });
+          }
+          execSync('npm run build', { cwd: frontendDir, stdio: 'pipe' });
+        } catch {
+          // If compilation fails or tools are unavailable, let assertions report exact failure
+        }
+      }
+    }
+  }, 30000);
+
   it('verifies production frontend dist bundle exists and references assets', () => {
     expect(fs.existsSync(frontendDist)).toBe(true);
     const indexHtmlPath = path.join(frontendDist, 'index.html');

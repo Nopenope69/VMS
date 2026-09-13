@@ -11,8 +11,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  frontend-checks:
+    name: Frontend Typecheck & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend Build (tsc & vite build)
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Upload Frontend Dist Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
   backend-checks:
     name: Backend Typecheck, Migrations & Tests
+    needs: [frontend-checks]
     runs-on: ubuntu-latest
 
     services:
@@ -61,6 +92,12 @@ jobs:
           echo "Applying migrations to fresh PostgreSQL service container..."
           npx prisma migrate deploy
 
+      - name: Download Frontend Dist Artifact for Static Validation
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
@@ -69,29 +106,6 @@ jobs:
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
           INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
         run: npm test
-
-  frontend-checks:
-    name: Frontend Typecheck & Build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Frontend Build (tsc & vite build)
-        working-directory: ./frontend
-        run: npm run build
 
   packaging-and-installer-checks:
     name: Packaging, vigilonectl & Installer Invariants

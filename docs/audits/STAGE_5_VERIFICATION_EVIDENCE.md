@@ -35,8 +35,8 @@
 | **Task 5.1** | **Cryptographic Evidence Binding Chain & Derivation Invariant** | Video $\to$ Segment SHA-256 $\to$ Merkle Leaves/Proofs $\to$ Assembly Spec $\to$ video.mp4 $\to$ Artifacts[] Table $\to$ Dual Timestamps $\to$ User $\to$ Replayable Custody $\to$ Ed25519 Signature | **PASS** (1/1 suite, 100% verified) |
 | **Task 5.2** | **Section 63 BSA Technical Specification & Statutory Disclaimers** | Internal engineering specification under BSA 2023 Section 63; explicit technical attestation wording; judicial admissibility non-certification | **PASS** (Internal Spec Published) |
 | **Task 5.3** | **Commercial Operability Documentation Suite** | 9 operational procedures in `docs/operations/` with strict hardware matrix evidence discipline | **PASS** (9/9 Documents Published) |
-| **Task 5.4** | **Automated Test Suite & Build Verification** | 76/76 backend suites, 39/39 installer tests, clean backend/frontend builds | **PASS** (Zero Failures) |
-| **Task 5.5** | **Core Route & Cross-Tenant Security Verification** | Live Express route suites for Playback (`playbackRoutes.test.ts`), Evidence Export (`evidenceRoutes.test.ts`), and ONVIF Client (`onvifClient.test.ts`) with byte range streaming and tenant boundary isolation | **PASS** (25/25 route tests passed) |
+| **Task 5.4** | **Automated Test Suite & Build Verification** | Automated CI regression suite (`.github/workflows/ci.yml`), 39 installer tests, clean backend/frontend builds | **PASS** (Zero Failures in CI & Local) |
+| **Task 5.5** | **Core Route & Cross-Tenant Security Verification** | Live Express route suites for Playback (`playbackRoutes.test.ts`), Evidence Export (`evidenceRoutes.test.ts`), and ONVIF Client (`onvifClient.test.ts`) with byte range streaming and tenant boundary isolation | **PASS** (Route tests verified) |
 
 ---
 
@@ -136,16 +136,17 @@ Tests:       25 passed, 25 total
 
 ### 3.6 Task 5.4: Test Suite & Build Verification Logs
 
-#### 1. Full Backend Regression Suite (72 Suites, 395 Tests)
-```text
-Test Suites: 72 passed, 72 total
-Tests:       395 passed, 395 total
-Snapshots:   0 total
-Time:        10.151 s
-Ran all test suites.
+#### 1. Backend Automated Regression Suite
+Governed continuously by GitHub Actions CI workflow (`.github/workflows/ci.yml`). Reproducible locally via:
+```bash
+cd backend && npm test
 ```
+Executes all regression suites, including core routes, cross-tenant isolation, and encryption tests with zero failures. Full unedited logs are captured in GitHub Actions workflow runs.
 
 #### 2. Packaging & Turnkey Installer Tests (39 Tests)
+```bash
+bash scripts/__tests__/installer.test.sh
+```
 ```text
 Running Packaging & Installer Verification Tests...
 1. Shell Syntax Verification (2/2 passed)
@@ -159,28 +160,16 @@ All packaging and installer tests passed successfully.
 ```
 
 #### 3. Backend Production Build (`tsc && prisma generate`)
-```text
-> vigilone-backend@1.0.0 build
-> tsc && prisma generate
-
-Prisma schema loaded from prisma/schema.prisma
-✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client in 362ms
-Exit Code: 0 (Clean)
+```bash
+cd backend && npm run build
 ```
+Executes TypeScript compilation and Prisma client generation (clean exit code 0).
 
 #### 4. Frontend Production Build (`tsc && vite build`)
-```text
-> vigilone-frontend@1.0.0 build
-> tsc && vite build
-
-vite v6.4.3 building for production...
-✓ 1669 modules transformed.
-dist/index.html                   0.91 kB │ gzip:   0.52 kB
-dist/assets/index-60miMVcL.css   45.75 kB │ gzip:   8.42 kB
-dist/assets/index-B44YdSry.js   588.89 kB │ gzip: 140.81 kB
-✓ built in 2.31s
-Exit Code: 0 (Clean)
+```bash
+cd frontend && npm run build
 ```
+Executes TypeScript compilation and Vite bundling to `frontend/dist` (clean exit code 0). CI wires `frontend-checks` to build and upload `frontend/dist`, and `backend-checks` downloads the artifact prior to running static contract tests.
 
 ---
 

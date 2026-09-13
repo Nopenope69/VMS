@@ -116,46 +116,35 @@ Playwright E2E specification ([`frontend/e2e/operations.spec.ts`](../../frontend
 ## 6. Build & Test Regression Logs
 
 ### 6.1 Backend Full Regression Test Run
-```
-PASS src/__tests__/soakWorkload64.test.ts
-PASS src/__tests__/failureEnvelopeValidation.test.ts
-PASS src/__tests__/connectionManager.test.ts
-PASS src/__tests__/frontendOperationsSmoke.test.ts
-PASS src/__tests__/storageReliabilityLadder.test.ts
-PASS src/__tests__/physicalCameraCanary.test.ts
-PASS src/__tests__/failClosedAuditCustody.test.ts
-PASS src/__tests__/filenameTimestamp.test.ts
-PASS src/__tests__/webhookIngestion.test.ts
-PASS src/__tests__/crashRecovery.test.ts
-... (All 68 Test Suites Passed)
+Automated continuous verification is governed by GitHub Actions (`.github/workflows/ci.yml`). Local execution can be reproduced at any time via:
 
-Test Suites: 68 passed, 68 total
-Tests:       373 passed, 373 total
-Snapshots:   0 total
-Time:        8.385 s
+```bash
+cd backend && npm test
 ```
+
+Verification covers all unit and integration test suites, including:
+- Real multi-stream ffmpeg fMP4 load (`realStreamLoad.test.ts`)
+- 64-camera soak topology and workload definitions (`soakWorkload64.test.ts`)
+- 8/8 concrete failure envelopes (`failureEnvelopeValidation.test.ts`)
+- Camera auto-reconnect with ephemeral TCP sockets (`connectionManager.test.ts`)
+- Static frontend contract and distribution validation (`frontendStaticValidation.test.ts`)
+- Storage reliability ladder and Mount Guard probe (`storageReliabilityLadder.test.ts`)
+- Physical camera canary and RTSP transport (`physicalCameraCanary.test.ts`)
+- Fail-closed audit ledger and custody verification (`failClosedAuditCustody.test.ts`)
+
+Authoritative test runs and logs are recorded in GitHub Actions CI runs.
 
 ### 6.2 Backend Build
+```bash
+cd backend && npm run build
 ```
-> vigilone-backend@1.0.0 build
-> tsc && prisma generate
-
-✔ Generated Prisma Client (v5.22.0) to ./node_modules/@prisma/client
-Exit code: 0
-```
+Executes `tsc && prisma generate` to verify TypeScript compile integrity and client generation (clean exit code 0).
 
 ### 6.3 Frontend Build
+```bash
+cd frontend && npm run build
 ```
-> vigilone-frontend@1.0.0 build
-> tsc && vite build
-
-✓ 1669 modules transformed.
-dist/index.html                   0.91 kB
-dist/assets/index-60miMVcL.css   45.75 kB
-dist/assets/index-B44YdSry.js   588.89 kB
-✓ built in 2.31s
-Exit code: 0
-```
+Executes `tsc && vite build` to compile the production frontend distribution bundle to `frontend/dist` (clean exit code 0). CI wires `frontend-checks` to upload `frontend/dist`, and `backend-checks` downloads it prior to running static contract tests.
 
 ### 6.4 Real Multi-Stream ffmpeg fMP4 Pipeline Verification (`realStreamLoad.test.ts`)
 To address the critique requiring genuine media encoding under multi-stream conditions (moving beyond synthetic ASCII strings), `backend/src/__tests__/realStreamLoad.test.ts` executes real `ffmpeg` processes generating fragmented MP4 (fMP4) segments:

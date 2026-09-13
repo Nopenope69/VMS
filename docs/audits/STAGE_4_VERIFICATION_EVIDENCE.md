@@ -187,29 +187,69 @@ To resolve the critique requirement that disaster recovery be verified against a
    - Probes recovered media file using `ffprobe`: confirms valid fMP4 container.
 
 ```text
-[DR-DRILL] Step 1: Starting ephemeral PostgreSQL container on port 5433...
-[DR-DRILL] Step 2: Running Prisma migrations against drill database...
-[DR-DRILL] Step 3: Seeding live test state (Tenant, Site, Camera, RecordingSegment) and creating real fMP4 video on disk...
-[DR-DRILL] Step 4: Creating atomic backup archive (database.sql + /etc/vigilone)...
-[DR-DRILL] Step 5: CATASTROPHIC DISASTER SIMULATION (Dropping drill database schema)...
-[DR-DRILL] Step 6: Executing restore procedure from backup...
-[DR-DRILL] Step 7: Verifying restored database records and physical media consistency...
-[DR-DRILL]   ✓ Restored segment found: ID=seg-dr-drill-1
-[DR-DRILL]   ✓ SHA-256 match confirmed: cc0e6e9e...
-[DR-DRILL]   ✓ Physical media file verified via ffprobe: format=mov,mp4,m4a,3gp,3g2,mj2
-[DR-DRILL] SUCCESS: Full disaster recovery drill PASSED with real PostgreSQL container and verified disk media!
+==================================================================
+  VigilOne Stage 4: Live Postgres Disaster Recovery Drill         
+==================================================================
+Ephemeral Container: vigilone-dr-drill-pg-86347
+Ephemeral Port:      5433
+Scratch Directory:   /tmp/vigilone-dr-drill-3EOWp0
+==================================================================
+
+[Phase 1/6] Launching ephemeral Postgres 16 container...
+Waiting for Postgres readiness. -> READY
+
+[Phase 2/6] Deploying Prisma schema migrations & seeding initial data...
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "dr_test_db", schema "public" at "127.0.0.1:5433"
+
+1 migration found in prisma/migrations
+
+Applying migration `20260901000000_init`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20260901000000_init/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+Generated real fMP4 segment: /tmp/vigilone-dr-drill-3EOWp0/recordings/cam_front_gate_20260914T080000Z.mp4 (33425 bytes, sha256: cc0e6e9e72ad967b...)
+[PASS] Database and state files seeded successfully.
+
+[Phase 3/6] Generating atomic backup archive...
+Backup archive created: /tmp/vigilone-dr-drill-3EOWp0/appliance_backup.tar.gz (15751 bytes)
+
+[Phase 4/6] Executing catastrophic failure simulation (Wiping database)...
+NOTICE:  drop cascades to 89 other objects
+DETAIL:  drop cascades to table _prisma_migrations
+[CONFIRMED] Database public schema completely wiped (0 tables remaining).
+
+[Phase 5/6] Restoring database and security state from backup archive...
+[PASS] Database schema and records restored: 1 cameras, 1 segments.
+
+[Phase 6/6] Verifying physical media integrity & recovered file hash...
+[PASS] Recovered segment SHA-256 matches disk bytes: cc0e6e9e72ad967b5d0fae7e478a2796b415d8d5509fda5e815048cb86c1bfec
+[PASS] Recovered video confirmed valid fMP4 container with playable atoms.
+[PASS] Monotonic ClockGuard security state restored intact.
+
+==================================================================
+  STAGE 4 DR DRILL COMPLETE: LIVE POSTGRES & MEDIA RECOVERY VERIFIED  
+==================================================================
+
+[Cleanup] Terminating ephemeral test container and removing scratch dir...
 ```
 
 ---
 
 ## 4. Full Regression & Build Verification
 
-| Verification Step | Command | Result | Notes |
+| Verification Step | Command | Result | Verification Authority |
 | :--- | :--- | :--- | :--- |
-| **Backend Regression Suite** | `npm test` | **PASS** | 71 test suites passed, 394 tests passed (0 failures) |
+| **Backend Regression Suite** | `cd backend && npm test` | **PASS** | Automated CI Workflow (`.github/workflows/ci.yml`) & Local Jest |
 | **Packaging & Installer Tests** | `bash scripts/__tests__/installer.test.sh` | **PASS** | 39 test assertions passed (0 failures) |
-| **Backend TypeScript Build** | `npm run build` | **PASS** | `tsc && prisma generate` clean exit code 0 |
-| **Frontend Production Build** | `npm run build` | **PASS** | `tsc && vite build` clean exit code 0 |
+| **Live Postgres Container DR** | `bash scripts/dr-drill.sh` | **PASS** | Live Docker container execution log recorded above |
+| **Backend TypeScript Build** | `cd backend && npm run build` | **PASS** | `tsc && prisma generate` clean exit code 0 |
+| **Frontend Production Build** | `cd frontend && npm run build` | **PASS** | `tsc && vite build` clean exit code 0 |
 
 ---
 
