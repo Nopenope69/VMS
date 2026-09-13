@@ -215,107 +215,105 @@ export const StorageManagement: React.FC = () => {
     switch (state) {
       case 'AVAILABLE':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-            <CheckCircle className="w-3.5 h-3.5 mr-1" />
-            AVAILABLE (HEALTHY)
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#3FB950] border border-[#238636] uppercase tracking-wider">
+            <CheckCircle className="w-3 h-3 mr-1 text-[#3FB950]" />
+            [ AVAILABLE // NOMINAL ]
           </span>
         );
       case 'WARNING':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-400 border border-amber-800/60">
-            <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-            WARNING (ELEVATED WRITE LOAD)
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#E3B341] border border-[#E3B341] uppercase tracking-wider">
+            <AlertTriangle className="w-3 h-3 mr-1 text-[#E3B341]" />
+            [ WARNING // ELEVATED LOAD ]
           </span>
         );
       case 'CRITICAL':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-950/80 text-orange-400 border border-orange-800/60">
-            <AlertOctagon className="w-3.5 h-3.5 mr-1" />
-            CRITICAL (ADAPTIVE INGESTION ACTIVE)
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider">
+            <AlertOctagon className="w-3 h-3 mr-1 text-[#F85149]" />
+            [ CRITICAL // ADAPTIVE ACTIVE ]
           </span>
         );
       case 'EMERGENCY_PRESERVE_EVIDENCE':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-950/90 text-purple-300 border border-purple-700 animate-pulse">
-            <Shield className="w-3.5 h-3.5 mr-1 text-purple-400" />
-            EMERGENCY: PRESERVE EVIDENCE
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#58A6FF] border border-[#58A6FF] uppercase tracking-wider animate-pulse">
+            <Shield className="w-3 h-3 mr-1 text-[#58A6FF]" />
+            [ EMERGENCY // PRESERVE EVIDENCE ]
           </span>
         );
       case 'EMERGENCY_PURGE':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-950/90 text-red-400 border border-red-800 animate-pulse">
-            <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-            EMERGENCY PURGE
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider animate-pulse">
+            <AlertTriangle className="w-3 h-3 mr-1" />
+            [ EMERGENCY PURGE ]
           </span>
         );
       case 'PINNED_STORAGE_EXHAUSTION':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-950 text-red-200 border border-red-600 animate-pulse">
-            <AlertOctagon className="w-3.5 h-3.5 mr-1 text-red-500" />
-            PINNED STORAGE EXHAUSTION
+          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider animate-pulse">
+            <AlertOctagon className="w-3 h-3 mr-1 text-[#F85149]" />
+            [ PINNED STORAGE EXHAUSTION ]
           </span>
         );
       default:
-        return <span className="text-xs text-slate-400">{state}</span>;
+        return <span className="text-[10px] text-[#8B949E] font-bold">[{state}]</span>;
     }
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 font-mono text-[#C9D1D9] overflow-y-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-graphite-700 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0D1117] p-3.5 border border-[#21262D]">
         <div>
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-cctv-teal/10 rounded border border-cctv-teal/30">
-              <HardDrive className="w-6 h-6 text-cctv-teal" />
-            </div>
+          <div className="flex items-center space-x-2.5">
+            <HardDrive className="w-5 h-5 text-[#E3B341]" />
             <div>
-              <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-                Storage Operations & Resilience Console
+              <h1 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
+                [ STORAGE OPERATIONS & MOUNT GUARD RESILIENCE CONSOLE ]
               </h1>
-              <p className="text-xs text-slate-400">
-                Multi-Volume Drive Registry • Rate-Adaptive Ingestion • Section 63 Legal Hold Invariance
+              <p className="text-[10px] text-[#8B949E]">
+                MULTI-VOLUME DRIVE REGISTRY • RATE-ADAPTIVE INGESTION • SECTION 63 LEGAL HOLD INVARIANCE
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <button
             onClick={fetchData}
             disabled={loading}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-graphite-800 hover:bg-graphite-700 text-slate-200 border border-graphite-600 flex items-center space-x-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-[#E3B341] border border-[#30363D] flex items-center space-x-1.5 transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#E3B341]' : ''}`} />
+            <span>[ REFRESH ]</span>
           </button>
           <button
             onClick={handleRunReconcile}
             disabled={reconciling}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-cctv-amber/20 hover:bg-cctv-amber/30 text-cctv-amber border border-cctv-amber/50 flex items-center space-x-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#E3B341] border border-[#E3B341] flex items-center space-x-1.5 transition-colors"
           >
             <Wrench className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} />
-            <span>{reconciling ? 'Scanning...' : 'Run Integrity Scan'}</span>
+            <span>{reconciling ? '[ SCANNING... ]' : '[ INTEGRITY SCAN ]'}</span>
           </button>
           <button
             onClick={() => setShowAddVolumeModal(true)}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-cctv-teal text-graphite-950 font-semibold hover:bg-teal-400 flex items-center space-x-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] flex items-center space-x-1.5 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Volume</span>
+            <span>[ + REGISTER VOLUME ]</span>
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="p-3 rounded bg-red-950/50 border border-red-800 text-red-300 text-xs flex items-center space-x-2">
+        <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-xs flex items-center space-x-2">
           <AlertOctagon className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-3 rounded bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs flex items-center space-x-2">
+        <div className="p-2.5 bg-[#080B10] border border-[#3FB950] text-[#3FB950] text-xs flex items-center space-x-2">
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           <span>{successMsg}</span>
         </div>
@@ -323,25 +321,25 @@ export const StorageManagement: React.FC = () => {
 
       {/* Top Vitals Cards */}
       {status && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Status Badge */}
-          <div className="p-4 rounded bg-graphite-800 border border-graphite-700 flex flex-col justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">System State</span>
-            <div className="mt-2">{getStateBadge(status.state)}</div>
-            <span className="text-[10px] text-slate-500 mt-2 font-mono">Dynamic multi-signal guard</span>
+          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
+            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">SYSTEM_STATE:</span>
+            <div>{getStateBadge(status.state)}</div>
+            <span className="text-[9px] text-[#484F58]">Dynamic multi-signal guard</span>
           </div>
 
           {/* Capacity */}
-          <div className="p-4 rounded bg-graphite-800 border border-graphite-700 flex flex-col justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Storage Capacity</span>
-            <div className="mt-1">
-              <span className="text-xl font-bold text-slate-100">{formatBytes(status.usedBytes)}</span>
-              <span className="text-xs text-slate-400"> / {formatBytes(status.sizeBytes)}</span>
+          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
+            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">STORAGE_CAPACITY:</span>
+            <div>
+              <span className="text-lg font-bold text-white">{formatBytes(status.usedBytes)}</span>
+              <span className="text-xs text-[#8B949E]"> / {formatBytes(status.sizeBytes)}</span>
             </div>
-            <div className="w-full bg-graphite-700 h-1.5 rounded-full overflow-hidden mt-2">
+            <div className="w-full bg-[#080B10] border border-[#30363D] h-2 p-0.5">
               <div
                 className={`h-full ${
-                  status.fillRatio > 0.9 ? 'bg-red-500' : status.fillRatio > 0.8 ? 'bg-amber-500' : 'bg-cctv-teal'
+                  status.fillRatio > 0.9 ? 'bg-[#F85149]' : status.fillRatio > 0.8 ? 'bg-[#E3B341]' : 'bg-[#3FB950]'
                 }`}
                 style={{ width: `${Math.min(status.fillRatio * 100, 100)}%` }}
               />
@@ -349,145 +347,147 @@ export const StorageManagement: React.FC = () => {
           </div>
 
           {/* Free Headroom */}
-          <div className="p-4 rounded bg-graphite-800 border border-graphite-700 flex flex-col justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Free Headroom</span>
-            <div className="mt-1">
-              <span className="text-xl font-bold text-emerald-400">{formatBytes(status.freeBytes)}</span>
-              <span className="text-xs text-slate-400 ml-1">({((1 - status.fillRatio) * 100).toFixed(1)}%)</span>
+          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
+            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">FREE_HEADROOM:</span>
+            <div>
+              <span className="text-lg font-bold text-[#3FB950]">{formatBytes(status.freeBytes)}</span>
+              <span className="text-xs text-[#8B949E] ml-1">({((1 - status.fillRatio) * 100).toFixed(1)}%)</span>
             </div>
-            <span className="text-[10px] text-slate-500 mt-2 font-mono">Usable disk remaining</span>
+            <span className="text-[9px] text-[#484F58]">Usable disk allocation</span>
           </div>
 
           {/* Section 63 Evidence Locked */}
-          <div className="p-4 rounded bg-graphite-800 border border-graphite-700 flex flex-col justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              <Shield className="w-3.5 h-3.5 text-cctv-amber" />
-              Locked Evidence
+          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
+            <span className="text-[10px] uppercase tracking-wider text-[#8B949E] flex items-center gap-1">
+              <Shield className="w-3 h-3 text-[#E3B341]" />
+              LOCKED_EVIDENCE:
             </span>
-            <div className="mt-1">
-              <span className="text-xl font-bold text-cctv-amber">{formatBytes(status.pinnedBytes)}</span>
+            <div>
+              <span className="text-lg font-bold text-[#E3B341]">{formatBytes(status.pinnedBytes)}</span>
             </div>
-            <span className="text-[10px] text-slate-500 mt-2 font-mono">Section 63 Legal Hold Immune</span>
+            <span className="text-[9px] text-[#484F58]">Sec. 63 Legal Hold Immune</span>
           </div>
 
           {/* Projected Exhaustion */}
-          <div className="p-4 rounded bg-graphite-800 border border-graphite-700 flex flex-col justify-between">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              Projected Full
+          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
+            <span className="text-[10px] uppercase tracking-wider text-[#8B949E] flex items-center gap-1">
+              <Clock className="w-3 h-3 text-[#58A6FF]" />
+              PROJECTED_EXHAUSTION:
             </span>
-            <div className="mt-1">
-              <span className="text-xl font-bold text-slate-100">
+            <div>
+              <span className="text-lg font-bold text-white">
                 {formatDuration(status.projectedExhaustionHours)}
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 mt-2 font-mono">
-              Burn rate: {formatBytes(status.writeRateBytesPerHour * 24)}/day
+            <span className="text-[9px] text-[#484F58]">
+              Rate: {formatBytes(status.writeRateBytesPerHour * 24)}/day
             </span>
           </div>
         </div>
       )}
 
-      {/* Camera Recording States Banner */}
+      {/* Ingestion Fleet Status Banner */}
       {status && (
-        <div className="bg-graphite-850 p-4 rounded border border-graphite-700 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#0D1117] p-2.5 border border-[#21262D] flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center space-x-2">
-            <Activity className="w-4 h-4 text-cctv-teal" />
-            <span className="text-xs font-semibold text-slate-200">Active Ingestion Fleet Status:</span>
+            <Activity className="w-4 h-4 text-[#58A6FF]" />
+            <span className="font-bold uppercase tracking-wider text-[#C9D1D9]">INGESTION FLEET TELEMETRY:</span>
           </div>
-          <div className="flex items-center space-x-6 text-xs font-mono">
+          <div className="flex items-center space-x-6 text-[11px]">
             <div>
-              <span className="text-slate-400">Total: </span>
-              <span className="font-bold text-slate-100">{status.cameraStats.total}</span>
+              <span className="text-[#8B949E]">TOTAL: </span>
+              <span className="font-bold text-white">{status.cameraStats.total}</span>
             </div>
             <div>
-              <span className="text-slate-400">Healthy Continuous: </span>
-              <span className="font-bold text-emerald-400">{status.cameraStats.healthy}</span>
+              <span className="text-[#8B949E]">HEALTHY CONTINUOUS: </span>
+              <span className="font-bold text-[#3FB950]">{status.cameraStats.healthy}</span>
             </div>
             <div>
-              <span className="text-slate-400">Adaptive Degraded: </span>
-              <span className="font-bold text-amber-400">{status.cameraStats.degraded}</span>
+              <span className="text-[#8B949E]">ADAPTIVE DEGRADED: </span>
+              <span className="font-bold text-[#E3B341]">{status.cameraStats.degraded}</span>
             </div>
             <div>
-              <span className="text-slate-400">Stopped: </span>
-              <span className="font-bold text-red-400">{status.cameraStats.stopped}</span>
+              <span className="text-[#8B949E]">STOPPED: </span>
+              <span className="font-bold text-[#F85149]">{status.cameraStats.stopped}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Physical Volumes Table */}
-      <div className="bg-graphite-850 rounded border border-graphite-700 overflow-hidden">
-        <div className="p-4 border-b border-graphite-700 flex items-center justify-between">
+      <div className="bg-[#0D1117] border border-[#21262D] flex flex-col">
+        <div className="p-3 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">
-              Physical Storage Volume Pools ({volumes.length})
+            <Layers className="w-4 h-4 text-[#E3B341]" />
+            <h2 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
+              PHYSICAL STORAGE VOLUME POOLS ({volumes.length})
             </h2>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">Mount Guard Active</span>
+          <span className="text-[10px] bg-[#080B10] border border-[#238636] text-[#3FB950] px-1.5 py-0.5 font-bold">
+            MOUNT GUARD: ENFORCED
+          </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-graphite-800 text-slate-400 uppercase font-mono text-[10px]">
+            <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
               <tr>
-                <th className="py-2.5 px-4">Volume Name</th>
-                <th className="py-2.5 px-4">Mount Path</th>
-                <th className="py-2.5 px-4">Device Identity</th>
-                <th className="py-2.5 px-4">Filesystem</th>
-                <th className="py-2.5 px-4">Mount Status</th>
-                <th className="py-2.5 px-4">Capacity Used</th>
-                <th className="py-2.5 px-4">Cameras Bound</th>
+                <th className="py-2 px-3.5">VOLUME_NAME</th>
+                <th className="py-2 px-3.5">MOUNT_PATH</th>
+                <th className="py-2 px-3.5">DEVICE_IDENTIFIER</th>
+                <th className="py-2 px-3.5">FILESYSTEM</th>
+                <th className="py-2 px-3.5">MOUNT_STATUS</th>
+                <th className="py-2 px-3.5">CAPACITY_UTILIZATION</th>
+                <th className="py-2 px-3.5">FEEDS_BOUND</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-graphite-700 text-slate-200">
+            <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
               {volumes.map((vol) => (
-                <tr key={vol.id} className="hover:bg-graphite-800/50">
-                  <td className="py-3 px-4 font-medium flex items-center space-x-2">
+                <tr key={vol.id} className="hover:bg-[#161B22] transition-colors">
+                  <td className="py-2.5 px-3.5 font-bold flex items-center space-x-2">
                     <span>{vol.name}</span>
                     {vol.isDefault && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal font-mono">
+                      <span className="text-[9px] px-1 py-0.2 bg-[#161B22] border border-[#58A6FF] text-[#58A6FF] font-bold">
                         DEFAULT
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-4 font-mono text-slate-300">{vol.path}</td>
-                  <td className="py-3 px-4 font-mono text-slate-400">{vol.deviceIdentifier || vol.mountSource || 'N/A'}</td>
-                  <td className="py-3 px-4 font-mono text-slate-400">{vol.filesystemType || 'ext4'}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-2.5 px-3.5 text-[#8B949E]">{vol.path}</td>
+                  <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">{vol.deviceIdentifier || vol.mountSource || 'N/A'}</td>
+                  <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">{vol.filesystemType || 'ext4'}</td>
+                  <td className="py-2.5 px-3.5">
                     {vol.status === 'HEALTHY' ? (
-                      <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 text-[10px] font-mono font-semibold">
+                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#238636] text-[#3FB950] text-[10px] font-bold">
                         HEALTHY
                       </span>
                     ) : vol.status === 'READ_ONLY' ? (
-                      <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-400 text-[10px] font-mono font-semibold">
+                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-[10px] font-bold">
                         READ_ONLY
                       </span>
                     ) : vol.status === 'UNMOUNTED' ? (
-                      <span className="px-2 py-0.5 rounded bg-red-950 text-red-400 text-[10px] font-mono font-semibold">
+                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-[10px] font-bold">
                         UNMOUNTED
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded bg-orange-950 text-orange-400 text-[10px] font-mono font-semibold">
+                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-[10px] font-bold">
                         DEGRADED
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-2.5 px-3.5">
                     <div className="flex items-center space-x-2">
-                      <div className="w-24 bg-graphite-700 h-1.5 rounded-full overflow-hidden">
+                      <div className="w-20 bg-[#080B10] border border-[#30363D] h-1.5">
                         <div
-                          className="h-full bg-cctv-teal"
+                          className="h-full bg-[#3FB950]"
                           style={{ width: `${Math.min(vol.fillRatio * 100, 100)}%` }}
                         />
                       </div>
-                      <span className="font-mono text-[11px] text-slate-300">
+                      <span className="text-[11px] text-[#8B949E]">
                         {formatBytes(vol.usedBytes)} / {formatBytes(vol.sizeBytes)}
                       </span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 font-mono">{vol.cameraCount}</td>
+                  <td className="py-2.5 px-3.5 text-[#C9D1D9] font-bold">{vol.cameraCount}</td>
                 </tr>
               ))}
             </tbody>
@@ -497,84 +497,84 @@ export const StorageManagement: React.FC = () => {
 
       {/* Per-Camera Retention & Quotas Table */}
       {status && (
-        <div className="bg-graphite-850 rounded border border-graphite-700 overflow-hidden">
-          <div className="p-4 border-b border-graphite-700 flex items-center justify-between">
+        <div className="bg-[#0D1117] border border-[#21262D] flex flex-col">
+          <div className="p-3 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Sliders className="w-4 h-4 text-cctv-amber" />
-              <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">
-                Camera Retention Policies & Storage Quotas ({status.cameraBreakdown.length})
+              <Sliders className="w-4 h-4 text-[#E3B341]" />
+              <h2 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
+                RETENTION POLICIES & QUOTAS ({status.cameraBreakdown.length})
               </h2>
             </div>
-            <span className="text-[11px] text-slate-400 font-mono">Priority-Ladder Pruning</span>
+            <span className="text-[10px] text-[#8B949E]">PRIORITY-LADDER PRUNING ACTIVE</span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-graphite-800 text-slate-400 uppercase font-mono text-[10px]">
+              <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
                 <tr>
-                  <th className="py-2.5 px-4">Camera</th>
-                  <th className="py-2.5 px-4">Priority</th>
-                  <th className="py-2.5 px-4">Configured Mode</th>
-                  <th className="py-2.5 px-4">Effective Mode</th>
-                  <th className="py-2.5 px-4">Degradation Status</th>
-                  <th className="py-2.5 px-4">Used on Disk</th>
-                  <th className="py-2.5 px-4">Retention Window</th>
-                  <th className="py-2.5 px-4">Storage Quota</th>
-                  <th className="py-2.5 px-4">Actions</th>
+                  <th className="py-2 px-3.5">CAMERA</th>
+                  <th className="py-2 px-3.5">PRIORITY</th>
+                  <th className="py-2 px-3.5">CONFIGURED_MODE</th>
+                  <th className="py-2 px-3.5">EFFECTIVE_MODE</th>
+                  <th className="py-2 px-3.5">DEGRADATION_REASON</th>
+                  <th className="py-2 px-3.5">USED_ON_DISK</th>
+                  <th className="py-2 px-3.5">RETENTION_WINDOW</th>
+                  <th className="py-2 px-3.5">STORAGE_QUOTA</th>
+                  <th className="py-2 px-3.5 text-right">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-graphite-700 text-slate-200">
+              <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
                 {status.cameraBreakdown.map((cam) => (
-                  <tr key={cam.id} className="hover:bg-graphite-800/50">
-                    <td className="py-3 px-4 font-medium">
+                  <tr key={cam.id} className="hover:bg-[#161B22] transition-colors">
+                    <td className="py-2.5 px-3.5 font-bold">
                       <div>{cam.name}</div>
-                      <div className="text-[10px] font-mono text-slate-500">{cam.streamPath}</div>
+                      <div className="text-[10px] text-[#484F58]">{cam.streamPath}</div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3.5">
                       <span
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                        className={`text-[9px] px-1.5 py-0.5 border font-bold ${
                           cam.retentionPriority === 'HIGH'
-                            ? 'bg-purple-950 text-purple-300 border border-purple-800/60'
+                            ? 'bg-[#080B10] text-[#58A6FF] border-[#58A6FF]'
                             : cam.retentionPriority === 'LOW'
-                            ? 'bg-graphite-700 text-slate-300'
-                            : 'bg-blue-950 text-blue-300 border border-blue-800/60'
+                            ? 'bg-[#080B10] text-[#8B949E] border-[#30363D]'
+                            : 'bg-[#080B10] text-[#E3B341] border-[#E3B341]'
                         }`}
                       >
                         {cam.retentionPriority}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-mono">{cam.recordingMode}</td>
-                    <td className="py-3 px-4 font-mono font-semibold">
+                    <td className="py-2.5 px-3.5 text-[#8B949E]">{cam.recordingMode}</td>
+                    <td className="py-2.5 px-3.5 font-bold">
                       {cam.effectiveRecordingMode === 'CONTINUOUS' ? (
-                        <span className="text-emerald-400">CONTINUOUS</span>
+                        <span className="text-[#3FB950]">CONTINUOUS</span>
                       ) : cam.effectiveRecordingMode === 'MOTION' ? (
-                        <span className="text-amber-400">MOTION ONLY</span>
+                        <span className="text-[#E3B341]">MOTION ONLY</span>
                       ) : (
-                        <span className="text-red-400">STOPPED</span>
+                        <span className="text-[#F85149]">STOPPED</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 font-mono text-[11px]">
+                    <td className="py-2.5 px-3.5 text-[10px]">
                       {cam.degradationReason === 'NONE' ? (
-                        <span className="text-slate-500">NORMAL</span>
+                        <span className="text-[#484F58]">NOMINAL</span>
                       ) : (
-                        <span className="text-amber-400 font-semibold">{cam.degradationReason}</span>
+                        <span className="text-[#E3B341] font-bold">{cam.degradationReason}</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 font-mono text-slate-300">
+                    <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">
                       {formatBytes(cam.usedBytes)} ({cam.segmentCount} segs)
                     </td>
-                    <td className="py-3 px-4 font-mono">
-                      {cam.retentionDays}d continuous / {cam.motionDays}d motion
+                    <td className="py-2.5 px-3.5 text-[11px] text-[#8B949E]">
+                      {cam.retentionDays}d cont / {cam.motionDays}d mot
                     </td>
-                    <td className="py-3 px-4 font-mono">
-                      {cam.maxStorageGigabytes ? `${cam.maxStorageGigabytes} GB` : 'Uncapped'}
+                    <td className="py-2.5 px-3.5 text-[11px]">
+                      {cam.maxStorageGigabytes ? `${cam.maxStorageGigabytes} GB` : 'UNCAPPED'}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3.5 text-right">
                       <button
                         onClick={() => openRetentionModal(cam)}
-                        className="px-2 py-1 text-[11px] rounded bg-graphite-700 hover:bg-graphite-600 text-slate-200 border border-graphite-600"
+                        className="px-2 py-1 text-[10px] font-bold uppercase bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-white border border-[#30363D] transition-colors"
                       >
-                        Configure
+                        [ CONFIGURE ]
                       </button>
                     </td>
                   </tr>
@@ -587,39 +587,39 @@ export const StorageManagement: React.FC = () => {
 
       {/* Recovery History Log Card */}
       {status?.lastRecovery && (
-        <div className="bg-graphite-850 p-4 rounded border border-graphite-700">
-          <div className="flex items-center space-x-2 border-b border-graphite-700 pb-2 mb-3">
-            <FileCheck className="w-4 h-4 text-cctv-teal" />
-            <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
-              Power-Cut & Crash Recovery Event History
+        <div className="bg-[#0D1117] p-3.5 border border-[#21262D]">
+          <div className="flex items-center space-x-2 border-b border-[#21262D] pb-2 mb-2.5">
+            <FileCheck className="w-4 h-4 text-[#3FB950]" />
+            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
+              POWER-CUT & CRASH RECOVERY LOG
             </h3>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-xs font-mono">
-            <div>
-              <span className="text-slate-400 block text-[10px]">Last Recovery Scan:</span>
-              <span className="text-slate-200 font-semibold">
-                {new Date(status.lastRecovery.timestamp).toLocaleString()}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">LAST_SCAN:</span>
+              <span className="text-white font-bold text-[11px]">
+                {new Date(status.lastRecovery.timestamp).toLocaleTimeString([], { hour12: false })}
               </span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Files Examined:</span>
-              <span className="text-slate-200 font-semibold">{status.lastRecovery.filesExamined}</span>
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">FILES_EXAMINED:</span>
+              <span className="text-white font-bold">{status.lastRecovery.filesExamined}</span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Files Repaired:</span>
-              <span className="text-emerald-400 font-semibold">{status.lastRecovery.filesRecovered}</span>
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">FILES_REPAIRED:</span>
+              <span className="text-[#3FB950] font-bold">{status.lastRecovery.filesRecovered}</span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Files Quarantined:</span>
-              <span className="text-amber-400 font-semibold">{status.lastRecovery.filesQuarantined}</span>
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">QUARANTINED:</span>
+              <span className="text-[#E3B341] font-bold">{status.lastRecovery.filesQuarantined}</span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Zero-Byte Culled:</span>
-              <span className="text-slate-300 font-semibold">{status.lastRecovery.zeroBytePruned}</span>
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">ZERO_BYTE_CULLED:</span>
+              <span className="text-[#8B949E] font-bold">{status.lastRecovery.zeroBytePruned}</span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Missing In DB:</span>
-              <span className="text-red-400 font-semibold">{status.lastRecovery.filesMissing}</span>
+            <div className="bg-[#161B22] p-2 border border-[#21262D]">
+              <span className="text-[#8B949E] block text-[9px] uppercase">MISSING_IN_DB:</span>
+              <span className="text-[#F85149] font-bold">{status.lastRecovery.filesMissing}</span>
             </div>
           </div>
         </div>
@@ -627,71 +627,71 @@ export const StorageManagement: React.FC = () => {
 
       {/* Add Volume Modal */}
       {showAddVolumeModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-cctv-teal" />
-              Register Storage Volume
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
+          <div className="bg-[#0D1117] border border-[#30363D] rounded-none p-5 max-w-md w-full shadow-2xl">
+            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-[#21262D] pb-2">
+              <HardDrive className="w-4 h-4 text-[#E3B341]" />
+              [ REGISTER PHYSICAL STORAGE VOLUME ]
             </h3>
-            <form onSubmit={handleCreateVolume} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateVolume} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">Volume Name</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">VOLUME_NAME:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Drive Bay 2 (WD Purple)"
                   value={newVolName}
                   onChange={(e) => setNewVolName(e.target.value)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Physical Mount Path</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">PHYSICAL_MOUNT_PATH:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. /mnt/cctv_hdd2"
                   value={newVolPath}
                   onChange={(e) => setNewVolPath(e.target.value)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Device Identifier (Optional)</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">DEVICE_IDENTIFIER (OPTIONAL):</label>
                 <input
                   type="text"
                   placeholder="e.g. /dev/sdb1 or UUID=..."
                   value={newVolDevice}
                   onChange={(e) => setNewVolDevice(e.target.value)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
-              <div className="flex items-center space-x-2 pt-2">
+              <div className="flex items-center space-x-2 pt-1">
                 <input
                   type="checkbox"
                   id="isDef"
                   checked={newVolIsDefault}
                   onChange={(e) => setNewVolIsDefault(e.target.checked)}
-                  className="rounded border-graphite-700 bg-graphite-900 text-cctv-teal"
+                  className="border-[#30363D] bg-[#080B10] text-[#E3B341] rounded-none"
                 />
-                <label htmlFor="isDef" className="text-slate-300">
+                <label htmlFor="isDef" className="text-[11px] text-[#C9D1D9]">
                   Set as default recording volume for new cameras
                 </label>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-graphite-700">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
                 <button
                   type="button"
                   onClick={() => setShowAddVolumeModal(false)}
-                  className="px-3 py-1.5 rounded bg-graphite-700 hover:bg-graphite-600 text-slate-300"
+                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
                 >
-                  Cancel
+                  [ CANCEL ]
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded bg-cctv-teal text-graphite-950 font-semibold hover:bg-teal-400"
+                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs"
                 >
-                  Register Volume
+                  [ REGISTER VOLUME ]
                 </button>
               </div>
             </form>
@@ -701,18 +701,18 @@ export const StorageManagement: React.FC = () => {
 
       {/* Edit Retention Policy Modal */}
       {editingCamera && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-cctv-amber" />
-              Configure Retention & Quota: {editingCamera.name}
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
+          <div className="bg-[#0D1117] border border-[#30363D] rounded-none p-5 max-w-md w-full shadow-2xl">
+            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider mb-1 flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-[#E3B341]" />
+              [ CONFIGURE RETENTION: {editingCamera.name} ]
             </h3>
-            <p className="text-[11px] text-slate-400 mb-4 font-mono">
-              Stream Path: {editingCamera.streamPath}
+            <p className="text-[10px] text-[#8B949E] mb-3 pb-2 border-b border-[#21262D]">
+              STREAM_PATH: {editingCamera.streamPath}
             </p>
-            <form onSubmit={handleSaveRetention} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveRetention} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">Continuous Retention (Days)</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">CONTINUOUS_RETENTION_DAYS:</label>
                 <input
                   type="number"
                   min="1"
@@ -720,11 +720,11 @@ export const StorageManagement: React.FC = () => {
                   required
                   value={editContinuousDays}
                   onChange={(e) => setEditContinuousDays(parseInt(e.target.value, 10) || 1)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Motion Retention (Days)</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">MOTION_RETENTION_DAYS:</label>
                 <input
                   type="number"
                   min="1"
@@ -732,49 +732,49 @@ export const StorageManagement: React.FC = () => {
                   required
                   value={editMotionDays}
                   onChange={(e) => setEditMotionDays(parseInt(e.target.value, 10) || 1)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Max Storage Quota Cap (GB, Optional)</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">STORAGE_QUOTA_CAP_GB (OPTIONAL):</label>
                 <input
                   type="number"
                   min="1"
                   placeholder="Leave empty for uncapped"
                   value={editMaxGb}
                   onChange={(e) => setEditMaxGb(e.target.value)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Camera will prune oldest unpinned footage when total consumption exceeds this GB limit.
+                <span className="text-[9px] text-[#484F58] mt-1 block">
+                  Camera will prune oldest unpinned footage when consumption exceeds this cap.
                 </span>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Retention & Evidentiary Priority</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">PRUNING_PRIORITY:</label>
                 <select
                   value={editPriority}
                   onChange={(e) => setEditPriority(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-graphite-900 border border-graphite-700 rounded text-slate-100 font-mono"
+                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 >
-                  <option value="HIGH">HIGH (Vault, Perimeter, Cash - Pruned Last)</option>
-                  <option value="NORMAL">NORMAL (General Areas, Entrances)</option>
-                  <option value="LOW">LOW (Auxiliary, Low-motion Hallways - Pruned First)</option>
+                  <option value="HIGH">HIGH (Vault, Cash, Perimeter - Pruned Last)</option>
+                  <option value="NORMAL">NORMAL (General Areas, Corridors)</option>
+                  <option value="LOW">LOW (Auxiliary Feeds - Pruned First)</option>
                 </select>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-graphite-700">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
                 <button
                   type="button"
                   onClick={() => setEditingCamera(null)}
-                  className="px-3 py-1.5 rounded bg-graphite-700 hover:bg-graphite-600 text-slate-300"
+                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
                 >
-                  Cancel
+                  [ CANCEL ]
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded bg-cctv-amber text-graphite-950 font-semibold hover:bg-amber-400"
+                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs"
                 >
-                  Save Policy
+                  [ SAVE POLICY ]
                 </button>
               </div>
             </form>

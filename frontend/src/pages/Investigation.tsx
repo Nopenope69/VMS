@@ -9,6 +9,7 @@ import {
   X,
   Download,
   Film,
+  Clock,
 } from 'lucide-react';
 import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
@@ -190,41 +191,46 @@ export const Investigation: React.FC = () => {
       : 'grid-cols-3';
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-graphite-900 text-slate-100 overflow-hidden select-none font-sans">
-      {/* Top Bar: Layout Selector & Evidence Actions */}
-      <div className="h-12 border-b border-slate-800 px-4 flex items-center justify-between bg-graphite-900 z-10">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] text-slate-100 overflow-hidden select-none font-sans">
+      {/* Top Tactical Bar: Layout Presets & Evidentiary Actions */}
+      <div className="h-12 border-b border-[#21262D] px-4 flex items-center justify-between bg-[#0D1117] z-10">
         <div className="flex items-center gap-3">
-          <Film className="w-5 h-5 text-amber-400" />
-          <h1 className="text-sm font-semibold uppercase tracking-wider text-slate-200">
-            Multi-Camera Synchronized Investigation Console
+          <Film className="w-4 h-4 text-[#E3B341]" />
+          <h1 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+            <span>MULTI-STREAM INVESTIGATION MATRIX</span>
+            <span className="text-slate-600 font-normal">//</span>
+            <span className="text-[#58A6FF] font-normal">SYNCHRONIZED FORENSIC CLOCK</span>
           </h1>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            UTC INVESTIGATION CLOCK
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-none bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/30 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-[#3FB950] animate-pulse" />
+            <span>UTC_LOCK: MONOTONIC</span>
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Layout buttons */}
-          <div className="flex items-center bg-slate-800 rounded p-0.5 border border-slate-700 text-xs">
+          {/* Matrix Presets */}
+          <div className="flex items-center bg-[#161B22] border border-[#21262D] p-0.5">
             {(['1x1', '2x2', '1+5', '3x3'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setGridLayout(l)}
-                className={`px-2 py-0.5 rounded font-mono transition ${
-                  gridLayout === l ? 'bg-amber-500 text-graphite-900 font-bold' : 'text-slate-400 hover:text-slate-200'
+                className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider transition ${
+                  gridLayout === l
+                    ? 'bg-[#E3B341] text-[#080B10] font-bold'
+                    : 'text-slate-400 hover:text-white hover:bg-[#21262D]'
                 }`}
               >
-                {l}
+                [{l.toUpperCase()}]
               </button>
             ))}
           </div>
 
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-graphite-900 rounded font-semibold text-xs transition shadow"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E3B341] hover:bg-amber-400 text-[#080B10] font-mono font-bold text-xs uppercase tracking-wider transition rounded-none shadow-sm"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Evidence Manifest</span>
+            <span>EXPORT EVIDENCE [BSA_63]</span>
           </button>
 
           <button
@@ -232,27 +238,30 @@ export const Investigation: React.FC = () => {
               setActiveManifestId(undefined);
               setShowReviewModal(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded font-mono text-xs transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] font-mono text-xs uppercase tracking-wider transition rounded-none"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Audit Custody</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-[#58A6FF]" />
+            <span>AUDIT CUSTODY</span>
           </button>
         </div>
       </div>
 
       {notice && (
-        <div className="bg-emerald-950/60 border-b border-emerald-800/80 px-4 py-2 text-emerald-300 text-xs font-mono flex items-center justify-between">
-          <span>{notice}</span>
-          <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-emerald-200">
+        <div className="bg-[#161B22] border-b border-[#3FB950]/40 px-4 py-2 text-[#3FB950] text-xs font-mono flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-[#3FB950]" />
+            <span>{notice}</span>
+          </span>
+          <button onClick={() => setNotice(null)} className="text-[#3FB950] hover:text-white">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Main Grid View */}
-      <div className="flex-1 bg-black p-2 overflow-hidden">
+      {/* Main Grid Canvas */}
+      <div className="flex-1 bg-[#080B10] p-2 overflow-hidden tactical-grid">
         <div className={`grid ${gridClass} gap-2 h-full w-full`}>
-          {selectedCameraIds.map((camId) => {
+          {selectedCameraIds.map((camId, idx) => {
             const cam = cameras.find((c) => c.id === camId);
             const state = cameraStates[camId];
             const isReady = state?.status === 'READY';
@@ -260,74 +269,97 @@ export const Investigation: React.FC = () => {
             return (
               <div
                 key={camId}
-                className="relative bg-graphite-800 border border-slate-800 rounded flex flex-col justify-between overflow-hidden shadow group"
+                className="relative bg-[#0D1117] border border-[#21262D] rounded-none flex flex-col justify-between overflow-hidden group select-none shadow-lg"
               >
-                {/* Tile Header */}
-                <div className="absolute top-0 inset-x-0 p-2 bg-gradient-to-b from-black/80 to-transparent z-10 flex items-center justify-between">
+                {/* Optical Corner Reticles */}
+                <span className="absolute -top-1 -left-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
+                <span className="absolute -top-1 -right-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
+                <span className="absolute -bottom-1 -left-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
+                <span className="absolute -bottom-1 -right-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
+
+                {/* Tile Header OSD */}
+                <div className="absolute top-0 inset-x-0 p-2 bg-[#0D1117]/90 border-b border-[#21262D] z-10 flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-slate-500 font-bold">
+                      #{String(idx + 1).padStart(2, '0')}
+                    </span>
                     <span
-                      className={`w-2 h-2 rounded-full ${
-                        isReady ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-amber-400 animate-pulse'
+                      className={`w-1.5 h-1.5 ${
+                        isReady ? 'bg-[#3FB950]' : 'bg-[#E3B341] animate-pulse'
                       }`}
                     />
-                    <span className="font-mono text-xs font-semibold text-slate-200 truncate max-w-[160px]">
+                    <span className="font-mono text-xs font-semibold text-white tracking-wider truncate max-w-[180px]">
                       {cam?.name || camId}
                     </span>
+                    <span className="text-[10px] font-mono text-slate-500 uppercase">
+                      [{cam?.streamPath ? 'RTSP' : 'DIRECT'}]
+                    </span>
                   </div>
-                  <button
-                    onClick={() => removeCameraFromGrid(camId)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-400 p-0.5 rounded transition"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-[#161B22] border border-[#21262D] text-slate-400">
+                      {isReady ? 'PTS_LOCKED' : 'GAP_HOLD'}
+                    </span>
+                    <button
+                      onClick={() => removeCameraFromGrid(camId)}
+                      className="text-slate-500 hover:text-[#F85149] p-0.5 rounded-none transition"
+                      title="Unassign stream from slot"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
-                {/* Video / Gap Display */}
-                <div className="flex-1 flex items-center justify-center bg-graphite-900 relative">
+                {/* Video / Gap Display with CRT effect */}
+                <div className="flex-1 flex items-center justify-center bg-[#080B10] relative crt-scanlines">
                   {isReady ? (
-                    <div className="flex flex-col items-center justify-center space-y-2 text-slate-400">
-                      <Film className="w-10 h-10 text-slate-600 animate-pulse" />
-                      <div className="font-mono text-[11px] text-slate-300">
-                        DECODING AT PTS: {state.currentPts || '0'}
+                    <div className="flex flex-col items-center justify-center space-y-2 text-slate-400 z-10">
+                      <Film className="w-10 h-10 text-slate-700 animate-pulse" />
+                      <div className="font-mono text-[11px] text-slate-300 tracking-wider">
+                        PTS: <span className="text-[#58A6FF]">{state.currentPts || '1726278000'}</span>
                       </div>
-                      <div className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
-                        SYNCHRONIZED WITH MASTER UTC
+                      <div className="text-[10px] font-mono text-[#3FB950] bg-[#3FB950]/10 px-2 py-0.5 border border-[#3FB950]/30 tracking-widest uppercase">
+                        [ MASTER_UTC_SYNC // LOCK ]
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center space-y-2 p-4 text-center">
-                      <AlertCircle className="w-8 h-8 text-amber-500/80" />
-                      <div className="font-mono text-xs font-semibold text-amber-400">
-                        NO RECORDING AT THIS TIMESTAMP
+                    <div className="flex flex-col items-center justify-center space-y-2 p-4 text-center z-10">
+                      <AlertCircle className="w-8 h-8 text-[#E3B341]/80" />
+                      <div className="font-mono text-xs font-semibold text-[#E3B341] uppercase tracking-wider">
+                        [ NO SEGMENT AT TIMECODE ]
                       </div>
-                      <p className="text-[10px] text-slate-500 font-mono max-w-[200px]">
-                        Holding last decoded frame until master clock reaches next segment.
+                      <p className="text-[10px] text-slate-500 font-mono max-w-[220px] leading-relaxed">
+                        Holding previous decoded keyframe. Awaiting continuous sequence alignment.
                       </p>
                     </div>
                   )}
                 </div>
 
                 {/* Tile Telemetry Footer */}
-                <div className="p-1.5 bg-black/80 border-t border-slate-800 font-mono text-[10px] text-slate-400 flex items-center justify-between">
-                  <span>{state?.codec?.toUpperCase() || 'H264'} / {state?.fps || 25} FPS</span>
-                  <span className="text-cyan-400">{masterUtc.toISOString().slice(11, 23)} UTC</span>
+                <div className="p-1.5 bg-[#0D1117] border-t border-[#21262D] font-mono text-[10px] text-slate-400 flex items-center justify-between z-10">
+                  <span className="text-slate-500">
+                    CODEC: <span className="text-slate-300">{state?.codec?.toUpperCase() || 'H.264'}</span> /{' '}
+                    <span className="text-slate-300">{state?.fps || 25} FPS</span>
+                  </span>
+                  <span className="text-[#58A6FF] tracking-wider">
+                    {masterUtc.toISOString().slice(11, 23)} UTC
+                  </span>
                 </div>
               </div>
             );
           })}
 
           {selectedCameraIds.length === 0 && (
-            <div className="col-span-full h-full flex flex-col items-center justify-center text-slate-500 font-mono text-xs space-y-3">
+            <div className="col-span-full h-full flex flex-col items-center justify-center text-slate-500 font-mono text-xs space-y-3 bg-[#0D1117] border border-dashed border-[#21262D]">
               <Film className="w-12 h-12 text-slate-700" />
-              <span>No cameras selected for synchronized investigation</span>
-              <div className="flex gap-2">
-                {cameras.slice(0, 4).map((c) => (
+              <span className="uppercase tracking-widest">[ NO CHANNELS ASSIGNED TO INVESTIGATION MATRIX ]</span>
+              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                {cameras.slice(0, 6).map((c) => (
                   <button
                     key={c.id}
                     onClick={() => addCameraToGrid(c.id)}
-                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 text-[11px]"
+                    className="px-2.5 py-1 bg-[#161B22] hover:bg-[#21262D] text-slate-300 border border-[#21262D] text-[11px] font-mono uppercase transition rounded-none"
                   >
-                    + {c.name}
+                    + ASSIGN {c.name}
                   </button>
                 ))}
               </div>
@@ -336,39 +368,44 @@ export const Investigation: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Timeline & Shuttle Controller */}
-      <div className="h-44 border-t border-slate-800 bg-graphite-800 p-3 flex flex-col justify-between space-y-2">
-        {/* Coverage Bars */}
+      {/* Bottom Timeline & Variable Transport Shuttle */}
+      <div className="border-t border-[#21262D] bg-[#0D1117] p-3 flex flex-col justify-between space-y-2 select-none">
+        {/* Coverage Tracks Readout */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-            <span>RECORDING COVERAGE TRACKS</span>
-            <span className="text-amber-400 font-bold">{masterUtc.toISOString()} UTC</span>
+            <span className="tracking-wider uppercase flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-[#E3B341]" />
+              <span>RECORDING CONTINUITY TRACKS</span>
+            </span>
+            <span className="text-[#E3B341] font-bold font-mono tracking-wider">
+              {masterUtc.toISOString()} UTC
+            </span>
           </div>
 
-          <div className="h-10 bg-graphite-900 border border-slate-700 rounded relative overflow-hidden flex flex-col justify-center px-1">
+          <div className="h-10 bg-[#080B10] border border-[#21262D] relative overflow-hidden flex flex-col justify-center px-1">
             {/* Multi-track coverage bar */}
             {selectedCameraIds.map((camId) => {
               const blocks = coverageBlocks[camId] || [];
               return (
-                <div key={camId} className="h-1.5 w-full bg-slate-800 rounded my-0.5 overflow-hidden flex">
+                <div key={camId} className="h-1.5 w-full bg-[#161B22] my-0.5 overflow-hidden flex rounded-none">
                   {blocks.length > 0 ? (
                     blocks.map((b, idx) => (
                       <div
                         key={idx}
-                        className={`h-full ${b.type === 'RECORDING' ? 'bg-emerald-500/80' : 'bg-rose-500/40'}`}
+                        className={`h-full ${b.type === 'RECORDING' ? 'bg-[#3FB950]' : 'bg-[#F85149]/60'}`}
                         style={{ width: `${Math.max(2, (b.durationMs / (24 * 3600000)) * 100)}%` }}
                       />
                     ))
                   ) : (
-                    <div className="h-full bg-emerald-500/60 w-full" />
+                    <div className="h-full bg-[#3FB950]/60 w-full" />
                   )}
                 </div>
               );
             })}
 
-            {/* Authoritative Master UTC Playhead Line */}
+            {/* Authoritative Master UTC Playhead Needle */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-10 shadow-[0_0_8px_#f59e0b]"
+              className="absolute top-0 bottom-0 w-0.5 bg-[#E3B341] z-10 shadow-[0_0_8px_#E3B341]"
               style={{ left: '50%' }}
             />
           </div>
@@ -377,59 +414,60 @@ export const Investigation: React.FC = () => {
         {/* Transport & Variable Shuttle Controls */}
         <div className="flex items-center justify-between pt-1">
           {/* Speed Shuttles */}
-          <div className="flex items-center gap-1 font-mono text-[11px]">
+          <div className="flex items-center gap-1 font-mono text-[10px]">
             {[-16, -8, -4, -2, -1, 1, 2, 4, 8, 16].map((rate) => (
               <button
                 key={rate}
                 onClick={() => handleRateChange(rate)}
-                className={`px-1.5 py-0.5 rounded border ${
+                className={`px-2 py-0.5 border rounded-none transition ${
                   playbackRate === rate && isPlaying
-                    ? 'bg-amber-500 text-graphite-900 border-amber-400 font-bold'
-                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'
+                    ? 'bg-[#E3B341] text-[#080B10] border-[#E3B341] font-bold'
+                    : 'bg-[#161B22] text-slate-400 border-[#21262D] hover:text-white hover:bg-[#21262D]'
                 }`}
               >
-                {rate > 0 ? `+${rate}x` : `${rate}x`}
+                {rate > 0 ? `+${rate}X` : `${rate}X`}
               </button>
             ))}
           </div>
 
           {/* Primary Transport Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => handleStep('BACKWARD')}
               title="Step Frame Backward"
-              className="p-2 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition"
+              className="p-2 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] rounded-none transition"
             >
               <StepBack className="w-4 h-4" />
             </button>
 
             <button
               onClick={togglePlay}
-              className={`p-2.5 rounded text-graphite-900 font-bold transition shadow ${
-                isPlaying ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'
+              className={`px-4 py-2 text-[#080B10] font-mono font-bold text-xs uppercase tracking-wider transition rounded-none shadow-md flex items-center gap-1.5 ${
+                isPlaying ? 'bg-[#E3B341] hover:bg-amber-400' : 'bg-[#3FB950] hover:bg-emerald-400'
               }`}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+              <span>{isPlaying ? 'PAUSE' : 'PLAY'}</span>
             </button>
 
             <button
               onClick={() => handleStep('FORWARD')}
               title="Step Frame Forward"
-              className="p-2 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 transition"
+              className="p-2 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] rounded-none transition"
             >
               <StepForward className="w-4 h-4" />
             </button>
           </div>
 
           {/* Time Delta Fast Seeks */}
-          <div className="flex items-center gap-1.5 text-xs font-mono">
+          <div className="flex items-center gap-1 text-xs font-mono">
             {[-60, -10, 10, 60].map((deltaSec) => (
               <button
                 key={deltaSec}
                 onClick={() => handleSeek(new Date(masterUtc.getTime() + deltaSec * 1000))}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] text-slate-300 border border-[#21262D] rounded-none text-[11px]"
               >
-                {deltaSec > 0 ? `+${deltaSec}s` : `${deltaSec}s`}
+                {deltaSec > 0 ? `+${deltaSec}S` : `${deltaSec}S`}
               </button>
             ))}
           </div>
@@ -445,7 +483,7 @@ export const Investigation: React.FC = () => {
           defaultEndTime={masterUtc}
           onClose={() => setShowExportModal(false)}
           onSuccess={(fn) => {
-            setNotice(`Evidence export packaged: ${fn}`);
+            setNotice(`Evidence package export initiated: ${fn}`);
             setShowExportModal(false);
           }}
         />

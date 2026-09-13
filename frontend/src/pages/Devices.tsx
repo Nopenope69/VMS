@@ -110,73 +110,99 @@ export const Devices: React.FC = () => {
 
   const isQuotaReached = license?.maxCameras && license.cameraCount >= license.maxCameras;
 
+  // Render a segmented gauge for quota
+  const renderQuotaGauge = () => {
+    if (!license || !license.maxCameras) return null;
+    const total = license.maxCameras;
+    const current = license.cameraCount || 0;
+    const pct = Math.round((current / total) * 100);
+
+    return (
+      <div className="flex items-center space-x-2 bg-[#161B22] border border-[#30363D] px-2.5 py-1 text-xs">
+        <span className="text-[10px] text-[#8B949E] uppercase tracking-wider">APPLIANCE_QUOTA:</span>
+        <div className="w-16 bg-[#080B10] border border-[#30363D] h-2 p-0.5">
+          <div
+            className={`h-full ${pct > 90 ? 'bg-[#F85149]' : pct > 75 ? 'bg-[#E3B341]' : 'bg-[#3FB950]'}`}
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
+        </div>
+        <span className="font-bold text-[#C9D1D9]">
+          <span className="text-[#E3B341]">{current}</span>/{total}
+        </span>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-graphite-900 p-4 space-y-4 overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
       {/* Top Action Bar */}
-      <div className="bg-graphite-850 p-4 rounded border border-graphite-700 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">Device Management</h2>
-          <p className="text-xs text-slate-400">
-            Manage ONVIF / RTSP camera appliances across your physical facility sites.
+          <div className="flex items-center space-x-2">
+            <Radio className="w-5 h-5 text-[#E3B341]" />
+            <h2 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
+              [ APPLIANCE FLEET & SENSOR TOPOLOGY ]
+            </h2>
+          </div>
+          <p className="text-[11px] text-[#8B949E] mt-0.5">
+            ONVIF PROFILE S/G/T APPLIANCES • RTSP/H.264 CAPTURE FLEET • FACILITY SENSOR REGISTRY
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
-          {license && (
-            <div className="text-xs font-mono px-2.5 py-1 rounded bg-graphite-800 border border-graphite-700 text-slate-300 mr-2">
-              Quota: <span className="text-cctv-amber font-semibold">{license.cameraCount}</span> / {license.maxCameras}
-            </div>
-          )}
+          {renderQuotaGauge()}
+
           <button
             onClick={handleScan}
             disabled={scanning}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-medium bg-graphite-700 text-slate-200 hover:bg-graphite-600 transition"
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-[#58A6FF] border border-[#30363D] transition-colors"
           >
-            <Search className={`w-3.5 h-3.5 ${scanning ? 'animate-spin' : ''}`} />
-            <span>{scanning ? 'Scanning...' : 'WS-Discovery'}</span>
+            <Search className={`w-3.5 h-3.5 ${scanning ? 'animate-spin text-[#58A6FF]' : ''}`} />
+            <span>{scanning ? '[ SCANNING LAN... ]' : '[ WS-DISCOVERY RADAR ]'}</span>
           </button>
+
           <button
             onClick={() => setShowAddModal(true)}
             disabled={isQuotaReached}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 transition disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors disabled:opacity-40"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Manual IP Entry</span>
+            <Plus className="w-3.5 h-3.5 text-[#080B10]" />
+            <span>[ + ONBOARD FEED ]</span>
           </button>
         </div>
       </div>
 
       {isQuotaReached && (
-        <div className="p-3 bg-amber-950/40 border border-amber-600 rounded flex items-center space-x-2 text-xs text-amber-200">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+        <div className="p-2.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-xs flex items-center space-x-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-[#E3B341]" />
           <span>
-            Camera capacity quota reached ({license.maxCameras} cameras). Please upgrade your commercial license under the License tab to onboard additional feeds.
+            [ QUOTA CEILING REACHED ] Appliance capacity limit attained ({license.maxCameras} feeds). Upgrade your license tier in License & Entitlements to provision additional hardware streams.
           </span>
         </div>
       )}
 
       {/* Discovered Cameras Notice */}
       {discovered.length > 0 && (
-        <div className="bg-cctv-teal/10 border border-cctv-teal/50 rounded p-3">
-          <div className="text-xs font-semibold text-cctv-teal mb-2 flex items-center space-x-1.5">
-            <Radio className="w-4 h-4" />
-            <span>Found {discovered.length} ONVIF Cameras on LAN:</span>
+        <div className="bg-[#0D1117] border border-[#58A6FF] p-3">
+          <div className="text-xs font-bold text-[#58A6FF] uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <Radio className="w-4 h-4 animate-pulse" />
+            <span>[ RADAR HIT ] FOUND {discovered.length} ONVIF BROADCASTING FEEDS ON LAN:</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {discovered.map((d, idx) => (
               <div
                 key={idx}
-                className="bg-graphite-850 p-2.5 rounded border border-graphite-700 flex items-center justify-between"
+                className="bg-[#161B22] p-2 border border-[#30363D] flex items-center justify-between"
               >
                 <div>
-                  <div className="text-xs font-mono font-semibold text-slate-200">{d.ipAddress}:{d.onvifPort}</div>
-                  <div className="text-[10px] text-slate-400">{d.manufacturer || 'Generic'} {d.model || 'Device'}</div>
+                  <div className="text-xs font-bold text-white">{d.ipAddress}:{d.onvifPort}</div>
+                  <div className="text-[10px] text-[#8B949E]">{d.manufacturer || 'GENERIC'} {d.model || 'ONVIF-CAMERA'}</div>
                 </div>
                 <button
                   onClick={() => handleSelectDiscovered(d)}
-                  className="px-2 py-1 bg-cctv-teal text-graphite-900 font-bold rounded text-[10px] hover:bg-teal-400"
+                  className="px-2.5 py-1 bg-[#58A6FF] hover:bg-[#79B8FF] text-[#080B10] font-bold text-[10px] uppercase tracking-wider transition-colors"
                 >
-                  Onboard
+                  [ ONBOARD ]
                 </button>
               </div>
             ))}
@@ -185,76 +211,84 @@ export const Devices: React.FC = () => {
       )}
 
       {/* Configured Cameras Table */}
-      <div className="bg-graphite-850 rounded border border-graphite-700 overflow-hidden">
-        <div className="px-4 py-3 border-b border-graphite-700 font-semibold text-xs uppercase tracking-wider text-slate-300">
-          Configured Cameras ({cameras.length})
+      <div className="bg-[#0D1117] border border-[#21262D] flex-1 flex flex-col">
+        <div className="px-3.5 py-2.5 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between text-xs">
+          <span className="font-bold uppercase tracking-wider text-[#C9D1D9]">
+            PROVISIONED SENSORS ({cameras.length})
+          </span>
+          <span className="text-[10px] text-[#8B949E]">
+            ENGINE: ACTIVE RTMP/RTSP INGESTION DAEMON
+          </span>
         </div>
 
         {cameras.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 font-mono text-xs">
-            No cameras currently onboarded. Run a WS-Discovery scan or add one manually.
+          <div className="p-12 text-center text-[#484F58] text-xs">
+            [ NO CAMERAS CURRENTLY PROVISIONED. RUN A WS-DISCOVERY SCAN OR ADD AN ONVIF FEED MANUALLY. ]
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-graphite-900 text-slate-400 uppercase text-[10px] border-b border-graphite-700">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
                 <tr>
-                  <th className="px-4 py-2.5">Name</th>
-                  <th className="px-4 py-2.5">Site Location</th>
-                  <th className="px-4 py-2.5">IP Address</th>
-                  <th className="px-4 py-2.5">PTZ</th>
-                  <th className="px-4 py-2.5">Configured Mode</th>
-                  <th className="px-4 py-2.5">Engine Status</th>
-                  <th className="px-4 py-2.5">Stream State</th>
-                  <th className="px-4 py-2.5 text-right">Surveillance Operations</th>
+                  <th className="px-3.5 py-2">FEED_NAME</th>
+                  <th className="px-3.5 py-2">FACILITY_SITE</th>
+                  <th className="px-3.5 py-2">IP_ENDPOINT</th>
+                  <th className="px-3.5 py-2">PTZ_OPTICS</th>
+                  <th className="px-3.5 py-2">RECORDING_MODE</th>
+                  <th className="px-3.5 py-2">REC_ENGINE</th>
+                  <th className="px-3.5 py-2">STREAM_STATE</th>
+                  <th className="px-3.5 py-2 text-right">OPERATIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-graphite-700 text-slate-300">
+              <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
                 {cameras.map((c) => (
-                  <tr key={c.id} className="hover:bg-graphite-800 transition">
-                    <td className="px-4 py-3 font-semibold text-white">{c.name}</td>
-                    <td className="px-4 py-3 text-slate-400">{c.site?.name || 'Primary Site'}</td>
-                    <td className="px-4 py-3 text-cctv-amber">{c.ipAddress}</td>
-                    <td className="px-4 py-3">
+                  <tr key={c.id} className="hover:bg-[#161B22] transition-colors">
+                    <td className="px-3.5 py-2.5 font-bold text-white">{c.name}</td>
+                    <td className="px-3.5 py-2.5 text-[#8B949E]">{c.site?.name || 'PRIMARY_FACILITY'}</td>
+                    <td className="px-3.5 py-2.5 text-[#E3B341]">{c.ipAddress}</td>
+                    <td className="px-3.5 py-2.5">
                       {c.hasPtz ? (
-                        <span className="px-1.5 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal text-[10px]">
-                          SUPPORTED
+                        <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#58A6FF] text-[#58A6FF] text-[9px] font-bold">
+                          3-AXIS PTZ
                         </span>
                       ) : (
-                        <span className="text-slate-500 text-[10px]">FIXED</span>
+                        <span className="text-[#484F58] text-[10px]">FIXED FOV</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="px-1.5 py-0.5 rounded bg-graphite-700 text-slate-200 text-[10px]">
+                    <td className="px-3.5 py-2.5">
+                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] text-[10px] font-bold">
                         {c.recordingMode}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        className={`px-1.5 py-0.5 text-[9px] font-bold border ${
                           c.recorderState === 'RUNNING'
-                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                            : 'bg-graphite-800 text-slate-400'
+                            ? 'bg-[#080B10] text-[#3FB950] border-[#238636]'
+                            : 'bg-[#080B10] text-[#8B949E] border-[#30363D]'
                         }`}
                       >
-                        REC: {c.recorderState || 'STOPPED'}
+                        {c.recorderState === 'RUNNING' ? 'REC: ACTIVE' : 'REC: IDLE'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 flex items-center space-x-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="text-emerald-400">ONLINE</span>
+                    <td className="px-3.5 py-2.5">
+                      <span className="inline-flex items-center space-x-1 text-[#3FB950] text-[10px] font-bold">
+                        <span className="w-1.5 h-1.5 bg-[#3FB950] animate-pulse" />
+                        <span>ONLINE</span>
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end space-x-1.5">
+                    <td className="px-3.5 py-2.5 text-right">
+                      <div className="flex items-center justify-end space-x-1">
                         <button
                           onClick={() => {
                             setSelectedCameraForModal(c);
                             setActiveModalType('SCHEDULE');
                           }}
                           title="Weekly Recording Schedule Matrix"
-                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
                         >
-                          <Calendar className="w-3.5 h-3.5" />
+                          <Calendar className="w-3 h-3 inline mr-1" />
+                          <span>SCHED</span>
                         </button>
                         <button
                           onClick={() => {
@@ -262,9 +296,10 @@ export const Devices: React.FC = () => {
                             setActiveModalType('ZONES');
                           }}
                           title="Motion Detection Zones & Exclusion Masks"
-                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
                         >
-                          <Shield className="w-3.5 h-3.5" />
+                          <Shield className="w-3 h-3 inline mr-1" />
+                          <span>ZONES</span>
                         </button>
                         {c.hasPtz && (
                           <button
@@ -273,9 +308,10 @@ export const Devices: React.FC = () => {
                               setActiveModalType('PTZ');
                             }}
                             title="PTZ Presets & Guard Patrol Tours"
-                            className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                            className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#58A6FF] text-[#8B949E] hover:text-[#58A6FF] text-[10px] font-bold uppercase transition-colors"
                           >
-                            <Compass className="w-3.5 h-3.5" />
+                            <Compass className="w-3 h-3 inline mr-1" />
+                            <span>PTZ</span>
                           </button>
                         )}
                         <button
@@ -284,9 +320,10 @@ export const Devices: React.FC = () => {
                             setActiveModalType('DIAGNOSTIC');
                           }}
                           title="Stream Telemetry & Diagnostics"
-                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-teal hover:bg-graphite-700 transition"
+                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#3FB950] text-[#8B949E] hover:text-[#3FB950] text-[10px] font-bold uppercase transition-colors"
                         >
-                          <Activity className="w-3.5 h-3.5" />
+                          <Activity className="w-3 h-3 inline mr-1" />
+                          <span>DIAG</span>
                         </button>
                         <button
                           onClick={() => {
@@ -294,9 +331,10 @@ export const Devices: React.FC = () => {
                             setActiveModalType('TRIPWIRE');
                           }}
                           title="Vector Tripwire & Continuous Loitering Analytics"
-                          className="p-1.5 rounded bg-graphite-800 text-slate-300 hover:text-cctv-amber hover:bg-graphite-700 transition"
+                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
                         >
-                          <Crosshair className="w-3.5 h-3.5" />
+                          <Crosshair className="w-3 h-3 inline mr-1" />
+                          <span>TRIP</span>
                         </button>
                       </div>
                     </td>
@@ -310,44 +348,52 @@ export const Devices: React.FC = () => {
 
       {/* Manual Onboard Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-graphite-850 border border-graphite-700 rounded-md w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="px-5 py-4 border-b border-graphite-700 flex justify-between items-center bg-graphite-800">
-              <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
-                Onboard ONVIF / RTSP Camera
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">✕</button>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
+          <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
+              <div className="flex items-center space-x-2">
+                <Radio className="w-4 h-4 text-[#E3B341]" />
+                <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
+                  [ ONBOARD ONVIF / RTSP HARDWARE FEED ]
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-[#8B949E] hover:text-white text-xs px-2 py-0.5 border border-[#30363D] hover:bg-[#21262D]"
+              >
+                [ X ]
+              </button>
             </div>
 
-            <form onSubmit={handleAddCamera} className="p-5 space-y-3.5">
+            <form onSubmit={handleAddCamera} className="p-4 space-y-3 text-xs">
               {error && (
-                <div className="p-2.5 bg-red-900/40 border border-red-500 rounded text-xs text-red-200">
+                <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-xs">
                   {error}
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Camera Name</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">CAMERA_IDENTIFIER:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. North Gate PTZ"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Assigned Site</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">FACILITY_SITE:</label>
                 <select
                   value={siteId}
                   onChange={(e) => setSiteId(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 >
                   {sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.timezone})
+                    <option key={s.id} value={s.id} className="bg-[#0D1117] text-[#C9D1D9]">
+                      {s.name} [{s.timezone}]
                     </option>
                   ))}
                 </select>
@@ -355,86 +401,86 @@ export const Devices: React.FC = () => {
 
               <div className="grid grid-cols-4 gap-2">
                 <div className="col-span-2">
-                  <label className="block text-xs font-mono text-slate-300 mb-1">IP Address</label>
+                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">IP_ADDRESS:</label>
                   <input
                     type="text"
                     required
                     placeholder="192.168.1.100"
                     value={ipAddress}
                     onChange={(e) => setIpAddress(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono text-slate-300 mb-1">ONVIF Port</label>
+                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">ONVIF_PORT:</label>
                   <input
                     type="number"
                     value={onvifPort}
                     onChange={(e) => setOnvifPort(Number(e.target.value))}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono text-slate-300 mb-1">RTSP Port</label>
+                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">RTSP_PORT:</label>
                   <input
                     type="number"
                     value={rtspPort}
                     onChange={(e) => setRtspPort(Number(e.target.value))}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-mono text-slate-300 mb-1">ONVIF Username</label>
+                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">AUTH_USERNAME:</label>
                   <input
                     type="text"
                     placeholder="admin"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono text-slate-300 mb-1">ONVIF Password</label>
+                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">AUTH_PASSWORD:</label>
                   <input
                     type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Recording Mode</label>
+                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">RECORDING_MODE:</label>
                 <select
                   value={recordingMode}
                   onChange={(e) => setRecordingMode(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 >
-                  <option value="CONTINUOUS">CONTINUOUS (24/7 fMP4 Recording)</option>
-                  <option value="MOTION">MOTION (Scene Change Triggered Recording)</option>
-                  <option value="OFF">LIVE ONLY (No Recording)</option>
+                  <option value="CONTINUOUS" className="bg-[#0D1117]">CONTINUOUS (24/7 Lossless fMP4 Archive)</option>
+                  <option value="MOTION" className="bg-[#0D1117]">MOTION (Scene Detection Triggered)</option>
+                  <option value="OFF" className="bg-[#0D1117]">LIVE ONLY (Real-Time Display Only)</option>
                 </select>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-graphite-700">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-1.5 rounded text-xs text-slate-300 hover:bg-graphite-700"
+                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
                 >
-                  Cancel
+                  [ CANCEL ]
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-1.5 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 disabled:opacity-50"
+                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs disabled:opacity-50"
                 >
-                  {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
+                  {saving ? '[ CONNECTING & VERIFYING... ]' : '[ ONBOARD CAMERA ]'}
                 </button>
               </div>
             </form>

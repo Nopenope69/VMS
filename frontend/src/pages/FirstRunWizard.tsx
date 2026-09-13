@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Server,
   FileCheck,
+  Terminal,
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -168,76 +169,92 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-graphite-900 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-cctv-amber/30">
-      <div className="w-full max-w-3xl bg-graphite-850 border border-graphite-700 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-[#080B10] text-[#E6EDF3] font-mono flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-[#E3B341]/30 relative overflow-x-hidden">
+      {/* Background ambient CRT scanlines / subtle grid */}
+      <div className="fixed inset-0 pointer-events-none opacity-20 bg-[radial-gradient(#21262D_1px,transparent_1px)] [background-size:16px_16px]" />
+
+      <div className="w-full max-w-3xl bg-[#0D1117] border border-[#21262D] rounded-none shadow-2xl overflow-hidden flex flex-col relative z-10">
+        {/* Optical corner reticles */}
+        <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D] select-none leading-none z-20">+</span>
+        <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D] select-none leading-none z-20">+</span>
+        <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D] select-none leading-none z-20">+</span>
+        <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D] select-none leading-none z-20">+</span>
+
         {/* Header */}
-        <div className="bg-graphite-800 border-b border-graphite-700 px-8 py-5 flex items-center justify-between">
+        <div className="bg-[#161B22] border-b border-[#21262D] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-cctv-amber/20 border border-cctv-amber/60 flex items-center justify-center shadow-inner">
-              <Radio className="w-6 h-6 text-cctv-amber" />
+            <div className="w-9 h-9 rounded-none bg-[#E3B341]/10 border border-[#E3B341]/40 flex items-center justify-center">
+              <Radio className="w-5 h-5 text-[#E3B341]" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-bold tracking-wider text-white uppercase text-base">VigilOne VMS</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cctv-amber/20 text-cctv-amber border border-cctv-amber/40 font-mono font-bold">
-                  APPLIANCE FIRST-RUN
+                <span className="font-bold tracking-wider text-[#E6EDF3] uppercase text-sm">VIGILONE VMS</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-[#E3B341]/10 text-[#E3B341] border border-[#E3B341]/30 font-mono font-bold tracking-wider">
+                  FIRST-RUN COMMISSIONING
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-mono">Zero-Terminal Onboarding & Provisioning Engine</p>
+              <p className="text-[11px] text-[#8B949E] font-mono mt-0.5">ZERO-TERMINAL ONBOARDING & PROVISIONING ENGINE</p>
             </div>
           </div>
 
           <div className="text-right hidden sm:block">
-            <div className="text-xs font-mono text-slate-400">Target Appliance</div>
-            <div className="text-xs font-mono text-cctv-teal font-semibold">https://vigilone.local</div>
+            <div className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider">TARGET APPLIANCE</div>
+            <div className="text-xs font-mono text-[#58A6FF] font-semibold">https://vigilone.local</div>
           </div>
         </div>
 
         {/* Wizard Steps Bar */}
         {!isSuccess && !alreadyBootstrapped && (
-          <div className="bg-graphite-900/60 border-b border-graphite-700/60 px-8 py-3">
-            <div className="grid grid-cols-4 gap-2 text-center text-xs font-mono">
+          <div className="bg-[#080B10] border-b border-[#21262D] px-6 py-2.5">
+            <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-mono">
               <div
-                className={`flex items-center justify-center space-x-2 py-1.5 rounded transition ${
+                className={`py-1.5 px-2 border transition-colors flex items-center justify-center space-x-1 ${
                   currentStep === 1
-                    ? 'bg-cctv-amber text-graphite-900 font-bold'
+                    ? 'bg-[#E3B341] text-[#080B10] font-bold border-[#E3B341]'
                     : currentStep > 1
-                    ? 'text-cctv-amber/80 font-medium'
-                    : 'text-slate-500'
+                    ? 'bg-[#238636]/10 text-[#3FB950] border-[#238636]/40 font-medium'
+                    : 'bg-[#0D1117] text-[#484F58] border-[#21262D]'
                 }`}
               >
-                <span>1. Setup PIN</span>
+                <span>{currentStep > 1 ? '[✓]' : '[1]'}</span>
+                <span className="truncate">SETUP PIN</span>
               </div>
+
               <div
-                className={`flex items-center justify-center space-x-2 py-1.5 rounded transition ${
+                className={`py-1.5 px-2 border transition-colors flex items-center justify-center space-x-1 ${
                   currentStep === 2
-                    ? 'bg-cctv-amber text-graphite-900 font-bold'
+                    ? 'bg-[#E3B341] text-[#080B10] font-bold border-[#E3B341]'
                     : currentStep > 2
-                    ? 'text-cctv-amber/80 font-medium'
-                    : 'text-slate-500'
+                    ? 'bg-[#238636]/10 text-[#3FB950] border-[#238636]/40 font-medium'
+                    : 'bg-[#0D1117] text-[#484F58] border-[#21262D]'
                 }`}
               >
-                <span>2. Facility</span>
+                <span>{currentStep > 2 ? '[✓]' : '[2]'}</span>
+                <span className="truncate">FACILITY</span>
               </div>
+
               <div
-                className={`flex items-center justify-center space-x-2 py-1.5 rounded transition ${
+                className={`py-1.5 px-2 border transition-colors flex items-center justify-center space-x-1 ${
                   currentStep === 3
-                    ? 'bg-cctv-amber text-graphite-900 font-bold'
+                    ? 'bg-[#E3B341] text-[#080B10] font-bold border-[#E3B341]'
                     : currentStep > 3
-                    ? 'text-cctv-amber/80 font-medium'
-                    : 'text-slate-500'
+                    ? 'bg-[#238636]/10 text-[#3FB950] border-[#238636]/40 font-medium'
+                    : 'bg-[#0D1117] text-[#484F58] border-[#21262D]'
                 }`}
               >
-                <span>3. Super Admin</span>
+                <span>{currentStep > 3 ? '[✓]' : '[3]'}</span>
+                <span className="truncate">SUPER ADMIN</span>
               </div>
+
               <div
-                className={`flex items-center justify-center space-x-2 py-1.5 rounded transition ${
+                className={`py-1.5 px-2 border transition-colors flex items-center justify-center space-x-1 ${
                   currentStep === 4
-                    ? 'bg-cctv-amber text-graphite-900 font-bold'
-                    : 'text-slate-500'
+                    ? 'bg-[#E3B341] text-[#080B10] font-bold border-[#E3B341]'
+                    : 'bg-[#0D1117] text-[#484F58] border-[#21262D]'
                 }`}
               >
-                <span>4. TLS Trust</span>
+                <span>[4]</span>
+                <span className="truncate">TLS TRUST</span>
               </div>
             </div>
           </div>
@@ -245,65 +262,69 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
 
         {/* Error Banner */}
         {errorMessage && (
-          <div className="mx-8 mt-6 p-4 bg-red-950/60 border border-red-500/80 rounded-lg text-xs text-red-200 flex items-start space-x-3 shadow-inner">
-            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="mx-6 mt-4 p-3 bg-[#080B10] border border-[#F85149] text-xs text-[#F85149] flex items-start space-x-3">
+            <AlertTriangle className="w-4 h-4 text-[#F85149] flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <div className="font-semibold mb-1">Provisioning Notice</div>
-              <div>{errorMessage}</div>
+              <div className="font-bold uppercase tracking-wider mb-0.5">[ PROVISIONING FAULT // ATTESTATION REJECTED ]</div>
+              <div className="text-[11px] text-[#E6EDF3]">{errorMessage}</div>
             </div>
           </div>
         )}
 
         {/* Step Content */}
-        <div className="p-8 flex-1">
+        <div className="p-6 sm:p-8 flex-1">
           {alreadyBootstrapped ? (
             <div className="text-center py-8 space-y-4">
-              <div className="inline-flex w-16 h-16 rounded-full bg-slate-800 border border-slate-700 items-center justify-center text-slate-400">
-                <Server className="w-8 h-8" />
+              <div className="inline-flex w-14 h-14 rounded-none bg-[#161B22] border border-[#30363D] items-center justify-center text-[#8B949E]">
+                <Server className="w-7 h-7 text-[#E3B341]" />
               </div>
-              <h2 className="text-lg font-bold text-white uppercase tracking-wider">Appliance Already Initialized</h2>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
+              <h2 className="text-base font-bold text-[#E6EDF3] uppercase tracking-wider">
+                [ APPLIANCE COMMISSIONING COMPLETED ]
+              </h2>
+              <p className="text-xs text-[#8B949E] max-w-md mx-auto leading-relaxed">
                 This edge surveillance appliance has completed its initial commissioning sequence. The one-time setup
-                lock has been sealed to prevent unauthorized tenant takeover.
+                lock has been cryptographically sealed to prevent unauthorized tenant takeover.
               </p>
               {onSwitchToLogin && (
                 <button
                   type="button"
                   onClick={onSwitchToLogin}
-                  className="mt-4 px-6 py-2.5 bg-cctv-amber text-graphite-900 font-semibold text-xs rounded hover:bg-amber-400 transition uppercase tracking-wider"
+                  className="mt-4 px-5 py-2.5 bg-[#E3B341] text-[#080B10] font-bold text-xs uppercase tracking-wider hover:bg-[#F2CC60] transition-colors rounded-none"
                 >
-                  Proceed to Operator Login
+                  [ PROCEED TO OPERATOR LOGIN ]
                 </button>
               )}
             </div>
           ) : isSuccess ? (
-            <div className="text-center py-6 space-y-6">
-              <div className="inline-flex w-16 h-16 rounded-full bg-emerald-900/30 border border-emerald-500/60 items-center justify-center text-emerald-400 shadow-inner">
-                <CheckCircle2 className="w-10 h-10" />
+            <div className="text-center py-6 space-y-5">
+              <div className="inline-flex w-14 h-14 rounded-none bg-[#238636]/10 border border-[#238636]/60 items-center justify-center text-[#3FB950]">
+                <CheckCircle2 className="w-8 h-8 text-[#3FB950]" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Commissioning Complete</h2>
-                <p className="text-xs text-slate-300 mt-1">
-                  VigilOne edge server has successfully provisioned the facility and storage volume.
+                <h2 className="text-base font-bold text-[#E6EDF3] uppercase tracking-wider">
+                  [ COMMISSIONING COMPLETE // LOCK SEALED ]
+                </h2>
+                <p className="text-xs text-[#8B949E] mt-1">
+                  VigilOne edge server has provisioned the facility partition, master credential, and evidentiary storage.
                 </p>
               </div>
 
-              <div className="bg-graphite-900 border border-graphite-700 rounded-lg p-5 max-w-md mx-auto text-left text-xs space-y-2 font-mono">
-                <div className="flex justify-between border-b border-graphite-800 pb-2">
-                  <span className="text-slate-400">Facility:</span>
-                  <span className="text-white font-bold">{facilityName}</span>
+              <div className="bg-[#080B10] border border-[#21262D] p-4 max-w-md mx-auto text-left text-xs space-y-2 font-mono">
+                <div className="flex justify-between border-b border-[#161B22] pb-1.5">
+                  <span className="text-[#8B949E] uppercase tracking-wider text-[11px]">FACILITY:</span>
+                  <span className="text-[#E6EDF3] font-bold">{facilityName}</span>
                 </div>
-                <div className="flex justify-between border-b border-graphite-800 pb-2">
-                  <span className="text-slate-400">Super Admin:</span>
-                  <span className="text-cctv-amber">{adminEmail}</span>
+                <div className="flex justify-between border-b border-[#161B22] pb-1.5">
+                  <span className="text-[#8B949E] uppercase tracking-wider text-[11px]">SUPER ADMIN:</span>
+                  <span className="text-[#E3B341] font-bold">{adminEmail}</span>
                 </div>
-                <div className="flex justify-between border-b border-graphite-800 pb-2">
-                  <span className="text-slate-400">Timezone:</span>
-                  <span className="text-slate-200">{timezone}</span>
+                <div className="flex justify-between border-b border-[#161B22] pb-1.5">
+                  <span className="text-[#8B949E] uppercase tracking-wider text-[11px]">TIMEZONE:</span>
+                  <span className="text-[#58A6FF]">{timezone}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">License:</span>
-                  <span className="text-emerald-400 font-semibold">ENTERPRISE (Evaluation 90d)</span>
+                  <span className="text-[#8B949E] uppercase tracking-wider text-[11px]">LICENSE ENTITLEMENT:</span>
+                  <span className="text-[#3FB950] font-bold">ENTERPRISE (Evaluation 90d)</span>
                 </div>
               </div>
 
@@ -311,9 +332,9 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                 <button
                   type="button"
                   onClick={handleLaunchConsole}
-                  className="px-8 py-3 bg-cctv-amber text-graphite-900 font-bold text-xs rounded-lg hover:bg-amber-400 transition shadow-lg uppercase tracking-wider inline-flex items-center space-x-2"
+                  className="px-6 py-2.5 bg-[#E3B341] text-[#080B10] font-bold text-xs uppercase tracking-wider hover:bg-[#F2CC60] transition-colors inline-flex items-center space-x-2 rounded-none shadow"
                 >
-                  <span>Launch Surveillance Console</span>
+                  <span>[ LAUNCH SURVEILLANCE CONSOLE ]</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -322,48 +343,49 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
             <>
               {/* STEP 1: PIN Verification */}
               {currentStep === 1 && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                      <KeyRound className="w-5 h-5 text-cctv-amber" />
-                      <span>Step 1: Appliance Physical Setup PIN</span>
+                    <h2 className="text-xs font-bold text-[#E6EDF3] uppercase tracking-wider flex items-center space-x-2">
+                      <KeyRound className="w-4 h-4 text-[#E3B341]" />
+                      <span>STEP 01 // APPLIANCE PHYSICAL SETUP PIN</span>
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-[11px] text-[#8B949E] mt-1">
                       Enter the one-time authorization PIN printed to the physical terminal during initial Linux installation.
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-2">
-                        Appliance Setup Token / PIN
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1.5">
+                        APPLIANCE SETUP TOKEN / PIN <span className="text-[#F85149]">*</span>
                       </label>
                       <div className="relative">
-                        <KeyRound className="w-5 h-5 absolute left-3 top-3 text-slate-500" />
+                        <KeyRound className="w-4 h-4 absolute left-3 top-2.5 text-[#484F58]" />
                         <input
                           type="password"
                           autoFocus
                           value={setupToken}
                           onChange={(e) => setSetupToken(e.target.value)}
                           placeholder="Paste or enter 32-hex token / PIN"
-                          className="w-full bg-graphite-900 border border-graphite-700 rounded-lg pl-10 pr-4 py-3 text-sm text-slate-100 font-mono focus:outline-none focus:border-cctv-amber"
+                          className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] pl-9 pr-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                         />
                       </div>
                     </div>
 
-                    <div className="p-4 bg-graphite-900/80 border border-graphite-700/80 rounded-lg text-xs text-slate-400 space-y-2">
-                      <div className="font-semibold text-slate-300 flex items-center space-x-1.5">
-                        <Server className="w-3.5 h-3.5 text-cctv-teal" />
-                        <span>How to locate your Setup Token:</span>
+                    <div className="p-3.5 bg-[#080B10] border border-[#21262D] text-xs text-[#8B949E] space-y-2">
+                      <div className="font-bold text-[#C9D1D9] flex items-center space-x-1.5 text-[11px] uppercase tracking-wider">
+                        <Terminal className="w-3.5 h-3.5 text-[#58A6FF]" />
+                        <span>LOCATING YOUR SETUP TOKEN ON APPLIANCE:</span>
                       </div>
-                      <p>
-                        On the appliance host terminal, run:
-                        <code className="ml-2 px-2 py-0.5 rounded bg-graphite-800 text-cctv-amber font-mono text-[11px] border border-graphite-700">
-                          sudo vigilonectl token
-                        </code>
+                      <p className="text-[11px]">
+                        On the physical appliance terminal or serial console, execute:
                       </p>
-                      <p className="text-[11px] text-slate-500">
-                        This token prevents unauthorized rogue provisioning over the local area network.
+                      <div className="bg-[#05070A] border border-[#21262D] p-2 text-[11px] text-[#E3B341] font-mono flex items-center justify-between">
+                        <span>$ sudo vigilonectl token</span>
+                        <span className="text-[10px] text-[#484F58] uppercase">HOST CLI</span>
+                      </div>
+                      <p className="text-[10px] text-[#484F58] uppercase tracking-wider">
+                        Air-gap invariant: Setup token prevents unauthorized rogue provisioning over the local broadcast subnet.
                       </p>
                     </div>
                   </div>
@@ -372,21 +394,21 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
 
               {/* STEP 2: Facility Profile */}
               {currentStep === 2 && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                      <Building2 className="w-5 h-5 text-cctv-amber" />
-                      <span>Step 2: Facility Profile & Timezone</span>
+                    <h2 className="text-xs font-bold text-[#E6EDF3] uppercase tracking-wider flex items-center space-x-2">
+                      <Building2 className="w-4 h-4 text-[#E3B341]" />
+                      <span>STEP 02 // FACILITY PROFILE & LEGAL TIMEZONE</span>
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-[11px] text-[#8B949E] mt-1">
                       Configure your installation site name and legal evidentiary timezone reference.
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-2">
-                        Facility / Organization Name <span className="text-red-400">*</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1.5">
+                        FACILITY / JURISDICTION NAME <span className="text-[#F85149]">*</span>
                       </label>
                       <input
                         type="text"
@@ -394,28 +416,28 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                         value={facilityName}
                         onChange={(e) => setFacilityName(e.target.value)}
                         placeholder="e.g. Metro Logistics Center - Site 1"
-                        className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cctv-amber"
+                        className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] px-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-2 flex items-center space-x-2">
-                        <Clock className="w-4 h-4 text-cctv-teal" />
-                        <span>Evidentiary Timezone</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1.5 flex items-center space-x-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#58A6FF]" />
+                        <span>EVIDENTIARY REFERENCE TIMEZONE</span>
                       </label>
                       <select
                         value={timezone}
                         onChange={(e) => setTimezone(e.target.value)}
-                        className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cctv-amber"
+                        className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] px-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                       >
                         {COMMON_TIMEZONES.map((tz) => (
-                          <option key={tz.value} value={tz.value}>
+                          <option key={tz.value} value={tz.value} className="bg-[#0D1117] text-[#E6EDF3]">
                             {tz.label}
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-slate-500 mt-1.5 font-mono">
-                        All Section 63 chain-of-custody timestamps will be recorded in UTC and localized to this zone.
+                      <p className="text-[10px] text-[#484F58] mt-1.5 font-mono uppercase tracking-wider">
+                        Section 63 BSA compliance: All Merkle audit log entries and forensic video fragments are bound to UTC and localized to this zone.
                       </p>
                     </div>
                   </div>
@@ -424,21 +446,21 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
 
               {/* STEP 3: Super Admin Creation */}
               {currentStep === 3 && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                      <UserCheck className="w-5 h-5 text-cctv-amber" />
-                      <span>Step 3: Super Administrator Account</span>
+                    <h2 className="text-xs font-bold text-[#E6EDF3] uppercase tracking-wider flex items-center space-x-2">
+                      <UserCheck className="w-4 h-4 text-[#E3B341]" />
+                      <span>STEP 03 // SUPER ADMINISTRATOR MASTER CREDENTIAL</span>
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Create the primary administrative credential for this appliance.
+                    <p className="text-[11px] text-[#8B949E] mt-1">
+                      Enroll the primary administrative identity holding appliance recovery keys and cryptographic authority.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-1">
-                        Administrator Full Name <span className="text-red-400">*</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1">
+                        ADMINISTRATOR FULL NAME <span className="text-[#F85149]">*</span>
                       </label>
                       <input
                         type="text"
@@ -446,88 +468,88 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                         value={adminName}
                         onChange={(e) => setAdminName(e.target.value)}
                         placeholder="Security Administrator"
-                        className="w-full bg-graphite-900 border border-graphite-700 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cctv-amber"
+                        className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] px-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-1">
-                        Super Admin Email <span className="text-red-400">*</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1">
+                        SUPER ADMIN EMAIL <span className="text-[#F85149]">*</span>
                       </label>
                       <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <Mail className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#484F58]" />
                         <input
                           type="email"
                           value={adminEmail}
                           onChange={(e) => setAdminEmail(e.target.value)}
                           placeholder="admin@facility.local"
-                          className="w-full bg-graphite-900 border border-graphite-700 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-cctv-amber"
+                          className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] pl-9 pr-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-1">
-                        Master Password <span className="text-red-400">*</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1">
+                        MASTER PASSWORD <span className="text-[#F85149]">*</span>
                       </label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#484F58]" />
                         <input
                           type="password"
                           value={adminPassword}
                           onChange={(e) => setAdminPassword(e.target.value)}
                           placeholder="Min 12 characters"
-                          className="w-full bg-graphite-900 border border-graphite-700 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-cctv-amber"
+                          className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] pl-9 pr-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-mono text-slate-300 mb-1">
-                        Confirm Master Password <span className="text-red-400">*</span>
+                      <label className="block text-[11px] font-mono text-[#8B949E] uppercase tracking-wider mb-1">
+                        CONFIRM MASTER PASSWORD <span className="text-[#F85149]">*</span>
                       </label>
                       <div className="relative">
-                        <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#484F58]" />
                         <input
                           type="password"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Re-type password"
-                          className="w-full bg-graphite-900 border border-graphite-700 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-cctv-amber"
+                          className="w-full bg-[#080B10] border border-[#30363D] focus:border-[#E3B341] pl-9 pr-3 py-2 text-xs text-[#E6EDF3] font-mono rounded-none outline-none"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Password Requirements Checklist */}
-                  <div className="p-4 bg-graphite-900/60 border border-graphite-700/60 rounded-lg text-xs space-y-2">
-                    <div className="text-slate-400 font-mono text-[11px] mb-2 font-medium">
-                      Administrative Credential Hygiene Standards:
+                  <div className="p-3 bg-[#080B10] border border-[#21262D] text-xs space-y-2">
+                    <div className="text-[#8B949E] font-mono text-[10px] uppercase tracking-wider font-bold">
+                      ADMINISTRATIVE CREDENTIAL HYGIENE INVARIANTS:
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                      <div className={`flex items-center space-x-1.5 ${hasMinLength ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{hasMinLength ? '✓' : '○'}</span>
-                        <span>At least 12 characters</span>
+                      <div className={`flex items-center space-x-1.5 ${hasMinLength ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{hasMinLength ? '[✓]' : '[ ]'}</span>
+                        <span>MIN 12 CHARACTERS</span>
                       </div>
-                      <div className={`flex items-center space-x-1.5 ${hasUppercase ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{hasUppercase ? '✓' : '○'}</span>
-                        <span>Uppercase letter (A-Z)</span>
+                      <div className={`flex items-center space-x-1.5 ${hasUppercase ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{hasUppercase ? '[✓]' : '[ ]'}</span>
+                        <span>UPPERCASE (A-Z)</span>
                       </div>
-                      <div className={`flex items-center space-x-1.5 ${hasLowercase ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{hasLowercase ? '✓' : '○'}</span>
-                        <span>Lowercase letter (a-z)</span>
+                      <div className={`flex items-center space-x-1.5 ${hasLowercase ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{hasLowercase ? '[✓]' : '[ ]'}</span>
+                        <span>LOWERCASE (a-z)</span>
                       </div>
-                      <div className={`flex items-center space-x-1.5 ${hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{hasNumber ? '✓' : '○'}</span>
-                        <span>Numerical digit (0-9)</span>
+                      <div className={`flex items-center space-x-1.5 ${hasNumber ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{hasNumber ? '[✓]' : '[ ]'}</span>
+                        <span>NUMERICAL (0-9)</span>
                       </div>
-                      <div className={`flex items-center space-x-1.5 ${hasSpecial ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{hasSpecial ? '✓' : '○'}</span>
-                        <span>Special symbol (!@#$%^&*)</span>
+                      <div className={`flex items-center space-x-1.5 ${hasSpecial ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{hasSpecial ? '[✓]' : '[ ]'}</span>
+                        <span>SPECIAL SYMBOL (!@#$%^&*)</span>
                       </div>
-                      <div className={`flex items-center space-x-1.5 ${passwordsMatch ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        <span>{passwordsMatch ? '✓' : '○'}</span>
-                        <span>Passwords match exactly</span>
+                      <div className={`flex items-center space-x-1.5 ${passwordsMatch ? 'text-[#3FB950]' : 'text-[#484F58]'}`}>
+                        <span className="font-bold">{passwordsMatch ? '[✓]' : '[ ]'}</span>
+                        <span>PASSWORDS MATCH</span>
                       </div>
                     </div>
                   </div>
@@ -536,141 +558,141 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
 
               {/* STEP 4: TLS Certificate Trust */}
               {currentStep === 4 && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                      <ShieldCheck className="w-5 h-5 text-cctv-amber" />
-                      <span>Step 4: TLS Security & Root CA Trust</span>
+                    <h2 className="text-xs font-bold text-[#E6EDF3] uppercase tracking-wider flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-[#E3B341]" />
+                      <span>STEP 04 // TLS SECURITY & ROOT CA ATTESTATION</span>
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-[11px] text-[#8B949E] mt-1">
                       VigilOne secures all video streams and data with hardware-isolated HTTPS. To eliminate browser warnings on{' '}
-                      <span className="text-cctv-amber font-mono font-semibold">https://vigilone.local</span>, install the appliance Root CA.
+                      <span className="text-[#E3B341] font-mono font-bold">https://vigilone.local</span>, install the appliance Root CA.
                     </p>
                   </div>
 
                   {/* Download CA card */}
-                  <div className="p-5 bg-gradient-to-r from-graphite-900 to-graphite-800 border border-cctv-teal/40 rounded-xl flex items-center justify-between shadow-lg">
-                    <div className="space-y-1">
-                      <div className="text-sm font-bold text-white flex items-center space-x-2">
-                        <FileCheck className="w-4 h-4 text-cctv-teal" />
-                        <span>VigilOne Appliance Root CA Certificate</span>
+                  <div className="p-4 bg-[#161B22] border border-[#58A6FF]/40 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-[#E6EDF3] flex items-center space-x-2 uppercase tracking-wider">
+                        <FileCheck className="w-4 h-4 text-[#58A6FF]" />
+                        <span>VIGILONE APPLIANCE ROOT CA CERTIFICATE</span>
                       </div>
-                      <p className="text-xs text-slate-400">
-                        SHA-256 certificate issued by internal Caddy PKI for local domain resolution.
+                      <p className="text-[11px] text-[#8B949E]">
+                        SHA-256 root certificate generated by appliance internal Caddy PKI for local domain resolution.
                       </p>
                     </div>
                     <a
                       href="/ca.crt"
                       download="vigilone-root-ca.crt"
-                      className="px-4 py-2.5 bg-cctv-teal/20 text-cctv-teal hover:bg-cctv-teal hover:text-graphite-900 border border-cctv-teal font-semibold text-xs rounded-lg transition flex items-center space-x-2"
+                      className="px-3 py-1.5 bg-[#58A6FF]/10 text-[#58A6FF] hover:bg-[#58A6FF] hover:text-[#080B10] border border-[#58A6FF] font-bold text-xs uppercase tracking-wider transition-colors flex items-center space-x-1.5"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Download ca.crt</span>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>DOWNLOAD CA.CRT</span>
                     </a>
                   </div>
 
                   {/* OS-specific Trust Instructions */}
-                  <div className="border border-graphite-700 rounded-lg overflow-hidden bg-graphite-900/60">
-                    <div className="flex border-b border-graphite-700 bg-graphite-800/80 text-xs font-mono">
+                  <div className="border border-[#21262D] bg-[#080B10]">
+                    <div className="flex border-b border-[#21262D] bg-[#161B22] text-xs font-mono">
                       <button
                         type="button"
                         onClick={() => setSelectedOsTab('windows')}
-                        className={`px-4 py-2 font-medium border-r border-graphite-700 transition ${
+                        className={`px-3.5 py-1.5 font-bold uppercase tracking-wider border-r border-[#21262D] transition-colors ${
                           selectedOsTab === 'windows'
-                            ? 'bg-cctv-amber text-graphite-900 font-bold'
-                            : 'text-slate-400 hover:text-white'
+                            ? 'bg-[#E3B341] text-[#080B10]'
+                            : 'text-[#8B949E] hover:text-[#E6EDF3]'
                         }`}
                       >
-                        Windows
+                        [ WINDOWS ]
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedOsTab('mac')}
-                        className={`px-4 py-2 font-medium border-r border-graphite-700 transition ${
+                        className={`px-3.5 py-1.5 font-bold uppercase tracking-wider border-r border-[#21262D] transition-colors ${
                           selectedOsTab === 'mac'
-                            ? 'bg-cctv-amber text-graphite-900 font-bold'
-                            : 'text-slate-400 hover:text-white'
+                            ? 'bg-[#E3B341] text-[#080B10]'
+                            : 'text-[#8B949E] hover:text-[#E6EDF3]'
                         }`}
                       >
-                        macOS
+                        [ MACOS ]
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedOsTab('linux')}
-                        className={`px-4 py-2 font-medium border-r border-graphite-700 transition ${
+                        className={`px-3.5 py-1.5 font-bold uppercase tracking-wider border-r border-[#21262D] transition-colors ${
                           selectedOsTab === 'linux'
-                            ? 'bg-cctv-amber text-graphite-900 font-bold'
-                            : 'text-slate-400 hover:text-white'
+                            ? 'bg-[#E3B341] text-[#080B10]'
+                            : 'text-[#8B949E] hover:text-[#E6EDF3]'
                         }`}
                       >
-                        Linux
+                        [ LINUX ]
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedOsTab('browser')}
-                        className={`px-4 py-2 font-medium transition ${
+                        className={`px-3.5 py-1.5 font-bold uppercase tracking-wider transition-colors ${
                           selectedOsTab === 'browser'
-                            ? 'bg-cctv-amber text-graphite-900 font-bold'
-                            : 'text-slate-400 hover:text-white'
+                            ? 'bg-[#E3B341] text-[#080B10]'
+                            : 'text-[#8B949E] hover:text-[#E6EDF3]'
                         }`}
                       >
-                        Firefox / Chrome
+                        [ FIREFOX / CHROME ]
                       </button>
                     </div>
 
-                    <div className="p-4 text-xs font-mono text-slate-300 space-y-2">
+                    <div className="p-3.5 text-xs font-mono text-[#C9D1D9] space-y-2">
                       {selectedOsTab === 'windows' && (
-                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
-                          <li>Double-click the downloaded <span className="text-slate-200">vigilone-root-ca.crt</span> file.</li>
-                          <li>Click <span className="text-slate-200">"Install Certificate..."</span> and select <span className="text-slate-200">Local Machine</span>.</li>
-                          <li>Choose <span className="text-slate-200">"Place all certificates in the following store"</span>.</li>
-                          <li>Click Browse and select <span className="text-cctv-amber font-semibold">"Trusted Root Certification Authorities"</span>.</li>
+                        <ol className="list-decimal list-inside space-y-1 text-[#8B949E] text-[11px]">
+                          <li>Double-click the downloaded <span className="text-[#E6EDF3] font-bold">vigilone-root-ca.crt</span> file.</li>
+                          <li>Click <span className="text-[#E6EDF3]">"Install Certificate..."</span> and select <span className="text-[#E6EDF3]">Local Machine</span>.</li>
+                          <li>Choose <span className="text-[#E6EDF3]">"Place all certificates in the following store"</span>.</li>
+                          <li>Click Browse and select <span className="text-[#E3B341] font-bold">"Trusted Root Certification Authorities"</span>.</li>
                           <li>Click Next, Finish, and confirm prompt. Restart your browser.</li>
                         </ol>
                       )}
 
                       {selectedOsTab === 'mac' && (
-                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
-                          <li>Double-click <span className="text-slate-200">vigilone-root-ca.crt</span> to open in <span className="text-slate-200">Keychain Access</span>.</li>
-                          <li>Add the certificate to the <span className="text-slate-200">System</span> keychain.</li>
-                          <li>Find <span className="text-cctv-amber font-semibold">Caddy Local Authority</span>, double click, expand <span className="text-slate-200">Trust</span>.</li>
-                          <li>Change "When using this certificate" to <span className="text-emerald-400 font-semibold">"Always Trust"</span>.</li>
+                        <ol className="list-decimal list-inside space-y-1 text-[#8B949E] text-[11px]">
+                          <li>Double-click <span className="text-[#E6EDF3] font-bold">vigilone-root-ca.crt</span> to open in <span className="text-[#E6EDF3]">Keychain Access</span>.</li>
+                          <li>Add the certificate to the <span className="text-[#E6EDF3]">System</span> keychain.</li>
+                          <li>Find <span className="text-[#E3B341] font-bold">Caddy Local Authority</span>, double click, expand <span className="text-[#E6EDF3]">Trust</span>.</li>
+                          <li>Change "When using this certificate" to <span className="text-[#3FB950] font-bold">"Always Trust"</span>.</li>
                           <li>Save with administrator password and restart browser.</li>
                         </ol>
                       )}
 
                       {selectedOsTab === 'linux' && (
-                        <div className="space-y-2 text-slate-400">
+                        <div className="space-y-1.5 text-[#8B949E] text-[11px]">
                           <p>Copy certificate to the system trust anchor:</p>
-                          <code className="block p-2 bg-graphite-950 rounded text-cctv-amber text-[11px] border border-graphite-800">
+                          <div className="p-2 bg-[#05070A] text-[#E3B341] text-[11px] border border-[#21262D] font-mono leading-relaxed">
                             sudo cp ca.crt /usr/local/share/ca-certificates/vigilone-ca.crt<br />
                             sudo update-ca-certificates
-                          </code>
+                          </div>
                         </div>
                       )}
 
                       {selectedOsTab === 'browser' && (
-                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                        <ol className="list-decimal list-inside space-y-1 text-[#8B949E] text-[11px]">
                           <li>Open Settings → Privacy & Security → Certificates → View Certificates.</li>
-                          <li>Under <span className="text-slate-200">Authorities</span>, click <span className="text-slate-200">Import</span>.</li>
-                          <li>Select <span className="text-slate-200">vigilone-root-ca.crt</span>.</li>
-                          <li>Check <span className="text-cctv-amber font-semibold">"Trust this CA to identify websites"</span> and click OK.</li>
+                          <li>Under <span className="text-[#E6EDF3]">Authorities</span>, click <span className="text-[#E6EDF3]">Import</span>.</li>
+                          <li>Select <span className="text-[#E6EDF3] font-bold">vigilone-root-ca.crt</span>.</li>
+                          <li>Check <span className="text-[#E3B341] font-bold">"Trust this CA to identify websites"</span> and click OK.</li>
                         </ol>
                       )}
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    <label className="flex items-start space-x-3 cursor-pointer">
+                  <div className="pt-1">
+                    <label className="flex items-start space-x-2.5 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={caAcknowledged}
                         onChange={(e) => setCaAcknowledged(e.target.checked)}
-                        className="mt-0.5 rounded border-graphite-700 bg-graphite-900 text-cctv-amber focus:ring-cctv-amber"
+                        className="mt-0.5 rounded-none border-[#30363D] bg-[#080B10] text-[#E3B341] focus:ring-0"
                       />
-                      <span className="text-xs text-slate-300">
+                      <span className="text-[11px] text-[#8B949E]">
                         I acknowledge that the root certificate is required for warning-free zero-trust HTTPS access to{' '}
-                        <span className="text-cctv-amber font-mono font-semibold">https://vigilone.local</span>.
+                        <span className="text-[#E3B341] font-mono font-bold">https://vigilone.local</span>.
                       </span>
                     </label>
                   </div>
@@ -682,25 +704,25 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
 
         {/* Action Footer */}
         {!isSuccess && !alreadyBootstrapped && (
-          <div className="bg-graphite-800 border-t border-graphite-700 px-8 py-4 flex items-center justify-between">
+          <div className="bg-[#161B22] border-t border-[#21262D] px-6 py-3 flex items-center justify-between">
             <div>
               {currentStep > 1 ? (
                 <button
                   type="button"
                   onClick={handleBack}
                   disabled={submitting}
-                  className="px-4 py-2 bg-graphite-700 text-slate-300 hover:text-white rounded text-xs font-semibold uppercase tracking-wider flex items-center space-x-1.5 transition disabled:opacity-50"
+                  className="px-3.5 py-1.5 bg-[#0D1117] text-[#8B949E] hover:text-[#E6EDF3] border border-[#30363D] text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors disabled:opacity-50"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Previous</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>[ PREVIOUS ]</span>
                 </button>
               ) : onSwitchToLogin ? (
                 <button
                   type="button"
                   onClick={onSwitchToLogin}
-                  className="text-xs font-mono text-slate-400 hover:text-cctv-amber transition"
+                  className="text-xs font-mono text-[#8B949E] hover:text-[#E3B341] transition-colors uppercase tracking-wider"
                 >
-                  Switch to Existing Login
+                  [ SWITCH TO OPERATOR LOGIN ]
                 </button>
               ) : null}
             </div>
@@ -710,24 +732,24 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-6 py-2 bg-cctv-amber text-graphite-900 font-bold text-xs rounded hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-1.5 shadow"
+                  className="px-5 py-2 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] font-bold text-xs uppercase tracking-wider flex items-center space-x-1.5 transition-colors shadow"
                 >
-                  <span>Next Step</span>
-                  <ChevronRight className="w-4 h-4" />
+                  <span>[ NEXT STEP ]</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleCompleteBootstrap}
                   disabled={submitting || !caAcknowledged}
-                  className="px-6 py-2.5 bg-cctv-amber text-graphite-900 font-bold text-xs rounded hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                  className="px-5 py-2 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] font-bold text-xs uppercase tracking-wider flex items-center space-x-2 transition-colors shadow disabled:opacity-40"
                 >
                   {submitting ? (
-                    <span>Commissioning Appliance...</span>
+                    <span>[ COMMISSIONING APPLIANCE... ]</span>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Complete Commissioning</span>
+                      <span>[ COMPLETE COMMISSIONING ]</span>
                     </>
                   )}
                 </button>

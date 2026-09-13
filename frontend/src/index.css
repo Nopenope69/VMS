@@ -4,42 +4,104 @@
 
 @layer base {
   body {
-    @apply bg-graphite-900 text-slate-100;
+    @apply bg-tactical-bg text-tactical-text font-sans antialiased selection:bg-phosphor-amber/30 selection:text-white;
+    color-scheme: dark;
   }
 }
 
-/* Authentic CCTV REC blinking indicator */
+/* Tactical Telemetry Blueprint Grid */
+.tactical-grid {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(33, 38, 45, 0.4) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(33, 38, 45, 0.4) 1px, transparent 1px);
+}
+
+/* Simulated CRT Scanline Filter */
+.crt-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  pointer-events: none;
+}
+
+/* Optical Corner Reticle (+) */
+.corner-reticle {
+  position: relative;
+}
+.corner-reticle::before,
+.corner-reticle::after {
+  content: '+';
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(125, 133, 144, 0.5);
+  line-height: 1;
+  pointer-events: none;
+  z-index: 15;
+}
+.corner-reticle::before {
+  top: 4px;
+  left: 4px;
+}
+.corner-reticle::after {
+  bottom: 4px;
+  right: 4px;
+}
+
+/* Authentic CCTV REC Blinking Beacon */
 @keyframes rec-blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  50% { opacity: 0.15; }
 }
 
 .animate-rec {
   animation: rec-blink 1.2s infinite ease-in-out;
 }
 
+/* Phosphor Status Pulse */
+@keyframes phosphor-pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px currentColor); }
+  50% { opacity: 0.4; filter: drop-shadow(0 0 1px currentColor); }
+}
+
+.animate-phosphor {
+  animation: phosphor-pulse 2s infinite ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-rec {
-    animation: none;
-    opacity: 1;
+  .animate-rec,
+  .animate-phosphor {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }
 
-/* Custom CCTV scrollbars */
+/* Mechanical Rectangular Industrial Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #181b20;
+  background: #080b10;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a303c;
-  border-radius: 3px;
+  background: #21262d;
+  border-radius: 0px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #384152;
+  background: #30363d;
+}
+
+/* Tactical Focus Rings for Strict WCAG Keyboard Accessibility */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px #e3b341 !important;
 }

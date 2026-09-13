@@ -74,7 +74,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
   };
 
   return (
-    <div className="relative group bg-graphite-900 border border-graphite-700 rounded-sm overflow-hidden flex flex-col aspect-video select-none shadow-lg">
+    <div className="relative group bg-tactical-panel border border-tactical-border overflow-hidden flex flex-col aspect-video select-none corner-reticle">
       {/* Video Canvas */}
       <video
         ref={videoRef}
@@ -84,38 +84,62 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
         className="w-full h-full object-contain bg-black"
       />
 
-      {/* Authentic CCTV On-Screen Display (OSD) Overlay */}
-      <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none text-white font-mono text-xs drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-        <div className="flex items-center space-x-2">
+      {/* Simulated Scanlines Overlay */}
+      <div className="absolute inset-0 crt-scanlines opacity-40 pointer-events-none" />
+
+      {/* Authentic CCTV Optical OSD Top Bar */}
+      <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none text-white font-mono text-xs z-10">
+        <div className="flex items-center space-x-1.5">
           {camera.recordingMode === 'CONTINUOUS' && (
-            <div className="flex items-center space-x-1.5 px-1.5 py-0.5 rounded bg-black/60 border border-cctv-amber/40">
-              <span className="w-2 h-2 rounded-full bg-cctv-amber animate-rec" />
-              <span className="text-[10px] font-bold text-cctv-amber tracking-widest">REC</span>
+            <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-black/80 border border-phosphor-red/60 text-phosphor-red text-[10px] font-bold tracking-widest">
+              <span className="w-1.5 h-1.5 bg-phosphor-red animate-rec" />
+              <span>REC</span>
             </div>
           )}
-          <span className="bg-black/60 px-1.5 py-0.5 rounded border border-white/10 uppercase tracking-wider font-semibold">
-            {camera.name}
-          </span>
+          <div className="bg-black/80 px-2 py-0.5 border border-tactical-border text-white text-[11px] font-bold tracking-wider uppercase">
+            CAM // {camera.name}
+          </div>
+          <div className="hidden sm:block bg-black/80 px-1.5 py-0.5 border border-tactical-border text-tactical-muted text-[10px]">
+            {camera.ipAddress}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          {streamStatus !== 'connected' && (
-            <span className="bg-cctv-amber/90 text-graphite-900 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase">
-              {streamStatus}
-            </span>
-          )}
-          <span className="bg-black/60 px-1.5 py-0.5 rounded border border-white/10">
+        <div className="flex items-center space-x-1.5">
+          <span
+            className={`px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase border ${
+              streamStatus === 'connected'
+                ? 'bg-black/80 text-phosphor-green border-phosphor-green/40'
+                : streamStatus === 'failed'
+                ? 'bg-phosphor-red/20 text-phosphor-red border-phosphor-red'
+                : 'bg-phosphor-amber/20 text-phosphor-amber border-phosphor-amber'
+            }`}
+          >
+            {streamStatus === 'connected' ? 'LIVE' : streamStatus}
+          </span>
+          <span className="bg-black/80 px-2 py-0.5 border border-tactical-border text-slate-200 text-[10px] tracking-wide">
             {clock}
           </span>
         </div>
       </div>
 
+      {/* Bottom Telemetry Bar */}
+      <div className="absolute bottom-2 left-2 pointer-events-none flex items-center space-x-2 font-mono text-[10px] text-tactical-muted z-10">
+        <span className="bg-black/70 px-1.5 py-0.5 border border-tactical-border">
+          1080P25 // H.264
+        </span>
+        {camera.hasPtz && (
+          <span className="bg-black/70 px-1.5 py-0.5 border border-phosphor-amber/40 text-phosphor-amber">
+            PTZ // READY
+          </span>
+        )}
+      </div>
+
       {/* Tile Controls (Hover Overlay) */}
-      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 p-1 rounded border border-white/10 z-10">
+      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-tactical-surface/90 p-1 border border-tactical-border z-20">
         <button
           onClick={() => setShowDiagModal(true)}
           title="Stream Quality & Diagnostics"
-          className="p-1 rounded text-slate-300 hover:text-cctv-teal transition"
+          className="p-1 text-tactical-muted hover:text-phosphor-cyan hover:bg-tactical-raised transition"
         >
           <Activity className="w-3.5 h-3.5" />
         </button>
@@ -125,15 +149,15 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
             <button
               onClick={() => setShowPtzModal(true)}
               title="PTZ Presets & Guard Tours"
-              className="p-1 rounded text-slate-300 hover:text-cctv-amber transition"
+              className="p-1 text-tactical-muted hover:text-phosphor-amber hover:bg-tactical-raised transition"
             >
               <Compass className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setShowPtz(!showPtz)}
               title="Quick D-Pad Overlay"
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
-                showPtz ? 'bg-cctv-teal text-graphite-900 font-bold' : 'text-slate-300 hover:text-white'
+              className={`px-1.5 py-0.5 text-[10px] font-mono transition ${
+                showPtz ? 'bg-phosphor-amber text-tactical-bg font-bold' : 'text-tactical-muted hover:text-white'
               }`}
             >
               PAD
@@ -144,7 +168,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
         {onToggleFullscreen && (
           <button
             onClick={onToggleFullscreen}
-            className="p-1 rounded text-slate-300 hover:text-white transition"
+            className="p-1 text-tactical-muted hover:text-white hover:bg-tactical-raised transition"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>

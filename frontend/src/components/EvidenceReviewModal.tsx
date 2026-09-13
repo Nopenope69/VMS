@@ -71,44 +71,50 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-graphite-800 border border-slate-700 rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none font-mono">
+      <div className="bg-[#0D1117] border border-[#21262D] rounded-none max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+        {/* Optical Corner Reticles */}
+        <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D] z-20">+</span>
+        <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D] z-20">+</span>
+        <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D] z-20">+</span>
+        <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D] z-20">+</span>
+
         {/* Header */}
-        <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-graphite-900">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+        <div className="p-4 border-b border-[#21262D] flex items-center justify-between bg-[#161B22]">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-[#3FB950]" />
             <div>
-              <h2 className="text-sm font-semibold text-slate-100 uppercase tracking-wide">
-                Evidence Integrity & Custodial Audit
+              <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+                [ EVIDENCE INTEGRITY & CUSTODIAL AUDIT // SECTION 63 BSA ]
               </h2>
-              <p className="text-xs text-slate-400 font-mono">
-                {manifestId ? `MANIFEST ID: ${manifestId}` : `EXPORT ID: ${exportId}`}
+              <p className="text-[10px] text-slate-400 font-mono tracking-wider">
+                {manifestId ? `TARGET_MANIFEST: ${manifestId}` : `TARGET_EXPORT: ${exportId}`}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-100 p-1 rounded hover:bg-slate-700/50"
+            className="text-slate-400 hover:text-white p-1 rounded-none hover:bg-[#21262D] transition"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-300">
+        <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-300 bg-[#0D1117]">
           {loading ? (
-            <div className="py-12 text-center text-slate-400 font-mono animate-pulse">
-              Verifying cryptographic hash chain and custodial lineage...
+            <div className="py-12 text-center text-slate-400 tracking-wider">
+              [ VERIFYING CRYPTOGRAPHIC HASH CHAIN AND CUSTODIAL LINEAGE... ]
             </div>
           ) : error ? (
-            <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded text-rose-300 flex items-center gap-2">
+            <div className="p-3 bg-[#F85149]/10 border border-[#F85149]/40 text-[#F85149] flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
           ) : (
             <>
               {successNotice && (
-                <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded text-emerald-300 flex items-center gap-2">
+                <div className="p-3 bg-[#3FB950]/10 border border-[#3FB950]/40 text-[#3FB950] flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <span>{successNotice}</span>
                 </div>
@@ -116,45 +122,48 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
 
               {/* Master Evidence Hash Banner */}
               {manifest && (
-                <div className="p-4 bg-graphite-900 border border-slate-700 rounded space-y-2">
+                <div className="p-4 bg-[#161B22] border border-[#21262D] space-y-2 relative">
+                  <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+                  <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 uppercase text-[10px] font-mono">
-                      Master Evidence SHA-256 Root Hash
+                    <span className="text-slate-400 uppercase text-[10px] tracking-widest">
+                      MASTER EVIDENCE SHA-256 ROOT HASH:
                     </span>
                     {verification?.valid ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> VERIFIED INTACT
+                      <span className="px-2 py-0.5 text-[10px] bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/40 flex items-center gap-1 font-bold">
+                        <CheckCircle2 className="w-3 h-3" /> [ VERIFIED_INTACT ]
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1">
-                        <XCircle className="w-3 h-3" /> MISMATCH DETECTED
+                      <span className="px-2 py-0.5 text-[10px] bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40 flex items-center gap-1 font-bold">
+                        <XCircle className="w-3 h-3" /> [ MISMATCH_DETECTED ]
                       </span>
                     )}
                   </div>
-                  <div className="font-mono text-emerald-400 text-xs break-all bg-black/40 p-2 rounded border border-slate-800">
+                  <div className="text-[#58A6FF] text-xs break-all bg-[#080B10] p-2.5 border border-[#21262D] select-text font-bold">
                     {manifest.masterEvidenceHash}
                   </div>
                   <div className="grid grid-cols-3 gap-2 pt-2 text-[11px] text-slate-400">
                     <div>
-                      <span className="text-slate-500 block">Start UTC:</span>
-                      <span className="font-mono text-slate-200">
+                      <span className="text-slate-500 block uppercase text-[10px]">START UTC:</span>
+                      <span className="text-slate-200">
                         {new Date(manifest.startUtc).toISOString()}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">End UTC:</span>
-                      <span className="font-mono text-slate-200">
+                      <span className="text-slate-500 block uppercase text-[10px]">END UTC:</span>
+                      <span className="text-slate-200">
                         {new Date(manifest.endUtc).toISOString()}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block">Legal Hold:</span>
+                      <span className="text-slate-500 block uppercase text-[10px]">LEGAL HOLD STATUS:</span>
                       <span
-                        className={`font-mono font-medium ${
-                          manifest.legalHold ? 'text-amber-400' : 'text-slate-300'
+                        className={`font-bold ${
+                          manifest.legalHold ? 'text-[#E3B341]' : 'text-slate-400'
                         }`}
                       >
-                        {manifest.legalHold ? 'ACTIVE (PREVENT PURGE)' : 'INACTIVE'}
+                        {manifest.legalHold ? '[ ACTIVE // PREVENT PURGE ]' : '[ INACTIVE ]'}
                       </span>
                     </div>
                   </div>
@@ -163,64 +172,64 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
 
               {/* Section 63 BSA Statement */}
               {manifest?.certificateDataJson && (
-                <div className="p-3 bg-slate-900/60 border border-slate-700/60 rounded space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-slate-200 font-semibold text-[11px]">
-                    <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Section 63 BSA Provenance Record</span>
+                <div className="p-3.5 bg-[#161B22] border border-[#21262D] space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-slate-200 font-bold text-[11px] uppercase tracking-wider">
+                    <FileText className="w-3.5 h-3.5 text-[#58A6FF]" />
+                    <span>SECTION 63 BSA STATUTORY PROVENANCE RECORD</span>
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     {manifest.certificateDataJson.disclaimer}
                   </p>
-                  <div className="font-mono text-[10px] text-slate-500 pt-1">
-                    Appliance: {manifest.certificateDataJson.applianceIdentifier} | Algorithm:{' '}
-                    {manifest.certificateDataJson.hashAlgorithm}
+                  <div className="text-[10px] text-slate-500 pt-1 border-t border-[#21262D] mt-2 flex justify-between">
+                    <span>APPLIANCE: {manifest.certificateDataJson.applianceIdentifier}</span>
+                    <span>ALGORITHM: {manifest.certificateDataJson.hashAlgorithm}</span>
                   </div>
                 </div>
               )}
 
               {/* Chain of Custody History */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-                    <History className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Immutable Chain of Custody Log</span>
+                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-[#E3B341]" />
+                    <span>IMMUTABLE CHAIN OF CUSTODY LOG</span>
                   </h3>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {custodyLogs.length} Events Recorded
+                  <span className="text-[10px] text-slate-500">
+                    {custodyLogs.length} EVENTS RECORDED
                   </span>
                 </div>
 
-                <div className="border border-slate-700 rounded overflow-hidden divide-y divide-slate-800 bg-graphite-900">
+                <div className="border border-[#21262D] divide-y divide-[#21262D] bg-[#080B10]">
                   {custodyLogs.length === 0 ? (
-                    <div className="p-4 text-center text-slate-500 font-mono text-xs">
-                      No custodial actions recorded yet.
+                    <div className="p-4 text-center text-slate-500 text-xs uppercase tracking-widest">
+                      [ NO CUSTODIAL ACTIONS LOGGED ]
                     </div>
                   ) : (
                     custodyLogs.map((log, idx) => (
-                      <div key={log.id || idx} className="p-3 hover:bg-slate-800/40 transition">
+                      <div key={log.id || idx} className="p-3 hover:bg-[#161B22] transition">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-mono font-semibold text-emerald-400 text-[11px]">
-                            {log.action}
+                          <span className="font-bold text-[#3FB950] text-[11px] tracking-wide">
+                            [{log.action}]
                           </span>
-                          <span className="font-mono text-[10px] text-slate-500">
+                          <span className="text-[10px] text-slate-500">
                             {new Date(log.timestampUtc).toISOString()}
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
+                        <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400">
                           <div>
-                            <span className="text-slate-600 block">Actor ID:</span>
-                            <span className="text-slate-300">{log.actorUserId}</span>
+                            <span className="text-slate-500 block">ACTOR IDENTIFIER:</span>
+                            <span className="text-slate-300 font-bold">{log.actorUserId}</span>
                           </div>
                           <div>
-                            <span className="text-slate-600 block">Source Hash:</span>
-                            <span className="text-slate-300 truncate block">
+                            <span className="text-slate-500 block">SOURCE MERKLE ROOT:</span>
+                            <span className="text-slate-300 truncate block font-mono">
                               {log.sourceHash.slice(0, 16)}...
                             </span>
                           </div>
                         </div>
                         {log.resultHash && (
-                          <div className="mt-1 text-[10px] font-mono text-cyan-400">
-                            Result Hash: {log.resultHash.slice(0, 24)}...
+                          <div className="mt-1 text-[10px] text-[#58A6FF] font-mono">
+                            RESULT HASH: {log.resultHash.slice(0, 24)}...
                           </div>
                         )}
                       </div>
@@ -231,11 +240,11 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
 
               {/* Dual-Custody Approval Action */}
               {exportId && (
-                <div className="p-4 bg-amber-950/20 border border-amber-800/40 rounded flex items-center justify-between">
+                <div className="p-3.5 bg-[#161B22] border border-[#E3B341]/40 flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <div className="text-amber-300 font-medium text-xs flex items-center gap-1.5">
+                    <div className="text-[#E3B341] font-bold text-xs flex items-center gap-1.5 uppercase tracking-wider">
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Dual-Custody Supervisory Approval</span>
+                      <span>DUAL-CUSTODY SUPERVISORY APPROVAL</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
                       Validate evidence authenticity before official evidentiary release.
@@ -244,9 +253,9 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
                   <button
                     onClick={handleApproveExport}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-mono text-xs transition disabled:opacity-50"
+                    className="px-3.5 py-1.5 bg-[#3FB950] hover:bg-emerald-400 text-[#080B10] font-bold text-xs uppercase tracking-wider transition rounded-none disabled:opacity-50"
                   >
-                    {actionLoading ? 'Approving...' : 'Approve Export'}
+                    {actionLoading ? 'APPROVING...' : 'APPROVE EXPORT'}
                   </button>
                 </div>
               )}
@@ -255,12 +264,12 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-700 bg-graphite-900 flex justify-end">
+        <div className="p-3 border-t border-[#21262D] bg-[#161B22] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded font-mono text-xs transition"
+            className="px-4 py-1.5 bg-[#0D1117] hover:bg-[#21262D] border border-[#21262D] text-slate-200 text-xs uppercase tracking-wider transition rounded-none"
           >
-            Close
+            CLOSE
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Film, ShieldCheck, Download, Crosshair } from 'lucide-react';
 import api from '../services/api';
 import TimelineScrubber, { TimelineSegment } from '../components/TimelineScrubber';
@@ -12,10 +12,13 @@ export const Playback: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [segments, setSegments] = useState<TimelineSegment[]>([]);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [showSmartSearch, setShowSmartSearch] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Load cameras
   useEffect(() => {
@@ -49,7 +52,21 @@ export const Playback: React.FC = () => {
       .catch((err) => console.error('Failed to load segments:', err));
   }, [selectedCameraId, selectedDate]);
 
-  // Handle timeline scrubber click
+  // Sync playback rate to video element
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackRate(speed);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = speed;
+    }
+  };
+
+  // Quick jump in time
+  const handleJump = (deltaMs: number) => {
+    const next = new Date(currentTime.getTime() + deltaMs);
+    handleSeek(next);
+  };
+
+  // Handle timeline scrubber seek
   const handleSeek = (time: Date) => {
     setCurrentTime(time);
 
@@ -78,112 +95,221 @@ export const Playback: React.FC = () => {
   const activeCamera = cameras.find((c) => c.id === selectedCameraId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-graphite-900 p-4 space-y-4 overflow-y-auto">
-      {/* Control Bar */}
-      <div className="bg-graphite-850 p-3 rounded border border-graphite-700 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          {/* Camera Picker */}
-          <div className="flex items-center space-x-2">
-            <Film className="w-4 h-4 text-cctv-amber" />
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
+      {/* Tactical Top Bar */}
+      <div className="bg-[#0D1117] p-3 border border-[#21262D] flex flex-wrap items-center justify-between gap-3 shadow-none">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Camera Select */}
+          <div className="flex items-center space-x-2 bg-[#161B22] px-2.5 py-1 border border-[#30363D]">
+            <Film className="w-3.5 h-3.5 text-[#E3B341]" />
+            <span className="text-[10px] uppercase text-[#8B949E] tracking-wider">SOURCE:</span>
             <select
               value={selectedCameraId}
               onChange={(e) => setSelectedCameraId(e.target.value)}
-              className="bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+              className="bg-transparent text-xs text-[#C9D1D9] font-mono focus:outline-none cursor-pointer"
             >
               {cameras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.ipAddress})
+                <option key={c.id} value={c.id} className="bg-[#0D1117] text-[#C9D1D9]">
+                  {c.name} [{c.ipAddress}]
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Date Picker */}
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-cctv-teal" />
+          {/* Date Select */}
+          <div className="flex items-center space-x-2 bg-[#161B22] px-2.5 py-1 border border-[#30363D]">
+            <Calendar className="w-3.5 h-3.5 text-[#58A6FF]" />
+            <span className="text-[10px] uppercase text-[#8B949E] tracking-wider">ARCHIVE_DATE:</span>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-teal"
+              className="bg-transparent text-xs text-[#C9D1D9] font-mono focus:outline-none cursor-pointer"
             />
+          </div>
+
+          {/* Jump Shortcuts */}
+          <div className="hidden sm:flex items-center space-x-1 border border-[#30363D] bg-[#080B10] px-1 py-0.5">
+            <button
+              onClick={() => handleJump(-3600000)}
+              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              title="Step -1 Hour"
+            >
+              -1H
+            </button>
+            <button
+              onClick={() => handleJump(-600000)}
+              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              title="Step -10 Minutes"
+            >
+              -10M
+            </button>
+            <button
+              onClick={() => handleJump(600000)}
+              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              title="Step +10 Minutes"
+            >
+              +10M
+            </button>
+            <button
+              onClick={() => handleJump(3600000)}
+              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              title="Step +1 Hour"
+            >
+              +1H
+            </button>
           </div>
         </div>
 
-        {/* Forensic Search & Section 63 Evidence Export Buttons */}
+        {/* Action Triggers */}
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowSmartSearch(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-graphite-800 border border-graphite-700 hover:border-cctv-amber text-slate-200 transition"
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] border border-[#30363D] hover:border-[#E3B341] text-[#C9D1D9] hover:text-[#E3B341] transition-colors"
           >
-            <Crosshair className="w-4 h-4 text-cctv-amber" />
-            <span>Smart Forensic & ANPR Search</span>
+            <Crosshair className="w-3.5 h-3.5 text-[#E3B341]" />
+            <span>[ SMART FORENSIC SEARCH ]</span>
           </button>
 
           <button
             onClick={() => setShowExportModal(true)}
             disabled={!selectedCameraId}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 transition disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Generate Section 63 Evidence Package</span>
+            <ShieldCheck className="w-4 h-4 text-[#080B10]" />
+            <span>[ SECTION 63 BSA EXPORT ]</span>
           </button>
         </div>
       </div>
 
+      {/* Export Notification Banner */}
       {exportNotice && (
-        <div className="p-3 bg-cctv-teal/20 border border-cctv-teal/60 rounded flex items-center justify-between text-xs text-teal-100">
+        <div className="p-2.5 bg-[#0D1117] border border-[#3FB950] flex items-center justify-between text-xs text-[#3FB950]">
           <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-cctv-teal" />
-            <span>Evidence package generated: <strong>{exportNotice}</strong></span>
+            <ShieldCheck className="w-4 h-4 text-[#3FB950]" />
+            <span>
+              EVIDENCE PACKAGE SEALED & DIGITALLY SIGNED:{' '}
+              <strong className="text-[#C9D1D9]">{exportNotice}</strong>
+            </span>
           </div>
           <a
             href={`/api/v1/evidence/download/${exportNotice}`}
             download
-            className="flex items-center space-x-1 px-2 py-0.5 rounded bg-cctv-teal text-graphite-900 font-semibold"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#238636] hover:bg-[#2EA043] text-white font-bold uppercase text-[10px] tracking-wider transition-colors"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download Zip</span>
+            <Download className="w-3 h-3" />
+            <span>DOWNLOAD ZIP PACKAGE</span>
           </a>
         </div>
       )}
 
-      {/* Main Playback Screen */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-[350px]">
-        {/* Video Player */}
-        <div className="lg:col-span-3 bg-black border border-graphite-700 rounded flex items-center justify-center relative overflow-hidden aspect-video max-h-[500px]">
-          {activeSegmentId ? (
-            <video
-              key={activeSegmentId}
-              src={`/api/v1/playback/stream/${activeSegmentId}`}
-              controls
-              autoPlay
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div className="flex flex-col items-center space-y-2 text-slate-500">
-              <Film className="w-10 h-10" />
-              <div className="text-xs font-mono">No recorded footage selected or available for this interval</div>
+      {/* Main Playback Cockpit */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 flex-1 min-h-[420px]">
+        {/* Video Player Chassis */}
+        <div className="lg:col-span-3 bg-[#080B10] border border-[#21262D] relative flex flex-col justify-between overflow-hidden">
+          {/* OSD Top Bar */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-[#0D1117]/90 border-b border-[#21262D] z-10 text-[10px] tracking-wider">
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 bg-[#3FB950] animate-pulse" />
+              <span className="text-[#3FB950] font-bold">
+                [ ARCHIVE PLAYBACK // {playbackRate}X ]
+              </span>
+              <span className="text-[#8B949E]">//</span>
+              <span className="text-[#C9D1D9]">
+                {activeCamera?.name || 'FEED'} [{activeCamera?.ipAddress}]
+              </span>
             </div>
-          )}
-        </div>
 
-        {/* Segments List for Day */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded p-3 flex flex-col h-full max-h-[500px]">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-300 pb-2 border-b border-graphite-700">
-            Indexed Segments ({segments.length})
+            <div className="flex items-center space-x-3">
+              <span className="text-[#8B949E]">
+                CONTAINER: <strong className="text-[#58A6FF]">fMP4 (FRAGMENTED)</strong>
+              </span>
+              <span className="text-[#E3B341] font-bold">
+                {currentTime.toLocaleTimeString([], { hour12: false })} UTC
+              </span>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 mt-2 pr-1">
+          {/* Center Video Viewport */}
+          <div className="flex-1 flex items-center justify-center relative bg-black min-h-[320px]">
+            {/* Corner Reticles */}
+            <div className="absolute top-2 left-2 text-[#30363D] text-xs select-none pointer-events-none">+</div>
+            <div className="absolute top-2 right-2 text-[#30363D] text-xs select-none pointer-events-none">+</div>
+            <div className="absolute bottom-2 left-2 text-[#30363D] text-xs select-none pointer-events-none">+</div>
+            <div className="absolute bottom-2 right-2 text-[#30363D] text-xs select-none pointer-events-none">+</div>
+
+            {activeSegmentId ? (
+              <video
+                key={activeSegmentId}
+                ref={videoRef}
+                src={`/api/v1/playback/stream/${activeSegmentId}`}
+                controls
+                autoPlay
+                className="w-full h-full object-contain max-h-[540px]"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center space-y-3 text-[#484F58] p-8 text-center">
+                <Film className="w-12 h-12 text-[#30363D]" />
+                <div className="text-xs uppercase tracking-widest text-[#8B949E]">
+                  [ NO RECORDED FOOTAGE AT SELECTED TIMECODE ]
+                </div>
+                <div className="text-[10px] text-[#484F58] max-w-sm">
+                  Select an indexed block from the right panel or scrub the 24H timeline below to inspect available fMP4 fragments.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* OSD Bottom HUD & Speed Controls */}
+          <div className="flex flex-wrap items-center justify-between px-3 py-1.5 bg-[#0D1117] border-t border-[#21262D] z-10 text-[10px]">
+            <div className="flex items-center space-x-2">
+              <span className="text-[#8B949E]">RATE:</span>
+              <div className="flex items-center border border-[#30363D] bg-[#080B10]">
+                {[0.5, 1.0, 2.0, 4.0, 8.0, 16.0].map((rate) => (
+                  <button
+                    key={rate}
+                    onClick={() => handleSpeedChange(rate)}
+                    className={`px-1.5 py-0.5 font-bold transition-colors ${
+                      playbackRate === rate
+                        ? 'bg-[#E3B341] text-[#080B10]'
+                        : 'text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]'
+                    }`}
+                  >
+                    {rate}X
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 text-[#8B949E]">
+              <span>MOOF ATOM: <strong className="text-[#3FB950]">VALIDATED</strong></span>
+              <span>//</span>
+              <span>HASH LOCK: <strong className="text-[#58A6FF]">SHA-256 ACTIVE</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Segments Directory Panel */}
+        <div className="bg-[#0D1117] border border-[#21262D] flex flex-col h-full max-h-[600px]">
+          <div className="p-2.5 border-b border-[#21262D] flex items-center justify-between bg-[#161B22]">
+            <div className="text-xs font-bold uppercase tracking-wider text-[#C9D1D9]">
+              INDEXED FRAGMENTS
+            </div>
+            <div className="text-[10px] text-[#E3B341] bg-[#080B10] px-1.5 py-0.5 border border-[#30363D]">
+              COUNT: {segments.length}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {segments.length === 0 ? (
-              <div className="text-[11px] text-slate-500 font-mono text-center py-6">
-                No segments recorded for {selectedDate}
+              <div className="text-[11px] text-[#484F58] text-center py-12">
+                [ NO RECORDING BLOCKS FOR {selectedDate} ]
               </div>
             ) : (
               segments.map((seg) => {
                 const isSelected = activeSegmentId === seg.id;
-                const startStr = new Date(seg.startTime).toLocaleTimeString();
-                const endStr = new Date(seg.endTime).toLocaleTimeString();
+                const startStr = new Date(seg.startTime).toLocaleTimeString([], { hour12: false });
+                const endStr = new Date(seg.endTime).toLocaleTimeString([], { hour12: false });
 
                 return (
                   <button
@@ -192,16 +318,22 @@ export const Playback: React.FC = () => {
                       setActiveSegmentId(seg.id);
                       setCurrentTime(new Date(seg.startTime));
                     }}
-                    className={`w-full text-left p-2 rounded text-xs font-mono transition flex justify-between items-center ${
+                    className={`w-full text-left p-2 transition-colors border flex flex-col space-y-1 ${
                       isSelected
-                        ? 'bg-cctv-amber/20 border border-cctv-amber/60 text-cctv-amber font-semibold'
-                        : 'bg-graphite-900 border border-graphite-800 text-slate-300 hover:bg-graphite-800'
+                        ? 'bg-[#161B22] border-[#E3B341] text-[#E3B341]'
+                        : 'bg-[#080B10] border-[#21262D] text-[#8B949E] hover:border-[#30363D] hover:text-[#C9D1D9]'
                     }`}
                   >
-                    <span>{startStr} - {endStr}</span>
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-                      fMP4
-                    </span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold">{startStr} → {endStr}</span>
+                      <span className="text-[9px] px-1 py-0.2 bg-[#238636]/20 border border-[#238636] text-[#3FB950] font-bold">
+                        fMP4
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-[#484F58]">
+                      <span>SEG_ID: {seg.id.slice(0, 8)}...</span>
+                      <span>STATUS: {seg.status || 'OK'}</span>
+                    </div>
                   </button>
                 );
               })

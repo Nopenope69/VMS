@@ -150,21 +150,21 @@ export const Events: React.FC = () => {
     switch (severity) {
       case 'CRITICAL':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40 text-[10px] font-mono font-bold tracking-wider">
             <AlertCircle className="w-3 h-3" />
             <span>CRITICAL</span>
           </span>
         );
       case 'WARNING':
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-[#E3B341]/10 text-[#E3B341] border border-[#E3B341]/40 text-[10px] font-mono font-bold tracking-wider">
             <AlertTriangle className="w-3 h-3" />
             <span>WARNING</span>
           </span>
         );
       default:
         return (
-          <span className="flex items-center space-x-1 px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 text-[10px] font-semibold">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-[#58A6FF]/10 text-[#58A6FF] border border-[#58A6FF]/40 text-[10px] font-mono font-semibold tracking-wider">
             <Info className="w-3 h-3" />
             <span>INFO</span>
           </span>
@@ -176,23 +176,23 @@ export const Events: React.FC = () => {
     switch (state) {
       case 'ACTIVE':
         return (
-          <span className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800 text-[10px] font-bold animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>ACTIVE</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/50 text-[10px] font-mono font-bold tracking-wider animate-pulse">
+            <span className="w-1.5 h-1.5 bg-[#F85149]" />
+            <span>[ ACTIVE ]</span>
           </span>
         );
       case 'ACKNOWLEDGED':
         return (
-          <span className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#E3B341]/10 text-[#E3B341] border border-[#E3B341]/40 text-[10px] font-mono font-bold tracking-wider">
             <Clock className="w-3 h-3" />
-            <span>IN REVIEW</span>
+            <span>[ IN_REVIEW ]</span>
           </span>
         );
       case 'RESOLVED':
         return (
-          <span className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 text-[10px] font-semibold">
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            <span>RESOLVED</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/40 text-[10px] font-mono font-semibold tracking-wider">
+            <CheckCircle2 className="w-3 h-3 text-[#3FB950]" />
+            <span>[ RESOLVED ]</span>
           </span>
         );
       default:
@@ -204,24 +204,25 @@ export const Events: React.FC = () => {
   const activeCount = alarms.filter((a) => a.state === 'ACTIVE').length;
   const criticalCount = alarms.filter((a) => a.severity === 'CRITICAL').length;
   const ackCount = alarms.filter((a) => a.state === 'ACKNOWLEDGED').length;
+  const resolvedCount = alarms.filter((a) => a.state === 'RESOLVED').length;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-graphite-900 p-4 space-y-4 overflow-y-auto">
-      {/* Top View Selector Tabs */}
-      <div className="bg-graphite-850 p-2 rounded border border-graphite-700 flex items-center justify-between">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-4 select-none font-mono">
+      {/* Top Tactical Selector Tabs */}
+      <div className="bg-[#0D1117] p-2 border border-[#21262D] flex items-center justify-between">
         <div className="flex space-x-2">
           <button
             onClick={() => setConsoleTab('ALARMS')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-xs font-mono font-semibold transition ${
+            className={`flex items-center space-x-2 px-3.5 py-1.5 text-xs font-mono tracking-wider uppercase transition rounded-none ${
               consoleTab === 'ALARMS'
-                ? 'bg-cctv-amber text-graphite-900 shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-graphite-750'
+                ? 'bg-[#E3B341] text-[#080B10] font-bold shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-[#161B22]'
             }`}
           >
             <ShieldAlert className="w-4 h-4" />
-            <span>Alarms Incident Workflow</span>
+            <span>[ 01 // ALARMS INCIDENT WORKFLOW ]</span>
             {activeCount > 0 && (
-              <span className="px-1.5 py-0.2 bg-red-600 text-white rounded-full text-[10px] font-bold">
+              <span className="px-1.5 py-0.2 bg-[#F85149] text-white text-[10px] font-bold">
                 {activeCount}
               </span>
             )}
@@ -229,16 +230,16 @@ export const Events: React.FC = () => {
 
           <button
             onClick={() => setConsoleTab('EVENTS')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded text-xs font-mono font-semibold transition ${
+            className={`flex items-center space-x-2 px-3.5 py-1.5 text-xs font-mono tracking-wider uppercase transition rounded-none ${
               consoleTab === 'EVENTS'
-                ? 'bg-cctv-amber text-graphite-900 shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-graphite-750'
+                ? 'bg-[#E3B341] text-[#080B10] font-bold shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-[#161B22]'
             }`}
           >
             <ListFilter className="w-4 h-4" />
-            <span>Raw Surveillance Events</span>
+            <span>[ 02 // RAW SURVEILLANCE TELEMETRY ]</span>
             {eventStats.unacknowledgedTotal > 0 && (
-              <span className="px-1.5 py-0.2 bg-graphite-700 text-slate-200 rounded-full text-[10px]">
+              <span className="px-1.5 py-0.2 bg-[#21262D] text-slate-300 text-[10px]">
                 {eventStats.unacknowledgedTotal}
               </span>
             )}
@@ -247,11 +248,11 @@ export const Events: React.FC = () => {
 
         <button
           onClick={() => (consoleTab === 'ALARMS' ? fetchAlarms() : fetchEvents())}
-          className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-graphite-700 transition mr-2"
-          title="Refresh Feed"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-[#161B22] border border-[#21262D] transition rounded-none mr-1"
+          title="Refresh Incident Feed"
         >
           <RefreshCw
-            className={`w-4 h-4 ${alarmLoading || eventLoading ? 'animate-spin text-cctv-amber' : ''}`}
+            className={`w-4 h-4 ${alarmLoading || eventLoading ? 'animate-spin text-[#E3B341]' : ''}`}
           />
         </button>
       </div>
@@ -261,59 +262,73 @@ export const Events: React.FC = () => {
       {/* ========================================================================= */}
       {consoleTab === 'ALARMS' && (
         <div className="space-y-4">
-          {/* Stats Bar */}
+          {/* Tactical KPI Metrics Row */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-slate-400 uppercase">Active Alarms</div>
-                <div className="text-xl font-bold font-mono text-white mt-0.5">{activeCount}</div>
-              </div>
-              <ShieldAlert className="w-6 h-6 text-cctv-amber" />
-            </div>
-
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-rose-400 uppercase">Critical Severity</div>
-                <div className="text-xl font-bold font-mono text-rose-300 mt-0.5">{criticalCount}</div>
-              </div>
-              <AlertCircle className="w-6 h-6 text-rose-400" />
-            </div>
-
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-amber-400 uppercase">In Review (Acked)</div>
-                <div className="text-xl font-bold font-mono text-amber-300 mt-0.5">{ackCount}</div>
-              </div>
-              <Clock className="w-6 h-6 text-amber-400" />
-            </div>
-
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-emerald-400 uppercase">Resolved In Query</div>
-                <div className="text-xl font-bold font-mono text-emerald-300 mt-0.5">
-                  {alarms.filter((a) => a.state === 'RESOLVED').length}
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-widest">ACTIVE_ALARMS</div>
+                  <div className="text-2xl font-bold text-white mt-0.5 tracking-wider">{activeCount}</div>
                 </div>
+                <ShieldAlert className="w-6 h-6 text-[#E3B341]" />
               </div>
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            </div>
+
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#F85149] uppercase tracking-widest">CRITICAL_SEVERITY</div>
+                  <div className="text-2xl font-bold text-[#F85149] mt-0.5 tracking-wider">{criticalCount}</div>
+                </div>
+                <AlertCircle className="w-6 h-6 text-[#F85149]" />
+              </div>
+            </div>
+
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#E3B341] uppercase tracking-widest">IN_REVIEW (ACKED)</div>
+                  <div className="text-2xl font-bold text-[#E3B341] mt-0.5 tracking-wider">{ackCount}</div>
+                </div>
+                <Clock className="w-6 h-6 text-[#E3B341]" />
+              </div>
+            </div>
+
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#3FB950] uppercase tracking-widest">RESOLVED_IN_QUERY</div>
+                  <div className="text-2xl font-bold text-[#3FB950] mt-0.5 tracking-wider">{resolvedCount}</div>
+                </div>
+                <CheckCircle2 className="w-6 h-6 text-[#3FB950]" />
+              </div>
             </div>
           </div>
 
           {/* Alarm Filters */}
-          <div className="bg-graphite-850 p-3 rounded border border-graphite-700 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-[#0D1117] p-3 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               {/* State Filter Pills */}
-              <div className="flex space-x-1 bg-graphite-900 p-0.5 rounded border border-graphite-700">
+              <div className="flex space-x-1 bg-[#080B10] p-0.5 border border-[#21262D]">
                 {(['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'] as const).map((s) => (
                   <button
                     key={s}
                     onClick={() => setAlarmStateFilter(s)}
-                    className={`px-3 py-1 rounded text-xs font-mono font-medium transition ${
+                    className={`px-3 py-1 text-xs uppercase tracking-wider transition ${
                       alarmStateFilter === s
-                        ? 'bg-cctv-amber text-graphite-900 font-bold'
+                        ? 'bg-[#E3B341] text-[#080B10] font-bold'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {s === 'ALL' ? 'All States' : s}
+                    {s === 'ALL' ? '[ ALL STATES ]' : `[ ${s} ]`}
                   </button>
                 ))}
               </div>
@@ -322,74 +337,75 @@ export const Events: React.FC = () => {
               <select
                 value={alarmSeverityFilter}
                 onChange={(e) => setAlarmSeverityFilter(e.target.value)}
-                className="bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                className="bg-[#080B10] border border-[#21262D] px-3 py-1 text-xs text-slate-200 uppercase tracking-wider focus:outline-none focus:border-[#E3B341] rounded-none"
               >
-                <option value="">All Severities</option>
+                <option value="">ALL SEVERITIES</option>
                 <option value="CRITICAL">CRITICAL</option>
                 <option value="WARNING">WARNING</option>
                 <option value="INFO">INFO</option>
               </select>
             </div>
 
-            <div className="text-xs font-mono text-slate-400">
-              Showing <span className="text-cctv-amber font-semibold">{alarms.length}</span> security alarm incident(s)
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              MATCHED_INCIDENTS: <span className="text-[#E3B341] font-bold">{alarms.length}</span>
             </div>
           </div>
 
           {/* Alarms Table */}
-          <div className="bg-graphite-850 rounded border border-graphite-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-graphite-700 font-semibold text-xs uppercase tracking-wider text-slate-300 font-mono">
-              Operational Alarm Incidents
+          <div className="bg-[#0D1117] border border-[#21262D] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-[#21262D] font-bold text-xs uppercase tracking-wider text-slate-300 flex items-center justify-between bg-[#161B22]">
+              <span>OPERATIONAL INCIDENT REGISTRY</span>
+              <span className="text-[10px] text-slate-500">FORMAT: ED-25519 VERIFIED</span>
             </div>
 
             {alarms.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 font-mono text-xs">
-                No alarm incidents matching the selected criteria.
+              <div className="p-12 text-center text-slate-500 text-xs uppercase tracking-widest">
+                [ NO ACTIVE ALARM INCIDENTS IN SCOPE ]
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-graphite-900 text-slate-400 uppercase text-[10px] border-b border-graphite-700">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#080B10] text-slate-400 uppercase text-[10px] border-b border-[#21262D]">
                     <tr>
-                      <th className="px-4 py-2.5">Severity</th>
-                      <th className="px-4 py-2.5">Incident Title / Details</th>
-                      <th className="px-4 py-2.5">Camera Source</th>
-                      <th className="px-4 py-2.5">Workflow State</th>
-                      <th className="px-4 py-2.5">Triggered At</th>
-                      <th className="px-4 py-2.5">Resolution / Operator Notes</th>
-                      <th className="px-4 py-2.5 text-right">Actions</th>
+                      <th className="px-4 py-2.5">SEVERITY</th>
+                      <th className="px-4 py-2.5">INCIDENT DETAILS</th>
+                      <th className="px-4 py-2.5">SOURCE CAMERA</th>
+                      <th className="px-4 py-2.5">STATE</th>
+                      <th className="px-4 py-2.5">TIMESTAMP (UTC)</th>
+                      <th className="px-4 py-2.5">OPERATOR NOTES</th>
+                      <th className="px-4 py-2.5 text-right">ACTION</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-graphite-700 text-slate-300">
+                  <tbody className="divide-y divide-[#21262D] text-slate-300">
                     {alarms.map((alarm) => (
-                      <tr key={alarm.id} className="hover:bg-graphite-800 transition">
+                      <tr key={alarm.id} className="hover:bg-[#161B22] transition">
                         <td className="px-4 py-3">{getSeverityBadge(alarm.severity)}</td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-white">{alarm.title}</div>
+                          <div className="font-bold text-white tracking-wide">{alarm.title}</div>
                           {alarm.description && (
                             <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
                               {alarm.description}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-cctv-amber">
-                          {alarm.camera?.name || 'System Facility'}
+                        <td className="px-4 py-3 text-[#E3B341] tracking-wider">
+                          {alarm.camera?.name || 'FACILITY_SYSTEM'}
                         </td>
                         <td className="px-4 py-3">{getAlarmStateBadge(alarm.state)}</td>
-                        <td className="px-4 py-3 text-slate-400">
-                          {new Date(alarm.createdAt).toLocaleString()}
+                        <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">
+                          {new Date(alarm.createdAt).toISOString()}
                         </td>
                         <td className="px-4 py-3 text-slate-300 text-[11px] max-w-xs">
                           {alarm.state === 'RESOLVED' ? (
-                            <div className="truncate text-emerald-300" title={alarm.resolutionNotes || ''}>
-                              {alarm.resolutionNotes || 'Resolved'}
+                            <div className="truncate text-[#3FB950]" title={alarm.resolutionNotes || ''}>
+                              {alarm.resolutionNotes || 'RESOLVED'}
                             </div>
                           ) : alarm.state === 'ACKNOWLEDGED' ? (
-                            <div className="text-amber-300">
-                              Acked by operator ({new Date(alarm.acknowledgedAt || '').toLocaleTimeString()})
+                            <div className="text-[#E3B341]">
+                              ACKED ({alarm.acknowledgedBy || 'OPERATOR'})
                             </div>
                           ) : (
-                            <span className="text-slate-500">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -398,10 +414,10 @@ export const Events: React.FC = () => {
                               <button
                                 onClick={() => handleAcknowledgeAlarm(alarm.id)}
                                 title="Acknowledge alarm"
-                                className="flex items-center space-x-1 px-2.5 py-1 rounded bg-graphite-750 hover:bg-cctv-amber hover:text-graphite-900 text-slate-200 font-semibold text-[10px] transition"
+                                className="flex items-center space-x-1 px-2.5 py-1 bg-[#161B22] hover:bg-[#E3B341] hover:text-[#080B10] text-slate-200 border border-[#21262D] font-bold text-[10px] uppercase transition rounded-none"
                               >
                                 <Check className="w-3 h-3" />
-                                <span>Acknowledge</span>
+                                <span>ACKNOWLEDGE</span>
                               </button>
                             )}
 
@@ -409,10 +425,10 @@ export const Events: React.FC = () => {
                               <button
                                 onClick={() => handleOpenResolve(alarm)}
                                 title="Resolve alarm with incident notes"
-                                className="flex items-center space-x-1 px-2.5 py-1 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 hover:bg-emerald-900 font-semibold text-[10px] transition"
+                                className="flex items-center space-x-1 px-2.5 py-1 bg-[#3FB950]/10 border border-[#3FB950]/40 text-[#3FB950] hover:bg-[#3FB950] hover:text-[#080B10] font-bold text-[10px] uppercase transition rounded-none"
                               >
                                 <CheckCircle2 className="w-3 h-3" />
-                                <span>Resolve</span>
+                                <span>RESOLVE</span>
                               </button>
                             )}
                           </div>
@@ -434,120 +450,137 @@ export const Events: React.FC = () => {
         <div className="space-y-4">
           {/* Top Banner & Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-slate-400 uppercase">Unacknowledged Total</div>
-                <div className="text-xl font-bold font-mono text-white mt-0.5">
-                  {eventStats.unacknowledgedTotal || 0}
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-widest">UNACK_TELEMETRY</div>
+                  <div className="text-2xl font-bold text-white mt-0.5 tracking-wider">
+                    {eventStats.unacknowledgedTotal || 0}
+                  </div>
                 </div>
+                <Bell className="w-6 h-6 text-[#E3B341]" />
               </div>
-              <Bell className="w-6 h-6 text-cctv-amber" />
             </div>
 
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-rose-400 uppercase">Critical Events</div>
-                <div className="text-xl font-bold font-mono text-rose-300 mt-0.5">{eventStats.critical || 0}</div>
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#F85149] uppercase tracking-widest">CRITICAL_EVENTS</div>
+                  <div className="text-2xl font-bold text-[#F85149] mt-0.5 tracking-wider">{eventStats.critical || 0}</div>
+                </div>
+                <AlertCircle className="w-6 h-6 text-[#F85149]" />
               </div>
-              <AlertCircle className="w-6 h-6 text-rose-400" />
             </div>
 
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-amber-400 uppercase">Warnings</div>
-                <div className="text-xl font-bold font-mono text-amber-300 mt-0.5">{eventStats.warning || 0}</div>
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#E3B341] uppercase tracking-widest">WARNING_TRIGGERS</div>
+                  <div className="text-2xl font-bold text-[#E3B341] mt-0.5 tracking-wider">{eventStats.warning || 0}</div>
+                </div>
+                <AlertTriangle className="w-6 h-6 text-[#E3B341]" />
               </div>
-              <AlertTriangle className="w-6 h-6 text-amber-400" />
             </div>
 
-            <div className="bg-graphite-850 border border-graphite-700 p-3.5 rounded flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-sky-400 uppercase">Informational</div>
-                <div className="text-xl font-bold font-mono text-sky-300 mt-0.5">{eventStats.info || 0}</div>
+            <div className="bg-[#0D1117] border border-[#21262D] p-3.5 relative">
+              <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+              <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-[#58A6FF] uppercase tracking-widest">INFORMATIONAL</div>
+                  <div className="text-2xl font-bold text-[#58A6FF] mt-0.5 tracking-wider">{eventStats.info || 0}</div>
+                </div>
+                <Info className="w-6 h-6 text-[#58A6FF]" />
               </div>
-              <Info className="w-6 h-6 text-sky-400" />
             </div>
           </div>
 
           {/* Filter Bar */}
-          <div className="bg-graphite-850 p-3 rounded border border-graphite-700 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-[#0D1117] p-3 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <select
                 value={eventSeverityFilter}
                 onChange={(e) => setEventSeverityFilter(e.target.value)}
-                className="bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                className="bg-[#080B10] border border-[#21262D] px-3 py-1 text-xs text-slate-200 uppercase tracking-wider focus:outline-none focus:border-[#E3B341] rounded-none"
               >
-                <option value="">All Severities</option>
+                <option value="">ALL SEVERITIES</option>
                 <option value="CRITICAL">CRITICAL</option>
                 <option value="WARNING">WARNING</option>
                 <option value="INFO">INFO</option>
               </select>
 
-              <label className="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer select-none font-mono">
+              <label className="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={unackOnly}
                   onChange={(e) => setUnackOnly(e.target.checked)}
-                  className="rounded bg-graphite-900 border-graphite-700 accent-cctv-amber"
+                  className="rounded-none bg-[#080B10] border-[#21262D] accent-[#E3B341]"
                 />
-                <span>Unacknowledged Only</span>
+                <span className="uppercase tracking-wider">UNACKNOWLEDGED ONLY</span>
               </label>
             </div>
           </div>
 
           {/* Events Table */}
-          <div className="bg-graphite-850 rounded border border-graphite-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-graphite-700 font-semibold text-xs uppercase tracking-wider text-slate-300 font-mono">
-              Surveillance Events Log ({events.length})
+          <div className="bg-[#0D1117] border border-[#21262D] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-[#21262D] font-bold text-xs uppercase tracking-wider text-slate-300 bg-[#161B22] flex items-center justify-between">
+              <span>RAW SURVEILLANCE TELEMETRY FEED</span>
+              <span className="text-[10px] text-slate-500">TOTAL: {events.length}</span>
             </div>
 
             {events.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 font-mono text-xs">
-                No events recorded matching the selected criteria.
+              <div className="p-12 text-center text-slate-500 text-xs uppercase tracking-widest">
+                [ NO RAW EVENTS MATCHING QUERY ]
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-graphite-900 text-slate-400 uppercase text-[10px] border-b border-graphite-700">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#080B10] text-slate-400 uppercase text-[10px] border-b border-[#21262D]">
                     <tr>
-                      <th className="px-4 py-2.5">Severity</th>
-                      <th className="px-4 py-2.5">Title / Type</th>
-                      <th className="px-4 py-2.5">Camera Source</th>
-                      <th className="px-4 py-2.5">Activity Metrics</th>
-                      <th className="px-4 py-2.5">Timestamp</th>
-                      <th className="px-4 py-2.5">Status</th>
-                      <th className="px-4 py-2.5 text-right">Action</th>
+                      <th className="px-4 py-2.5">SEVERITY</th>
+                      <th className="px-4 py-2.5">TITLE / TYPE</th>
+                      <th className="px-4 py-2.5">CAMERA SOURCE</th>
+                      <th className="px-4 py-2.5">ACTIVITY METRICS</th>
+                      <th className="px-4 py-2.5">TIMESTAMP (UTC)</th>
+                      <th className="px-4 py-2.5">STATUS</th>
+                      <th className="px-4 py-2.5 text-right">ACTION</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-graphite-700 text-slate-300">
+                  <tbody className="divide-y divide-[#21262D] text-slate-300">
                     {events.map((evt) => (
-                      <tr key={evt.id} className="hover:bg-graphite-800 transition">
+                      <tr key={evt.id} className="hover:bg-[#161B22] transition">
                         <td className="px-4 py-3">{getSeverityBadge(evt.severity)}</td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-white">{evt.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{evt.type}</div>
+                          <div className="font-bold text-white tracking-wide">{evt.title}</div>
+                          <div className="text-[10px] text-slate-500 uppercase mt-0.5">{evt.type}</div>
                         </td>
-                        <td className="px-4 py-3 text-cctv-amber">{evt.camera?.name || 'Facility System'}</td>
+                        <td className="px-4 py-3 text-[#E3B341] tracking-wider">{evt.camera?.name || 'FACILITY_SYSTEM'}</td>
                         <td className="px-4 py-3 text-slate-300 text-[11px]">
                           {evt.type === 'MOTION' ? (
                             <span>
-                              {evt.motionSpikes} spikes • {evt.durationSeconds}s duration
+                              {evt.motionSpikes} spikes // {evt.durationSeconds}s duration
                             </span>
                           ) : (
-                            <span className="text-slate-500">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">
-                          {new Date(evt.startTime).toLocaleString()}
+                        <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">
+                          {new Date(evt.startTime).toISOString()}
                         </td>
                         <td className="px-4 py-3">
                           {evt.acknowledged ? (
-                            <span className="flex items-center space-x-1 text-emerald-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-[#3FB950] text-[10px] uppercase">
                               <CheckCircle2 className="w-3 h-3" />
-                              <span>Ack by {evt.acknowledgedBy || 'Operator'}</span>
+                              <span>ACK: {evt.acknowledgedBy || 'OPERATOR'}</span>
                             </span>
                           ) : (
-                            <span className="px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 text-[10px] font-bold">
+                            <span className="px-1.5 py-0.5 rounded-none bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40 text-[10px] font-bold uppercase">
                               UNACK
                             </span>
                           )}
@@ -556,9 +589,9 @@ export const Events: React.FC = () => {
                           {!evt.acknowledged && (
                             <button
                               onClick={() => handleAckEvent(evt.id)}
-                              className="px-2.5 py-1 rounded bg-graphite-750 hover:bg-cctv-amber hover:text-graphite-900 font-semibold text-[10px] transition"
+                              className="px-2.5 py-1 bg-[#161B22] hover:bg-[#E3B341] hover:text-[#080B10] text-slate-200 border border-[#21262D] font-bold text-[10px] uppercase transition rounded-none"
                             >
-                              Acknowledge
+                              ACKNOWLEDGE
                             </button>
                           )}
                         </td>
@@ -574,13 +607,18 @@ export const Events: React.FC = () => {
 
       {/* Resolve Alarm Modal Dialog */}
       {resolvingAlarm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm select-none">
-          <div className="bg-graphite-850 border border-graphite-700 rounded-md w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="px-5 py-3.5 border-b border-graphite-700 flex justify-between items-center bg-graphite-800">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 select-none">
+          <div className="bg-[#0D1117] border border-[#21262D] rounded-none w-full max-w-md overflow-hidden shadow-2xl relative">
+            <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
+            <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
+            <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
+            <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
+
+            <div className="px-5 py-3.5 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
               <div className="flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider font-mono">
-                  Resolve Alarm Incident
+                <CheckCircle2 className="w-4 h-4 text-[#3FB950]" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  [ RESOLVE ALARM INCIDENT // ROOT CAUSE ]
                 </h3>
               </div>
               <button onClick={() => setResolvingAlarm(null)} className="text-slate-400 hover:text-white">
@@ -588,45 +626,45 @@ export const Events: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleConfirmResolve} className="p-5 space-y-4 bg-graphite-900">
-              <div className="p-3 bg-graphite-850 rounded border border-graphite-700 text-xs font-mono">
-                <div className="text-slate-400 text-[10px] uppercase">Incident:</div>
-                <div className="font-semibold text-white mt-0.5">{resolvingAlarm.title}</div>
+            <form onSubmit={handleConfirmResolve} className="p-5 space-y-4 bg-[#0D1117]">
+              <div className="p-3 bg-[#161B22] border border-[#21262D] text-xs">
+                <div className="text-slate-500 text-[10px] uppercase tracking-widest">INCIDENT IDENTIFIER:</div>
+                <div className="font-bold text-white mt-0.5 tracking-wider">{resolvingAlarm.title}</div>
                 <div className="text-slate-400 mt-1">
-                  Source: <span className="text-cctv-amber">{resolvingAlarm.camera?.name || 'Facility'}</span>
+                  SOURCE: <span className="text-[#E3B341]">{resolvingAlarm.camera?.name || 'FACILITY_CHASSIS'}</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5 flex items-center space-x-1">
-                  <FileText className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Operator Resolution & Root Cause Notes</span>
+                <label className="block text-xs text-slate-300 mb-1.5 flex items-center space-x-1 uppercase tracking-wider">
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span>OPERATOR RESOLUTION ATTESTATION</span>
                 </label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="e.g. Guard dispatched to North Gate. Area inspected and secured; false trigger caused by wind blown banner."
+                  placeholder="Enter verifiable root cause notes (e.g., Physical inspection confirmed perimeter secured; sensor re-calibrated)."
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
-                  className="w-full bg-graphite-850 border border-graphite-700 rounded p-2.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none p-2.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-graphite-700">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#21262D]">
                 <button
                   type="button"
                   onClick={() => setResolvingAlarm(null)}
-                  className="px-4 py-1.5 rounded text-xs text-slate-300 hover:bg-graphite-800 font-mono"
+                  className="px-4 py-1.5 rounded-none text-xs text-slate-300 hover:bg-[#161B22] border border-[#21262D]"
                 >
-                  Cancel
+                  CANCEL
                 </button>
                 <button
                   type="submit"
                   disabled={submittingResolve || !resolutionNotes.trim()}
-                  className="flex items-center space-x-1.5 px-4 py-1.5 rounded text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 font-mono shadow"
+                  className="flex items-center space-x-1.5 px-4 py-1.5 rounded-none text-xs font-bold bg-[#3FB950] hover:bg-emerald-400 text-[#080B10] disabled:opacity-50 tracking-wider uppercase shadow"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{submittingResolve ? 'Resolving...' : 'Confirm Resolution'}</span>
+                  <span>{submittingResolve ? 'RECORDING...' : 'CONFIRM RESOLUTION'}</span>
                 </button>
               </div>
             </form>

@@ -54,59 +54,92 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-graphite-900 flex items-center justify-center p-4 selection:bg-cctv-amber/30">
-      <div className="bg-graphite-850 border border-graphite-700 rounded-lg w-full max-w-md p-8 shadow-2xl space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex w-12 h-12 rounded-lg bg-cctv-amber/20 border border-cctv-amber/60 items-center justify-center mb-1 shadow-inner">
-            <Radio className="w-6 h-6 text-cctv-amber" />
+    <div className="min-h-screen bg-[#080B10] flex items-center justify-center p-4 selection:bg-[#E3B341]/30 font-mono text-[#C9D1D9] relative overflow-hidden">
+      {/* Background Decorative Reticles */}
+      <div className="absolute top-6 left-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
+      <div className="absolute top-6 right-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
+      <div className="absolute bottom-6 left-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
+      <div className="absolute bottom-6 right-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
+
+      <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-md p-6 shadow-2xl space-y-5 relative">
+        {/* Optical Corner Reticles */}
+        <div className="absolute top-1.5 left-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
+        <div className="absolute top-1.5 right-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
+        <div className="absolute bottom-1.5 left-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
+        <div className="absolute bottom-1.5 right-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
+
+        {/* Brand & Telemetry Header */}
+        <div className="text-center space-y-2 border-b border-[#21262D] pb-4">
+          <div className="inline-flex items-center justify-center w-10 h-10 bg-[#161B22] border border-[#30363D] mb-1">
+            <Radio className="w-5 h-5 text-[#E3B341]" />
           </div>
-          <h1 className="text-lg font-bold tracking-wider text-white uppercase">VigilOne VMS</h1>
-          <p className="text-xs font-mono text-slate-400">Commercial Edge-First CCTV Surveillance Appliance</p>
+          <div>
+            <h1 className="text-sm font-bold tracking-widest text-white uppercase">
+              [ VIGILONE APPLIANCE TERMINAL ]
+            </h1>
+            <p className="text-[10px] text-[#8B949E] mt-0.5">
+              AIR-GAPPED COMMERCIAL CCTV SURVEILLANCE NODE
+            </p>
+          </div>
+
+          <div className="inline-flex items-center space-x-2 bg-[#080B10] border border-[#21262D] px-2 py-0.5 text-[9px] text-[#8B949E]">
+            <span>NODE: <strong className="text-[#3FB950]">LOCAL_NVR_01</strong></span>
+            <span>//</span>
+            <span>SEC_LEVEL: <strong className="text-[#58A6FF]">STRICT_RBAC</strong></span>
+          </div>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-900/40 border border-red-500 rounded text-xs text-red-200 flex items-center space-x-2">
+          <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-xs text-[#F85149] flex items-center space-x-2">
             <ShieldAlert className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-3.5 text-xs">
           {isBootstrap && (
             <>
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Facility / Tenant Name</label>
+                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
+                  FACILITY_OR_TENANT_NAME:
+                </label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Central Command Facility"
                   value={tenantName}
                   onChange={(e) => setTenantName(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Administrator Full Name</label>
+                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
+                  ADMINISTRATOR_FULL_NAME:
+                </label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Chief Security Officer"
                   value={adminName}
                   onChange={(e) => setAdminName(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cctv-amber"
+                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1">Appliance Setup Token</label>
+                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
+                  APPLIANCE_SETUP_TOKEN:
+                </label>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                  <KeyRound className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
                   <input
                     type="password"
                     required
+                    placeholder="Enter hardware initialization token"
                     value={setupToken}
                     onChange={(e) => setSetupToken(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded pl-9 pr-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
                   />
                 </div>
               </div>
@@ -114,31 +147,35 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           )}
 
           <div>
-            <label className="block text-xs font-mono text-slate-300 mb-1">Operator Email</label>
+            <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
+              OPERATOR_IDENTITY (EMAIL):
+            </label>
             <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+              <Mail className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
               <input
                 type="email"
                 required
                 placeholder="operator@facility.local"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-graphite-900 border border-graphite-700 rounded pl-9 pr-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-slate-300 mb-1">Security Password</label>
+            <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
+              SECURITY_KEY (PASSWORD):
+            </label>
             <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+              <Lock className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
               <input
                 type="password"
                 required
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-graphite-900 border border-graphite-700 rounded pl-9 pr-3 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
               />
             </div>
           </div>
@@ -146,22 +183,22 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded bg-cctv-amber text-graphite-900 font-semibold text-xs tracking-wider uppercase hover:bg-amber-400 transition disabled:opacity-50 shadow-md"
+            className="w-full py-2 bg-[#E3B341] text-[#080B10] font-bold text-xs tracking-wider uppercase hover:bg-[#F2CC60] transition-colors disabled:opacity-50 mt-2"
           >
-            {loading ? 'Authenticating...' : isBootstrap ? 'Bootstrap First-Run Tenant' : 'Sign In to Surveillance Console'}
+            {loading ? '[ AUTHENTICATING ACCESS... ]' : isBootstrap ? '[ INITIALIZE FIRST-RUN TENANT ]' : '[ AUTHENTICATE OPERATOR ]'}
           </button>
         </form>
 
-        <div className="pt-2 text-center border-t border-graphite-700">
+        <div className="pt-2 text-center border-t border-[#21262D]">
           <button
             type="button"
             onClick={() => {
               setIsBootstrap(!isBootstrap);
               setError('');
             }}
-            className="text-xs font-mono text-slate-400 hover:text-cctv-amber transition"
+            className="text-[11px] text-[#8B949E] hover:text-[#E3B341] transition-colors"
           >
-            {isBootstrap ? 'Back to Operator Login' : 'Initial Appliance Setup / First-Run Bootstrap'}
+            {isBootstrap ? '[ ← RETURN TO OPERATOR LOGIN ]' : '[ INITIAL APPLIANCE SETUP // BOOTSTRAP → ]'}
           </button>
         </div>
       </div>

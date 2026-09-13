@@ -5,7 +5,6 @@ import {
   HardDrive,
   ShieldCheck,
   LogOut,
-  Radio,
   Bell,
   Users,
   FileText,
@@ -14,6 +13,7 @@ import {
   Compass,
   Database,
   Server,
+  Activity,
 } from 'lucide-react';
 import api from '../services/api';
 import NotificationSettingsModal from './NotificationSettingsModal';
@@ -30,6 +30,20 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
   const [unackAlarms, setUnackAlarms] = useState<number>(0);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [utcClock, setUtcClock] = useState<string>('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
+      setUtcClock(timeStr);
+    };
+
+    updateTime();
+    const clockTimer = setInterval(updateTime, 1000);
+    return () => clearInterval(clockTimer);
+  }, []);
 
   useEffect(() => {
     const fetchStats = () => {
@@ -49,16 +63,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
   const role = user?.role || 'VIEWER';
 
   const allNavItems = [
-    { id: 'live', label: 'Live Grid', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'investigation', label: 'Investigation', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'floorplans', label: 'Floorplans', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'devices', label: 'Cameras', icon: HardDrive, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'events', label: 'Events', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'evidence', label: 'Section 63 Evidence', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'users', label: 'Staff', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'storage', label: 'Storage', icon: Database, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'appliance', label: 'Appliance', icon: Server, roles: ['SUPER_ADMIN'] },
-    { id: 'audit', label: 'Audit Trail', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'live', index: '1', label: 'LIVE', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'investigation', index: '2', label: 'INVESTIGATE', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'floorplans', index: '3', label: 'MAPS', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'devices', index: '4', label: 'CAMERAS', icon: HardDrive, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'events', index: '5', label: 'EVENTS', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'evidence', index: '6', label: 'SEC-63', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'users', index: '7', label: 'STAFF', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'storage', index: '8', label: 'STORAGE', icon: Database, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'appliance', index: '9', label: 'APPLIANCE', icon: Server, roles: ['SUPER_ADMIN'] },
+    { id: 'audit', index: '0', label: 'AUDIT', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
   ];
 
   const navItems = allNavItems.filter((item) => item.roles.includes(role));
@@ -66,23 +80,29 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
   const canBackup = role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
 
   return (
-    <header className="bg-graphite-850 border-b border-graphite-700 select-none">
-      <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-cctv-amber/20 border border-cctv-amber/60 flex items-center justify-center">
-            <Radio className="w-5 h-5 text-cctv-amber" />
-          </div>
-          <div>
-            <span className="font-bold tracking-wider text-slate-100 uppercase text-sm">VigilOne</span>
-            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono">
-              VMS 2.0
+    <header className="bg-tactical-panel border-b border-tactical-border select-none relative z-30">
+      <div className="w-full px-3 h-12 flex items-center justify-between gap-2">
+        {/* Left: Tactical Brand & Hardware Telemetry */}
+        <div className="flex items-center space-x-3 shrink-0">
+          <div className="flex items-center space-x-2 bg-tactical-bg px-2.5 py-1 border border-tactical-border">
+            <div className="w-2 h-2 rounded-none bg-phosphor-green animate-phosphor" />
+            <span className="font-mono font-bold tracking-wider text-white text-xs uppercase">
+              VIGILONE <span className="text-phosphor-amber">//</span> NVR-01
             </span>
+            <span className="text-[10px] text-tactical-muted font-mono border-l border-tactical-border pl-2">
+              v1.0.0
+            </span>
+          </div>
+
+          {/* Real-time UTC Precision Clock */}
+          <div className="hidden lg:flex items-center space-x-1.5 font-mono text-[11px] text-phosphor-cyan bg-tactical-bg px-2 py-1 border border-tactical-border">
+            <Activity className="w-3 h-3 text-phosphor-cyan animate-pulse" />
+            <span>{utcClock || '00:00:00 UTC'}</span>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex space-x-1">
+        {/* Center: Mission-Critical Monospaced Navigation */}
+        <nav className="flex items-center space-x-0.5 overflow-x-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = currentTab === item.id;
@@ -90,20 +110,17 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-75 border-b-2 ${
                   active
-                    ? 'bg-cctv-amber text-graphite-900 font-semibold shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-graphite-700'
+                    ? 'border-phosphor-amber bg-tactical-surface text-white font-bold'
+                    : 'border-transparent text-tactical-muted hover:text-white hover:bg-tactical-surface/60'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <span className="text-[10px] text-tactical-muted">[{item.index}]</span>
+                <Icon className={`w-3.5 h-3.5 ${active ? 'text-phosphor-amber' : 'text-tactical-muted'}`} />
                 <span>{item.label}</span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span
-                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
-                      active ? 'bg-red-600 text-white' : 'bg-red-500 text-white'
-                    }`}
-                  >
+                  <span className="ml-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-phosphor-red text-tactical-bg animate-pulse">
                     {item.badge}
                   </span>
                 )}
@@ -112,15 +129,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
           })}
         </nav>
 
-        {/* Action icons & User profile & logout */}
-        <div className="flex items-center space-x-3 text-xs">
+        {/* Right: Telemetry Actions & User Profile */}
+        <div className="flex items-center space-x-2 shrink-0 text-xs font-mono">
           {canManageNotifications && (
             <button
               onClick={() => setShowNotificationModal(true)}
               title="Notification Channels & Webhooks"
-              className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-amber transition"
+              className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-amber hover:border-phosphor-amber transition"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5" />
             </button>
           )}
 
@@ -128,26 +145,27 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
             <button
               onClick={() => setShowBackupModal(true)}
               title="Disaster Recovery & Appliance Backup"
-              className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-cctv-teal transition"
+              className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-cyan hover:border-phosphor-cyan transition"
             >
-              <Archive className="w-4 h-4" />
+              <Archive className="w-3.5 h-3.5" />
             </button>
           )}
 
-          <div className="h-4 w-px bg-graphite-700 mx-1" />
-
-          <div className="text-right">
-            <div className="font-medium text-slate-200">{user?.name || 'Operator'}</div>
-            <div className="text-slate-400 font-mono text-[10px]">
-              {user?.role || 'OPERATOR'} • {user?.tenantName || 'Main Facility'}
+          <div className="hidden sm:block text-right border-l border-tactical-border pl-2.5 py-0.5">
+            <div className="font-mono text-white text-[11px] font-semibold uppercase tracking-wider">
+              {user?.name || 'OPERATOR'}
+            </div>
+            <div className="text-tactical-muted text-[10px]">
+              ROLE // <span className="text-phosphor-amber">{user?.role || 'VIEWER'}</span>
             </div>
           </div>
+
           <button
             onClick={onLogout}
-            title="Sign Out"
-            className="p-1.5 rounded hover:bg-graphite-700 text-slate-400 hover:text-rose-400 transition"
+            title="Sign Out of Appliance"
+            className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-red hover:border-phosphor-red transition"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

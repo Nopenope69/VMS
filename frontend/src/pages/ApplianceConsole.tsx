@@ -146,120 +146,129 @@ export const ApplianceConsole: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-slate-400 font-mono text-xs flex items-center justify-center space-x-2">
-        <RefreshCw className="w-4 h-4 animate-spin text-cctv-amber" />
-        <span>Querying VigilOne Appliance Management Subsystem...</span>
+      <div className="p-12 text-center text-slate-400 font-mono text-xs flex items-center justify-center space-x-2 bg-[#080B10]">
+        <RefreshCw className="w-4 h-4 animate-spin text-[#E3B341]" />
+        <span>[ QUERYING VIGILONE HARDWARE MANAGEMENT SUBSYSTEM... ]</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 selection:bg-cctv-amber/30">
+    <div className="min-h-full bg-[#080B10] text-slate-100 p-4 sm:p-6 space-y-6 font-mono select-none">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-graphite-700 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#21262D] pb-4 bg-[#0D1117] p-4 border relative">
+        <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
+
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-xl font-bold tracking-wider text-white uppercase flex items-center space-x-2">
-              <Server className="w-6 h-6 text-cctv-amber" />
-              <span>Appliance Diagnostics & Health Console</span>
+            <Server className="w-5 h-5 text-[#E3B341]" />
+            <h1 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <span>[ 01 // APPLIANCE DIAGNOSTICS & SYSTEM HEALTH CONSOLE ]</span>
             </h1>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono font-bold">
-              EDGE NVR
+            <span className="text-[10px] px-2 py-0.5 rounded-none bg-[#58A6FF]/10 text-[#58A6FF] border border-[#58A6FF]/40 font-bold">
+              EDGE_NVR_AIR_GAPPED
             </span>
           </div>
-          <p className="text-xs text-slate-400 font-mono mt-1">
-            Hardware vitals, storage mount security guard, and Level-3 escalation diagnostics
+          <p className="text-[11px] text-slate-400 mt-1">
+            Hardware telemetry, storage mount security guard, and Level-3 escalation diagnostics
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <button
             onClick={() => fetchApplianceData(true)}
             disabled={refreshing}
-            className="px-3 py-1.5 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 rounded text-xs font-mono text-slate-300 hover:text-white flex items-center space-x-1.5 transition disabled:opacity-50"
+            className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#21262D] text-xs text-slate-300 hover:text-white flex items-center space-x-1.5 transition rounded-none disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-cctv-amber' : ''}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#E3B341]' : ''}`} />
+            <span>REFRESH</span>
           </button>
 
           <button
             onClick={handleDownloadBundle}
             disabled={downloadingBundle}
-            className="px-4 py-1.5 bg-cctv-amber text-graphite-900 font-bold text-xs rounded hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-1.5 shadow-md disabled:opacity-50"
+            className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] font-bold text-xs hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-1.5 rounded-none shadow-sm disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{downloadingBundle ? 'Compiling Bundle...' : 'Download Diagnostics Bundle'}</span>
+            <span>{downloadingBundle ? 'COMPILING ARCHIVE...' : 'DIAGNOSTICS BUNDLE'}</span>
           </button>
         </div>
       </div>
 
       {/* Notices */}
       {errorMessage && (
-        <div className="p-4 bg-red-950/60 border border-red-500/80 rounded-lg text-xs text-red-200 flex items-start space-x-3 shadow-inner">
-          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+        <div className="p-3 bg-[#F85149]/10 border border-[#F85149]/40 text-xs text-[#F85149] flex items-start space-x-2.5">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <div className="font-semibold">Subsystem Exception</div>
+            <div className="font-bold uppercase tracking-wider">SUBSYSTEM EXCEPTION:</div>
             <div>{errorMessage}</div>
           </div>
         </div>
       )}
 
       {bundleSuccess && (
-        <div className="p-4 bg-emerald-950/60 border border-emerald-500/80 rounded-lg text-xs text-emerald-200 flex items-start space-x-3 shadow-inner">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+        <div className="p-3 bg-[#3FB950]/10 border border-[#3FB950]/40 text-xs text-[#3FB950] flex items-start space-x-2.5">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <div className="font-semibold">Support Archive Generated</div>
+            <div className="font-bold uppercase tracking-wider">DIAGNOSTICS ARCHIVE COMPILED:</div>
             <div>{bundleSuccess}</div>
           </div>
         </div>
       )}
 
       {/* Top Cards: Hardware Vitals */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* CPU Load */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-            <span className="flex items-center space-x-1.5">
-              <Cpu className="w-4 h-4 text-cctv-amber" />
-              <span>CPU Load Averages</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-3.5 space-y-2 relative">
+          <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center space-x-1.5 uppercase text-[10px] tracking-wider">
+              <Cpu className="w-3.5 h-3.5 text-[#E3B341]" />
+              <span>CPU_LOAD_AVG</span>
             </span>
-            <span className="text-slate-300 font-semibold">{vitals?.os.arch || 'x86_64'}</span>
+            <span className="text-slate-300 font-bold">{vitals?.os.arch || 'X86_64'}</span>
           </div>
-          <div className="text-xl font-bold font-mono text-white">
+          <div className="text-2xl font-bold text-white tracking-wider">
             {vitals?.cpuLoad?.length ? vitals.cpuLoad[0].toFixed(2) : '0.00'}
-            <span className="text-xs font-normal text-slate-400 ml-1">1m load</span>
+            <span className="text-xs font-normal text-slate-500 ml-1">1M</span>
           </div>
-          <div className="text-[11px] font-mono text-slate-400 flex justify-between border-t border-graphite-800 pt-1.5">
-            <span>5m: {vitals?.cpuLoad?.[1]?.toFixed(2) ?? '0.00'}</span>
-            <span>15m: {vitals?.cpuLoad?.[2]?.toFixed(2) ?? '0.00'}</span>
+          <div className="text-[10px] text-slate-500 flex justify-between border-t border-[#21262D] pt-1.5">
+            <span>5M: <span className="text-slate-300">{vitals?.cpuLoad?.[1]?.toFixed(2) ?? '0.00'}</span></span>
+            <span>15M: <span className="text-slate-300">{vitals?.cpuLoad?.[2]?.toFixed(2) ?? '0.00'}</span></span>
           </div>
         </div>
 
         {/* Memory */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-            <span className="flex items-center space-x-1.5">
-              <Activity className="w-4 h-4 text-cctv-teal" />
-              <span>Host Memory</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-3.5 space-y-2 relative">
+          <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center space-x-1.5 uppercase text-[10px] tracking-wider">
+              <Activity className="w-3.5 h-3.5 text-[#58A6FF]" />
+              <span>HOST_MEMORY</span>
             </span>
-            <span className="text-slate-300 font-semibold">
+            <span className="text-[#58A6FF] font-bold">
               {vitals?.memory?.percentUsed ?? 0}%
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white">
+          <div className="text-2xl font-bold text-white tracking-wider">
             {formatBytes(vitals?.memory?.usedBytes || 0)}
-            <span className="text-xs font-normal text-slate-400 ml-1">
+            <span className="text-xs font-normal text-slate-500 ml-1">
               / {formatBytes(vitals?.memory?.totalBytes || 0)}
             </span>
           </div>
-          <div className="w-full bg-graphite-900 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-[#161B22] h-1.5 overflow-hidden">
             <div
               className={`h-full transition-all duration-500 ${
                 (vitals?.memory?.percentUsed || 0) > 85
-                  ? 'bg-red-500'
+                  ? 'bg-[#F85149]'
                   : (vitals?.memory?.percentUsed || 0) > 70
-                  ? 'bg-amber-500'
-                  : 'bg-cctv-teal'
+                  ? 'bg-[#E3B341]'
+                  : 'bg-[#58A6FF]'
               }`}
               style={{ width: `${Math.min(100, vitals?.memory?.percentUsed || 0)}%` }}
             />
@@ -267,40 +276,42 @@ export const ApplianceConsole: React.FC = () => {
         </div>
 
         {/* Primary Storage */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-            <span className="flex items-center space-x-1.5">
-              <HardDrive className="w-4 h-4 text-indigo-400" />
-              <span>Recordings Storage</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-3.5 space-y-2 relative">
+          <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center space-x-1.5 uppercase text-[10px] tracking-wider">
+              <HardDrive className="w-3.5 h-3.5 text-[#E3B341]" />
+              <span>STORAGE_MOUNT</span>
             </span>
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${
+              className={`text-[9px] px-1.5 py-0.2 font-bold ${
                 vitals?.storage?.mountGuardStatus === 'HEALTHY'
-                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-600/40'
-                  : 'bg-red-950 text-red-400 border border-red-600/40'
+                  ? 'bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/40'
+                  : 'bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40'
               }`}
             >
               {vitals?.storage?.mountGuardStatus || 'UNKNOWN'}
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white">
+          <div className="text-2xl font-bold text-white tracking-wider">
             {formatBytes(
               (parseFloat(vitals?.storage?.totalBytes || '0') -
                 parseFloat(vitals?.storage?.availableBytes || '0')) ||
                 0
             )}
-            <span className="text-xs font-normal text-slate-400 ml-1">
+            <span className="text-xs font-normal text-slate-500 ml-1">
               / {formatBytes(vitals?.storage?.totalBytes || 0)}
             </span>
           </div>
-          <div className="w-full bg-graphite-900 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-[#161B22] h-1.5 overflow-hidden">
             <div
               className={`h-full transition-all duration-500 ${
                 (vitals?.storage?.percentUsed || 0) > 90
-                  ? 'bg-red-500'
+                  ? 'bg-[#F85149]'
                   : (vitals?.storage?.percentUsed || 0) > 75
-                  ? 'bg-amber-500'
-                  : 'bg-indigo-500'
+                  ? 'bg-[#E3B341]'
+                  : 'bg-[#3FB950]'
               }`}
               style={{ width: `${Math.min(100, vitals?.storage?.percentUsed || 0)}%` }}
             />
@@ -308,189 +319,204 @@ export const ApplianceConsole: React.FC = () => {
         </div>
 
         {/* System Uptime */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-            <span className="flex items-center space-x-1.5">
-              <Clock className="w-4 h-4 text-emerald-400" />
-              <span>Appliance Uptime</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-3.5 space-y-2 relative">
+          <span className="absolute -top-1 -left-1 text-[8px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[8px] text-[#30363D]">+</span>
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center space-x-1.5 uppercase text-[10px] tracking-wider">
+              <Clock className="w-3.5 h-3.5 text-[#3FB950]" />
+              <span>APPLIANCE_UPTIME</span>
             </span>
-            <span className="text-slate-400 text-[11px] font-mono">
-              {vitals?.os.platform || 'linux'}
+            <span className="text-slate-500 text-[10px]">
+              {vitals?.os.platform?.toUpperCase() || 'LINUX'}
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white">
+          <div className="text-2xl font-bold text-white tracking-wider">
             {vitals ? formatUptime(vitals.uptimeSeconds) : '0m'}
           </div>
-          <div className="text-[11px] font-mono text-slate-400 border-t border-graphite-800 pt-1.5 flex justify-between">
-            <span>Cameras: {vitals?.cameras?.total ?? 0}</span>
-            <span className={vitals?.cameras?.degraded ? 'text-amber-400' : 'text-emerald-400'}>
-              {vitals?.cameras?.degraded ?? 0} degraded
+          <div className="text-[10px] text-slate-500 border-t border-[#21262D] pt-1.5 flex justify-between">
+            <span>SENSORS: {vitals?.cameras?.total ?? 0}</span>
+            <span className={vitals?.cameras?.degraded ? 'text-[#F85149] font-bold' : 'text-[#3FB950]'}>
+              {vitals?.cameras?.degraded ?? 0} DEGRADED
             </span>
           </div>
         </div>
       </div>
 
       {/* Mid Section: Identity & Mount Guard Invariant */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Appliance Identity Card */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-graphite-800 pb-3">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-              <Server className="w-4 h-4 text-cctv-amber" />
-              <span>Appliance Identity & Cryptography</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-5 space-y-4 relative">
+          <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
+
+          <div className="flex items-center justify-between border-b border-[#21262D] pb-2.5">
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <Server className="w-4 h-4 text-[#E3B341]" />
+              <span>[ APPLIANCE CRYPTOGRAPHIC IDENTITY ]</span>
             </h2>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-graphite-800 text-slate-300 font-mono border border-graphite-700">
+            <span className="text-[10px] px-2 py-0.5 bg-[#161B22] text-[#E3B341] border border-[#21262D]">
               v{identity?.softwareVersion || '1.0.0'}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs font-mono">
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
             <div>
-              <span className="text-slate-500 block text-[11px]">APPLIANCE ID</span>
+              <span className="text-slate-500 block text-[10px] uppercase">APPLIANCE_ID:</span>
               <span className="text-slate-200 font-bold">{identity?.applianceId || 'N/A'}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[11px]">NODE FINGERPRINT</span>
-              <span className="text-cctv-teal font-semibold">
-                {identity?.nodeFingerprint ? `SHA256:${identity.nodeFingerprint}` : 'N/A'}
+              <span className="text-slate-500 block text-[10px] uppercase">NODE_FINGERPRINT:</span>
+              <span className="text-[#58A6FF] font-semibold break-all text-[11px]">
+                {identity?.nodeFingerprint ? `SHA256:${identity.nodeFingerprint.slice(0, 16)}...` : 'N/A'}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[11px]">HOSTNAME</span>
+              <span className="text-slate-500 block text-[10px] uppercase">HOSTNAME:</span>
               <span className="text-slate-200">{vitals?.os.hostname || 'vigilone-edge'}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[11px]">CANONICAL FQDN</span>
-              <span className="text-cctv-amber">vigilone.local</span>
+              <span className="text-slate-500 block text-[10px] uppercase">CANONICAL_FQDN:</span>
+              <span className="text-[#E3B341]">vigilone.local</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[11px]">COMMISSIONED AT</span>
+              <span className="text-slate-500 block text-[10px] uppercase">COMMISSIONED_AT:</span>
               <span className="text-slate-300">
                 {identity?.bootstrappedAt
-                  ? new Date(identity.bootstrappedAt).toLocaleString()
-                  : 'Pre-Provisioning'}
+                  ? new Date(identity.bootstrappedAt).toISOString().slice(0, 19) + ' UTC'
+                  : 'PRE-PROVISIONING'}
               </span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[11px]">ENCRYPTION KEY STATUS</span>
-              <span className="text-emerald-400 font-semibold">
-                AES-256-GCM Locked (/etc/vigilone)
+              <span className="text-slate-500 block text-[10px] uppercase">ENCRYPTION_KEY_STATUS:</span>
+              <span className="text-[#3FB950] font-semibold">
+                AES-256-GCM (/etc/vigilone)
               </span>
             </div>
           </div>
 
-          <div className="p-3 bg-graphite-900 border border-graphite-800 rounded text-[11px] font-mono text-slate-400 flex items-start space-x-2">
-            <Info className="w-4 h-4 text-cctv-teal flex-shrink-0 mt-0.5" />
+          <div className="p-3 bg-[#161B22] border border-[#21262D] text-[11px] text-slate-400 flex items-start space-x-2">
+            <Info className="w-4 h-4 text-[#58A6FF] flex-shrink-0 mt-0.5" />
             <div>
-              Internal cryptographic separation enforced: Credential Encryption Key is isolated from
+              Cryptographic domain isolation enforced: Credential Master Encryption Key is isolated from
               JWT signing keys and TLS private keys.
             </div>
           </div>
         </div>
 
         {/* Mount Guard & Storage Security */}
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-graphite-800 pb-3">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Storage Mount Guard Subsystem</span>
+        <div className="bg-[#0D1117] border border-[#21262D] p-5 space-y-4 relative">
+          <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
+          <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
+
+          <div className="flex items-center justify-between border-b border-[#21262D] pb-2.5">
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-[#3FB950]" />
+              <span>[ STORAGE MOUNT GUARD INVARIANT ]</span>
             </h2>
             <span
-              className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+              className={`text-[10px] px-2 py-0.5 font-bold ${
                 vitals?.storage?.mountGuardStatus === 'HEALTHY'
-                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-600/40'
-                  : 'bg-red-950 text-red-400 border border-red-600/40'
+                  ? 'bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/40'
+                  : 'bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40'
               }`}
             >
-              {vitals?.storage?.mountGuardStatus === 'HEALTHY' ? 'GUARD ACTIVE' : 'FAILOVER ENGAGED'}
+              {vitals?.storage?.mountGuardStatus === 'HEALTHY' ? 'GUARD_ACTIVE' : 'FAILOVER_LOCKED'}
             </span>
           </div>
 
           <div className="space-y-3 text-xs">
-            <div className="p-3 bg-graphite-900 border border-graphite-800 rounded font-mono space-y-1.5">
+            <div className="p-3 bg-[#161B22] border border-[#21262D] space-y-1.5">
               <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Primary Mount:</span>
+                <span className="text-slate-500 uppercase text-[10px]">PRIMARY MOUNT POINT:</span>
                 <span className="text-white font-bold">/var/lib/vigilone/recordings</span>
               </div>
               <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Mount Guard Token:</span>
-                <span className="text-emerald-400">.vigilone_mount_guard (Verified)</span>
+                <span className="text-slate-500 uppercase text-[10px]">MOUNT GUARD TOKEN:</span>
+                <span className="text-[#3FB950]">.vigilone_mount_guard [VERIFIED]</span>
               </div>
               <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Write Probe Status:</span>
-                <span className="text-emerald-400">PASSED (Zero Latency)</span>
+                <span className="text-slate-500 uppercase text-[10px]">WRITE PROBE LATENCY:</span>
+                <span className="text-[#3FB950]">PASSED (&lt; 1ms)</span>
               </div>
             </div>
 
-            <p className="text-slate-400 text-xs">
-              Mount Guard verifies that the dedicated storage partition is persistently attached. If an
-              underlying drive unmounts or drops offline, recording automatically engages isolated
-              storage epoch transitions to prevent evidentiary corruption.
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Mount Guard verifies persistent partition attachment on every segment write. If the underlying disk drops offline,
+              the recording pipeline transitions to isolated storage epochs to prevent evidentiary database corruption.
             </p>
           </div>
         </div>
       </div>
 
       {/* Bottom Section: Support Diagnostics Bundle Card */}
-      <div className="bg-gradient-to-r from-graphite-850 via-graphite-850 to-graphite-800 border border-graphite-700 rounded-lg p-6 space-y-4 shadow-lg">
+      <div className="bg-[#0D1117] border border-[#21262D] p-5 space-y-4 relative">
+        <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
+        <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-              <FileArchive className="w-5 h-5 text-cctv-amber" />
-              <span>Level-3 Support & Diagnostics Bundle</span>
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <FileArchive className="w-4 h-4 text-[#E3B341]" />
+              <span>[ LEVEL-3 SUPPORT & DIAGNOSTICS BUNDLE ]</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Generate an end-to-end sanitized diagnostic archive for vendor escalation. All sensitive
-              secrets are automatically redacted before packaging.
+              Generate an end-to-end sanitized diagnostic archive for manufacturer escalation. All cryptographic secrets are automatically redacted.
             </p>
           </div>
 
           <button
             onClick={handleDownloadBundle}
             disabled={downloadingBundle}
-            className="px-5 py-2.5 bg-cctv-amber text-graphite-900 font-bold text-xs rounded hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-2 shadow disabled:opacity-50 flex-shrink-0"
+            className="px-4 py-2 bg-[#E3B341] text-[#080B10] font-bold text-xs hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-2 rounded-none shadow flex-shrink-0 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{downloadingBundle ? 'Compiling Archive...' : 'Download Bundle (.tar.gz)'}</span>
+            <span>{downloadingBundle ? 'COMPILING ARCHIVE...' : 'DOWNLOAD BUNDLE (.TAR.GZ)'}</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs font-mono">
-          <div className="bg-graphite-900/80 border border-graphite-800 p-3 rounded space-y-1">
-            <span className="text-cctv-teal font-semibold block flex items-center space-x-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+          <div className="bg-[#161B22] border border-[#21262D] p-3 space-y-1.5">
+            <span className="text-[#58A6FF] font-bold block flex items-center space-x-1 uppercase text-[10px]">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Included Telemetry</span>
+              <span>INCLUDED TELEMETRY</span>
             </span>
-            <ul className="text-slate-400 text-[11px] list-disc list-inside space-y-0.5">
-              <li>Appliance hardware vitals & uptime</li>
-              <li>Prisma schema & migration history</li>
-              <li>Redacted container service logs</li>
-              <li>Network ingress routing config</li>
+            <ul className="text-slate-400 text-[11px] space-y-0.5">
+              <li>• Appliance hardware vitals & uptime</li>
+              <li>• Prisma schema & migration history</li>
+              <li>• Redacted system service journals</li>
+              <li>• Network ingress routing table</li>
             </ul>
           </div>
 
-          <div className="bg-graphite-900/80 border border-graphite-800 p-3 rounded space-y-1">
-            <span className="text-emerald-400 font-semibold block flex items-center space-x-1">
+          <div className="bg-[#161B22] border border-[#21262D] p-3 space-y-1.5">
+            <span className="text-[#3FB950] font-bold block flex items-center space-x-1 uppercase text-[10px]">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Privacy Guarantees</span>
+              <span>PRIVACY GUARANTEES</span>
             </span>
-            <ul className="text-slate-400 text-[11px] list-disc list-inside space-y-0.5">
-              <li>Zero JWT or Bearer session tokens</li>
-              <li>Stripped database passwords</li>
-              <li>Redacted camera RTSP passwords</li>
-              <li>Zero private TLS / signing keys</li>
+            <ul className="text-slate-400 text-[11px] space-y-0.5">
+              <li>• Zero JWT or Bearer session tokens</li>
+              <li>• Stripped database passwords</li>
+              <li>• Redacted camera RTSP passwords</li>
+              <li>• Zero private TLS / signing keys</li>
             </ul>
           </div>
 
-          <div className="bg-graphite-900/80 border border-graphite-800 p-3 rounded space-y-1">
-            <span className="text-cctv-amber font-semibold block flex items-center space-x-1">
+          <div className="bg-[#161B22] border border-[#21262D] p-3 space-y-1.5">
+            <span className="text-[#E3B341] font-bold block flex items-center space-x-1 uppercase text-[10px]">
               <Terminal className="w-3.5 h-3.5" />
-              <span>CLI Equivalent</span>
+              <span>TERMINAL CLI EQUIVALENT</span>
             </span>
             <p className="text-slate-400 text-[11px]">
-              Technicians on the host terminal can compile the identical bundle via:
+              Engineers on the host terminal can compile the identical bundle via:
             </p>
-            <code className="block text-[10px] text-cctv-amber bg-graphite-950 p-1 rounded border border-graphite-800 mt-1">
+            <code className="block text-[10px] text-[#E3B341] bg-[#080B10] p-1.5 border border-[#21262D] mt-1 font-mono select-text">
               sudo vigilonectl support-bundle
             </code>
           </div>

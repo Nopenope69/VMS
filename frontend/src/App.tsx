@@ -17,21 +17,38 @@ import Login from './pages/Login';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 
 const OutOfScopeNotice: React.FC<{ name: string; description: string }> = ({ name, description }) => (
-  <div className="max-w-3xl mx-auto my-16 p-8 bg-graphite-850 border border-amber-500/30 rounded-xl text-center shadow-xl">
-    <div className="inline-flex p-3 rounded-full bg-amber-500/10 text-amber-400 mb-4 ring-1 ring-amber-500/20">
-      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-        />
-      </svg>
+  <div className="max-w-3xl mx-auto my-16 bg-[#0D1117] border border-[#21262D] p-6 relative rounded-none shadow-2xl">
+    {/* Optical Corner Reticles */}
+    <span className="absolute -top-1 -left-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
+    <span className="absolute -top-1 -right-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
+    <span className="absolute -bottom-1 -left-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
+    <span className="absolute -bottom-1 -right-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
+
+    <div className="flex items-center justify-between border-b border-[#21262D] pb-3 mb-5">
+      <div className="flex items-center gap-2">
+        <span className="inline-block w-2 h-2 bg-[#E3B341]" />
+        <span className="text-[11px] font-mono text-[#E3B341] tracking-widest uppercase font-bold">
+          [ ARCHITECTURAL SCOPE BOUNDARY // FROZEN ]
+        </span>
+      </div>
+      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+        SPEC: COMMERCIAL_V1_AIR_GAPPED
+      </span>
     </div>
-    <h2 className="text-xl font-bold text-slate-100 mb-2">{name} — Out of Scope for Commercial V1</h2>
-    <p className="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">{description}</p>
-    <div className="mt-6 pt-6 border-t border-graphite-700/60 text-xs text-slate-400 font-mono">
-      Commercial Scope Frozen under VigilOne Master Commercialization Execution Contract
+
+    <div className="p-4 bg-[#161B22] border border-[#21262D] mb-5">
+      <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider mb-1.5 flex items-center gap-2">
+        <span className="text-[#F85149] font-bold">///</span>
+        <span>{name}</span>
+      </h2>
+      <p className="text-xs font-mono text-slate-400 leading-relaxed">
+        {description}
+      </p>
+    </div>
+
+    <div className="flex items-center justify-between pt-3 border-t border-[#21262D] text-[10px] font-mono text-slate-500 uppercase">
+      <span>GOVERNANCE: VIGILONE MASTER ARCHITECTURE EXECUTION DIRECTIVE</span>
+      <span className="text-[#E3B341]">ROADMAP: COMMERCIAL_V2</span>
     </div>
   </div>
 );
