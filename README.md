@@ -102,3 +102,17 @@ VigilOne enforces a strict Software Bill of Materials (SBOM) policy:
 - The proprietary application codebase (`backend/`, `frontend/`) imports **strictly MIT, Apache-2.0, and BSD** dependencies.
 - Copyleft **AGPL-3.0** (e.g. Ultralytics YOLO, OpenALPR) and **GPL** (e.g. ZoneMinder, Bluecherry core) are excluded from proprietary application modules.
 - FFmpeg is executed strictly as a standalone operating system subprocess (`child_process.spawn()`). GPL obligations for the shipped binary (`libx264`) are fulfilled with source offers and license terms detailed in `THIRD_PARTY_LICENSES.md`.
+
+---
+
+## 5. Next Steps: Cloud Pilot & Physical Hardware Roadmap
+
+All software engineering gates through Stage 5 are 100% complete and verified (77 test suites passing, clean builds, live container DR drill passed). The system is ready for real-world deployment validation:
+
+- **Track 1: Google Cloud VM Deployment** — Test the single-command turnkey installer (`deploy/packaging/install.sh --unattended`) on a fresh Ubuntu 22.04/24.04 LTS VM, configure Caddy HTTPS, and complete the browser bootstrap wizard.
+- **Track 2: 1–4 Physical Camera Bench Canary** — Connect real physical IP cameras (Hikvision, Dahua, CP Plus, ONVIF) over a local PoE switch to test ONVIF discovery, PTZ controls, real Ethernet RTSP transport, and network disconnect recovery.
+- **Track 3: Supervised Customer Pilot** — Commission the first production site using the documented [Technician SOP](docs/operations/TECHNICIAN_SOP_AND_INSTALLATION_MANUAL.md) and [Acceptance Checklist](docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md).
+
+For complete step-by-step procedures and commands, see:  
+📘 **[`docs/operations/NEXT_STEPS_PILOT_AND_HARDWARE_ROADMAP.md`](docs/operations/NEXT_STEPS_PILOT_AND_HARDWARE_ROADMAP.md)**
+
