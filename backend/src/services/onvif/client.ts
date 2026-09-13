@@ -40,7 +40,8 @@ export class OnvifClientManager {
     }
 
     const cam = await new Promise<Cam>((resolve, reject) => {
-      const c = new Cam(
+      let c: Cam;
+      c = new Cam(
         {
           hostname: creds.hostname,
           port: creds.port,
@@ -52,7 +53,7 @@ export class OnvifClientManager {
           if (err) {
             reject(new Error(`ONVIF connection to ${creds.hostname}:${creds.port} failed: ${err.message}`));
           } else {
-            resolve(c);
+            setImmediate(() => resolve(c));
           }
         }
       );

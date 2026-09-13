@@ -1,10 +1,10 @@
 # Stage 4 Internal Engineering Verification Gate & Evidence Pack
 
 > **Gate:** Stage 4 — Operationalize (Weeks 13–15)  
-> **Status:** PASSED (Internal Automated Engineering Gates)  
-> **Execution Date:** 2026-09-13  
+> **Status:** CODE COMPLETE + REAL CONTAINER DR VERIFIED  
+> **Execution Date:** 2026-09-14 (Updated Post-Critique Remediation)  
 > **Master Execution Authority:** [`docs/audits/MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md`](./MASTER_COMMERCIALIZATION_EXECUTION_CONTRACT.md)  
-> **Verification Type:** Internal Automated Test & Build Suite (Self-Assessment)
+> **Verification Type:** Internal Automated Test, Build Suite & Live Container DR Drill (Self-Assessment)
 
 ---
 
@@ -22,12 +22,12 @@ Core Architecture Reviewer
   │
   ▼
 [Verification Method]
-Automated Jest Regression Suites, Installer Syntax/Invariants, and Build Gates
+Automated Jest Regression Suites, Live PostgreSQL 16 Container Disaster Recovery Drill, Installer Syntax/Invariants, and Build Gates
   │
   ▼
 [Verification Status]
-PASS — 100% Stage 4 Objectives Verified with Zero Regressions
-Execution Timestamp: 2026-09-13T07:15:00Z
+STAGE 4 CODE COMPLETE + REAL CONTAINER DR VERIFIED
+Execution Timestamp: 2026-09-14T00:18:00Z
 ```
 
 ---
@@ -38,7 +38,7 @@ Execution Timestamp: 2026-09-13T07:15:00Z
 | :--- | :--- | :--- | :--- |
 | **Task 4.1: Turnkey Single-Command Installer** | Zero-terminal unattended deployment with `--non-interactive`; strict mount failure exit 1; 45s post-install health verification probe with fatal exit on degradation. | **PASS** | [`deploy/packaging/install.sh`](../../deploy/packaging/install.sh)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) (39/39 passed) |
 | **Task 4.2: Cryptographic OTA Updates** | Dedicated Ed25519 OTA signing key distinct from commercial license domain; manifest and payload verification prior to extraction; path traversal defense; semver/epoch downgrade prevention against persistent monotonic release floor; automated pre-update PostgreSQL database dump (`database.sql`) + `/etc/vigilone` configuration snapshot; deep stream healthcheck (backend + MediaMTX with 5% tolerance); automatic snapshot rollback with database restoration and strict monotonic security state preservation (Clock floor + license revocation floor + trust-anchor floor + OTA release floor). | **PASS** | [`backend/src/config/otaKeys.ts`](../../backend/src/config/otaKeys.ts)<br>[`backend/src/services/appliance/otaUpdate.service.ts`](../../backend/src/services/appliance/otaUpdate.service.ts)<br>[`backend/src/scripts/packageOta.ts`](../../backend/src/scripts/packageOta.ts)<br>[`backend/src/__tests__/otaUpdate.test.ts`](../../backend/src/__tests__/otaUpdate.test.ts) (10/10 passed) |
-| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest ([`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)); unmappable media quarantined; pinned segments restored from host mirror ([`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state), mode 0600) with honest audit logging. | **PASS** | [`backend/src/services/evidence/pinStateMirror.service.ts`](../../backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](../../backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](../../backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](../../backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](../../backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed) |
+| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest ([`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)); unmappable media quarantined; pinned segments restored from host mirror ([`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state), mode 0600) with honest audit logging.<br>**Live Container Drill:** Real PostgreSQL 16 container schema wipe and full restore verified with disk byte/hash matching. | **PASS** (Jest Suites + Real Container DR Drill) | [`backend/src/services/evidence/pinStateMirror.service.ts`](../../backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](../../backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](../../backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](../../backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](../../backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed)<br>[`scripts/dr-drill.sh`](../../scripts/dr-drill.sh) |
 | **Task 4.4: ClockGuard Host State & Hardware Binding** | Monotonic `/etc/vigilone/clock_guard.state` (`0o600`); clock rollback detection clamps license evaluation to trusted floor; DMI board UUID primary hardware binding corroborated with `machine-id`; active commercial license host mirroring to `/etc/vigilone/license.json` (`0o600`) and boot-time auto-reconciliation on bare-metal DB rebuild. | **PASS** | [`backend/src/utils/clockGuard.ts`](../../backend/src/utils/clockGuard.ts)<br>[`backend/src/utils/license.ts`](../../backend/src/utils/license.ts)<br>[`backend/src/services/appliance/licenseHostMirror.service.ts`](../../backend/src/services/appliance/licenseHostMirror.service.ts)<br>[`backend/src/routes/license.routes.ts`](../../backend/src/routes/license.routes.ts)<br>[`backend/src/services/reconciliation/startupReconciler.service.ts`](../../backend/src/services/reconciliation/startupReconciler.service.ts)<br>[`backend/src/__tests__/clockGuardHostState.test.ts`](../../backend/src/__tests__/clockGuardHostState.test.ts) (9/9 passed) |
 | **CLI Operations (vigilonectl)** | Production appliance CLI support for `ota <apply\|rollback\|status>` and `backup <create\|restore>`. | **PASS** | [`deploy/packaging/vigilonectl`](../../deploy/packaging/vigilonectl)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) |
 
@@ -168,6 +168,36 @@ PASS src/__tests__/clockGuardHostState.test.ts
     Commercial License Host Mirroring & Database Rebuild Reconciliation
       ✓ saves license artifact to host mirror with mode 0o600 and loads accurately
       ✓ auto-reconciles license into clean database on startup after catastrophic DB wipe
+```
+
+### 3.5 Live Container Disaster Recovery Drill (`scripts/dr-drill.sh`)
+To resolve the critique requirement that disaster recovery be verified against a real database rather than in-memory mocks, `scripts/dr-drill.sh` executes a live containerized drill against PostgreSQL 16 (`postgres:16-alpine` on port 5433):
+1. **Schema Initialization:** Executes `prisma migrate deploy` against the clean container.
+2. **State & Media Seeding:**
+   - Seeds `Tenant`, `Site`, `Camera`, and `RecordingSegment` records.
+   - Generates a physical fragmented MP4 video segment on the recording volume with known byte payload and SHA-256 hash (`cc0e6e9e...`).
+   - Generates host appliance state at `/etc/vigilone/clock_guard.state`.
+3. **Atomic Backup:** Bundles `database.sql` (pg_dump) and `/etc/vigilone` into `dr_backup_*.tar.gz`.
+4. **Hard Database Guard:** Prevents destructive drills against production databases by validating `DATABASE_URL` against `dr_test` pattern before executing schema drops.
+5. **Catastrophic Drop:** Drops public schema (`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`).
+6. **Full Restore & Re-Verification:**
+   - Restores schema and records from `database.sql`.
+   - Restores `/etc/vigilone/clock_guard.state` host state.
+   - Queries recovered `RecordingSegment`: verifies recovered SHA-256 matches actual media file bytes on disk byte-for-byte.
+   - Probes recovered media file using `ffprobe`: confirms valid fMP4 container.
+
+```text
+[DR-DRILL] Step 1: Starting ephemeral PostgreSQL container on port 5433...
+[DR-DRILL] Step 2: Running Prisma migrations against drill database...
+[DR-DRILL] Step 3: Seeding live test state (Tenant, Site, Camera, RecordingSegment) and creating real fMP4 video on disk...
+[DR-DRILL] Step 4: Creating atomic backup archive (database.sql + /etc/vigilone)...
+[DR-DRILL] Step 5: CATASTROPHIC DISASTER SIMULATION (Dropping drill database schema)...
+[DR-DRILL] Step 6: Executing restore procedure from backup...
+[DR-DRILL] Step 7: Verifying restored database records and physical media consistency...
+[DR-DRILL]   ✓ Restored segment found: ID=seg-dr-drill-1
+[DR-DRILL]   ✓ SHA-256 match confirmed: cc0e6e9e...
+[DR-DRILL]   ✓ Physical media file verified via ffprobe: format=mov,mp4,m4a,3gp,3g2,mj2
+[DR-DRILL] SUCCESS: Full disaster recovery drill PASSED with real PostgreSQL container and verified disk media!
 ```
 
 ---

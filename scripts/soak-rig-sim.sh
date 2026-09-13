@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # VigilOne Stage 3: 64-Camera Soak Test Rig Simulation Script
-# Strictly simulates 4 vendor cohorts x 16 streams = 64 concurrent streams
-# Conforms to Master Execution Contract Section 3.1.1
+#
+# IMPORTANT HARDWARE BOUNDARY & VERIFICATION NOTICE:
+# This script scaffolds 64 stream directories and validates storage mount guards.
+#
+# Scope Demarcation:
+# 1. Directory Scaffolding & Storage Prep: Sets up directory layout for 64 cameras.
+# 2. Automated Lab Load: Executed via backend/src/__tests__/realStreamLoad.test.ts
+#    using real FFmpeg fMP4 video encoding.
+# 3. 64-Camera Physical Soak: Physical 168-hour soak requires physical cameras
+#    and PoE switch infrastructure. This script represents synthetic lab scaffolding,
+#    NOT 168 elapsed hours of physical hardware soak.
 # ==============================================================================
 
 set -euo pipefail

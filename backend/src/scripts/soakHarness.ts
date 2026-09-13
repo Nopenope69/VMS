@@ -6,6 +6,11 @@ import { formatSegmentFilename, calculateSegmentBounds } from '../utils/segmentP
 import { computeFileSha256 } from '../utils/crypto';
 import config from '../config/env';
 
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+
 export interface SoakCycleMetrics {
   cycleNumber: number;
   totalCameras: number;
@@ -27,6 +32,23 @@ export class SoakTestHarness {
     this.prisma = prisma;
     this.topology = generate64CameraTopology();
     this.baseDir = baseDir || config.RECORDINGS_DIR || '/var/lib/vigilone/recordings';
+  }
+
+  /**
+   * Generates a genuine fragmented MP4 file with moof/mdat atoms using FFmpeg
+   */
+  public async generateRealFmp4Segment(filePath: string, durationSec = 2): Promise<void> {
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-f', 'lavfi',
+      '-i', `testsrc=duration=${durationSec}:size=320x240:rate=10`,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-tune', 'zerolatency',
+      '-f', 'mp4',
+      '-movflags', '+empty_moov+default_base_moof+frag_keyframe',
+      filePath,
+    ]);
   }
 
   /**
@@ -77,9 +99,15 @@ export class SoakTestHarness {
   }
 
   /**
-   * Simulates a synchronized recording segment generation cycle across all 64 cameras
+   * Simulates a synchronized recording segment generation cycle across cameras.
+   * Can use synthetic payloads for pure scale simulation or real FFmpeg fMP4 generation.
    */
-  async simulateSegmentCycle(cycleIndex: number, timestampUtc: Date, segmentDurationSec = 600): Promise<SoakCycleMetrics> {
+  async simulateSegmentCycle(
+    cycleIndex: number,
+    timestampUtc: Date,
+    segmentDurationSec = 600,
+    options?: { useRealFmp4?: boolean; cameraSubset?: number }
+  ): Promise<SoakCycleMetrics> {
     let segmentsCreated = 0;
     let segmentsIndexed = 0;
     let zeroByteFiles = 0;
@@ -88,8 +116,11 @@ export class SoakTestHarness {
     let storageUsageBytes = 0;
 
     const durationMs = segmentDurationSec * 1000;
+    const targetCams = options?.cameraSubset
+      ? this.topology.slice(0, options.cameraSubset)
+      : this.topology;
 
-    for (const cam of this.topology) {
+    for (const cam of targetCams) {
       const camDir = path.join(this.baseDir, cam.streamPath);
       if (!fs.existsSync(camDir)) {
         fs.mkdirSync(camDir, { recursive: true });
@@ -98,12 +129,16 @@ export class SoakTestHarness {
       const filename = formatSegmentFilename(timestampUtc, 'mp4');
       const filePath = path.join(camDir, filename);
 
-      // Generate simulated fMP4 payload conforming to target bitrate
-      // e.g. 2.5 Mbps for 10 min = ~187.5 MB, scaled down for test runner
-      const mockPayload = Buffer.from(
-        `VIGILONE_64_SOAK_STREAM_COHORT_${cam.cohort}_CAM_${cam.id}_CYCLE_${cycleIndex}`
-      );
-      fs.writeFileSync(filePath, mockPayload);
+      if (options?.useRealFmp4) {
+        // Generate real fragmented MP4 using FFmpeg with explicit moof/mdat atoms
+        await this.generateRealFmp4Segment(filePath, Math.min(segmentDurationSec, 2));
+      } else {
+        // Fast synthetic test payload
+        const mockPayload = Buffer.from(
+          `VIGILONE_64_SOAK_STREAM_COHORT_${cam.cohort}_CAM_${cam.id}_CYCLE_${cycleIndex}`
+        );
+        fs.writeFileSync(filePath, mockPayload);
+      }
       segmentsCreated++;
 
       const stat = fs.statSync(filePath);

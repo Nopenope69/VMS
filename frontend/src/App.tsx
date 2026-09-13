@@ -8,16 +8,33 @@ import Evidence from './pages/Evidence';
 import Users from './pages/Users';
 import AuditLogs from './pages/AuditLogs';
 import License from './pages/License';
-import AnprConsole from './pages/AnprConsole';
-import FederationConsole from './pages/FederationConsole';
 import Investigation from './pages/Investigation';
 import FloorplanView from './pages/FloorplanView';
-import IdentitySettings from './pages/IdentitySettings';
 import StorageManagement from './pages/StorageManagement';
 import ApplianceConsole from './pages/ApplianceConsole';
 import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
+
+const OutOfScopeNotice: React.FC<{ name: string; description: string }> = ({ name, description }) => (
+  <div className="max-w-3xl mx-auto my-16 p-8 bg-graphite-850 border border-amber-500/30 rounded-xl text-center shadow-xl">
+    <div className="inline-flex p-3 rounded-full bg-amber-500/10 text-amber-400 mb-4 ring-1 ring-amber-500/20">
+      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        />
+      </svg>
+    </div>
+    <h2 className="text-xl font-bold text-slate-100 mb-2">{name} — Out of Scope for Commercial V1</h2>
+    <p className="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">{description}</p>
+    <div className="mt-6 pt-6 border-t border-graphite-700/60 text-xs text-slate-400 font-mono">
+      Commercial Scope Frozen under VigilOne Master Commercialization Execution Contract
+    </div>
+  </div>
+);
 
 export const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
@@ -188,11 +205,26 @@ export const App: React.FC = () => {
         {currentTab === 'investigation' && <Investigation />}
         {currentTab === 'floorplans' && <FloorplanView />}
         {currentTab === 'devices' && <Devices />}
-        {currentTab === 'anpr' && <AnprConsole />}
+        {currentTab === 'anpr' && (
+          <OutOfScopeNotice
+            name="ANPR & Automated Fleet Monitoring"
+            description="Automatic Number Plate Recognition (ANPR) is out of scope for the v1.0.0 edge NVR appliance (no local OCR/inference engine attached). Planned for v2.0."
+          />
+        )}
         {currentTab === 'events' && <Events />}
         {currentTab === 'evidence' && <Evidence />}
-        {currentTab === 'identity' && <IdentitySettings />}
-        {currentTab === 'federation' && <FederationConsole />}
+        {currentTab === 'identity' && (
+          <OutOfScopeNotice
+            name="Enterprise SSO & Identity Federation"
+            description="OIDC/SAML single sign-on is out of scope for v1.0.0. Authentication strictly uses local cryptographically secured credentials."
+          />
+        )}
+        {currentTab === 'federation' && (
+          <OutOfScopeNotice
+            name="Multi-Site Edge Mesh Federation"
+            description="WAN mesh sync between multiple appliances is out of scope for v1.0.0. Each appliance operates as an autonomous edge NVR."
+          />
+        )}
         {currentTab === 'users' && <Users />}
         {currentTab === 'audit' && <AuditLogs />}
         {currentTab === 'license' && <License />}

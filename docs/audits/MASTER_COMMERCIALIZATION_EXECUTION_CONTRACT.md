@@ -25,6 +25,20 @@ Engineering Complete  ──>  Pilot Ready  ──>  Field-Validated  ──>  F
 
 ---
 
+### 1.1.1 Current Commercialization Status & Stage Calibration (Post-Critique Remediation 14 Sept 2026)
+
+| Milestone Stage | Scope & Deliverables | Verification Status | Evidence Basis |
+|---|---|:---:|---|
+| **Stage 0: Contain** | License key rotation, offline minting, SSO elimination, token type hygiene, fake-success audit | **COMPLETE (100%)** | Dedicated automated tests, zero compromised keys in repo, strict RBAC/token enforcement |
+| **Stage 1: Make It Install** | Baseline PG migration, Prisma singleton, baked Caddy frontend, CI workflow, installer hardening | **COMPLETE (100%)** | Clean unattended install, 39/39 installer tests, zero terminal stalls |
+| **Stage 2: Make Core True** | MediaMTX webhooks, filename timestamps, fail-closed custody ledger, storage mount guard, RTSP smoke | **COMPLETE (100%)** | Real RTSP canary, deterministic timestamp authority, fail-closed audit locks |
+| **Stage 3: Prove It** | Scale, soak, failure envelopes, multi-stream fMP4 pipeline, 64-cam hardware soak | **LAB VERIFIED**<br>*(Real 4-Stream ffmpeg fMP4 Load Verified; 64-Cam 168h Field Soak Pending Hardware Bench)* | 4 concurrent real fMP4 streams × 3 rotations (12 segments, 0 loss, valid moov/moof/mdat atoms); 8/8 failure envelopes; 168h bench pending physical rack |
+| **Stage 4: Operationalize** | Turnkey installer, signed OTA updates, downgrade prevention, disaster recovery & bare-metal rebuild | **CODE COMPLETE + REAL CONTAINER DR VERIFIED** | Real PostgreSQL 16 container disaster recovery drill (`dr-drill.sh`), schema wipe & restore, disk byte/hash verified, 10/10 OTA tests |
+| **Stage 5: Commercialize & Pilot Ready** | Section 63 BSA evidence binding, open core routes, operability docs, pilot qualification | **LAB COMPLETE**<br>*(Cryptographic Evidence Binding & Open Routes Verified; Supervised Pilot Candidate)* | 25/25 route & ONVIF tests (`playbackRoutes.test.ts`, `evidenceRoutes.test.ts`, `onvifClient.test.ts`), real `pdfkit` BSA certificate, 9 operational runbooks |
+| **OVERALL SYSTEM STATUS** | **Pre-Pilot Lab Complete — Ready for Supervised Field Pilot Deployment** | | |
+
+---
+
 ### 1.2 Two-Axis Readiness Scoring
 Engineering effort cannot compress elapsed calendar time (e.g. a 30-day soak test requires 30 days). Progress is tracked on two strictly decoupled axes:
 

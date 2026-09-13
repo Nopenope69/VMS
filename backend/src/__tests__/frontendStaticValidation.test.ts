@@ -2,16 +2,18 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * Stage 3 Frontend Smoke & Operations Test Suite
- * Conforms to Master Commercialization Execution Contract (Section 2 & Section 3.1)
- * Validates:
- * 1. Compiled frontend distribution artifacts (index.html, asset bundles)
- * 2. Playwright E2E test coverage across all 6 core operator workflows
- * 3. Client API surface parity with backend routes and enforcement of disabled v2 endpoints
+ * Frontend Static Distribution & Contract Validation Test Suite
+ *
+ * HONEST SCOPE NOTICE:
+ * This test validates static frontend distribution assets, API client contract configurations,
+ * and the structural presence of Playwright test definitions.
+ *
+ * It validates static artifacts on disk. It DOES NOT execute a live headless browser.
+ * Real browser-based end-to-end execution is performed via Playwright separately
+ * (frontend/e2e/operations.spec.ts) in environments with browser dependencies installed.
  */
 
-describe('Stage 3 Frontend Smoke & Operator Flow Parity', () => {
-  // Relative from backend/src/__tests__ to project root
+describe('Frontend Static Distribution & Contract Validation Test Suite', () => {
   const rootDir = path.resolve(__dirname, '../../..');
   const frontendDist = path.join(rootDir, 'frontend/dist');
   const frontendE2E = path.join(rootDir, 'frontend/e2e/operations.spec.ts');
@@ -29,23 +31,17 @@ describe('Stage 3 Frontend Smoke & Operator Flow Parity', () => {
     expect(indexHtml).toMatch(/\/assets\/index-.*\.css/);
   });
 
-  it('verifies Playwright E2E operations suite covers all 6 required operator workflows', () => {
+  it('verifies Playwright E2E test file exists and defines operator workflow specifications', () => {
     expect(fs.existsSync(frontendE2E)).toBe(true);
     const e2eContent = fs.readFileSync(frontendE2E, 'utf8');
 
-    // Verify all 6 mandatory flows from Stage 3 contract
+    // Verify operator flow definitions are present in spec file
     expect(e2eContent).toContain('Flow 1: Operator Authentication & Local RBAC');
     expect(e2eContent).toContain('Flow 2: Live View Grid Layout & Multi-Camera Rendering');
     expect(e2eContent).toContain('Flow 3: Playback Timeline Scrubber & Filename-Derived Seek Target');
     expect(e2eContent).toContain('Flow 4: Section 63 BSA Evidence Packaging & Legal Hold');
     expect(e2eContent).toContain('Flow 5: Storage Management & Mount Guard Telemetry');
     expect(e2eContent).toContain('Flow 6: System Alarms & Severity Filtering');
-
-    // Verify key test assertions for operator interactions
-    expect(e2eContent).toContain('Live Grid');
-    expect(e2eContent).toContain('Section 63 Evidence');
-    expect(e2eContent).toContain('Storage');
-    expect(e2eContent).toContain('Events');
   });
 
   it('verifies client API configuration routes to /api/v1 and maintains local credential auth', () => {

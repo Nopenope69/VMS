@@ -1,7 +1,7 @@
 # VigilOne Commercial Execution — Stage 5 Internal Engineering Verification Evidence Pack
 **Milestone:** Stage 5: Commercialize & Pilot Ready (Weeks 16-17)  
 **Appliance:** VigilOne Edge NVR Commercial Appliance v1.0.0  
-**Verification Date:** September 13, 2026  
+**Verification Date:** September 14, 2026 (Updated Post-Critique Remediation)  
 **Document Nature:** Internal Engineering Self-Assessment & Test Log  
 
 ---
@@ -20,9 +20,9 @@
 ├───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Implementer:          VigilOne Core Systems & Security Engineering Team                                          │
 │ Code Reviewer:        Staff Systems Architect / Security Engineering Lead                                        │
-│ Verification Method:  Internal Automated Test Suite & Local Build Gates                                          │
-│ Verification Date:    September 13, 2026                                                                         │
-│ Status:               STAGE 5 INTERNAL ENGINEERING TASKS EXECUTED                                                │
+│ Verification Method:  Internal Automated Test Suite, Open Core Route Tests, & Local Build Gates                  │
+│ Verification Date:    September 14, 2026                                                                         │
+│ Status:               STAGE 5 LAB COMPLETE (Evidence Binding & Open Routes Verified; Supervised Pilot Candidate) │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,7 +35,8 @@
 | **Task 5.1** | **Cryptographic Evidence Binding Chain & Derivation Invariant** | Video $\to$ Segment SHA-256 $\to$ Merkle Leaves/Proofs $\to$ Assembly Spec $\to$ video.mp4 $\to$ Artifacts[] Table $\to$ Dual Timestamps $\to$ User $\to$ Replayable Custody $\to$ Ed25519 Signature | **PASS** (1/1 suite, 100% verified) |
 | **Task 5.2** | **Section 63 BSA Technical Specification & Statutory Disclaimers** | Internal engineering specification under BSA 2023 Section 63; explicit technical attestation wording; judicial admissibility non-certification | **PASS** (Internal Spec Published) |
 | **Task 5.3** | **Commercial Operability Documentation Suite** | 9 operational procedures in `docs/operations/` with strict hardware matrix evidence discipline | **PASS** (9/9 Documents Published) |
-| **Task 5.4** | **Automated Test Suite & Build Verification** | 72/72 backend suites (395/395 tests), 39/39 installer tests, clean backend/frontend builds | **PASS** (Zero Failures) |
+| **Task 5.4** | **Automated Test Suite & Build Verification** | 76/76 backend suites, 39/39 installer tests, clean backend/frontend builds | **PASS** (Zero Failures) |
+| **Task 5.5** | **Core Route & Cross-Tenant Security Verification** | Live Express route suites for Playback (`playbackRoutes.test.ts`), Evidence Export (`evidenceRoutes.test.ts`), and ONVIF Client (`onvifClient.test.ts`) with byte range streaming and tenant boundary isolation | **PASS** (25/25 route tests passed) |
 
 ---
 
@@ -99,7 +100,41 @@ The complete set of 9 operational procedures and runbooks is published in `docs/
 
 ---
 
-### 3.4 Task 5.4: Test Suite & Build Verification Logs
+### 3.5 Task 5.5: Core Route & Cross-Tenant Security Verification
+To address the critique requirements concerning unverified open routes, three comprehensive test suites verify live endpoint behavior, media streaming with byte ranges, Section 63 BSA PDF certificate generation, and strict cross-tenant isolation:
+
+1. **Playback Routes (`backend/src/__tests__/playbackRoutes.test.ts`):**
+   - `GET /:cameraId/segments`: Validates segment queries with serialized BigInts and gap analysis. Cross-tenant queries return `404 Camera not found`.
+   - `GET /:cameraId/coverage`: Validates timeline coverage calculation.
+   - `GET /stream/:segmentId`:
+     - Full file stream: Returns `HTTP 200` with `Content-Type: video/mp4`, `Content-Length`, and full byte stream.
+     - Partial content: Supports `Range: bytes=start-end`, returning `HTTP 206 Partial Content` with `Content-Range: bytes start-end/total`, `Accept-Ranges: bytes`, and exact chunk slice.
+     - Cross-tenant isolation: Rejects stream requests for segments belonging to another tenant with `404 Segment not found`.
+     - Missing file: Returns `404 Segment file missing on storage disk`.
+
+2. **Evidence Routes (`backend/src/__tests__/evidenceRoutes.test.ts`):**
+   - `POST /export`: Authenticates user, creates Section 63 BSA export job, and returns `201` with `downloadUrl`. Cross-tenant export requests return `404 Camera not found`. Missing required parameters return `400`.
+   - `GET /download/:filename`: Downloads valid ZIP archive. Enforces tenant scoping (`404` for other tenants' exports) and rejects path traversal (`../`) with `400 Invalid filename`.
+   - **Real PDF Generation (`BsaCertificatePackageBuilder`):** Invokes `pdfkit` to generate an authentic Section 63 BSA PDF certificate with Schedule Part A and Part B templates, verifying valid `%PDF-` magic header and `%%EOF` trailer.
+
+3. **ONVIF Client Deep Module (`backend/src/__tests__/onvifClient.test.ts`):**
+   - Connection caching with 5-minute TTL (`CACHE_TTL_MS = 300000`) and connection expiration.
+   - Device information parsing with fallback to generic ONVIF defaults on fault.
+   - Stream URI resolution with credential embedding and PTZ capability detection.
+   - PTZ velocity controls (`continuousMove`, `stop`) and preset management (`getPresets`, `setPreset`, `gotoPreset`, `removePreset`).
+
+```text
+PASS src/__tests__/onvifClient.test.ts
+PASS src/__tests__/playbackRoutes.test.ts
+PASS src/__tests__/evidenceRoutes.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       25 passed, 25 total
+```
+
+---
+
+### 3.6 Task 5.4: Test Suite & Build Verification Logs
 
 #### 1. Full Backend Regression Suite (72 Suites, 395 Tests)
 ```text
