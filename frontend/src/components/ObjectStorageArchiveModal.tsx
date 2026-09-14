@@ -57,8 +57,13 @@ export const ObjectStorageArchiveModal: React.FC<ObjectStorageArchiveModalProps>
   useEffect(() => {
     if (isOpen) {
       fetchConfigAndJobs();
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -77,14 +82,19 @@ export const ObjectStorageArchiveModal: React.FC<ObjectStorageArchiveModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-sans text-slate-100">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="archive-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-sans text-slate-100"
+    >
       <div className="bg-graphite-900 border border-graphite-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-graphite-700 flex items-center justify-between bg-graphite-850">
           <div className="flex items-center space-x-2">
             <Cloud className="w-5 h-5 text-cctv-teal" />
             <div>
-              <h2 className="text-base font-bold tracking-wider uppercase text-slate-100">
+              <h2 id="archive-modal-title" className="text-base font-bold tracking-wider uppercase text-slate-100">
                 Offsite Object Storage Archive (S3 / MinIO)
               </h2>
               <p className="text-[11px] font-mono text-slate-400">
@@ -292,7 +302,7 @@ export const ObjectStorageArchiveModal: React.FC<ObjectStorageArchiveModalProps>
                       </td>
                       <td className="py-1.5">
                         {j.priority ? (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold">
+                          <span className="px-1.5 py-[2px] rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold">
                             LEGAL PIN
                           </span>
                         ) : (
@@ -301,7 +311,7 @@ export const ObjectStorageArchiveModal: React.FC<ObjectStorageArchiveModalProps>
                       </td>
                       <td className="py-1.5">
                         <span
-                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                          className={`px-1.5 py-[2px] rounded text-[9px] font-bold ${
                             j.status === 'COMPLETED'
                               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                               : j.status === 'FAILED'

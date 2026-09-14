@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ShieldAlert, Download, Upload, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../services/api';
 
@@ -14,6 +14,17 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
   const [restorePayloadJson, setRestorePayloadJson] = useState<string>('');
   const [restoreSummary, setRestoreSummary] = useState<any | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const handleDownloadBackup = async () => {
     setDownloading(true);
@@ -98,7 +109,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backup-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+    >
       <div className="bg-graphite-850 border border-graphite-700 w-full max-w-2xl max-h-[90vh] rounded-lg shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-graphite-700 flex items-center justify-between bg-graphite-900">
@@ -107,7 +123,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
               <ShieldAlert className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-wide uppercase">Disaster Recovery & Appliance Backup</h2>
+              <h2 id="backup-modal-title" className="text-sm font-bold tracking-wide uppercase">Disaster Recovery & Appliance Backup</h2>
               <p className="text-[11px] text-slate-400 font-mono">
                 AES-256-GCM Encrypted Configuration Archive (.vigilone-backup)
               </p>
@@ -117,6 +133,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({ isOpen, onClose }) => 
           <button
             onClick={onClose}
             className="p-1 rounded text-slate-400 hover:text-white hover:bg-graphite-700 transition"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>

@@ -144,6 +144,17 @@ export const StorageManagement: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddVolumeModal(false);
+        setEditingCamera(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleRunReconcile = async () => {
     setReconciling(true);
     setError(null);
@@ -261,17 +272,17 @@ export const StorageManagement: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 font-mono text-[#C9D1D9] overflow-y-auto">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 font-mono text-tactical-text overflow-y-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0D1117] p-3.5 border border-[#21262D]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-tactical-panel p-3.5 border border-tactical-border">
         <div>
           <div className="flex items-center space-x-2.5">
-            <HardDrive className="w-5 h-5 text-[#E3B341]" />
+            <HardDrive className="w-5 h-5 text-phosphor-amber" />
             <div>
-              <h1 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
-                [ STORAGE OPERATIONS & MOUNT GUARD RESILIENCE CONSOLE ]
+              <h1 className="text-sm font-bold text-tactical-bright uppercase tracking-wider font-mono">
+                Storage Operations & Mount Guard Resilience Console
               </h1>
-              <p className="text-[10px] text-[#8B949E]">
+              <p className="text-[11px] text-tactical-muted font-sans mt-0.5">
                 MULTI-VOLUME DRIVE REGISTRY • RATE-ADAPTIVE INGESTION • SECTION 63 LEGAL HOLD INVARIANCE
               </p>
             </div>
@@ -282,25 +293,25 @@ export const StorageManagement: React.FC = () => {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-[#E3B341] border border-[#30363D] flex items-center space-x-1.5 transition-colors"
+            className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#E3B341]' : ''}`} />
-            <span>[ REFRESH ]</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-phosphor-amber' : ''}`} />
+            <span>Refresh</span>
           </button>
           <button
             onClick={handleRunReconcile}
             disabled={reconciling}
-            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#E3B341] border border-[#E3B341] flex items-center space-x-1.5 transition-colors"
+            className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-phosphor-amber flex items-center space-x-1.5 transition-colors"
           >
             <Wrench className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} />
-            <span>{reconciling ? '[ SCANNING... ]' : '[ INTEGRITY SCAN ]'}</span>
+            <span>{reconciling ? 'Scanning...' : 'Integrity Scan'}</span>
           </button>
           <button
             onClick={() => setShowAddVolumeModal(true)}
-            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] flex items-center space-x-1.5 transition-colors"
+            className="btn-tactical-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>[ + REGISTER VOLUME ]</span>
+            <span>+ Register Volume</span>
           </button>
         </div>
       </div>
@@ -447,7 +458,7 @@ export const StorageManagement: React.FC = () => {
                   <td className="py-2.5 px-3.5 font-bold flex items-center space-x-2">
                     <span>{vol.name}</span>
                     {vol.isDefault && (
-                      <span className="text-[9px] px-1 py-0.2 bg-[#161B22] border border-[#58A6FF] text-[#58A6FF] font-bold">
+                      <span className="text-[9px] px-1 py-[2px] bg-[#161B22] border border-[#58A6FF] text-[#58A6FF] font-bold">
                         DEFAULT
                       </span>
                     )}
@@ -627,43 +638,47 @@ export const StorageManagement: React.FC = () => {
 
       {/* Add Volume Modal */}
       {showAddVolumeModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
-          <div className="bg-[#0D1117] border border-[#30363D] rounded-none p-5 max-w-md w-full shadow-2xl">
-            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-[#21262D] pb-2">
-              <HardDrive className="w-4 h-4 text-[#E3B341]" />
-              [ REGISTER PHYSICAL STORAGE VOLUME ]
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        >
+          <div className="bg-tactical-panel border border-tactical-border rounded-none p-5 max-w-md w-full shadow-2xl">
+            <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-tactical-border pb-2 font-mono">
+              <HardDrive className="w-4 h-4 text-phosphor-amber" />
+              Register Physical Storage Volume Pool
             </h3>
             <form onSubmit={handleCreateVolume} className="space-y-3 text-xs">
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">VOLUME_NAME:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">VOLUME_NAME:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Drive Bay 2 (WD Purple)"
                   value={newVolName}
                   onChange={(e) => setNewVolName(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">PHYSICAL_MOUNT_PATH:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">PHYSICAL_MOUNT_PATH:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. /mnt/cctv_hdd2"
                   value={newVolPath}
                   onChange={(e) => setNewVolPath(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">DEVICE_IDENTIFIER (OPTIONAL):</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">DEVICE_IDENTIFIER (OPTIONAL):</label>
                 <input
                   type="text"
                   placeholder="e.g. /dev/sdb1 or UUID=..."
                   value={newVolDevice}
                   onChange={(e) => setNewVolDevice(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
               <div className="flex items-center space-x-2 pt-1">
@@ -672,26 +687,26 @@ export const StorageManagement: React.FC = () => {
                   id="isDef"
                   checked={newVolIsDefault}
                   onChange={(e) => setNewVolIsDefault(e.target.checked)}
-                  className="border-[#30363D] bg-[#080B10] text-[#E3B341] rounded-none"
+                  className="border-tactical-border bg-tactical-canvas text-phosphor-amber rounded-none"
                 />
-                <label htmlFor="isDef" className="text-[11px] text-[#C9D1D9]">
+                <label htmlFor="isDef" className="text-[11px] text-tactical-text font-sans">
                   Set as default recording volume for new cameras
                 </label>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
                 <button
                   type="button"
                   onClick={() => setShowAddVolumeModal(false)}
-                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
+                  className="btn-tactical-secondary px-3 py-1.5 uppercase font-bold text-xs"
                 >
-                  [ CANCEL ]
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs"
+                  className="btn-tactical-primary px-4 py-1.5 uppercase font-bold text-xs"
                 >
-                  [ REGISTER VOLUME ]
+                  Register Volume
                 </button>
               </div>
             </form>
@@ -701,18 +716,22 @@ export const StorageManagement: React.FC = () => {
 
       {/* Edit Retention Policy Modal */}
       {editingCamera && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
-          <div className="bg-[#0D1117] border border-[#30363D] rounded-none p-5 max-w-md w-full shadow-2xl">
-            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider mb-1 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-[#E3B341]" />
-              [ CONFIGURE RETENTION: {editingCamera.name} ]
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        >
+          <div className="bg-tactical-panel border border-tactical-border rounded-none p-5 max-w-md w-full shadow-2xl">
+            <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider mb-1 flex items-center gap-2 font-mono">
+              <Sliders className="w-4 h-4 text-phosphor-amber" />
+              Configure Retention: {editingCamera.name}
             </h3>
-            <p className="text-[10px] text-[#8B949E] mb-3 pb-2 border-b border-[#21262D]">
+            <p className="text-[10px] text-tactical-muted mb-3 pb-2 border-b border-tactical-border font-mono">
               STREAM_PATH: {editingCamera.streamPath}
             </p>
             <form onSubmit={handleSaveRetention} className="space-y-3 text-xs">
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">CONTINUOUS_RETENTION_DAYS:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">CONTINUOUS_RETENTION_DAYS:</label>
                 <input
                   type="number"
                   min="1"
@@ -720,11 +739,11 @@ export const StorageManagement: React.FC = () => {
                   required
                   value={editContinuousDays}
                   onChange={(e) => setEditContinuousDays(parseInt(e.target.value, 10) || 1)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">MOTION_RETENTION_DAYS:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">MOTION_RETENTION_DAYS:</label>
                 <input
                   type="number"
                   min="1"
@@ -732,29 +751,29 @@ export const StorageManagement: React.FC = () => {
                   required
                   value={editMotionDays}
                   onChange={(e) => setEditMotionDays(parseInt(e.target.value, 10) || 1)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">STORAGE_QUOTA_CAP_GB (OPTIONAL):</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">STORAGE_QUOTA_CAP_GB (OPTIONAL):</label>
                 <input
                   type="number"
                   min="1"
                   placeholder="Leave empty for uncapped"
                   value={editMaxGb}
                   onChange={(e) => setEditMaxGb(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
-                <span className="text-[9px] text-[#484F58] mt-1 block">
+                <span className="text-[11px] text-tactical-muted mt-1 block font-sans">
                   Camera will prune oldest unpinned footage when consumption exceeds this cap.
                 </span>
               </div>
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">PRUNING_PRIORITY:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">PRUNING_PRIORITY:</label>
                 <select
                   value={editPriority}
                   onChange={(e) => setEditPriority(e.target.value as any)}
-                  className="w-full px-2.5 py-1.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 >
                   <option value="HIGH">HIGH (Vault, Cash, Perimeter - Pruned Last)</option>
                   <option value="NORMAL">NORMAL (General Areas, Corridors)</option>
@@ -762,19 +781,19 @@ export const StorageManagement: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
                 <button
                   type="button"
                   onClick={() => setEditingCamera(null)}
-                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
+                  className="btn-tactical-secondary px-3 py-1.5 uppercase font-bold text-xs"
                 >
-                  [ CANCEL ]
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs"
+                  className="btn-tactical-primary px-4 py-1.5 uppercase font-bold text-xs"
                 >
-                  [ SAVE POLICY ]
+                  Save Policy
                 </button>
               </div>
             </form>

@@ -166,7 +166,7 @@ export const ApplianceConsole: React.FC = () => {
           <div className="flex items-center space-x-2">
             <Server className="w-5 h-5 text-[#E3B341]" />
             <h1 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-              <span>[ 01 // APPLIANCE DIAGNOSTICS & SYSTEM HEALTH CONSOLE ]</span>
+              <span>Appliance Diagnostics & System Health Console</span>
             </h1>
             <span className="text-[10px] px-2 py-0.5 rounded-none bg-[#58A6FF]/10 text-[#58A6FF] border border-[#58A6FF]/40 font-bold">
               EDGE_NVR_AIR_GAPPED
@@ -181,19 +181,19 @@ export const ApplianceConsole: React.FC = () => {
           <button
             onClick={() => fetchApplianceData(true)}
             disabled={refreshing}
-            className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#21262D] text-xs text-slate-300 hover:text-white flex items-center space-x-1.5 transition rounded-none disabled:opacity-50"
+            className="btn-tactical-secondary flex items-center space-x-1.5 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#E3B341]' : ''}`} />
-            <span>REFRESH</span>
+            <span>Refresh</span>
           </button>
 
           <button
             onClick={handleDownloadBundle}
             disabled={downloadingBundle}
-            className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] font-bold text-xs hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-1.5 rounded-none shadow-sm disabled:opacity-50"
+            className="btn-tactical-primary flex items-center space-x-1.5 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{downloadingBundle ? 'COMPILING ARCHIVE...' : 'DIAGNOSTICS BUNDLE'}</span>
+            <span>{downloadingBundle ? 'Compiling Archive...' : 'Diagnostics Bundle'}</span>
           </button>
         </div>
       </div>
@@ -285,7 +285,7 @@ export const ApplianceConsole: React.FC = () => {
               <span>STORAGE_MOUNT</span>
             </span>
             <span
-              className={`text-[9px] px-1.5 py-0.2 font-bold ${
+              className={`text-[9px] px-1.5 py-[2px] font-bold ${
                 vitals?.storage?.mountGuardStatus === 'HEALTHY'
                   ? 'bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/40'
                   : 'bg-[#F85149]/10 text-[#F85149] border border-[#F85149]/40'
@@ -355,7 +355,7 @@ export const ApplianceConsole: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[#21262D] pb-2.5">
             <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
               <Server className="w-4 h-4 text-[#E3B341]" />
-              <span>[ APPLIANCE CRYPTOGRAPHIC IDENTITY ]</span>
+              <span>Appliance Cryptographic Identity</span>
             </h2>
             <span className="text-[10px] px-2 py-0.5 bg-[#161B22] text-[#E3B341] border border-[#21262D]">
               v{identity?.softwareVersion || '1.0.0'}
@@ -416,7 +416,7 @@ export const ApplianceConsole: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[#21262D] pb-2.5">
             <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
               <ShieldCheck className="w-4 h-4 text-[#3FB950]" />
-              <span>[ STORAGE MOUNT GUARD INVARIANT ]</span>
+              <span>Storage Mount Guard Invariant</span>
             </h2>
             <span
               className={`text-[10px] px-2 py-0.5 font-bold ${
@@ -464,7 +464,7 @@ export const ApplianceConsole: React.FC = () => {
           <div className="space-y-1">
             <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
               <FileArchive className="w-4 h-4 text-[#E3B341]" />
-              <span>[ LEVEL-3 SUPPORT & DIAGNOSTICS BUNDLE ]</span>
+              <span>Level-3 Support & Diagnostics Bundle</span>
             </h2>
             <p className="text-xs text-slate-400">
               Generate an end-to-end sanitized diagnostic archive for manufacturer escalation. All cryptographic secrets are automatically redacted.
@@ -474,10 +474,10 @@ export const ApplianceConsole: React.FC = () => {
           <button
             onClick={handleDownloadBundle}
             disabled={downloadingBundle}
-            className="px-4 py-2 bg-[#E3B341] text-[#080B10] font-bold text-xs hover:bg-amber-400 transition uppercase tracking-wider flex items-center space-x-2 rounded-none shadow flex-shrink-0 disabled:opacity-50"
+            className="btn-tactical-primary flex items-center space-x-2 flex-shrink-0 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{downloadingBundle ? 'COMPILING ARCHIVE...' : 'DOWNLOAD BUNDLE (.TAR.GZ)'}</span>
+            <span>{downloadingBundle ? 'Compiling Archive...' : 'Download Bundle (.tar.gz)'}</span>
           </button>
         </div>
 

@@ -57,6 +57,17 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newTargetUrl) return;
@@ -119,7 +130,12 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notification-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+    >
       <div className="bg-graphite-850 border border-graphite-700 w-full max-w-4xl max-h-[85vh] rounded-lg shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-graphite-700 flex items-center justify-between bg-graphite-900">
@@ -128,7 +144,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
               <Bell className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-wide uppercase">Outbound Notification Channels</h2>
+              <h2 id="notification-modal-title" className="text-sm font-bold tracking-wide uppercase">Outbound Notification Channels</h2>
               <p className="text-[11px] text-slate-400 font-mono">
                 HMAC-SHA256 Authenticated Webhooks, Slack Alerts & SMTP Dispatch
               </p>
@@ -138,6 +154,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
           <button
             onClick={onClose}
             className="p-1 rounded text-slate-400 hover:text-white hover:bg-graphite-700 transition"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>

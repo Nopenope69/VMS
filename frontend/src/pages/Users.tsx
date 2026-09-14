@@ -26,6 +26,17 @@ export const Users: React.FC = () => {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    if (!showAddModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -64,7 +75,7 @@ export const Users: React.FC = () => {
           <div className="flex items-center space-x-2">
             <UsersIcon className="w-4 h-4 text-[#E3B341]" />
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-              [ 01 // OPERATOR RBAC & STAFF ACCESS REGISTRY ]
+              Operator RBAC & Staff Access Registry
             </h2>
           </div>
           <p className="text-[11px] text-slate-400 mt-1 max-w-3xl leading-relaxed">
@@ -74,10 +85,10 @@ export const Users: React.FC = () => {
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#E3B341] hover:bg-amber-400 text-[#080B10] text-xs font-bold uppercase tracking-wider transition rounded-none shadow-sm"
+          className="btn-tactical-primary flex items-center space-x-1.5"
         >
           <UserPlus className="w-3.5 h-3.5" />
-          <span>[ + ENROLL STAFF MEMBER ]</span>
+          <span>+ Enroll Staff Member</span>
         </button>
       </div>
 
@@ -147,7 +158,12 @@ export const Users: React.FC = () => {
 
       {/* Add Staff Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 select-none">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="enroll-modal-title"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 select-none"
+        >
           <div className="bg-[#0D1117] border border-[#21262D] rounded-none w-full max-w-md overflow-hidden shadow-2xl relative">
             <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
             <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
@@ -155,10 +171,10 @@ export const Users: React.FC = () => {
             <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
 
             <div className="px-5 py-3.5 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                [ ENROLL OPERATOR ACCOUNT // RBAC ATTESTATION ]
+              <h3 id="enroll-modal-title" className="text-xs font-bold text-white uppercase tracking-wider">
+                Enroll Operator Account — RBAC Attestation
               </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white" aria-label="Close modal">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -179,7 +195,7 @@ export const Users: React.FC = () => {
                   placeholder="Officer Rajesh Kumar"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full"
                 />
               </div>
 
@@ -191,7 +207,7 @@ export const Users: React.FC = () => {
                   placeholder="r.kumar@facility.local"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full"
                 />
               </div>
 
@@ -203,7 +219,7 @@ export const Users: React.FC = () => {
                   placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full"
                 />
               </div>
 
@@ -212,7 +228,7 @@ export const Users: React.FC = () => {
                 <select
                   value={role}
                   onChange={(e: any) => setRole(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341] uppercase"
+                  className="input-tactical w-full uppercase"
                 >
                   <option value="OPERATOR">OPERATOR (Live View, PTZ, Evidence Export)</option>
                   <option value="VIEWER">VIEWER (Live View & Playback Only)</option>
@@ -224,15 +240,15 @@ export const Users: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-1.5 rounded-none text-xs text-slate-300 hover:bg-[#161B22] border border-[#21262D]"
+                  className="btn-tactical-secondary"
                 >
-                  CANCEL
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-none text-xs font-bold bg-[#E3B341] text-[#080B10] hover:bg-amber-400 uppercase tracking-wider shadow"
+                  className="btn-tactical-primary"
                 >
-                  ENROLL ACCOUNT
+                  Enroll Account
                 </button>
               </div>
             </form>

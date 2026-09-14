@@ -219,7 +219,7 @@ export const RelayControlWidget: React.FC = () => {
                         </span>
                         <span className="text-xs font-medium text-slate-200">{pin.name}</span>
                         <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                          className={`text-[9px] px-1.5 py-[2px] rounded font-mono font-bold ${
                             pin.state === 'HIGH'
                               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                               : 'bg-graphite-800 text-slate-400 border border-graphite-700'
@@ -349,7 +349,7 @@ export const RelayControlWidget: React.FC = () => {
                     <td className="py-1">{log.command}</td>
                     <td className="py-1">
                       <span
-                        className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        className={`px-1.5 py-[2px] rounded text-[9px] font-bold ${
                           isConfirmed
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                             : isFailed

@@ -54,6 +54,15 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     }
   }, [defaultCameraId, cameras]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Render Canvas ROI Box
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -206,7 +215,12 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="smartsearch-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+    >
       <div className="bg-graphite-850 border border-graphite-700 w-full max-w-4xl max-h-[90vh] rounded-lg shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-graphite-700 flex items-center justify-between bg-graphite-900">
@@ -215,7 +229,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
               <Crosshair className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-wide uppercase">Smart Spatial & Forensic Search</h2>
+              <h2 id="smartsearch-modal-title" className="text-sm font-bold tracking-wide uppercase">Smart Spatial & Forensic Search</h2>
               <p className="text-[11px] text-slate-400 font-mono">
                 Sub-second 2D AABB Intersection & Indian ANPR Wildcard Queries
               </p>
@@ -406,7 +420,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                           <div>
                             <div className="font-semibold text-slate-200 flex items-center space-x-2">
                               <span>{event.type}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono">
+                              <span className="text-[10px] px-1.5 py-[2px] rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono">
                                 {Math.round(event.confidence * 100)}% conf
                               </span>
                             </div>
@@ -483,11 +497,11 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                           <div>
                             <div className="flex items-center space-x-2">
                               <span className="font-medium text-slate-200">{obs.stateName || 'Indian Vehicle'}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-graphite-700 font-mono text-slate-300">
+                              <span className="text-[10px] px-1.5 py-[2px] rounded bg-graphite-700 font-mono text-slate-300">
                                 {obs.category || 'CAR'}
                               </span>
                               {obs.isWatchlistMatch && (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-400 border border-red-500/40 font-bold uppercase">
+                                <span className="text-[10px] px-1.5 py-[2px] rounded bg-red-500/20 text-red-400 border border-red-500/40 font-bold uppercase">
                                   Watchlist Hit
                                 </span>
                               )}

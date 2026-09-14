@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KeyRound, Shield, CheckCircle, AlertTriangle, UploadCloud } from 'lucide-react';
+import { KeyRound, Shield, CheckCircle, AlertTriangle, UploadCloud, X } from 'lucide-react';
 import api from '../services/api';
 
 export const License: React.FC = () => {
@@ -21,6 +21,17 @@ export const License: React.FC = () => {
   useEffect(() => {
     fetchLicense();
   }, []);
+
+  useEffect(() => {
+    if (!showApplyModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowApplyModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showApplyModal]);
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +71,7 @@ export const License: React.FC = () => {
           <div className="flex items-center space-x-2">
             <KeyRound className="w-5 h-5 text-[#E3B341]" />
             <h2 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
-              [ COMMERCIAL LICENSE & CRYPTOGRAPHIC ENTITLEMENTS ]
+              Commercial License & Cryptographic Entitlements
             </h2>
             <span className="text-[10px] bg-[#161B22] text-[#3FB950] border border-[#238636] px-1.5 py-0.5 font-bold">
               ED25519 LOCAL VERIFICATION
@@ -73,10 +84,10 @@ export const License: React.FC = () => {
 
         <button
           onClick={() => setShowApplyModal(true)}
-          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors shadow-none"
+          className="btn-tactical-primary flex items-center space-x-1.5"
         >
           <UploadCloud className="w-3.5 h-3.5" />
-          <span>[ APPLY LICENSE ARTIFACT ]</span>
+          <span>Apply License Artifact</span>
         </button>
       </div>
 
@@ -193,17 +204,23 @@ export const License: React.FC = () => {
 
       {/* Apply License Modal */}
       {showApplyModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="license-modal-title"
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        >
           <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="px-4 py-3 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
-              <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-                [ APPLY ED25519 SIGNED LICENSE ARTIFACT ]
+              <h3 id="license-modal-title" className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
+                Apply Ed25519 Signed License Artifact
               </h3>
               <button
                 onClick={() => setShowApplyModal(false)}
-                className="text-[#8B949E] hover:text-white text-xs px-2 py-0.5 border border-[#30363D] hover:bg-[#21262D]"
+                className="text-[#8B949E] hover:text-white transition"
+                aria-label="Close modal"
               >
-                [ X ]
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -225,7 +242,7 @@ export const License: React.FC = () => {
                   placeholder='{"signedPayload": "...", "signatureEd25519": "..."}'
                   value={rawArtifact}
                   onChange={(e) => setRawArtifact(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] p-2 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full"
                 />
               </div>
 
@@ -233,16 +250,16 @@ export const License: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowApplyModal(false)}
-                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
+                  className="btn-tactical-secondary"
                 >
-                  [ CANCEL ]
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={applyLoading}
-                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs disabled:opacity-50"
+                  className="btn-tactical-primary disabled:opacity-50"
                 >
-                  {applyLoading ? '[ VERIFYING ED25519... ]' : '[ VERIFY & ACTIVATE ]'}
+                  {applyLoading ? 'Verifying Ed25519...' : 'Verify & Activate'}
                 </button>
               </div>
             </form>

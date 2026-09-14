@@ -9,7 +9,6 @@ import {
   ShieldAlert,
   ListFilter,
   Check,
-  X,
   Clock,
   FileText,
 } from 'lucide-react';
@@ -100,6 +99,14 @@ export const Events: React.FC = () => {
       fetchEvents();
     }
   }, [consoleTab, alarmStateFilter, alarmSeverityFilter, eventSeverityFilter, unackOnly]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setResolvingAlarm(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Acknowledge Alarm
   const handleAcknowledgeAlarm = async (alarmId: string) => {
@@ -207,22 +214,22 @@ export const Events: React.FC = () => {
   const resolvedCount = alarms.filter((a) => a.state === 'RESOLVED').length;
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-4 select-none font-mono">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-4 select-none font-mono text-tactical-text">
       {/* Top Tactical Selector Tabs */}
-      <div className="bg-[#0D1117] p-2 border border-[#21262D] flex items-center justify-between">
+      <div className="bg-tactical-panel p-2 border border-tactical-border flex items-center justify-between">
         <div className="flex space-x-2">
           <button
             onClick={() => setConsoleTab('ALARMS')}
             className={`flex items-center space-x-2 px-3.5 py-1.5 text-xs font-mono tracking-wider uppercase transition rounded-none ${
               consoleTab === 'ALARMS'
-                ? 'bg-[#E3B341] text-[#080B10] font-bold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-[#161B22]'
+                ? 'bg-phosphor-amber text-tactical-canvas font-bold shadow-sm'
+                : 'text-tactical-muted hover:text-white hover:bg-tactical-surface'
             }`}
           >
             <ShieldAlert className="w-4 h-4" />
-            <span>[ 01 // ALARMS INCIDENT WORKFLOW ]</span>
+            <span>Alarms Incident Workflow</span>
             {activeCount > 0 && (
-              <span className="px-1.5 py-0.2 bg-[#F85149] text-white text-[10px] font-bold">
+              <span className="px-1.5 py-[2px] bg-phosphor-red text-white text-[10px] font-bold">
                 {activeCount}
               </span>
             )}
@@ -232,14 +239,14 @@ export const Events: React.FC = () => {
             onClick={() => setConsoleTab('EVENTS')}
             className={`flex items-center space-x-2 px-3.5 py-1.5 text-xs font-mono tracking-wider uppercase transition rounded-none ${
               consoleTab === 'EVENTS'
-                ? 'bg-[#E3B341] text-[#080B10] font-bold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-[#161B22]'
+                ? 'bg-phosphor-amber text-tactical-canvas font-bold shadow-sm'
+                : 'text-tactical-muted hover:text-white hover:bg-tactical-surface'
             }`}
           >
             <ListFilter className="w-4 h-4" />
-            <span>[ 02 // RAW SURVEILLANCE TELEMETRY ]</span>
+            <span>Raw Surveillance Telemetry</span>
             {eventStats.unacknowledgedTotal > 0 && (
-              <span className="px-1.5 py-0.2 bg-[#21262D] text-slate-300 text-[10px]">
+              <span className="px-1.5 py-[2px] bg-tactical-raised text-tactical-muted text-[10px]">
                 {eventStats.unacknowledgedTotal}
               </span>
             )}
@@ -317,18 +324,18 @@ export const Events: React.FC = () => {
           <div className="bg-[#0D1117] p-3 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               {/* State Filter Pills */}
-              <div className="flex space-x-1 bg-[#080B10] p-0.5 border border-[#21262D]">
+              <div className="flex space-x-1 bg-tactical-canvas p-0.5 border border-tactical-border">
                 {(['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'] as const).map((s) => (
                   <button
                     key={s}
                     onClick={() => setAlarmStateFilter(s)}
                     className={`px-3 py-1 text-xs uppercase tracking-wider transition ${
                       alarmStateFilter === s
-                        ? 'bg-[#E3B341] text-[#080B10] font-bold'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-phosphor-amber text-tactical-canvas font-bold'
+                        : 'text-tactical-muted hover:text-white hover:bg-tactical-surface'
                     }`}
                   >
-                    {s === 'ALL' ? '[ ALL STATES ]' : `[ ${s} ]`}
+                    {s === 'ALL' ? 'All States' : s}
                   </button>
                 ))}
               </div>
@@ -607,37 +614,39 @@ export const Events: React.FC = () => {
 
       {/* Resolve Alarm Modal Dialog */}
       {resolvingAlarm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 select-none">
-          <div className="bg-[#0D1117] border border-[#21262D] rounded-none w-full max-w-md overflow-hidden shadow-2xl relative">
-            <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D]">+</span>
-            <span className="absolute -top-1 -right-1 text-[9px] text-[#30363D]">+</span>
-            <span className="absolute -bottom-1 -left-1 text-[9px] text-[#30363D]">+</span>
-            <span className="absolute -bottom-1 -right-1 text-[9px] text-[#30363D]">+</span>
-
-            <div className="px-5 py-3.5 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 select-none font-mono"
+        >
+          <div className="bg-tactical-panel border border-tactical-border rounded-none w-full max-w-md overflow-hidden shadow-2xl relative">
+            <div className="px-5 py-3.5 border-b border-tactical-border flex justify-between items-center bg-tactical-surface">
               <div className="flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-[#3FB950]" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  [ RESOLVE ALARM INCIDENT // ROOT CAUSE ]
+                <CheckCircle2 className="w-4 h-4 text-phosphor-green" />
+                <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider font-mono">
+                  Resolve Alarm Incident // Root Cause
                 </h3>
               </div>
-              <button onClick={() => setResolvingAlarm(null)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
+              <button
+                onClick={() => setResolvingAlarm(null)}
+                className="text-tactical-muted hover:text-white text-xs px-2 py-0.5 border border-tactical-border hover:bg-tactical-raised"
+              >
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleConfirmResolve} className="p-5 space-y-4 bg-[#0D1117]">
-              <div className="p-3 bg-[#161B22] border border-[#21262D] text-xs">
-                <div className="text-slate-500 text-[10px] uppercase tracking-widest">INCIDENT IDENTIFIER:</div>
-                <div className="font-bold text-white mt-0.5 tracking-wider">{resolvingAlarm.title}</div>
-                <div className="text-slate-400 mt-1">
-                  SOURCE: <span className="text-[#E3B341]">{resolvingAlarm.camera?.name || 'FACILITY_CHASSIS'}</span>
+            <form onSubmit={handleConfirmResolve} className="p-5 space-y-4 bg-tactical-panel">
+              <div className="p-3 bg-tactical-surface border border-tactical-border text-xs">
+                <div className="text-tactical-muted text-[10px] uppercase tracking-widest font-mono">INCIDENT IDENTIFIER:</div>
+                <div className="font-bold text-tactical-bright mt-0.5 tracking-wider font-mono">{resolvingAlarm.title}</div>
+                <div className="text-tactical-muted mt-1 font-sans text-xs">
+                  SOURCE: <span className="text-phosphor-amber font-mono">{resolvingAlarm.camera?.name || 'FACILITY_CHASSIS'}</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 mb-1.5 flex items-center space-x-1 uppercase tracking-wider">
-                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                <label className="block text-xs text-tactical-text mb-1.5 flex items-center space-x-1 uppercase tracking-wider font-mono">
+                  <FileText className="w-3.5 h-3.5 text-tactical-muted" />
                   <span>OPERATOR RESOLUTION ATTESTATION</span>
                 </label>
                 <textarea
@@ -646,25 +655,25 @@ export const Events: React.FC = () => {
                   placeholder="Enter verifiable root cause notes (e.g., Physical inspection confirmed perimeter secured; sensor re-calibrated)."
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#21262D] rounded-none p-2.5 text-xs text-slate-200 focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full p-2.5 text-xs font-mono"
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-[#21262D]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-tactical-border">
                 <button
                   type="button"
                   onClick={() => setResolvingAlarm(null)}
-                  className="px-4 py-1.5 rounded-none text-xs text-slate-300 hover:bg-[#161B22] border border-[#21262D]"
+                  className="btn-tactical-secondary px-4 py-1.5 text-xs uppercase tracking-wider"
                 >
-                  CANCEL
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingResolve || !resolutionNotes.trim()}
-                  className="flex items-center space-x-1.5 px-4 py-1.5 rounded-none text-xs font-bold bg-[#3FB950] hover:bg-emerald-400 text-[#080B10] disabled:opacity-50 tracking-wider uppercase shadow"
+                  className="btn-tactical-primary flex items-center space-x-1.5 px-4 py-1.5 text-xs font-bold disabled:opacity-50 tracking-wider uppercase shadow"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{submittingResolve ? 'RECORDING...' : 'CONFIRM RESOLUTION'}</span>
+                  <span>{submittingResolve ? 'Recording...' : 'Confirm Resolution'}</span>
                 </button>
               </div>
             </form>

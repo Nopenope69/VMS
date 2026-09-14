@@ -22,6 +22,11 @@ export const Evidence: React.FC = () => {
 
   useEffect(() => {
     fetchExports();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedExport(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleCopyHash = (hash: string) => {
@@ -31,46 +36,46 @@ export const Evidence: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 overflow-y-auto font-mono text-tactical-text">
       {/* Top Banner */}
-      <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-wrap justify-between items-center gap-3">
+      <div className="bg-tactical-panel p-3.5 border border-tactical-border flex flex-wrap justify-between items-center gap-3">
         <div>
           <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-5 h-5 text-[#E3B341]" />
-            <h2 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
-              [ SECTION 63 BSA FORENSIC EVIDENCE REGISTRY ]
+            <ShieldCheck className="w-5 h-5 text-phosphor-amber" />
+            <h2 className="text-sm font-bold text-tactical-bright uppercase tracking-wider font-mono">
+              Section 63 BSA Forensic Evidence Registry
             </h2>
-            <span className="text-[10px] bg-[#161B22] text-[#3FB950] border border-[#238636] px-1.5 py-0.5 font-bold">
+            <span className="text-[10px] bg-tactical-surface text-phosphor-green border border-phosphor-green/40 px-1.5 py-0.5 font-bold">
               CHAIN-OF-CUSTODY SECURE
             </span>
           </div>
-          <p className="text-[11px] text-[#8B949E] mt-1 max-w-4xl leading-relaxed">
+          <p className="text-[13px] sm:text-[14px] text-tactical-muted mt-1 max-w-4xl leading-relaxed font-sans">
             Statutory registry of exported surveillance records under the Bharatiya Sakshya Adhiniyam, 2023. Every record block is immutably sealed with SHA-256 Merkle root digests and appliance Ed25519 digital signatures.
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
-          <div className="hidden sm:flex items-center space-x-2 bg-[#161B22] border border-[#30363D] px-2.5 py-1 text-[10px]">
-            <Key className="w-3.5 h-3.5 text-[#58A6FF]" />
-            <span className="text-[#8B949E]">APPLIANCE_KEY:</span>
-            <span className="text-[#58A6FF] font-bold">ED25519 READY</span>
+          <div className="hidden sm:flex items-center space-x-2 bg-tactical-surface border border-tactical-border px-2.5 py-1 text-[10px]">
+            <Key className="w-3.5 h-3.5 text-phosphor-cyan" />
+            <span className="text-tactical-muted">APPLIANCE_KEY:</span>
+            <span className="text-phosphor-cyan font-bold">ED25519 READY</span>
           </div>
 
           <button
             onClick={fetchExports}
             disabled={loading}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] border border-[#30363D] hover:border-[#E3B341] text-[#C9D1D9] hover:text-[#E3B341] transition-colors"
+            className="btn-tactical-secondary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#E3B341]' : ''}`} />
-            <span>[ REFRESH ]</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-phosphor-amber' : ''}`} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* Main Registry Table */}
-      <div className="bg-[#0D1117] border border-[#21262D] flex-1 flex flex-col">
-        <div className="px-3.5 py-2.5 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between text-xs">
-          <span className="font-bold uppercase tracking-wider text-[#C9D1D9]">
+      <div className="bg-tactical-panel border border-tactical-border flex-1 flex flex-col">
+        <div className="px-3.5 py-2.5 border-b border-tactical-border bg-tactical-surface flex items-center justify-between text-xs">
+          <span className="font-bold uppercase tracking-wider text-tactical-text">
             SEALED EVIDENCE PACKAGES ({exportsList.length})
           </span>
           <span className="text-[10px] text-[#8B949E]">
@@ -143,19 +148,19 @@ export const Evidence: React.FC = () => {
                     <td className="px-3.5 py-2.5 text-right space-x-2">
                       <button
                         onClick={() => setSelectedExport(exp)}
-                        className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#C9D1D9] hover:text-white text-[10px] font-bold uppercase transition-colors"
+                        className="btn-tactical-secondary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors inline-flex items-center space-x-1"
                         title="Inspect Full Manifest & Signatures"
                       >
                         <Eye className="w-3 h-3 inline mr-1" />
-                        <span>[ MANIFEST ]</span>
+                        <span>Manifest</span>
                       </button>
                       <a
                         href={`/api/v1/evidence/download/Evidence_${exp.id}.zip`}
                         download
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-[#E3B341] hover:bg-[#F2CC60] text-[#080B10] font-bold text-[10px] uppercase tracking-wider transition-colors"
+                        className="btn-tactical-primary inline-flex items-center space-x-1 px-2.5 py-1 font-bold text-[10px] uppercase tracking-wider transition-colors"
                       >
                         <Download className="w-3 h-3" />
-                        <span>ZIP</span>
+                        <span>Download ZIP</span>
                       </a>
                     </td>
                   </tr>
@@ -168,76 +173,80 @@ export const Evidence: React.FC = () => {
 
       {/* Manifest Inspection Modal */}
       {selectedExport && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-none font-mono">
-          <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-2xl overflow-hidden shadow-2xl">
-            <div className="px-4 py-3 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-none font-mono"
+        >
+          <div className="bg-tactical-panel border border-tactical-border rounded-none w-full max-w-2xl overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 border-b border-tactical-border flex justify-between items-center bg-tactical-surface">
               <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-4 h-4 text-[#E3B341]" />
-                <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-                  [ FORENSIC MANIFEST AUDIT // EV_{selectedExport.id.slice(0, 8).toUpperCase()} ]
+                <ShieldCheck className="w-4 h-4 text-phosphor-amber" />
+                <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider font-mono">
+                  Forensic Manifest Audit // EV_{selectedExport.id.slice(0, 8).toUpperCase()}
                 </h3>
               </div>
               <button
                 onClick={() => setSelectedExport(null)}
-                className="text-[#8B949E] hover:text-white text-xs px-2 py-0.5 border border-[#30363D] hover:bg-[#21262D]"
+                className="text-tactical-muted hover:text-white text-xs px-2 py-0.5 border border-tactical-border hover:bg-tactical-raised"
               >
-                [ X ]
+                ✕
               </button>
             </div>
 
-            <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto text-xs text-[#C9D1D9]">
+            <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto text-xs text-tactical-text">
               <div>
-                <span className="text-[10px] uppercase text-[#8B949E] block mb-1">
+                <span className="text-[10px] uppercase text-tactical-muted block mb-1">
                   SHA-256 MERKLE ROOT DIGEST:
                 </span>
-                <div className="p-2 bg-[#080B10] border border-[#30363D] text-[#E3B341] break-all select-all text-xs">
+                <div className="p-2 bg-tactical-canvas border border-tactical-border text-phosphor-amber break-all select-all text-xs font-mono">
                   {selectedExport.sha256Hash || 'PENDING'}
                 </div>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase text-[#8B949E] block mb-1">
+                <span className="text-[10px] uppercase text-tactical-muted block mb-1">
                   APPLIANCE ED25519 HARDWARE SIGNATURE:
                 </span>
-                <div className="p-2 bg-[#080B10] border border-[#30363D] text-[#8B949E] break-all text-[11px]">
+                <div className="p-2 bg-tactical-canvas border border-tactical-border text-tactical-muted break-all text-[11px] font-mono">
                   {selectedExport.signatureEd25519 || 'N/A'}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#161B22] p-2.5 border border-[#21262D]">
-                <div className="bg-[#080B10] p-2 border border-[#21262D]">
-                  <div className="text-[10px] text-[#58A6FF] font-bold uppercase mb-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-tactical-surface p-2.5 border border-tactical-border">
+                <div className="bg-tactical-canvas p-2 border border-tactical-border">
+                  <div className="text-[10px] text-phosphor-cyan font-bold uppercase mb-1">
                     PART A: PARTY IN-CHARGE
                   </div>
                   <div className="text-xs">NAME: {selectedExport.partAPartyName || 'N/A'}</div>
-                  <div className="text-[10px] text-[#8B949E]">ROLE: {selectedExport.partAPartyDesignation || 'N/A'}</div>
+                  <div className="text-[10px] text-tactical-muted">ROLE: {selectedExport.partAPartyDesignation || 'N/A'}</div>
                 </div>
-                <div className="bg-[#080B10] p-2 border border-[#21262D]">
-                  <div className="text-[10px] text-[#E3B341] font-bold uppercase mb-1">
+                <div className="bg-tactical-canvas p-2 border border-tactical-border">
+                  <div className="text-[10px] text-phosphor-amber font-bold uppercase mb-1">
                     PART B: FORENSIC EXPERT
                   </div>
                   <div className="text-xs">NAME: {selectedExport.partBExpertName || 'N/A'}</div>
-                  <div className="text-[10px] text-[#8B949E]">ROLE: {selectedExport.partBExpertDesignation || 'N/A'}</div>
-                  <div className="text-[10px] text-[#8B949E]">ORG: {selectedExport.partBExpertOrganization || 'N/A'}</div>
+                  <div className="text-[10px] text-tactical-muted">ROLE: {selectedExport.partBExpertDesignation || 'N/A'}</div>
+                  <div className="text-[10px] text-tactical-muted">ORG: {selectedExport.partBExpertOrganization || 'N/A'}</div>
                 </div>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase text-[#8B949E] block mb-1">
+                <span className="text-[10px] uppercase text-tactical-muted block mb-1">
                   CANONICAL AUDIT MANIFEST JSON:
                 </span>
-                <pre className="p-2.5 bg-[#080B10] border border-[#30363D] text-[10px] text-[#8B949E] overflow-x-auto leading-tight">
+                <pre className="p-2.5 bg-tactical-canvas border border-tactical-border text-[10px] text-tactical-muted overflow-x-auto leading-tight font-mono">
                   {JSON.stringify(selectedExport.manifestJson || selectedExport, null, 2)}
                 </pre>
               </div>
             </div>
 
-            <div className="p-3 border-t border-[#21262D] flex justify-end">
+            <div className="p-3 border-t border-tactical-border flex justify-end bg-tactical-surface">
               <button
                 onClick={() => setSelectedExport(null)}
-                className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#C9D1D9] hover:text-white text-xs font-bold uppercase tracking-wider"
+                className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
               >
-                [ CLOSE AUDIT VIEW ]
+                Close Audit View
               </button>
             </div>
           </div>

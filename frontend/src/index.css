@@ -81,6 +81,38 @@
   }
 }
 
+@layer components {
+  /* High-Contrast Sodium Amber Primary Action */
+  .btn-tactical-primary {
+    @apply font-mono text-xs font-bold uppercase tracking-wider bg-phosphor-amber text-[#07090E] hover:bg-phosphor-amber-hover active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-amber disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+  }
+
+  /* Deep Control Chassis Secondary Action */
+  .btn-tactical-secondary {
+    @apply font-mono text-xs font-bold uppercase tracking-wider bg-tactical-surface hover:bg-tactical-raised text-tactical-text border border-tactical-border hover:border-tactical-border-active active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+  }
+
+  /* Signal Flare Destructive Action */
+  .btn-tactical-danger {
+    @apply font-mono text-xs font-bold uppercase tracking-wider bg-phosphor-red/15 hover:bg-phosphor-red/25 text-phosphor-red border border-phosphor-red/40 active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-red disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+  }
+
+  /* Physical Keyboard Hotkey Badge */
+  .badge-hotkey {
+    @apply px-1.5 py-[2px] bg-tactical-raised border border-tactical-border text-tactical-muted text-[10px] font-mono font-bold leading-none select-none;
+  }
+
+  /* Zero-Terminal Monospace Input Well */
+  .input-tactical {
+    @apply bg-tactical-canvas border border-tactical-border focus:border-phosphor-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-amber text-tactical-text text-xs font-mono rounded-none px-3 py-2 transition-colors;
+  }
+
+  /* Section 63 BSA & Critical Legal Disclaimer Box */
+  .legal-disclaimer {
+    @apply text-[14px] leading-relaxed font-sans text-tactical-text bg-tactical-surface border-l-2 border-phosphor-amber p-4;
+  }
+}
+
 /* Mechanical Rectangular Industrial Scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
@@ -88,20 +120,20 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #080b10;
+  background: #07090E;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #21262d;
+  background: #1F2735;
   border-radius: 0px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #30363d;
+  background: #2E3A4E;
 }
 
 /* Tactical Focus Rings for Strict WCAG Keyboard Accessibility */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px #e3b341 !important;
+  box-shadow: 0 0 0 1px #F59E0B !important;
 }

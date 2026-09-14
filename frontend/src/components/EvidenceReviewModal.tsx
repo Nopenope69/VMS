@@ -27,6 +27,16 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
     loadData();
   }, [manifestId, exportId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -71,7 +81,12 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none font-mono">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-modal-title"
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 select-none font-mono"
+    >
       <div className="bg-[#0D1117] border border-[#21262D] rounded-none max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
         {/* Optical Corner Reticles */}
         <span className="absolute -top-1 -left-1 text-[9px] text-[#30363D] z-20">+</span>
@@ -84,8 +99,8 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="w-5 h-5 text-[#3FB950]" />
             <div>
-              <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-                [ EVIDENCE INTEGRITY & CUSTODIAL AUDIT // SECTION 63 BSA ]
+              <h2 id="review-modal-title" className="text-xs font-bold text-white uppercase tracking-wider">
+                Evidence Integrity & Custodial Audit — Section 63 BSA
               </h2>
               <p className="text-[10px] text-slate-400 font-mono tracking-wider">
                 {manifestId ? `TARGET_MANIFEST: ${manifestId}` : `TARGET_EXPORT: ${exportId}`}
@@ -95,6 +110,7 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1 rounded-none hover:bg-[#21262D] transition"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
@@ -253,9 +269,9 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
                   <button
                     onClick={handleApproveExport}
                     disabled={actionLoading}
-                    className="px-3.5 py-1.5 bg-[#3FB950] hover:bg-emerald-400 text-[#080B10] font-bold text-xs uppercase tracking-wider transition rounded-none disabled:opacity-50"
+                    className="btn-tactical-primary disabled:opacity-50"
                   >
-                    {actionLoading ? 'APPROVING...' : 'APPROVE EXPORT'}
+                    {actionLoading ? 'Approving...' : 'Approve Export'}
                   </button>
                 </div>
               )}
@@ -267,9 +283,9 @@ export const EvidenceReviewModal: React.FC<EvidenceReviewModalProps> = ({
         <div className="p-3 border-t border-[#21262D] bg-[#161B22] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-[#0D1117] hover:bg-[#21262D] border border-[#21262D] text-slate-200 text-xs uppercase tracking-wider transition rounded-none"
+            className="btn-tactical-secondary"
           >
-            CLOSE
+            Close
           </button>
         </div>
       </div>

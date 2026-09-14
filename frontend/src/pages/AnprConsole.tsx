@@ -413,7 +413,7 @@ export const AnprConsole: React.FC = () => {
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2">
                       <span className="font-mono font-bold text-cctv-amber">{wl.plateNumber}</span>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-graphite-800 text-slate-300 font-mono">
+                      <span className="text-[9px] px-1.5 py-[2px] rounded bg-graphite-800 text-slate-300 font-mono">
                         {wl.category}
                       </span>
                     </div>

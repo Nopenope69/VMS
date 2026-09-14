@@ -79,14 +79,47 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
   const canManageNotifications = role === 'OPERATOR' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
   const canBackup = role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
 
+  // Functional keyboard navigation: map numbers 1-9, 0 to active nav tabs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Never trigger when user is focused on an interactive input
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        activeTag === 'select' ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (showNotificationModal || showBackupModal) {
+        if (e.key === 'Escape') {
+          setShowNotificationModal(false);
+          setShowBackupModal(false);
+        }
+        return;
+      }
+
+      const matched = navItems.find((item) => item.index === e.key);
+      if (matched) {
+        e.preventDefault();
+        onSelectTab(matched.id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navItems, onSelectTab, showNotificationModal, showBackupModal]);
+
   return (
     <header className="bg-tactical-panel border-b border-tactical-border select-none relative z-30">
       <div className="w-full px-3 h-12 flex items-center justify-between gap-2">
         {/* Left: Tactical Brand & Hardware Telemetry */}
         <div className="flex items-center space-x-3 shrink-0">
-          <div className="flex items-center space-x-2 bg-tactical-bg px-2.5 py-1 border border-tactical-border">
+          <div className="flex items-center space-x-2 bg-tactical-canvas px-2.5 py-1 border border-tactical-border">
             <div className="w-2 h-2 rounded-none bg-phosphor-green animate-phosphor" />
-            <span className="font-mono font-bold tracking-wider text-white text-xs uppercase">
+            <span className="font-mono font-bold tracking-wider text-tactical-text text-xs uppercase">
               VIGILONE <span className="text-phosphor-amber">//</span> NVR-01
             </span>
             <span className="text-[10px] text-tactical-muted font-mono border-l border-tactical-border pl-2">
@@ -95,14 +128,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
           </div>
 
           {/* Real-time UTC Precision Clock */}
-          <div className="hidden lg:flex items-center space-x-1.5 font-mono text-[11px] text-phosphor-cyan bg-tactical-bg px-2 py-1 border border-tactical-border">
+          <div className="hidden lg:flex items-center space-x-1.5 font-mono text-[11px] text-phosphor-cyan bg-tactical-canvas px-2 py-1 border border-tactical-border">
             <Activity className="w-3 h-3 text-phosphor-cyan animate-pulse" />
             <span>{utcClock || '00:00:00 UTC'}</span>
           </div>
         </div>
 
-        {/* Center: Mission-Critical Monospaced Navigation */}
-        <nav className="flex items-center space-x-0.5 overflow-x-auto">
+        {/* Center: Mission-Critical Hotkey-Wired Navigation */}
+        <nav className="flex items-center space-x-0.5 overflow-x-auto" aria-label="Main Navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = currentTab === item.id;
@@ -110,17 +143,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-75 border-b-2 ${
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-75 border-b-2 active:translate-y-[1px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan ${
                   active
-                    ? 'border-phosphor-amber bg-tactical-surface text-white font-bold'
-                    : 'border-transparent text-tactical-muted hover:text-white hover:bg-tactical-surface/60'
+                    ? 'border-phosphor-amber bg-tactical-surface text-tactical-bright font-bold'
+                    : 'border-transparent text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface/60'
                 }`}
               >
-                <span className="text-[10px] text-tactical-muted">[{item.index}]</span>
+                <span className="badge-hotkey">{item.index}</span>
                 <Icon className={`w-3.5 h-3.5 ${active ? 'text-phosphor-amber' : 'text-tactical-muted'}`} />
                 <span>{item.label}</span>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="ml-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-phosphor-red text-tactical-bg animate-pulse">
+                  <span className="ml-1 px-1.5 py-[2px] text-[9px] font-mono font-bold bg-phosphor-red text-tactical-canvas animate-pulse">
                     {item.badge}
                   </span>
                 )}
@@ -135,7 +169,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
             <button
               onClick={() => setShowNotificationModal(true)}
               title="Notification Channels & Webhooks"
-              className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-amber hover:border-phosphor-amber transition"
+              className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-amber hover:border-tactical-border-active active:translate-y-[1px] transition-all"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
@@ -145,25 +179,25 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
             <button
               onClick={() => setShowBackupModal(true)}
               title="Disaster Recovery & Appliance Backup"
-              className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-cyan hover:border-phosphor-cyan transition"
+              className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-cyan hover:border-tactical-border-active active:translate-y-[1px] transition-all"
             >
               <Archive className="w-3.5 h-3.5" />
             </button>
           )}
 
           <div className="hidden sm:block text-right border-l border-tactical-border pl-2.5 py-0.5">
-            <div className="font-mono text-white text-[11px] font-semibold uppercase tracking-wider">
+            <div className="font-mono text-tactical-bright text-[11px] font-semibold uppercase tracking-wider">
               {user?.name || 'OPERATOR'}
             </div>
             <div className="text-tactical-muted text-[10px]">
-              ROLE // <span className="text-phosphor-amber">{user?.role || 'VIEWER'}</span>
+              ROLE // <span className="text-phosphor-amber font-semibold">{user?.role || 'VIEWER'}</span>
             </div>
           </div>
 
           <button
             onClick={onLogout}
             title="Sign Out of Appliance"
-            className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-phosphor-red hover:border-phosphor-red transition"
+            className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-red hover:border-tactical-border-active active:translate-y-[1px] transition-all"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>

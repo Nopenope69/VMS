@@ -209,28 +209,28 @@ export const Investigation: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* Matrix Presets */}
-          <div className="flex items-center bg-[#161B22] border border-[#21262D] p-0.5">
+          <div className="flex items-center bg-tactical-canvas border border-tactical-border p-0.5">
             {(['1x1', '2x2', '1+5', '3x3'] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setGridLayout(l)}
                 className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider transition ${
                   gridLayout === l
-                    ? 'bg-[#E3B341] text-[#080B10] font-bold'
-                    : 'text-slate-400 hover:text-white hover:bg-[#21262D]'
+                    ? 'bg-phosphor-amber text-tactical-canvas font-bold'
+                    : 'text-tactical-muted hover:text-white hover:bg-tactical-surface'
                 }`}
               >
-                [{l.toUpperCase()}]
+                {l.toUpperCase()}
               </button>
             ))}
           </div>
 
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E3B341] hover:bg-amber-400 text-[#080B10] font-mono font-bold text-xs uppercase tracking-wider transition rounded-none shadow-sm"
+            className="btn-tactical-primary flex items-center gap-1.5 px-3 py-1.5 font-mono font-bold text-xs uppercase tracking-wider transition shadow-sm"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>EXPORT EVIDENCE [BSA_63]</span>
+            <span>Export BSA 63 Evidence</span>
           </button>
 
           <button
@@ -238,10 +238,10 @@ export const Investigation: React.FC = () => {
               setActiveManifestId(undefined);
               setShowReviewModal(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] font-mono text-xs uppercase tracking-wider transition rounded-none"
+            className="btn-tactical-secondary flex items-center gap-1.5 px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-[#58A6FF]" />
-            <span>AUDIT CUSTODY</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-phosphor-cyan" />
+            <span>Audit Custody</span>
           </button>
         </div>
       </div>
@@ -296,12 +296,12 @@ export const Investigation: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-[#161B22] border border-[#21262D] text-slate-400">
+                    <span className="text-[9px] font-mono px-1.5 py-[2px] bg-tactical-canvas border border-tactical-border text-tactical-muted">
                       {isReady ? 'PTS_LOCKED' : 'GAP_HOLD'}
                     </span>
                     <button
                       onClick={() => removeCameraFromGrid(camId)}
-                      className="text-slate-500 hover:text-[#F85149] p-0.5 rounded-none transition"
+                      className="text-tactical-muted hover:text-phosphor-red p-0.5 rounded-none transition"
                       title="Unassign stream from slot"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -357,9 +357,9 @@ export const Investigation: React.FC = () => {
                   <button
                     key={c.id}
                     onClick={() => addCameraToGrid(c.id)}
-                    className="px-2.5 py-1 bg-[#161B22] hover:bg-[#21262D] text-slate-300 border border-[#21262D] text-[11px] font-mono uppercase transition rounded-none"
+                    className="btn-tactical-secondary px-2.5 py-1 text-[11px] font-mono uppercase transition"
                   >
-                    + ASSIGN {c.name}
+                    + Assign {c.name}
                   </button>
                 ))}
               </div>

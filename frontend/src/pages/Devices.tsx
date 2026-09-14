@@ -54,6 +54,15 @@ export const Devices: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddModal(false);
+        setSelectedCameraForModal(null);
+        setActiveModalType(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleScan = async () => {
@@ -134,17 +143,17 @@ export const Devices: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 overflow-y-auto font-mono text-tactical-text">
       {/* Top Action Bar */}
-      <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-tactical-panel p-3.5 border border-tactical-border flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center space-x-2">
-            <Radio className="w-5 h-5 text-[#E3B341]" />
-            <h2 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
-              [ APPLIANCE FLEET & SENSOR TOPOLOGY ]
+            <Radio className="w-5 h-5 text-phosphor-amber" />
+            <h2 className="text-sm font-bold text-tactical-bright uppercase tracking-wider font-mono">
+              Appliance Fleet & Sensor Topology
             </h2>
           </div>
-          <p className="text-[11px] text-[#8B949E] mt-0.5">
+          <p className="text-[11px] text-tactical-muted mt-0.5 font-sans">
             ONVIF PROFILE S/G/T APPLIANCES • RTSP/H.264 CAPTURE FLEET • FACILITY SENSOR REGISTRY
           </p>
         </div>
@@ -155,26 +164,26 @@ export const Devices: React.FC = () => {
           <button
             onClick={handleScan}
             disabled={scanning}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-[#58A6FF] border border-[#30363D] transition-colors"
+            className="btn-tactical-secondary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors"
           >
-            <Search className={`w-3.5 h-3.5 ${scanning ? 'animate-spin text-[#58A6FF]' : ''}`} />
-            <span>{scanning ? '[ SCANNING LAN... ]' : '[ WS-DISCOVERY RADAR ]'}</span>
+            <Search className={`w-3.5 h-3.5 ${scanning ? 'animate-spin text-phosphor-cyan' : ''}`} />
+            <span>{scanning ? 'Scanning LAN...' : 'WS-Discovery Radar'}</span>
           </button>
 
           <button
             onClick={() => setShowAddModal(true)}
             disabled={isQuotaReached}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors disabled:opacity-40"
+            className="btn-tactical-primary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
           >
-            <Plus className="w-3.5 h-3.5 text-[#080B10]" />
-            <span>[ + ONBOARD FEED ]</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Onboard Feed</span>
           </button>
         </div>
       </div>
 
       {isQuotaReached && (
-        <div className="p-2.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-xs flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-[#E3B341]" />
+        <div className="p-2.5 bg-tactical-canvas border border-phosphor-amber text-phosphor-amber text-xs flex items-center space-x-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-phosphor-amber" />
           <span>
             [ QUOTA CEILING REACHED ] Appliance capacity limit attained ({license.maxCameras} feeds). Upgrade your license tier in License & Entitlements to provision additional hardware streams.
           </span>
@@ -183,8 +192,8 @@ export const Devices: React.FC = () => {
 
       {/* Discovered Cameras Notice */}
       {discovered.length > 0 && (
-        <div className="bg-[#0D1117] border border-[#58A6FF] p-3">
-          <div className="text-xs font-bold text-[#58A6FF] uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+        <div className="bg-tactical-panel border border-phosphor-cyan/60 p-3">
+          <div className="text-xs font-bold text-phosphor-cyan uppercase tracking-wider mb-2 flex items-center space-x-1.5 font-mono">
             <Radio className="w-4 h-4 animate-pulse" />
             <span>[ RADAR HIT ] FOUND {discovered.length} ONVIF BROADCASTING FEEDS ON LAN:</span>
           </div>
@@ -192,17 +201,17 @@ export const Devices: React.FC = () => {
             {discovered.map((d, idx) => (
               <div
                 key={idx}
-                className="bg-[#161B22] p-2 border border-[#30363D] flex items-center justify-between"
+                className="bg-tactical-surface p-2 border border-tactical-border flex items-center justify-between"
               >
                 <div>
-                  <div className="text-xs font-bold text-white">{d.ipAddress}:{d.onvifPort}</div>
-                  <div className="text-[10px] text-[#8B949E]">{d.manufacturer || 'GENERIC'} {d.model || 'ONVIF-CAMERA'}</div>
+                  <div className="text-xs font-bold text-white font-mono">{d.ipAddress}:{d.onvifPort}</div>
+                  <div className="text-[10px] text-tactical-muted font-sans">{d.manufacturer || 'GENERIC'} {d.model || 'ONVIF-CAMERA'}</div>
                 </div>
                 <button
                   onClick={() => handleSelectDiscovered(d)}
-                  className="px-2.5 py-1 bg-[#58A6FF] hover:bg-[#79B8FF] text-[#080B10] font-bold text-[10px] uppercase tracking-wider transition-colors"
+                  className="btn-tactical-primary px-2.5 py-1 font-bold text-[10px] uppercase tracking-wider transition-colors"
                 >
-                  [ ONBOARD ]
+                  Onboard
                 </button>
               </div>
             ))}
@@ -348,51 +357,55 @@ export const Devices: React.FC = () => {
 
       {/* Manual Onboard Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono">
-          <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="px-4 py-3 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        >
+          <div className="bg-tactical-panel border border-tactical-border rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="px-4 py-3 border-b border-tactical-border flex justify-between items-center bg-tactical-surface">
               <div className="flex items-center space-x-2">
-                <Radio className="w-4 h-4 text-[#E3B341]" />
-                <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-                  [ ONBOARD ONVIF / RTSP HARDWARE FEED ]
+                <Radio className="w-4 h-4 text-phosphor-amber" />
+                <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider font-mono">
+                  Onboard ONVIF / RTSP Hardware Feed
                 </h3>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-[#8B949E] hover:text-white text-xs px-2 py-0.5 border border-[#30363D] hover:bg-[#21262D]"
+                className="text-tactical-muted hover:text-white text-xs px-2 py-0.5 border border-tactical-border hover:bg-tactical-raised"
               >
-                [ X ]
+                ✕
               </button>
             </div>
 
             <form onSubmit={handleAddCamera} className="p-4 space-y-3 text-xs">
               {error && (
-                <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-xs">
+                <div className="p-2.5 bg-tactical-canvas border border-phosphor-red text-phosphor-red text-xs">
                   {error}
                 </div>
               )}
 
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">CAMERA_IDENTIFIER:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">CAMERA_IDENTIFIER:</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. North Gate PTZ"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 />
               </div>
 
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">FACILITY_SITE:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">FACILITY_SITE:</label>
                 <select
                   value={siteId}
                   onChange={(e) => setSiteId(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 >
                   {sites.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-[#0D1117] text-[#C9D1D9]">
+                    <option key={s.id} value={s.id} className="bg-tactical-panel text-tactical-text">
                       {s.name} [{s.timezone}]
                     </option>
                   ))}
@@ -401,86 +414,86 @@ export const Devices: React.FC = () => {
 
               <div className="grid grid-cols-4 gap-2">
                 <div className="col-span-2">
-                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">IP_ADDRESS:</label>
+                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">IP_ADDRESS:</label>
                   <input
                     type="text"
                     required
                     placeholder="192.168.1.100"
                     value={ipAddress}
                     onChange={(e) => setIpAddress(e.target.value)}
-                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                    className="input-tactical w-full px-2.5 py-1.5"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">ONVIF_PORT:</label>
+                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">ONVIF_PORT:</label>
                   <input
                     type="number"
                     value={onvifPort}
                     onChange={(e) => setOnvifPort(Number(e.target.value))}
-                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                    className="input-tactical w-full px-2.5 py-1.5"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">RTSP_PORT:</label>
+                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">RTSP_PORT:</label>
                   <input
                     type="number"
                     value={rtspPort}
                     onChange={(e) => setRtspPort(Number(e.target.value))}
-                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                    className="input-tactical w-full px-2.5 py-1.5"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">AUTH_USERNAME:</label>
+                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">AUTH_USERNAME:</label>
                   <input
                     type="text"
                     placeholder="admin"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                    className="input-tactical w-full px-2.5 py-1.5"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#8B949E] uppercase text-[10px] mb-1">AUTH_PASSWORD:</label>
+                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">AUTH_PASSWORD:</label>
                   <input
                     type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                    className="input-tactical w-full px-2.5 py-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[#8B949E] uppercase text-[10px] mb-1">RECORDING_MODE:</label>
+                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">RECORDING_MODE:</label>
                 <select
                   value={recordingMode}
                   onChange={(e) => setRecordingMode(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
+                  className="input-tactical w-full px-2.5 py-1.5"
                 >
-                  <option value="CONTINUOUS" className="bg-[#0D1117]">CONTINUOUS (24/7 Lossless fMP4 Archive)</option>
-                  <option value="MOTION" className="bg-[#0D1117]">MOTION (Scene Detection Triggered)</option>
-                  <option value="OFF" className="bg-[#0D1117]">LIVE ONLY (Real-Time Display Only)</option>
+                  <option value="CONTINUOUS" className="bg-tactical-panel">CONTINUOUS (24/7 Lossless fMP4 Archive)</option>
+                  <option value="MOTION" className="bg-tactical-panel">MOTION (Scene Detection Triggered)</option>
+                  <option value="OFF" className="bg-tactical-panel">LIVE ONLY (Real-Time Display Only)</option>
                 </select>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#21262D]">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-3 py-1.5 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] text-[#8B949E] hover:text-[#C9D1D9] uppercase font-bold text-xs"
+                  className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
                 >
-                  [ CANCEL ]
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-1.5 bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] uppercase font-bold text-xs disabled:opacity-50"
+                  className="btn-tactical-primary px-4 py-1.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                 >
-                  {saving ? '[ CONNECTING & VERIFYING... ]' : '[ ONBOARD CAMERA ]'}
+                  {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
                 </button>
               </div>
             </form>

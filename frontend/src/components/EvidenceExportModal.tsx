@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Shield, FileCheck, Download, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, FileCheck, Download, AlertCircle, X } from 'lucide-react';
 import api from '../services/api';
 
 interface EvidenceExportModalProps {
@@ -19,6 +19,16 @@ export const EvidenceExportModal: React.FC<EvidenceExportModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const [startTime, setStartTime] = useState(defaultStartTime.toISOString().slice(0, 19));
   const [endTime, setEndTime] = useState(defaultEndTime.toISOString().slice(0, 19));
   const [exportMode, setExportMode] = useState<'STREAM_COPY' | 'FRAME_ACCURATE'>('STREAM_COPY');
@@ -63,24 +73,30 @@ export const EvidenceExportModal: React.FC<EvidenceExportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-none font-mono">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-modal-title"
+      className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 backdrop-blur-none font-mono"
+    >
       <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-2xl overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#21262D] bg-[#161B22]">
           <div className="flex items-center space-x-2.5">
             <Shield className="w-4 h-4 text-[#E3B341]" />
             <div>
-              <h3 className="font-bold text-xs text-[#C9D1D9] uppercase tracking-wider">
-                [ STATUTORY EVIDENCE EXPORT // BSA 2023 SEC. 63 ]
+              <h3 id="export-modal-title" className="font-bold text-xs text-[#C9D1D9] uppercase tracking-wider">
+                Statutory Evidence Export — BSA 2023 Sec. 63
               </h3>
               <p className="text-[10px] text-[#8B949E]">TARGET_FEED: {cameraName} [{cameraId.slice(0, 8)}]</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-[#8B949E] hover:text-[#C9D1D9] text-xs px-2 py-1 border border-[#30363D] hover:bg-[#21262D] transition-colors"
+            className="text-[#8B949E] hover:text-[#C9D1D9] transition-colors p-1"
+            aria-label="Close modal"
           >
-            [ ESC / X ]
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -247,8 +263,8 @@ export const EvidenceExportModal: React.FC<EvidenceExportModalProps> = ({
           </div>
 
           {/* Legal Notice */}
-          <div className="p-2.5 bg-[#080B10] border border-[#30363D] text-[10px] text-[#8B949E] leading-relaxed">
-            <span className="text-[#C9D1D9] font-bold">[ FORENSIC INTEGRITY DISCLOSURE ]</span> VigilOne VMS generates a byte-verified archive containing the raw fMP4 media stream, SHA-256 hash digests, Ed25519 appliance digital signature, and statutory Part A & Part B certificates pursuant to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.
+          <div className="legal-disclaimer">
+            <span className="text-[#C9D1D9] font-bold">Forensic Integrity Disclosure:</span> VigilOne VMS generates a byte-verified archive containing the raw fMP4 media stream, SHA-256 hash digests, Ed25519 appliance digital signature, and statutory Part A & Part B certificates pursuant to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.
           </div>
 
           {/* Footer Buttons */}
@@ -256,17 +272,17 @@ export const EvidenceExportModal: React.FC<EvidenceExportModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22] border border-[#30363D] transition-colors"
+              className="btn-tactical-secondary"
             >
-              [ CANCEL ]
+              Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center space-x-1.5 px-4 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors disabled:opacity-50"
+              className="btn-tactical-primary flex items-center space-x-1.5 disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{loading ? '[ ASSEMBLING & SIGNING... ]' : '[ SEAL & GENERATE PACKAGE ]'}</span>
+              <span>{loading ? 'Assembling & Signing...' : 'Seal & Generate Package'}</span>
             </button>
           </div>
         </form>

@@ -95,21 +95,21 @@ export const Playback: React.FC = () => {
   const activeCamera = cameras.find((c) => c.id === selectedCameraId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 overflow-y-auto font-mono text-tactical-text">
       {/* Tactical Top Bar */}
-      <div className="bg-[#0D1117] p-3 border border-[#21262D] flex flex-wrap items-center justify-between gap-3 shadow-none">
+      <div className="bg-tactical-panel p-3 border border-tactical-border flex flex-wrap items-center justify-between gap-3 shadow-none">
         <div className="flex flex-wrap items-center gap-3">
           {/* Camera Select */}
-          <div className="flex items-center space-x-2 bg-[#161B22] px-2.5 py-1 border border-[#30363D]">
-            <Film className="w-3.5 h-3.5 text-[#E3B341]" />
-            <span className="text-[10px] uppercase text-[#8B949E] tracking-wider">SOURCE:</span>
+          <div className="flex items-center space-x-2 bg-tactical-surface px-2.5 py-1 border border-tactical-border">
+            <Film className="w-3.5 h-3.5 text-phosphor-amber" />
+            <span className="text-[10px] uppercase text-tactical-muted tracking-wider">SOURCE:</span>
             <select
               value={selectedCameraId}
               onChange={(e) => setSelectedCameraId(e.target.value)}
-              className="bg-transparent text-xs text-[#C9D1D9] font-mono focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-tactical-text font-mono focus:outline-none cursor-pointer"
             >
               {cameras.map((c) => (
-                <option key={c.id} value={c.id} className="bg-[#0D1117] text-[#C9D1D9]">
+                <option key={c.id} value={c.id} className="bg-tactical-panel text-tactical-text">
                   {c.name} [{c.ipAddress}]
                 </option>
               ))}
@@ -117,43 +117,43 @@ export const Playback: React.FC = () => {
           </div>
 
           {/* Date Select */}
-          <div className="flex items-center space-x-2 bg-[#161B22] px-2.5 py-1 border border-[#30363D]">
-            <Calendar className="w-3.5 h-3.5 text-[#58A6FF]" />
-            <span className="text-[10px] uppercase text-[#8B949E] tracking-wider">ARCHIVE_DATE:</span>
+          <div className="flex items-center space-x-2 bg-tactical-surface px-2.5 py-1 border border-tactical-border">
+            <Calendar className="w-3.5 h-3.5 text-phosphor-cyan" />
+            <span className="text-[10px] uppercase text-tactical-muted tracking-wider">ARCHIVE_DATE:</span>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-xs text-[#C9D1D9] font-mono focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-tactical-text font-mono focus:outline-none cursor-pointer"
             />
           </div>
 
           {/* Jump Shortcuts */}
-          <div className="hidden sm:flex items-center space-x-1 border border-[#30363D] bg-[#080B10] px-1 py-0.5">
+          <div className="hidden sm:flex items-center space-x-1 border border-tactical-border bg-tactical-canvas px-1 py-0.5">
             <button
               onClick={() => handleJump(-3600000)}
-              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              className="px-1.5 py-0.5 text-[10px] text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface"
               title="Step -1 Hour"
             >
               -1H
             </button>
             <button
               onClick={() => handleJump(-600000)}
-              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              className="px-1.5 py-0.5 text-[10px] text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface"
               title="Step -10 Minutes"
             >
               -10M
             </button>
             <button
               onClick={() => handleJump(600000)}
-              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              className="px-1.5 py-0.5 text-[10px] text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface"
               title="Step +10 Minutes"
             >
               +10M
             </button>
             <button
               onClick={() => handleJump(3600000)}
-              className="px-1.5 py-0.5 text-[10px] text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]"
+              className="px-1.5 py-0.5 text-[10px] text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface"
               title="Step +1 Hour"
             >
               +1H
@@ -165,19 +165,19 @@ export const Playback: React.FC = () => {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowSmartSearch(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#161B22] border border-[#30363D] hover:border-[#E3B341] text-[#C9D1D9] hover:text-[#E3B341] transition-colors"
+            className="btn-tactical-secondary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors"
           >
-            <Crosshair className="w-3.5 h-3.5 text-[#E3B341]" />
-            <span>[ SMART FORENSIC SEARCH ]</span>
+            <Crosshair className="w-3.5 h-3.5 text-phosphor-amber" />
+            <span>Smart Forensic Search</span>
           </button>
 
           <button
             onClick={() => setShowExportModal(true)}
             disabled={!selectedCameraId}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-[#E3B341] text-[#080B10] hover:bg-[#F2CC60] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-tactical-primary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ShieldCheck className="w-4 h-4 text-[#080B10]" />
-            <span>[ SECTION 63 BSA EXPORT ]</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>Section 63 BSA Export</span>
           </button>
         </div>
       </div>
@@ -326,7 +326,7 @@ export const Playback: React.FC = () => {
                   >
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold">{startStr} → {endStr}</span>
-                      <span className="text-[9px] px-1 py-0.2 bg-[#238636]/20 border border-[#238636] text-[#3FB950] font-bold">
+                      <span className="text-[9px] px-1 py-[2px] bg-[#238636]/20 border border-[#238636] text-[#3FB950] font-bold">
                         fMP4
                       </span>
                     </div>

@@ -41,22 +41,23 @@ export const AlarmBanner: React.FC<AlarmBannerProps> = ({ onNavigateToAlarms }) 
 
   return (
     <div
+      role="alert"
       className={`px-4 py-1.5 border-b flex items-center justify-between text-xs font-mono transition-colors ${
         isCritical
-          ? 'bg-[#F85149]/15 border-[#F85149] text-[#F85149]'
-          : 'bg-[#E3B341]/10 border-[#E3B341] text-[#E3B341]'
+          ? 'bg-phosphor-red/15 border-phosphor-red text-phosphor-red'
+          : 'bg-phosphor-amber/10 border-phosphor-amber text-phosphor-amber'
       }`}
     >
       <div className="flex items-center space-x-2.5">
-        <span className="flex h-2 w-2 relative">
+        <span className="flex h-2 w-2 relative" aria-hidden="true">
           <span
             className={`animate-ping absolute inline-flex h-full w-full rounded-none opacity-75 ${
-              isCritical ? 'bg-[#F85149]' : 'bg-[#E3B341]'
+              isCritical ? 'bg-phosphor-red' : 'bg-phosphor-amber'
             }`}
           />
           <span
             className={`relative inline-flex rounded-none h-2 w-2 ${
-              isCritical ? 'bg-[#F85149]' : 'bg-[#E3B341]'
+              isCritical ? 'bg-phosphor-red' : 'bg-phosphor-amber'
             }`}
           />
         </span>
@@ -65,34 +66,36 @@ export const AlarmBanner: React.FC<AlarmBannerProps> = ({ onNavigateToAlarms }) 
           [ {activeAlarms.length} ACTIVE ALARM{activeAlarms.length > 1 ? 'S' : ''} ]:
         </span>
 
-        <span className="font-semibold text-[#E6EDF3] truncate max-w-md text-[11px]">
-          {topAlarm.title} — {topAlarm.description || 'Action required'}
+        <span className="truncate max-w-md text-xs">
+          <strong className="font-mono text-tactical-bright">{topAlarm.title}</strong>
+          <span className="font-sans text-tactical-text ml-1.5">— {topAlarm.description || 'Action required'}</span>
         </span>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2.5">
         <button
           onClick={() => handleQuickAcknowledge(topAlarm.id)}
-          className="flex items-center space-x-1 px-2 py-0.5 rounded-none bg-[#0D1117] hover:bg-[#161B22] border border-[#30363D] text-[10px] text-[#E6EDF3] font-bold uppercase tracking-wider transition-colors"
+          className="btn-tactical-secondary !text-[10px] !py-0.5 !px-2"
         >
-          <CheckCircle2 className="w-3 h-3 text-[#3FB950]" />
-          <span>[ ACKNOWLEDGE TOP ]</span>
+          <CheckCircle2 className="w-3 h-3 text-phosphor-green" />
+          <span>Acknowledge Top</span>
         </button>
 
         {onNavigateToAlarms && (
           <button
             onClick={onNavigateToAlarms}
-            className="flex items-center space-x-0.5 text-[#58A6FF] hover:text-[#79C0FF] text-[10px] uppercase font-bold tracking-wider"
+            className="flex items-center space-x-1 text-phosphor-cyan hover:text-phosphor-cyan-glow text-[11px] font-mono uppercase tracking-wider font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan"
           >
-            <span>[ ALARMS CONSOLE ]</span>
+            <span>Alarms Console</span>
             <ChevronRight className="w-3 h-3" />
           </button>
         )}
 
         <button
           onClick={() => setDismissed(true)}
-          className="p-1 text-[#8B949E] hover:text-[#E6EDF3] transition-colors"
+          className="p-1 text-tactical-muted hover:text-tactical-bright transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan"
           title="Dismiss Banner"
+          aria-label="Dismiss Banner"
         >
           <X className="w-3.5 h-3.5" />
         </button>
