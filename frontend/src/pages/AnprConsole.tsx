@@ -12,6 +12,8 @@ import {
   Radio,
 } from 'lucide-react';
 import api from '../services/api';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 
 export const AnprConsole: React.FC = () => {
   const [observations, setObservations] = useState<any[]>([]);
@@ -24,6 +26,7 @@ export const AnprConsole: React.FC = () => {
   // Drawers
   const [showWatchlistDrawer, setShowWatchlistDrawer] = useState<boolean>(false);
   const [showTelemetryDrawer, setShowTelemetryDrawer] = useState<boolean>(false);
+  const [plateToDelete, setPlateToDelete] = useState<string | null>(null);
 
   // Add Watchlist Form
   const [newPlate, setNewPlate] = useState<string>('');
@@ -80,13 +83,13 @@ export const AnprConsole: React.FC = () => {
   };
 
   const handleDeleteWatchlist = async (id: string) => {
-    if (!window.confirm('Remove plate from watchlist?')) return;
     try {
       await api.delete(`/anpr/watchlist/${id}`);
+      setPlateToDelete(null);
       const wlRes = await api.get('/anpr/watchlist');
       setWatchlists(wlRes.data.watchlist || []);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete watchlist entry.');
+      setWatchlistError(err.response?.data?.error || 'Failed to delete watchlist entry.');
     }
   };
 
@@ -100,110 +103,115 @@ export const AnprConsole: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-graphite-900 p-4 space-y-4 overflow-y-auto text-slate-100">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-vms-bg p-4 space-y-4 overflow-y-auto text-vms-text select-none font-sans">
       {/* Header Bar */}
-      <div className="bg-graphite-850 p-4 rounded-lg border border-graphite-700 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-vms-panel p-4 rounded border border-vms-border flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded bg-cctv-amber/20 border border-cctv-amber/60 text-cctv-amber">
+          <div className="p-2 rounded bg-vms-accent/20 border border-vms-accent/60 text-vms-accent">
             <Car className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-base font-bold tracking-wider uppercase">Indian ANPR & Fleet Forensics</h1>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-cctv-teal/20 text-cctv-teal border border-cctv-teal/40 font-mono">
+              <h1 className="text-base font-bold tracking-wider uppercase font-mono text-vms-text">
+                Indian ANPR & Fleet Forensics
+              </h1>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-400 font-mono">
                 36 States/UTs + BH Series
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
+            <p className="text-xs text-vms-muted font-mono mt-0.5">
               Multi-Frame Track Voting ($N \ge 3$) • OCR Ambiguity Normalization • MediaMTX Localhost Relay
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Cpu}
             onClick={() => setShowTelemetryDrawer(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-graphite-800 border border-graphite-700 hover:border-cctv-teal text-slate-200 transition"
           >
-            <Cpu className="w-4 h-4 text-cctv-teal" />
             <span>AI Telemetry</span>
             {runtimeTelemetry && (
-              <span className="ml-1 text-[10px] font-mono text-cctv-teal">{runtimeTelemetry.currentFps} FPS</span>
+              <span className="ml-1 text-[10px] font-mono text-sky-400">{runtimeTelemetry.currentFps} FPS</span>
             )}
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={ShieldAlert}
             onClick={() => setShowWatchlistDrawer(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-graphite-800 border border-graphite-700 hover:border-cctv-amber text-slate-200 transition"
           >
-            <ShieldAlert className="w-4 h-4 text-cctv-amber" />
             <span>Watchlists ({watchlists.length})</span>
-          </button>
+          </Button>
 
           <button
+            type="button"
             onClick={fetchAnprData}
-            className="p-1.5 rounded bg-graphite-800 border border-graphite-700 hover:bg-graphite-700 text-slate-400 hover:text-white transition"
+            className="p-1.5 rounded bg-vms-surface border border-vms-border hover:bg-vms-hover text-vms-muted hover:text-vms-text transition-colors"
             title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-vms-accent' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-3">
-          <div className="text-[10px] font-mono text-slate-400 uppercase">Tracked Observations</div>
-          <div className="text-xl font-bold font-mono text-slate-100 mt-1">{observations.length}</div>
-          <div className="text-[10px] text-slate-500 font-mono mt-0.5">Deduplicated vehicle tracks</div>
+        <div className="bg-vms-panel border border-vms-border rounded p-3">
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Tracked Observations</div>
+          <div className="text-xl font-bold font-mono text-vms-text mt-1">{observations.length}</div>
+          <div className="text-[10px] text-vms-dim font-mono mt-0.5">Deduplicated vehicle tracks</div>
         </div>
 
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-3">
-          <div className="text-[10px] font-mono text-slate-400 uppercase">Watchlist Hits</div>
+        <div className="bg-vms-panel border border-vms-border rounded p-3">
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Watchlist Hits</div>
           <div className="text-xl font-bold font-mono text-rose-400 mt-1">
             {observations.filter((o) => o.isWatchlistMatch).length}
           </div>
-          <div className="text-[10px] text-slate-500 font-mono mt-0.5">Hotlist / Stolen / Blocked</div>
+          <div className="text-[10px] text-vms-dim font-mono mt-0.5">Hotlist / Stolen / Blocked</div>
         </div>
 
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-3">
-          <div className="text-[10px] font-mono text-slate-400 uppercase">Inference Throughput</div>
-          <div className="text-xl font-bold font-mono text-cctv-teal mt-1">
+        <div className="bg-vms-panel border border-vms-border rounded p-3">
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Inference Throughput</div>
+          <div className="text-xl font-bold font-mono text-sky-400 mt-1">
             {runtimeTelemetry?.currentFps ?? '15.0'} <span className="text-xs font-normal">FPS</span>
           </div>
-          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+          <div className="text-[10px] text-vms-dim font-mono mt-0.5">
             Avg Latency: {Math.round(runtimeTelemetry?.avgLatencyMs ?? 24)} ms
           </div>
         </div>
 
-        <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-3">
-          <div className="text-[10px] font-mono text-slate-400 uppercase">Media Relay Protocol</div>
-          <div className="text-xl font-bold font-mono text-cctv-amber mt-1 flex items-center space-x-1.5">
+        <div className="bg-vms-panel border border-vms-border rounded p-3">
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Media Relay Protocol</div>
+          <div className="text-xl font-bold font-mono text-vms-accent mt-1 flex items-center space-x-1.5">
             <Radio className="w-4 h-4 text-emerald-400" />
             <span className="text-sm">MediaMTX Relay</span>
           </div>
-          <div className="text-[10px] text-slate-500 font-mono mt-0.5">127.0.0.1:8554 (Zero Duplicate RTSP)</div>
+          <div className="text-[10px] text-vms-dim font-mono mt-0.5">127.0.0.1:8554 (Zero Duplicate RTSP)</div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-graphite-850 p-3 rounded-lg border border-graphite-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="bg-vms-panel p-3 rounded border border-vms-border flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center space-x-3 flex-1 min-w-[280px]">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-vms-dim absolute left-3 top-2.5" />
             <input
               type="text"
               placeholder="Search by Plate (e.g. DL, MH, HR, BH) or State..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-graphite-900 border border-graphite-700 rounded pl-8 pr-3 py-1.5 font-mono text-xs uppercase text-slate-200 focus:border-cctv-amber focus:outline-none"
+              className="w-full bg-vms-surface border border-vms-border rounded pl-8 pr-3 py-1.5 font-mono text-xs uppercase text-vms-text focus:border-vms-accent focus:outline-none"
             />
           </div>
 
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1.5 font-mono text-xs text-slate-300 focus:border-cctv-amber focus:outline-none"
+            className="bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 font-mono text-xs text-vms-muted focus:border-vms-accent focus:outline-none"
           >
             <option value="">All Vehicle Categories</option>
             <option value="CAR">Car / SUV</option>
@@ -215,7 +223,7 @@ export const AnprConsole: React.FC = () => {
           </select>
         </div>
 
-        <div className="text-[11px] font-mono text-slate-400">
+        <div className="text-[11px] font-mono text-vms-muted">
           Displaying {filteredObservations.length} of {observations.length} Observations
         </div>
       </div>
@@ -223,17 +231,17 @@ export const AnprConsole: React.FC = () => {
       {/* Observations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredObservations.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-slate-500 font-mono text-xs bg-graphite-850 rounded-lg border border-graphite-700">
+          <div className="col-span-full py-16 text-center text-vms-dim font-mono text-xs bg-vms-panel rounded border border-vms-border">
             No vehicle observations recorded yet. Ensure Edge AI Runtime is active and cameras have vehicles in view.
           </div>
         ) : (
           filteredObservations.map((obs) => (
             <div
               key={obs.id}
-              className={`bg-graphite-850 border rounded-lg p-4 transition space-y-3 flex flex-col justify-between ${
+              className={`bg-vms-panel border rounded p-4 transition-colors space-y-3 flex flex-col justify-between ${
                 obs.isWatchlistMatch
                   ? 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
-                  : 'border-graphite-700 hover:border-graphite-600'
+                  : 'border-vms-border hover:border-vms-accent/40'
               }`}
             >
               {/* Top: Indian Plate Badge & Category */}
@@ -250,11 +258,11 @@ export const AnprConsole: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col items-end space-y-1">
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-graphite-800 text-slate-200 border border-graphite-700 font-mono font-semibold uppercase">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-vms-surface text-vms-text border border-vms-border font-mono font-semibold uppercase">
                     {obs.category || 'CAR'}
                   </span>
                   {obs.isWatchlistMatch && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500 text-white font-bold tracking-wider uppercase animate-pulse">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500 text-white font-bold tracking-wider uppercase animate-pulse font-mono">
                       WATCHLIST HIT
                     </span>
                   )}
@@ -262,48 +270,48 @@ export const AnprConsole: React.FC = () => {
               </div>
 
               {/* State & Metadata Details */}
-              <div className="bg-graphite-900 p-2.5 rounded border border-graphite-700/70 text-xs space-y-1.5 font-mono">
-                <div className="flex justify-between items-center text-slate-300">
-                  <span className="text-slate-500 text-[10px] uppercase">Jurisdiction:</span>
-                  <span className="text-cctv-teal font-semibold">
+              <div className="bg-vms-surface p-2.5 rounded border border-vms-border text-xs space-y-1.5 font-mono">
+                <div className="flex justify-between items-center text-vms-text">
+                  <span className="text-vms-dim text-[10px] uppercase">Jurisdiction:</span>
+                  <span className="text-sky-400 font-semibold">
                     {obs.stateName ? `${obs.stateName} (${obs.stateCode})` : 'Standard Indian Registration'}
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-slate-300">
-                  <span className="text-slate-500 text-[10px] uppercase">Confidence Score:</span>
+                <div className="flex justify-between items-center text-vms-text">
+                  <span className="text-vms-dim text-[10px] uppercase">Confidence Score:</span>
                   <div className="flex items-center space-x-2">
-                    <div className="w-16 h-1.5 bg-graphite-800 rounded-full overflow-hidden">
+                    <div className="w-16 h-1.5 bg-vms-panel rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-cctv-amber rounded-full"
+                        className="h-full bg-vms-accent rounded-full"
                         style={{ width: `${Math.round(obs.bestConfidence * 100)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] font-bold text-cctv-amber">
+                    <span className="text-[10px] font-bold text-vms-accent">
                       {Math.round(obs.bestConfidence * 100)}%
                     </span>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-slate-300">
-                  <span className="text-slate-500 text-[10px] uppercase">Multi-Frame Votes:</span>
-                  <span className="text-slate-300 text-[11px] font-bold">
+                <div className="flex justify-between items-center text-vms-text">
+                  <span className="text-vms-dim text-[10px] uppercase">Multi-Frame Votes:</span>
+                  <span className="text-vms-text text-[11px] font-bold">
                     {obs.observationCount} samples (Track #{obs.trackId?.slice(0, 8) || '01'})
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-slate-400 text-[10px] pt-1 border-t border-graphite-800">
+                <div className="flex justify-between items-center text-vms-muted text-[10px] pt-1 border-t border-vms-border">
                   <span className="flex items-center space-x-1">
-                    <Clock className="w-3 h-3 text-slate-500" />
+                    <Clock className="w-3 h-3 text-vms-dim" />
                     <span>Last Seen:</span>
                   </span>
-                  <span className="text-slate-300">{new Date(obs.lastSeen).toLocaleTimeString()}</span>
+                  <span className="text-vms-text">{new Date(obs.lastSeen).toLocaleTimeString()}</span>
                 </div>
               </div>
 
               {/* Snapshot Preview if available */}
               {obs.bestSnapshot && (
-                <div className="relative rounded overflow-hidden border border-graphite-700 aspect-video bg-black flex items-center justify-center">
+                <div className="relative rounded overflow-hidden border border-vms-border aspect-video bg-black flex items-center justify-center">
                   <img src={obs.bestSnapshot} alt="Vehicle Crop" className="object-cover w-full h-full" />
                 </div>
               )}
@@ -314,52 +322,54 @@ export const AnprConsole: React.FC = () => {
 
       {/* Watchlist Manager Drawer */}
       {showWatchlistDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-graphite-850 border-l border-graphite-700 h-full flex flex-col shadow-2xl p-5 text-slate-100 overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-graphite-700">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-vms-elevated border-l border-vms-border h-full flex flex-col shadow-2xl p-5 text-vms-text overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-vms-border">
               <div className="flex items-center space-x-2">
-                <ShieldAlert className="w-5 h-5 text-cctv-amber" />
-                <h2 className="text-sm font-bold uppercase tracking-wider">Vehicle Watchlists</h2>
+                <ShieldAlert className="w-5 h-5 text-vms-accent" />
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono">Vehicle Watchlists</h2>
               </div>
               <button
+                type="button"
                 onClick={() => setShowWatchlistDrawer(false)}
-                className="p-1 rounded text-slate-400 hover:text-white"
+                className="p-1 rounded text-vms-muted hover:text-vms-text transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Add Watchlist Form */}
-            <form onSubmit={handleAddWatchlist} className="py-4 space-y-3 border-b border-graphite-700 text-xs">
-              <span className="text-[11px] font-bold text-cctv-amber uppercase">Add Vehicle to Watchlist</span>
+            <form onSubmit={handleAddWatchlist} className="py-4 space-y-3 border-b border-vms-border text-xs">
+              <span className="text-[11px] font-bold text-vms-accent uppercase font-mono tracking-wider">
+                Add Vehicle to Watchlist
+              </span>
 
               {watchlistError && (
-                <div className="p-2 rounded bg-red-500/20 border border-red-500/40 text-red-200 text-[11px]">
+                <div className="p-2 rounded bg-rose-950/70 border border-rose-800 text-rose-300 text-[11px] font-mono">
                   {watchlistError}
                 </div>
               )}
 
               <div>
-                <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
+                <label className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">
                   Plate Number (Normalized live)
                 </label>
-                <input
-                  type="text"
+                <Input
                   required
                   placeholder="e.g. DL 01 AB 1234 or MH12DE1428"
                   value={newPlate}
                   onChange={(e) => setNewPlate(e.target.value.toUpperCase())}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1.5 font-mono uppercase text-xs focus:border-cctv-amber focus:outline-none"
+                  className="w-full uppercase font-mono text-xs"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">Category</label>
+                  <label className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">Category</label>
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-2 py-1.5 font-mono text-[11px] focus:border-cctv-amber focus:outline-none"
+                    className="w-full bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 font-mono text-[11px] text-vms-text focus:border-vms-accent focus:outline-none"
                   >
                     <option value="HOTLIST_STOLEN">Hotlist / Stolen</option>
                     <option value="SECURITY_BLOCKED">Security Blocked</option>
@@ -370,11 +380,11 @@ export const AnprConsole: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">Alert Severity</label>
+                  <label className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">Alert Severity</label>
                   <select
                     value={newSeverity}
                     onChange={(e) => setNewSeverity(e.target.value)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded px-2 py-1.5 font-mono text-[11px] focus:border-cctv-amber focus:outline-none"
+                    className="w-full bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 font-mono text-[11px] text-vms-text focus:border-vms-accent focus:outline-none"
                   >
                     <option value="CRITICAL">CRITICAL Alarm</option>
                     <option value="WARNING">WARNING</option>
@@ -384,47 +394,70 @@ export const AnprConsole: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">Owner / Details</label>
-                <input
-                  type="text"
+                <label className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">Owner / Details</label>
+                <Input
                   placeholder="e.g. Suspect in Gate B trespassing"
                   value={newOwner}
                   onChange={(e) => setNewOwner(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded px-2.5 py-1.5 text-xs focus:border-cctv-amber focus:outline-none"
+                  className="w-full text-xs"
                 />
               </div>
 
-              <button
+              <Button
                 type="submit"
-                className="w-full py-1.5 rounded bg-cctv-amber text-graphite-900 font-bold text-xs hover:bg-amber-400 transition"
+                variant="primary"
+                size="sm"
+                className="w-full"
               >
                 Save Watchlist Entry
-              </button>
+              </Button>
             </form>
 
             {/* Watchlists List */}
             <div className="flex-1 overflow-y-auto py-3 space-y-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase">Active Watchlist Records ({watchlists.length})</span>
+              <span className="text-[11px] font-bold text-vms-muted uppercase font-mono tracking-wider">
+                Active Watchlist Records ({watchlists.length})
+              </span>
               {watchlists.map((wl) => (
                 <div
                   key={wl.id}
-                  className="bg-graphite-900 p-2.5 rounded border border-graphite-700 flex items-center justify-between text-xs"
+                  className="bg-vms-panel p-2.5 rounded border border-vms-border flex items-center justify-between text-xs"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center space-x-2">
-                      <span className="font-mono font-bold text-cctv-amber">{wl.plateNumber}</span>
-                      <span className="text-[9px] px-1.5 py-[2px] rounded bg-graphite-800 text-slate-300 font-mono">
+                      <span className="font-mono font-bold text-vms-accent">{wl.plateNumber}</span>
+                      <span className="text-[9px] px-1.5 py-[2px] rounded bg-vms-surface text-vms-muted font-mono border border-vms-border">
                         {wl.category}
                       </span>
                     </div>
-                    {wl.ownerName && <div className="text-[11px] text-slate-400">{wl.ownerName}</div>}
+                    {wl.ownerName && <div className="text-[11px] text-vms-dim">{wl.ownerName}</div>}
                   </div>
-                  <button
-                    onClick={() => handleDeleteWatchlist(wl.id)}
-                    className="p-1 rounded text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {plateToDelete === wl.id ? (
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWatchlist(wl.id)}
+                        className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-mono"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlateToDelete(null)}
+                        className="px-1 py-0.5 text-vms-muted text-[10px]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPlateToDelete(wl.id)}
+                      className="p-1 rounded text-vms-dim hover:text-rose-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -434,16 +467,17 @@ export const AnprConsole: React.FC = () => {
 
       {/* AI Telemetry Drawer */}
       {showTelemetryDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-graphite-850 border-l border-graphite-700 h-full flex flex-col shadow-2xl p-5 text-slate-100 overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-graphite-700">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-vms-elevated border-l border-vms-border h-full flex flex-col shadow-2xl p-5 text-vms-text overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-vms-border">
               <div className="flex items-center space-x-2">
-                <Cpu className="w-5 h-5 text-cctv-teal" />
-                <h2 className="text-sm font-bold uppercase tracking-wider">Edge AI Runtime Supervisor</h2>
+                <Cpu className="w-5 h-5 text-sky-400" />
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono">Edge AI Runtime Supervisor</h2>
               </div>
               <button
+                type="button"
                 onClick={() => setShowTelemetryDrawer(false)}
-                className="p-1 rounded text-slate-400 hover:text-white"
+                className="p-1 rounded text-vms-muted hover:text-vms-text transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -451,53 +485,53 @@ export const AnprConsole: React.FC = () => {
 
             <div className="py-4 space-y-4 text-xs font-mono">
               {/* Telemetry Stats */}
-              <div className="bg-graphite-900 p-3 rounded border border-graphite-700 space-y-2">
-                <div className="text-[11px] font-bold text-cctv-teal uppercase tracking-wider pb-1 border-b border-graphite-800">
+              <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
+                <div className="text-[11px] font-bold text-sky-400 uppercase tracking-wider pb-1 border-b border-vms-border">
                   Real-time Inference Telemetry
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Processing FPS:</span>
-                  <span className="text-slate-100 font-bold">{runtimeTelemetry?.currentFps ?? '15.0'} FPS</span>
+                  <span className="text-vms-muted">Processing FPS:</span>
+                  <span className="text-vms-text font-bold">{runtimeTelemetry?.currentFps ?? '15.0'} FPS</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Average Latency:</span>
-                  <span className="text-slate-100 font-bold">
+                  <span className="text-vms-muted">Average Latency:</span>
+                  <span className="text-vms-text font-bold">
                     {Math.round(runtimeTelemetry?.avgLatencyMs ?? 24)} ms
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Admission Queue:</span>
-                  <span className="text-slate-100 font-bold">
+                  <span className="text-vms-muted">Admission Queue:</span>
+                  <span className="text-vms-text font-bold">
                     {runtimeTelemetry?.queueSize ?? 0} / {runtimeTelemetry?.maxQueueSize ?? 100} frames
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Active Pipelines:</span>
-                  <span className="text-slate-100 font-bold">
+                  <span className="text-vms-muted">Active Pipelines:</span>
+                  <span className="text-vms-text font-bold">
                     {runtimeTelemetry?.activePipelinesCount ?? 1} Cameras
                   </span>
                 </div>
               </div>
 
               {/* Single RTSP Relay Architecture Guarantee */}
-              <div className="bg-graphite-900 p-3 rounded border border-graphite-700 space-y-2">
-                <div className="text-[11px] font-bold text-cctv-amber uppercase tracking-wider pb-1 border-b border-graphite-800">
+              <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
+                <div className="text-[11px] font-bold text-vms-accent uppercase tracking-wider pb-1 border-b border-vms-border">
                   Appliance Invariant Check
                 </div>
-                <div className="text-[11px] leading-relaxed text-slate-300">
+                <div className="text-[11px] leading-relaxed text-vms-muted font-sans">
                   In compliance with Edge Appliance Hardening Invariant #2, AI frame sampling connects strictly to
-                  MediaMTX localhost loopback (<code className="text-cctv-amber">rtsp://127.0.0.1:8554/...</code>).
+                  MediaMTX localhost loopback (<code className="text-vms-accent font-mono">rtsp://127.0.0.1:8554/...</code>).
                   Direct RTSP connections to cameras are strictly forbidden, preventing hardware session saturation.
                 </div>
               </div>
 
               {/* AI SBOM & License Validation */}
-              <div className="bg-graphite-900 p-3 rounded border border-graphite-700 space-y-2">
-                <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider pb-1 border-b border-graphite-800 flex items-center space-x-1.5">
+              <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
+                <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider pb-1 border-b border-vms-border flex items-center space-x-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span>AI SBOM & Permissive Licensing</span>
                 </div>
-                <p className="text-[11px] text-slate-300">
+                <p className="text-[11px] text-vms-muted font-sans">
                   All models & weights run locally via ONNX Runtime under Apache-2.0 and MIT permissive licenses.
                   GPL/AGPL copyleft dependencies are strictly excluded from the appliance runtime.
                 </p>

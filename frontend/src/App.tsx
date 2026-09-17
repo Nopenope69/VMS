@@ -12,43 +12,39 @@ import Investigation from './pages/Investigation';
 import FloorplanView from './pages/FloorplanView';
 import StorageManagement from './pages/StorageManagement';
 import ApplianceConsole from './pages/ApplianceConsole';
+import { AlertTriangle } from 'lucide-react';
 import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 
 const OutOfScopeNotice: React.FC<{ name: string; description: string }> = ({ name, description }) => (
-  <div className="max-w-3xl mx-auto my-16 bg-[#0D1117] border border-[#21262D] p-6 relative rounded-none shadow-2xl">
-    {/* Optical Corner Reticles */}
-    <span className="absolute -top-1 -left-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
-    <span className="absolute -top-1 -right-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
-    <span className="absolute -bottom-1 -left-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
-    <span className="absolute -bottom-1 -right-1 text-[10px] font-mono text-[#30363D] select-none leading-none">+</span>
-
-    <div className="flex items-center justify-between border-b border-[#21262D] pb-3 mb-5">
-      <div className="flex items-center gap-2">
-        <span className="inline-block w-2 h-2 bg-[#E3B341]" />
-        <span className="text-[11px] font-mono text-[#E3B341] tracking-widest uppercase font-bold">
-          [ ARCHITECTURAL SCOPE BOUNDARY // FROZEN ]
+  <div className="max-w-2xl mx-auto my-16 p-6">
+    <div className="bg-vms-panel border border-vms-border rounded-lg p-6 space-y-4 shadow-lg">
+      <div className="flex items-center justify-between border-b border-vms-border pb-3">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-status-warn" />
+          <span className="text-xs font-bold text-vms-text tracking-wider uppercase">
+            Architectural Scope Boundary
+          </span>
+        </div>
+        <span className="text-[11px] font-mono text-vms-muted uppercase">
+          Spec: v1.0.0 Air-Gapped Appliance
         </span>
       </div>
-      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-        SPEC: COMMERCIAL_V1_AIR_GAPPED
-      </span>
-    </div>
 
-    <div className="p-4 bg-[#161B22] border border-[#21262D] mb-5">
-      <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider mb-1.5 flex items-center gap-2">
-        <span className="text-[#F85149] font-bold">///</span>
-        <span>{name}</span>
-      </h2>
-      <p className="text-xs font-mono text-slate-400 leading-relaxed">
-        {description}
-      </p>
-    </div>
+      <div className="p-4 bg-vms-bg border border-vms-border rounded">
+        <h2 className="text-sm font-semibold text-vms-text mb-1 flex items-center gap-2">
+          <span>{name}</span>
+        </h2>
+        <p className="text-xs text-vms-muted leading-relaxed">
+          {description}
+        </p>
+      </div>
 
-    <div className="flex items-center justify-between pt-3 border-t border-[#21262D] text-[10px] font-mono text-slate-500 uppercase">
-      <span>GOVERNANCE: VIGILONE MASTER ARCHITECTURE EXECUTION DIRECTIVE</span>
-      <span className="text-[#E3B341]">ROADMAP: COMMERCIAL_V2</span>
+      <div className="flex items-center justify-between pt-2 text-[11px] font-mono text-vms-dim">
+        <span>VigilOne Master Architecture Execution Directive</span>
+        <span className="text-status-warn">Roadmap: Commercial v2.0</span>
+      </div>
     </div>
   </div>
 );
@@ -66,15 +62,20 @@ export const App: React.FC = () => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('vigilone_user');
+    localStorage.removeItem('vigilone_token');
   }, []);
 
   useEffect(() => {
     setLogoutHandler(handleLogout);
 
     const savedUser = localStorage.getItem('vigilone_user');
-    if (savedUser) {
+    const savedToken = localStorage.getItem('vigilone_token');
+    if (savedUser && savedToken) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        setToken(savedToken);
+        setAccessToken(savedToken);
       } catch {}
     }
 
@@ -98,19 +99,24 @@ export const App: React.FC = () => {
             setToken(res.data.token);
             setUser(res.data.user);
             localStorage.setItem('vigilone_user', JSON.stringify(res.data.user));
+            localStorage.setItem('vigilone_token', res.data.token);
           })
           .catch(() => {
-            setAccessToken(null);
-            setToken(null);
-            setUser(null);
+            if (!savedToken) {
+              setAccessToken(null);
+              setToken(null);
+              setUser(null);
+            }
           });
       })
       .catch(() => {
         // Fallback: assume bootstrapped and attempt login
         setIsBootstrapped(true);
-        setAccessToken(null);
-        setToken(null);
-        setUser(null);
+        if (!savedToken) {
+          setAccessToken(null);
+          setToken(null);
+          setUser(null);
+        }
       })
       .finally(() => setLoading(false));
   }, [handleLogout]);
@@ -120,6 +126,7 @@ export const App: React.FC = () => {
     setToken(userToken);
     setUser(userData);
     localStorage.setItem('vigilone_user', JSON.stringify(userData));
+    localStorage.setItem('vigilone_token', userToken);
   };
 
   const allowedTabsByRole: Record<string, string[]> = {
@@ -179,8 +186,11 @@ export const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-graphite-900 flex items-center justify-center text-slate-400 font-mono text-xs">
-        Initializing VigilOne Surveillance Appliance...
+      <div className="min-h-screen bg-vms-bg flex items-center justify-center text-vms-muted font-mono text-xs">
+        <div className="flex items-center space-x-2.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+          <span>Initializing VigilOne Surveillance Console...</span>
+        </div>
       </div>
     );
   }
@@ -203,7 +213,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-graphite-900 flex flex-col font-sans text-slate-100">
+    <div className="min-h-screen bg-vms-bg flex flex-col font-sans text-vms-text">
       <Navbar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
@@ -211,7 +221,7 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {currentTab === 'live' && (
           <LiveView
             onNavigateToDevices={() => handleSelectTab('devices')}

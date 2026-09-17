@@ -9,8 +9,11 @@ import {
   Plus,
   ArrowDownRight,
   ArrowUpRight,
+  AlertCircle,
 } from 'lucide-react';
 import api from '../services/api';
+import Button from './ui/Button';
+import Input from './ui/Input';
 
 interface DigitalPin {
   id: string;
@@ -39,6 +42,7 @@ export const RelayControlWidget: React.FC = () => {
   const [logs, setLogs] = useState<RelayLog[]>([]);
   const [triggeringPin, setTriggeringPin] = useState<number | null>(null);
   const [showAddPin, setShowAddPin] = useState(false);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [newPin, setNewPin] = useState({
     pinNumber: 1,
     name: '',
@@ -68,6 +72,7 @@ export const RelayControlWidget: React.FC = () => {
 
   const handleTrigger = async (pinNumber: number, command: 'SET_HIGH' | 'SET_LOW' | 'PULSE') => {
     setTriggeringPin(pinNumber);
+    setErrorNotice(null);
     try {
       await api.post('/relays/trigger', {
         pinNumber,
@@ -76,7 +81,7 @@ export const RelayControlWidget: React.FC = () => {
       });
       await fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Relay command execution failed');
+      setErrorNotice(err.response?.data?.error || 'Relay command execution failed');
     } finally {
       setTriggeringPin(null);
     }
@@ -84,6 +89,7 @@ export const RelayControlWidget: React.FC = () => {
 
   const handleCreatePin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorNotice(null);
     try {
       await api.post('/relays/pins', newPin);
       setShowAddPin(false);
@@ -96,7 +102,7 @@ export const RelayControlWidget: React.FC = () => {
       });
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to configure pin');
+      setErrorNotice(err.response?.data?.error || 'Failed to configure pin');
     }
   };
 
@@ -104,89 +110,103 @@ export const RelayControlWidget: React.FC = () => {
   const outputPins = pins.filter((p) => p.direction === 'OUTPUT');
 
   return (
-    <div className="bg-graphite-850 border border-graphite-700 rounded-lg p-4 font-sans text-slate-100">
-      <div className="flex items-center justify-between border-b border-graphite-700 pb-3 mb-4">
+    <div className="bg-vms-surface border border-vms-border rounded p-4 font-sans text-vms-text select-none">
+      <div className="flex items-center justify-between border-b border-vms-border pb-3 mb-4">
         <div className="flex items-center space-x-2">
-          <Zap className="w-5 h-5 text-cctv-amber" />
-          <h3 className="font-bold text-sm uppercase tracking-wider text-slate-200">
+          <Zap className="w-5 h-5 text-vms-accent" />
+          <h3 className="font-bold text-xs uppercase tracking-wider text-vms-text font-mono">
             Physical Digital I/O & Relay Matrix
           </h3>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-graphite-750 border border-graphite-600 font-mono text-cctv-teal">
+          <span className="text-[10px] px-2 py-0.5 rounded bg-vms-panel border border-vms-border font-mono text-sky-400">
             Multi-Stage Hardware Handshake
           </span>
         </div>
-        <button
+        <Button
+          variant="secondary"
+          size="xs"
+          icon={Plus}
           onClick={() => setShowAddPin(!showAddPin)}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded bg-graphite-700 hover:bg-graphite-600 text-xs text-slate-200 transition"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Configure Pin</span>
-        </button>
+          Configure Pin
+        </Button>
       </div>
 
+      {errorNotice && (
+        <div className="mb-4 p-2.5 rounded bg-rose-950/70 border border-rose-800 text-xs font-mono text-rose-300 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{errorNotice}</span>
+          </div>
+          <button type="button" onClick={() => setErrorNotice(null)} className="text-vms-muted hover:text-vms-text ml-2">
+            ×
+          </button>
+        </div>
+      )}
+
       {showAddPin && (
-        <form onSubmit={handleCreatePin} className="mb-4 p-3 bg-graphite-900 border border-graphite-700 rounded text-xs space-y-3">
-          <div className="font-semibold text-cctv-amber">Register Hardware I/O Pin</div>
+        <form onSubmit={handleCreatePin} className="mb-4 p-3.5 bg-vms-panel border border-vms-border rounded text-xs space-y-3">
+          <div className="font-semibold text-vms-accent font-mono uppercase text-xs tracking-wider">Register Hardware I/O Pin</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Pin Number</label>
-              <input
+              <label className="block text-[10px] text-vms-muted mb-1 font-mono uppercase tracking-wider">Pin Number</label>
+              <Input
                 type="number"
                 min="1"
                 max="64"
                 value={newPin.pinNumber}
                 onChange={(e) => setNewPin({ ...newPin, pinNumber: Number(e.target.value) })}
-                className="w-full bg-graphite-800 border border-graphite-600 rounded px-2 py-1 text-slate-200"
+                className="w-full text-xs font-mono"
                 required
               />
             </div>
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Pin Name / Device</label>
-              <input
-                type="text"
+              <label className="block text-[10px] text-vms-muted mb-1 font-mono uppercase tracking-wider">Pin Name / Device</label>
+              <Input
                 placeholder="e.g. Main Gate Barrier"
                 value={newPin.name}
                 onChange={(e) => setNewPin({ ...newPin, name: e.target.value })}
-                className="w-full bg-graphite-800 border border-graphite-600 rounded px-2 py-1 text-slate-200"
+                className="w-full text-xs"
                 required
               />
             </div>
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Direction</label>
+              <label className="block text-[10px] text-vms-muted mb-1 font-mono uppercase tracking-wider">Direction</label>
               <select
                 value={newPin.direction}
                 onChange={(e) => setNewPin({ ...newPin, direction: e.target.value as any })}
-                className="w-full bg-graphite-800 border border-graphite-600 rounded px-2 py-1 text-slate-200"
+                className="w-full bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text font-mono focus:border-vms-accent focus:outline-none"
               >
                 <option value="OUTPUT">DO (Output Relay)</option>
                 <option value="INPUT">DI (Input Sensor)</option>
               </select>
             </div>
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Default Pulse (ms)</label>
-              <input
+              <label className="block text-[10px] text-vms-muted mb-1 font-mono uppercase tracking-wider">Default Pulse (ms)</label>
+              <Input
                 type="number"
                 step="500"
                 value={newPin.pulseDurationMs}
                 onChange={(e) => setNewPin({ ...newPin, pulseDurationMs: Number(e.target.value) })}
-                className="w-full bg-graphite-800 border border-graphite-600 rounded px-2 py-1 text-slate-200"
+                className="w-full text-xs font-mono"
               />
             </div>
           </div>
-          <div className="flex justify-end space-x-2">
-            <button
+          <div className="flex justify-end space-x-2 pt-1">
+            <Button
               type="button"
+              variant="secondary"
+              size="xs"
               onClick={() => setShowAddPin(false)}
-              className="px-3 py-1 rounded bg-graphite-800 text-slate-400 hover:text-white"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="px-3 py-1 rounded bg-cctv-amber text-graphite-900 font-bold hover:bg-amber-400"
+              variant="primary"
+              size="xs"
             >
               Save Pin
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -195,13 +215,13 @@ export const RelayControlWidget: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Output Relays (DO) */}
         <div>
-          <div className="flex items-center space-x-1 text-xs font-semibold text-slate-400 mb-2">
-            <ArrowUpRight className="w-3.5 h-3.5 text-cctv-amber" />
+          <div className="flex items-center space-x-1 text-xs font-semibold text-vms-muted mb-2 font-mono uppercase tracking-wider">
+            <ArrowUpRight className="w-3.5 h-3.5 text-vms-accent" />
             <span>Digital Outputs (DO Relays & Actuators)</span>
           </div>
           <div className="space-y-2">
             {outputPins.length === 0 ? (
-              <div className="text-xs text-slate-500 font-mono p-4 text-center bg-graphite-900/50 rounded border border-dashed border-graphite-750">
+              <div className="text-xs text-vms-dim font-mono p-4 text-center bg-vms-panel/50 rounded border border-dashed border-vms-border">
                 No output relays configured yet.
               </div>
             ) : (
@@ -210,25 +230,25 @@ export const RelayControlWidget: React.FC = () => {
                 return (
                   <div
                     key={pin.id}
-                    className="p-3 bg-graphite-900 border border-graphite-750 rounded-lg flex items-center justify-between"
+                    className="p-3 bg-vms-panel border border-vms-border rounded flex items-center justify-between"
                   >
                     <div>
                       <div className="flex items-center space-x-2">
-                        <span className="font-mono text-xs font-bold text-cctv-amber">
+                        <span className="font-mono text-xs font-bold text-vms-accent">
                           PIN #{pin.pinNumber}
                         </span>
-                        <span className="text-xs font-medium text-slate-200">{pin.name}</span>
+                        <span className="text-xs font-medium text-vms-text">{pin.name}</span>
                         <span
                           className={`text-[9px] px-1.5 py-[2px] rounded font-mono font-bold ${
                             pin.state === 'HIGH'
                               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                              : 'bg-graphite-800 text-slate-400 border border-graphite-700'
+                              : 'bg-vms-surface text-vms-dim border border-vms-border'
                           }`}
                         >
                           {pin.state}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                      <div className="text-[10px] text-vms-dim mt-1 font-mono">
                         Pulse: {pin.pulseDurationMs}ms • Changed:{' '}
                         {new Date(pin.lastStateChangeAt).toLocaleTimeString()}
                       </div>
@@ -236,18 +256,20 @@ export const RelayControlWidget: React.FC = () => {
 
                     <div className="flex items-center space-x-1.5">
                       <button
+                        type="button"
                         onClick={() => handleTrigger(pin.pinNumber, 'PULSE')}
                         disabled={isTriggering}
-                        className="px-2 py-1 rounded bg-cctv-amber/20 hover:bg-cctv-amber/30 text-cctv-amber border border-cctv-amber/40 text-[11px] font-bold font-mono transition"
+                        className="px-2 py-1 rounded bg-vms-accent/20 hover:bg-vms-accent/30 text-vms-accent border border-vms-accent/40 text-[11px] font-bold font-mono transition-colors"
                       >
                         {isTriggering ? 'PULSING...' : '⚡ PULSE'}
                       </button>
                       <button
+                        type="button"
                         onClick={() =>
                           handleTrigger(pin.pinNumber, pin.state === 'HIGH' ? 'SET_LOW' : 'SET_HIGH')
                         }
                         disabled={isTriggering}
-                        className={`px-2 py-1 rounded text-[11px] font-mono transition ${
+                        className={`px-2 py-1 rounded text-[11px] font-mono transition-colors ${
                           pin.state === 'HIGH'
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
@@ -265,29 +287,29 @@ export const RelayControlWidget: React.FC = () => {
 
         {/* Input Sensors (DI) */}
         <div>
-          <div className="flex items-center space-x-1 text-xs font-semibold text-slate-400 mb-2">
-            <ArrowDownRight className="w-3.5 h-3.5 text-cctv-teal" />
+          <div className="flex items-center space-x-1 text-xs font-semibold text-vms-muted mb-2 font-mono uppercase tracking-wider">
+            <ArrowDownRight className="w-3.5 h-3.5 text-sky-400" />
             <span>Digital Inputs (DI Sensors, Tamper & Beams)</span>
           </div>
           <div className="space-y-2">
             {inputPins.length === 0 ? (
-              <div className="text-xs text-slate-500 font-mono p-4 text-center bg-graphite-900/50 rounded border border-dashed border-graphite-750">
+              <div className="text-xs text-vms-dim font-mono p-4 text-center bg-vms-panel/50 rounded border border-dashed border-vms-border">
                 No input sensors configured yet.
               </div>
             ) : (
               inputPins.map((pin) => (
                 <div
                   key={pin.id}
-                  className="p-3 bg-graphite-900 border border-graphite-750 rounded-lg flex items-center justify-between"
+                  className="p-3 bg-vms-panel border border-vms-border rounded flex items-center justify-between"
                 >
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-mono text-xs font-bold text-cctv-teal">
+                      <span className="font-mono text-xs font-bold text-sky-400">
                         PIN #{pin.pinNumber}
                       </span>
-                      <span className="text-xs font-medium text-slate-200">{pin.name}</span>
+                      <span className="text-xs font-medium text-vms-text">{pin.name}</span>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                    <div className="text-[10px] text-vms-dim mt-1 font-mono">
                       Telemetry state monitored • Last transition:{' '}
                       {new Date(pin.lastStateChangeAt).toLocaleTimeString()}
                     </div>
@@ -310,14 +332,15 @@ export const RelayControlWidget: React.FC = () => {
       </div>
 
       {/* Multi-Stage Hardware Confirmation Audit Logs */}
-      <div className="mt-4 pt-3 border-t border-graphite-750">
+      <div className="mt-4 pt-3 border-t border-vms-border">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-mono text-slate-400 uppercase">
+          <span className="text-xs font-mono text-vms-muted uppercase tracking-wider">
             Recent Relay Hardware Confirmation Trajectory
           </span>
           <button
+            type="button"
             onClick={fetchData}
-            className="text-[10px] text-cctv-teal hover:underline flex items-center space-x-1"
+            className="text-[10px] text-sky-400 hover:underline flex items-center space-x-1 font-mono"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Refresh</span>
@@ -326,7 +349,7 @@ export const RelayControlWidget: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[11px] font-mono">
             <thead>
-              <tr className="border-b border-graphite-800 text-slate-500">
+              <tr className="border-b border-vms-border text-vms-dim uppercase text-[10px]">
                 <th className="py-1">Timestamp</th>
                 <th className="py-1">Pin</th>
                 <th className="py-1">Command</th>
@@ -334,16 +357,16 @@ export const RelayControlWidget: React.FC = () => {
                 <th className="py-1">Hardware Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-graphite-800/60 text-slate-300">
+            <tbody className="divide-y divide-vms-border/60 text-vms-text">
               {logs.map((log) => {
                 const isConfirmed = log.lifecycleState === 'STATE_CONFIRMED';
                 const isFailed = log.lifecycleState === 'COMMAND_FAILED';
                 return (
-                  <tr key={log.id}>
-                    <td className="py-1 text-slate-400">
+                  <tr key={log.id} className="hover:bg-vms-panel/50">
+                    <td className="py-1 text-vms-muted">
                       {new Date(log.sentAt).toLocaleTimeString()}
                     </td>
-                    <td className="py-1 font-bold text-cctv-amber">
+                    <td className="py-1 font-bold text-vms-accent">
                       PIN #{log.pin.pinNumber} ({log.pin.name})
                     </td>
                     <td className="py-1">{log.command}</td>
@@ -360,7 +383,7 @@ export const RelayControlWidget: React.FC = () => {
                         {log.lifecycleState}
                       </span>
                     </td>
-                    <td className="py-1 text-slate-400">
+                    <td className="py-1 text-vms-muted">
                       {isConfirmed ? (
                         <span className="text-emerald-400 flex items-center space-x-1">
                           <CheckCircle2 className="w-3 h-3" />
@@ -383,7 +406,7 @@ export const RelayControlWidget: React.FC = () => {
               })}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-2 text-center text-slate-500">
+                  <td colSpan={5} className="py-2 text-center text-vms-dim">
                     No recent relay hardware executions.
                   </td>
                 </tr>

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { Radio, Lock, Mail, ShieldAlert, KeyRound } from 'lucide-react';
+import { Radio, Lock, Mail, ShieldAlert, KeyRound, Building2, User, Zap } from 'lucide-react';
 import api from '../services/api';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 
 interface LoginProps {
   onLoginSuccess: (user: any, token: string) => void;
@@ -20,6 +23,35 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleBypassDemo = () => {
+    const demoUser = {
+      id: 'demo-super-admin',
+      name: 'Alex Vance (Chief Security Officer)',
+      email: 'admin@vigilone.local',
+      role: 'SUPER_ADMIN',
+      tenantId: 'demo-tenant-hq',
+      tenant: {
+        id: 'demo-tenant-hq',
+        name: 'Metro Transit Command Facility',
+      },
+    };
+    const demoToken = 'demo-jwt-token-preview-mode';
+    onLoginSuccess(demoUser, demoToken);
+  };
+
+  const handleFillDemo = () => {
+    if (isBootstrap) {
+      setTenantName('Metro Transit Command Facility');
+      setAdminName('Alex Vance (Chief Security Officer)');
+      setEmail('admin@vigilone.local');
+      setPassword('Password123!');
+      setSetupToken('vigilone_dev_setup_token_99182');
+    } else {
+      setEmail('admin@vigilone.local');
+      setPassword('Password123!');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,152 +86,192 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080B10] flex items-center justify-center p-4 selection:bg-[#E3B341]/30 font-mono text-[#C9D1D9] relative overflow-hidden">
-      {/* Background Decorative Reticles */}
-      <div className="absolute top-6 left-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
-      <div className="absolute top-6 right-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
-      <div className="absolute bottom-6 left-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
-      <div className="absolute bottom-6 right-6 text-[#21262D] text-xs select-none pointer-events-none">+</div>
-
-      <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-md p-6 shadow-2xl space-y-5 relative">
-        {/* Optical Corner Reticles */}
-        <div className="absolute top-1.5 left-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
-        <div className="absolute top-1.5 right-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
-        <div className="absolute bottom-1.5 left-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
-        <div className="absolute bottom-1.5 right-1.5 text-[#30363D] text-[10px] select-none pointer-events-none">+</div>
-
-        {/* Brand & Telemetry Header */}
-        <div className="text-center space-y-2 border-b border-[#21262D] pb-4">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-[#161B22] border border-[#30363D] mb-1">
-            <Radio className="w-5 h-5 text-[#E3B341]" />
+    <div className="min-h-screen bg-vms-bg flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-4">
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded bg-vms-panel border border-vms-border mb-1 shadow-sm">
+            <Radio className="w-6 h-6 text-vms-accent" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-widest text-white uppercase">
-              [ VIGILONE APPLIANCE TERMINAL ]
+            <h1 className="text-xl font-bold tracking-tight text-vms-text">
+              VigilOne VMS
             </h1>
-            <p className="text-[10px] text-[#8B949E] mt-0.5">
-              AIR-GAPPED COMMERCIAL CCTV SURVEILLANCE NODE
+            <p className="text-xs text-vms-muted mt-0.5">
+              Edge-First Commercial Video Management System
             </p>
           </div>
 
-          <div className="inline-flex items-center space-x-2 bg-[#080B10] border border-[#21262D] px-2 py-0.5 text-[9px] text-[#8B949E]">
-            <span>NODE: <strong className="text-[#3FB950]">LOCAL_NVR_01</strong></span>
-            <span>//</span>
-            <span>SEC_LEVEL: <strong className="text-[#58A6FF]">STRICT_RBAC</strong></span>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Badge variant="live" size="sm" dot>
+              Local NVR Appliance
+            </Badge>
+            <Badge variant="outline" size="sm">
+              Strict RBAC
+            </Badge>
           </div>
         </div>
 
-        {error && (
-          <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-xs text-[#F85149] flex items-center space-x-2">
-            <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-3.5 text-xs">
-          {isBootstrap && (
-            <>
+        {/* Login Card */}
+        <Card padding="lg" className="shadow-2xl space-y-4">
+          {/* Quick Test / Demo Bypass Banner */}
+          <div className="p-3 bg-vms-panel border border-vms-accent/40 rounded flex flex-col gap-2.5">
+            <div className="flex items-start gap-2">
+              <Zap className="w-4 h-4 text-vms-accent flex-shrink-0 mt-0.5" />
               <div>
-                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-                  FACILITY_OR_TENANT_NAME:
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Central Command Facility"
-                  value={tenantName}
-                  onChange={(e) => setTenantName(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-                  ADMINISTRATOR_FULL_NAME:
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Chief Security Officer"
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  className="w-full bg-[#080B10] border border-[#30363D] px-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-                  APPLIANCE_SETUP_TOKEN:
-                </label>
-                <div className="relative">
-                  <KeyRound className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter hardware initialization token"
-                    value={setupToken}
-                    onChange={(e) => setSetupToken(e.target.value)}
-                    className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
-                  />
+                <div className="text-xs font-semibold text-vms-text font-mono">
+                  UI/UX Evaluation & Testing Mode
+                </div>
+                <div className="text-[11px] text-vms-muted leading-tight mt-0.5">
+                  Bypass login immediately or auto-fill standard credentials to test all 15 operational consoles.
                 </div>
               </div>
-            </>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-vms-border/60">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleFillDemo}
+                title="Pre-fill form with standard test credentials"
+              >
+                Fill Credentials
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleBypassDemo}
+                title="Instantly bypass login as Super Admin"
+              >
+                Bypass & Test UI
+              </Button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-xs text-status-alarm flex items-center gap-2.5">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
-          <div>
-            <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-              OPERATOR_IDENTITY (EMAIL):
-            </label>
-            <div className="relative">
-              <Mail className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
-              <input
-                type="email"
-                required
-                placeholder="operator@facility.local"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
-              />
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            {isBootstrap && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-vms-text mb-1">
+                    Facility / Tenant Name
+                  </label>
+                  <div className="relative">
+                    <Building2 className="w-4 h-4 absolute left-3 top-2.5 text-vms-dim" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Central Command Facility"
+                      value={tenantName}
+                      onChange={(e) => setTenantName(e.target.value)}
+                      className="w-full bg-vms-bg border border-vms-border rounded pl-9 pr-3 py-2 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-vms-text mb-1">
+                    Administrator Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3 top-2.5 text-vms-dim" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Chief Security Officer"
+                      value={adminName}
+                      onChange={(e) => setAdminName(e.target.value)}
+                      className="w-full bg-vms-bg border border-vms-border rounded pl-9 pr-3 py-2 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-vms-text mb-1">
+                    Appliance Setup PIN / Token
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 absolute left-3 top-2.5 text-vms-dim" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Enter hardware initialization token"
+                      value={setupToken}
+                      onChange={(e) => setSetupToken(e.target.value)}
+                      className="w-full bg-vms-bg border border-vms-border rounded pl-9 pr-3 py-2 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent font-mono"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Operator Identity (Email)
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-vms-dim" />
+                <input
+                  type="email"
+                  required
+                  placeholder="operator@facility.local"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-vms-bg border border-vms-border rounded pl-9 pr-3 py-2 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent font-mono"
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-              SECURITY_KEY (PASSWORD):
-            </label>
-            <div className="relative">
-              <Lock className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#8B949E]" />
-              <input
-                type="password"
-                required
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#080B10] border border-[#30363D] pl-8 pr-2.5 py-1.5 text-xs text-[#C9D1D9] focus:outline-none focus:border-[#E3B341]"
-              />
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Security Credential (Password)
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-vms-dim" />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-vms-bg border border-vms-border rounded pl-9 pr-3 py-2 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent font-mono"
+                />
+              </div>
             </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={loading}
+              className="w-full justify-center py-2 text-xs font-semibold mt-2"
+            >
+              {isBootstrap ? 'Initialize First-Run Tenant' : 'Sign In to Console'}
+            </Button>
+          </form>
+
+          <div className="mt-5 pt-4 text-center border-t border-vms-border">
+            <button
+              type="button"
+              onClick={() => {
+                setIsBootstrap(!isBootstrap);
+                setError('');
+              }}
+              className="text-xs text-vms-muted hover:text-vms-accent transition"
+            >
+              {isBootstrap ? '← Return to Operator Login' : 'Initial Appliance Setup / Bootstrap →'}
+            </button>
           </div>
+        </Card>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 bg-[#E3B341] text-[#080B10] font-bold text-xs tracking-wider uppercase hover:bg-[#F2CC60] transition-colors disabled:opacity-50 mt-2"
-          >
-            {loading ? '[ AUTHENTICATING ACCESS... ]' : isBootstrap ? '[ INITIALIZE FIRST-RUN TENANT ]' : '[ AUTHENTICATE OPERATOR ]'}
-          </button>
-        </form>
-
-        <div className="pt-2 text-center border-t border-[#21262D]">
-          <button
-            type="button"
-            onClick={() => {
-              setIsBootstrap(!isBootstrap);
-              setError('');
-            }}
-            className="text-[11px] text-[#8B949E] hover:text-[#E3B341] transition-colors"
-          >
-            {isBootstrap ? '[ ← RETURN TO OPERATOR LOGIN ]' : '[ INITIAL APPLIANCE SETUP // BOOTSTRAP → ]'}
-          </button>
+        <div className="text-center text-[11px] text-vms-dim">
+          Air-gapped NVR node • Compliant with Section 63 BSA
         </div>
       </div>
     </div>

@@ -9,8 +9,12 @@ import {
   Trash2,
   CheckCircle2,
   LogOut,
+  AlertTriangle,
 } from 'lucide-react';
 import api from '../services/api';
+import Modal, { ConfirmModal } from '../components/ui/Modal';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 
 interface IdentityProviderItem {
   id: string;
@@ -36,6 +40,8 @@ export const IdentitySettings: React.FC = () => {
   const [sessions, setSessions] = useState<UserSessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [providerToDelete, setProviderToDelete] = useState<string | null>(null);
+  const [showConfirmRevokeAll, setShowConfirmRevokeAll] = useState(false);
 
   // New Provider Form
   const [name, setName] = useState('');
@@ -45,6 +51,7 @@ export const IdentitySettings: React.FC = () => {
   const [scopes, setScopes] = useState('openid profile email');
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -89,103 +96,133 @@ export const IdentitySettings: React.FC = () => {
     }
   };
 
-  const handleDeleteProvider = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this Identity Provider?')) return;
+  const handleDeleteProvider = (id: string) => {
+    setProviderToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!providerToDelete) return;
     try {
-      await api.delete(`/sso/providers/${id}`);
+      setError(null);
+      await api.delete(`/sso/providers/${providerToDelete}`);
       setNotice('Identity Provider removed');
+      setProviderToDelete(null);
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.message);
+      setError(err.response?.data?.error || err.message || 'Failed to remove provider');
+      setProviderToDelete(null);
     }
   };
 
   const handleUnlockSession = async (sessionId: string) => {
     try {
+      setError(null);
       await api.post(`/sso/sessions/${sessionId}/unlock`);
       setNotice('Session unlocked');
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.message);
+      setError(err.response?.data?.error || err.message || 'Failed to unlock session');
     }
   };
 
   const handleRevokeSession = async (sessionId: string) => {
     try {
+      setError(null);
       await api.post(`/sso/sessions/${sessionId}/revoke`);
       setNotice('Session revoked');
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.message);
+      setError(err.response?.data?.error || err.message || 'Failed to revoke session');
     }
   };
 
-  const handleRevokeAll = async () => {
-    if (!confirm('Revoke all workstation sessions for this account?')) return;
+  const handleRevokeAll = () => {
+    setShowConfirmRevokeAll(true);
+  };
+
+  const confirmRevokeAll = async () => {
     try {
+      setError(null);
       await api.post('/sso/sessions/revoke-all');
       setNotice('All active sessions revoked');
+      setShowConfirmRevokeAll(false);
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.message);
+      setError(err.response?.data?.error || err.message || 'Failed to revoke sessions');
+      setShowConfirmRevokeAll(false);
     }
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 text-slate-100 font-sans select-none">
+    <div className="p-6 max-w-6xl mx-auto space-y-6 text-vms-text font-sans select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-vms-border pb-4">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <KeyRound className="w-6 h-6 text-amber-400" />
+            <KeyRound className="w-6 h-6 text-vms-accent" />
             <span>Enterprise Identity, SSO & Session Governance</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-1">
+          <p className="text-xs text-vms-muted font-mono mt-1">
             Configure OpenID Connect (OIDC) identity federation, role mapping, and workstation auto-lock.
           </p>
         </div>
 
-        <button
+        <Button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-graphite-900 font-semibold text-xs rounded transition shadow"
+          variant="primary"
+          size="sm"
+          className="flex items-center gap-1.5"
         >
           <Plus className="w-4 h-4" />
           <span>Add OIDC Provider</span>
-        </button>
+        </Button>
       </div>
 
       {loading && (
-        <div className="p-4 bg-slate-800/40 border border-slate-700 rounded text-center text-xs font-mono text-slate-400 animate-pulse">
+        <div className="p-4 bg-vms-panel/40 border border-vms-border rounded text-center text-xs font-mono text-vms-muted animate-pulse">
           Loading identity federation profiles and active user sessions...
         </div>
       )}
 
       {notice && (
-        <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded text-emerald-300 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{notice}</span>
+        <div className="p-3 bg-emerald-950/40 border border-emerald-800/80 rounded text-emerald-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>{notice}</span>
+          </div>
+          <button onClick={() => setNotice(null)} className="hover:opacity-75 text-xs font-bold" aria-label="Dismiss notice">✕</button>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} className="hover:opacity-75 text-xs font-bold" aria-label="Dismiss error">✕</button>
         </div>
       )}
 
       {/* Identity Providers Table */}
-      <div className="bg-graphite-800 border border-slate-700 rounded-lg p-5 space-y-4 shadow">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-cyan-400" />
+      <div className="bg-vms-surface border border-vms-border rounded-lg p-5 space-y-4 shadow">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-vms-text flex items-center gap-2">
+          <Shield className="w-4 h-4 text-sky-400" />
           <span>Configured Identity Providers</span>
         </h2>
 
         {providers.length === 0 ? (
-          <div className="p-6 bg-graphite-900 border border-slate-800 rounded text-center text-slate-500 font-mono text-xs">
+          <div className="p-6 bg-vms-panel border border-vms-border rounded text-center text-vms-dim font-mono text-xs">
             No external identity providers configured. Local database credentials active.
           </div>
         ) : (
-          <div className="border border-slate-700 rounded overflow-hidden divide-y divide-slate-800 bg-graphite-900">
+          <div className="border border-vms-border rounded overflow-hidden divide-y divide-vms-border bg-vms-panel">
             {providers.map((p) => (
-              <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition">
+              <div key={p.id} className="p-4 flex items-center justify-between hover:bg-vms-hover/40 transition">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-200 text-xs">{p.name}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                    <span className="font-semibold text-vms-text text-xs">{p.name}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-sky-500/20 text-sky-400 border border-sky-500/30">
                       {p.type}
                     </span>
                     {p.enabled && (
@@ -194,15 +231,16 @@ export const IdentitySettings: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400">{p.issuerUrl}</div>
-                  <div className="text-[10px] font-mono text-slate-500">Client ID: {p.clientId}</div>
+                  <div className="text-[11px] font-mono text-vms-muted">{p.issuerUrl}</div>
+                  <div className="text-[10px] font-mono text-vms-dim">Client ID: {p.clientId}</div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleDeleteProvider(p.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition"
+                    className="p-1.5 text-vms-muted hover:text-rose-400 hover:bg-vms-surface rounded transition"
                     title="Remove Provider"
+                    aria-label={`Remove provider ${p.name}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -214,32 +252,34 @@ export const IdentitySettings: React.FC = () => {
       </div>
 
       {/* Active Workstation Sessions */}
-      <div className="bg-graphite-800 border border-slate-700 rounded-lg p-5 space-y-4 shadow">
+      <div className="bg-vms-surface border border-vms-border rounded-lg p-5 space-y-4 shadow">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-400" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-vms-text flex items-center gap-2">
+            <Clock className="w-4 h-4 text-vms-accent" />
             <span>Active Workstation Sessions & Inactivity Locks</span>
           </h2>
-          <button
+          <Button
             onClick={handleRevokeAll}
-            className="flex items-center gap-1.5 px-3 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/80 rounded font-mono text-xs transition"
+            variant="danger"
+            size="sm"
+            className="flex items-center gap-1.5"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Revoke All Sessions</span>
-          </button>
+          </Button>
         </div>
 
-        <div className="border border-slate-700 rounded overflow-hidden divide-y divide-slate-800 bg-graphite-900">
+        <div className="border border-vms-border rounded overflow-hidden divide-y divide-vms-border bg-vms-panel">
           {sessions.length === 0 ? (
-            <div className="p-4 text-center text-slate-500 font-mono text-xs">
+            <div className="p-4 text-center text-vms-dim font-mono text-xs">
               No active sessions found.
             </div>
           ) : (
             sessions.map((sess) => (
-              <div key={sess.id} className="p-3 flex items-center justify-between hover:bg-slate-800/30 transition">
+              <div key={sess.id} className="p-3 flex items-center justify-between hover:bg-vms-hover/40 transition">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-slate-300 font-medium">{sess.id}</span>
+                    <span className="font-mono text-xs text-vms-text font-medium">{sess.id}</span>
                     {sess.state === 'ACTIVE' ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> ACTIVE
@@ -249,12 +289,12 @@ export const IdentitySettings: React.FC = () => {
                         <Lock className="w-3 h-3" /> LOCKED (INACTIVITY)
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-500/20 text-slate-400">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-500/20 text-vms-muted">
                         {sess.state}
                       </span>
                     )}
                   </div>
-                  <div className="text-[10px] font-mono text-slate-500">
+                  <div className="text-[10px] font-mono text-vms-dim">
                     Last active: {new Date(sess.lastActivityAt).toLocaleString()} | Expires:{' '}
                     {new Date(sess.expiresAt).toLocaleTimeString()}
                   </div>
@@ -272,7 +312,7 @@ export const IdentitySettings: React.FC = () => {
                   {sess.state !== 'REVOKED' && (
                     <button
                       onClick={() => handleRevokeSession(sess.id)}
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-xs"
+                      className="px-2.5 py-1 bg-vms-elevated hover:bg-vms-surface text-vms-text rounded font-mono text-xs"
                     >
                       Revoke
                     </button>
@@ -285,96 +325,104 @@ export const IdentitySettings: React.FC = () => {
       </div>
 
       {/* Add Provider Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-graphite-800 border border-slate-700 rounded-lg max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-100 border-b border-slate-700 pb-2">
-              Configure OpenID Connect (OIDC) Provider
-            </h3>
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Configure OpenID Connect (OIDC) Provider"
+        maxWidth="lg"
+      >
+        <div className="space-y-4">
+          {formError && (
+            <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded text-rose-300 text-xs">
+              {formError}
+            </div>
+          )}
 
-            {formError && (
-              <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded text-rose-300 text-xs">
-                {formError}
-              </div>
-            )}
+          <form onSubmit={handleCreateProvider} className="space-y-4 text-xs font-mono">
+            <Input
+              label="Provider Name"
+              type="text"
+              placeholder="e.g. Okta / Azure AD / Keycloak"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
 
-            <form onSubmit={handleCreateProvider} className="space-y-4 text-xs font-mono">
-              <div>
-                <label className="text-slate-400 block mb-1">Provider Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Okta / Azure AD / Keycloak"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-graphite-900 border border-slate-700 rounded p-2 text-slate-200"
-                  required
-                />
-              </div>
+            <Input
+              label="Issuer URL (Discovery Endpoint)"
+              type="url"
+              placeholder="https://auth.enterprise.com/oauth2/v1"
+              value={issuerUrl}
+              onChange={(e) => setIssuerUrl(e.target.value)}
+              required
+            />
 
-              <div>
-                <label className="text-slate-400 block mb-1">Issuer URL (Discovery Endpoint)</label>
-                <input
-                  type="url"
-                  placeholder="https://auth.enterprise.com/oauth2/v1"
-                  value={issuerUrl}
-                  onChange={(e) => setIssuerUrl(e.target.value)}
-                  className="w-full bg-graphite-900 border border-slate-700 rounded p-2 text-slate-200"
-                  required
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Client ID"
+                type="text"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                required
+              />
+              <Input
+                label="Client Secret"
+                type="password"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                required
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-400 block mb-1">Client ID</label>
-                  <input
-                    type="text"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    className="w-full bg-graphite-900 border border-slate-700 rounded p-2 text-slate-200"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">Client Secret</label>
-                  <input
-                    type="password"
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    className="w-full bg-graphite-900 border border-slate-700 rounded p-2 text-slate-200"
-                    required
-                  />
-                </div>
-              </div>
+            <Input
+              label="Requested Scopes (space-separated)"
+              type="text"
+              value={scopes}
+              onChange={(e) => setScopes(e.target.value)}
+            />
 
-              <div>
-                <label className="text-slate-400 block mb-1">Requested Scopes (space-separated)</label>
-                <input
-                  type="text"
-                  value={scopes}
-                  onChange={(e) => setScopes(e.target.value)}
-                  className="w-full bg-graphite-900 border border-slate-700 rounded p-2 text-slate-200"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-graphite-900 font-bold rounded"
-                >
-                  Save Provider
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-vms-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+              >
+                Save Provider
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </Modal>
+
+      {/* Delete Provider Confirmation */}
+      <ConfirmModal
+        isOpen={!!providerToDelete}
+        onClose={() => setProviderToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Remove Identity Provider"
+        message="Are you sure you want to remove this external Identity Provider configuration? Active sessions may be affected."
+        confirmLabel="Remove Provider"
+        variant="danger"
+      />
+
+      {/* Revoke All Sessions Confirmation */}
+      <ConfirmModal
+        isOpen={showConfirmRevokeAll}
+        onClose={() => setShowConfirmRevokeAll(false)}
+        onConfirm={confirmRevokeAll}
+        title="Revoke All Sessions"
+        message="Are you sure you want to revoke all active workstation sessions across all accounts? Operators will be forced to log in again."
+        confirmLabel="Revoke All"
+        variant="danger"
+      />
     </div>
   );
 };

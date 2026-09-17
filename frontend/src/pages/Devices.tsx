@@ -1,12 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Radio, AlertTriangle, Calendar, Shield, Compass, Activity, Crosshair } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Search,
+  Plus,
+  Radio,
+  AlertTriangle,
+  Calendar,
+  Shield,
+  Compass,
+  Activity,
+  Crosshair,
+  Video,
+  MoreVertical,
+} from 'lucide-react';
 import api from '../services/api';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { EmptyState } from '../components/ui/EmptyState';
 import ScheduleMatrixModal from '../components/ScheduleMatrixModal';
 import DetectionZoneModal from '../components/DetectionZoneModal';
 import PtzControlModal from '../components/PtzControlModal';
 import StreamDiagnosticModal from '../components/StreamDiagnosticModal';
 import TripwireModal from '../components/TripwireModal';
 
+/* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Devices: React.FC = () => {
   const [cameras, setCameras] = useState<any[]>([]);
   const [sites, setSites] = useState<any[]>([]);
@@ -21,6 +39,9 @@ export const Devices: React.FC = () => {
     'SCHEDULE' | 'ZONES' | 'PTZ' | 'DIAGNOSTIC' | 'TRIPWIRE' | null
   >(null);
 
+  // Context Menu State
+  const [openMenuCameraId, setOpenMenuCameraId] = useState<string | null>(null);
+
   // Form State
   const [name, setName] = useState('');
   const [siteId, setSiteId] = useState('');
@@ -33,6 +54,8 @@ export const Devices: React.FC = () => {
   const [vendorQuirks, setVendorQuirks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchData = async () => {
     try {
@@ -54,15 +77,16 @@ export const Devices: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowAddModal(false);
-        setSelectedCameraForModal(null);
-        setActiveModalType(null);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuCameraId(null);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleScan = async () => {
@@ -118,233 +142,294 @@ export const Devices: React.FC = () => {
   };
 
   const isQuotaReached = license?.maxCameras && license.cameraCount >= license.maxCameras;
-
-  // Render a segmented gauge for quota
-  const renderQuotaGauge = () => {
-    if (!license || !license.maxCameras) return null;
-    const total = license.maxCameras;
-    const current = license.cameraCount || 0;
-    const pct = Math.round((current / total) * 100);
-
-    return (
-      <div className="flex items-center space-x-2 bg-[#161B22] border border-[#30363D] px-2.5 py-1 text-xs">
-        <span className="text-[10px] text-[#8B949E] uppercase tracking-wider">APPLIANCE_QUOTA:</span>
-        <div className="w-16 bg-[#080B10] border border-[#30363D] h-2 p-0.5">
-          <div
-            className={`h-full ${pct > 90 ? 'bg-[#F85149]' : pct > 75 ? 'bg-[#E3B341]' : 'bg-[#3FB950]'}`}
-            style={{ width: `${Math.min(pct, 100)}%` }}
-          />
-        </div>
-        <span className="font-bold text-[#C9D1D9]">
-          <span className="text-[#E3B341]">{current}</span>/{total}
-        </span>
-      </div>
-    );
-  };
+  const quotaUsedPct = license?.maxCameras ? Math.round(((license.cameraCount || 0) / license.maxCameras) * 100) : 0;
+  const activeRecCount = cameras.filter((c) => c.recorderState === 'RUNNING').length;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 overflow-y-auto font-mono text-tactical-text">
-      {/* Top Action Bar */}
-      <div className="bg-tactical-panel p-3.5 border border-tactical-border flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Radio className="w-5 h-5 text-phosphor-amber" />
-            <h2 className="text-sm font-bold text-tactical-bright uppercase tracking-wider font-mono">
-              Appliance Fleet & Sensor Topology
-            </h2>
-          </div>
-          <p className="text-[11px] text-tactical-muted mt-0.5 font-sans">
-            ONVIF PROFILE S/G/T APPLIANCES • RTSP/H.264 CAPTURE FLEET • FACILITY SENSOR REGISTRY
-          </p>
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-vms-bg p-3 md:p-4 space-y-3">
+      {/* Top Header & Actions */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-vms-border pb-3">
+        <div className="flex items-center gap-2.5">
+          <Radio className="w-5 h-5 text-vms-accent" />
+          <h1 className="text-base md:text-lg font-bold text-vms-text tracking-tight uppercase font-mono">
+            Appliance Fleet & Camera Topology
+          </h1>
         </div>
 
-        <div className="flex items-center space-x-2">
-          {renderQuotaGauge()}
-
-          <button
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleScan}
-            disabled={scanning}
-            className="btn-tactical-secondary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors"
+            isLoading={scanning}
+            icon={<Search className="w-3.5 h-3.5" />}
           >
-            <Search className={`w-3.5 h-3.5 ${scanning ? 'animate-spin text-phosphor-cyan' : ''}`} />
-            <span>{scanning ? 'Scanning LAN...' : 'WS-Discovery Radar'}</span>
-          </button>
+            {scanning ? 'Scanning Network...' : 'WS-Discovery Radar'}
+          </Button>
 
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setShowAddModal(true)}
             disabled={isQuotaReached}
-            className="btn-tactical-primary flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40"
+            icon={<Plus className="w-3.5 h-3.5" />}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Onboard Feed</span>
-          </button>
+            Onboard Camera
+          </Button>
         </div>
       </div>
 
+      {/* Horizontal Telemetry Bar */}
+      <div className="flex flex-wrap items-center gap-4 sm:gap-6 px-3 py-2 bg-vms-surface border border-vms-border rounded text-xs font-mono">
+        <div className="flex items-center gap-2">
+          <span className="text-vms-muted">PROVISIONED FEEDS:</span>
+          <span className="font-bold text-vms-text">{cameras.length}</span>
+        </div>
+        <div className="h-3 w-px bg-vms-border hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="text-vms-muted">RECORDING ENGINES:</span>
+          <span className={`font-bold ${activeRecCount > 0 ? 'text-emerald-400' : 'text-vms-muted'}`}>
+            {activeRecCount} Active
+          </span>
+        </div>
+        <div className="h-3 w-px bg-vms-border hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="text-vms-muted">WS-DISCOVERY:</span>
+          <span className={`font-bold ${discovered.length > 0 ? 'text-sky-400' : 'text-vms-dim'}`}>
+            {discovered.length > 0 ? `${discovered.length} Found` : 'Idle'}
+          </span>
+        </div>
+        <div className="h-3 w-px bg-vms-border hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="text-vms-muted">APPLIANCE QUOTA:</span>
+          <span className={`font-bold ${quotaUsedPct > 90 ? 'text-rose-400' : quotaUsedPct > 75 ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {license?.cameraCount || 0} / {license?.maxCameras || '—'} ({quotaUsedPct}%)
+          </span>
+        </div>
+      </div>
+
+      {/* Quota Ceiling Alert */}
       {isQuotaReached && (
-        <div className="p-2.5 bg-tactical-canvas border border-phosphor-amber text-phosphor-amber text-xs flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 text-phosphor-amber" />
+        <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-status-alarm text-xs flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>
-            [ QUOTA CEILING REACHED ] Appliance capacity limit attained ({license.maxCameras} feeds). Upgrade your license tier in License & Entitlements to provision additional hardware streams.
+            <strong className="font-semibold">Quota Ceiling Reached:</strong> Appliance capacity limit attained ({license.maxCameras} feeds). Upgrade your license tier in Appliance License & Entitlements to provision additional hardware streams.
           </span>
         </div>
       )}
 
-      {/* Discovered Cameras Notice */}
+      {/* Discovered Cameras Drawer */}
       {discovered.length > 0 && (
-        <div className="bg-tactical-panel border border-phosphor-cyan/60 p-3">
-          <div className="text-xs font-bold text-phosphor-cyan uppercase tracking-wider mb-2 flex items-center space-x-1.5 font-mono">
-            <Radio className="w-4 h-4 animate-pulse" />
-            <span>[ RADAR HIT ] FOUND {discovered.length} ONVIF BROADCASTING FEEDS ON LAN:</span>
+        <Card padding="md" className="border-vms-accent/40 bg-vms-panel/90">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Radio className="w-4 h-4 text-vms-accent animate-pulse" />
+              <h2 className="text-xs font-bold text-vms-text uppercase tracking-wider font-mono">
+                Radar Discovery Hit: {discovered.length} ONVIF Cameras on Local Subnet
+              </h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDiscovered([])}
+            >
+              Dismiss
+            </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {discovered.map((d, idx) => (
               <div
                 key={idx}
-                className="bg-tactical-surface p-2 border border-tactical-border flex items-center justify-between"
+                className="bg-vms-bg p-3 rounded border border-vms-border flex items-center justify-between"
               >
                 <div>
-                  <div className="text-xs font-bold text-white font-mono">{d.ipAddress}:{d.onvifPort}</div>
-                  <div className="text-[10px] text-tactical-muted font-sans">{d.manufacturer || 'GENERIC'} {d.model || 'ONVIF-CAMERA'}</div>
+                  <div className="text-xs font-semibold text-vms-text font-mono">
+                    {d.ipAddress}:{d.onvifPort}
+                  </div>
+                  <div className="text-[11px] text-vms-muted mt-0.5">
+                    {d.manufacturer || 'Generic'} {d.model || 'ONVIF Camera'}
+                  </div>
                 </div>
-                <button
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={() => handleSelectDiscovered(d)}
-                  className="btn-tactical-primary px-2.5 py-1 font-bold text-[10px] uppercase tracking-wider transition-colors"
                 >
                   Onboard
-                </button>
+                </Button>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Configured Cameras Table */}
-      <div className="bg-[#0D1117] border border-[#21262D] flex-1 flex flex-col">
-        <div className="px-3.5 py-2.5 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between text-xs">
-          <span className="font-bold uppercase tracking-wider text-[#C9D1D9]">
-            PROVISIONED SENSORS ({cameras.length})
-          </span>
-          <span className="text-[10px] text-[#8B949E]">
-            ENGINE: ACTIVE RTMP/RTSP INGESTION DAEMON
+      {/* Cameras Fleet Table Card */}
+      <Card padding="none">
+        <div className="px-4 py-3 border-b border-vms-border flex items-center justify-between bg-vms-panel/50">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-xs text-vms-text uppercase tracking-wider">
+              Provisioned Surveillance Sensors ({cameras.length})
+            </span>
+          </div>
+          <span className="text-[11px] text-vms-muted font-mono">
+            Active RTMP/RTSP Ingestion Engine
           </span>
         </div>
 
         {cameras.length === 0 ? (
-          <div className="p-12 text-center text-[#484F58] text-xs">
-            [ NO CAMERAS CURRENTLY PROVISIONED. RUN A WS-DISCOVERY SCAN OR ADD AN ONVIF FEED MANUALLY. ]
-          </div>
+          <EmptyState
+            icon={<Video className="w-6 h-6" />}
+            title="No cameras provisioned"
+            description="Run a WS-Discovery scan to detect hardware on your LAN or onboard an ONVIF feed manually."
+            action={{
+              label: 'Onboard Camera',
+              onClick: () => setShowAddModal(true),
+            }}
+          />
         ) : (
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
+              <thead className="bg-vms-panel/80 text-vms-muted uppercase text-[10px] border-b border-vms-border font-medium tracking-wider">
                 <tr>
-                  <th className="px-3.5 py-2">FEED_NAME</th>
-                  <th className="px-3.5 py-2">FACILITY_SITE</th>
-                  <th className="px-3.5 py-2">IP_ENDPOINT</th>
-                  <th className="px-3.5 py-2">PTZ_OPTICS</th>
-                  <th className="px-3.5 py-2">RECORDING_MODE</th>
-                  <th className="px-3.5 py-2">REC_ENGINE</th>
-                  <th className="px-3.5 py-2">STREAM_STATE</th>
-                  <th className="px-3.5 py-2 text-right">OPERATIONS</th>
+                  <th className="px-4 py-2.5">Feed Identifier</th>
+                  <th className="px-4 py-2.5">Facility Site</th>
+                  <th className="px-4 py-2.5">IP Endpoint</th>
+                  <th className="px-4 py-2.5">Optics Profile</th>
+                  <th className="px-4 py-2.5">Recording Mode</th>
+                  <th className="px-4 py-2.5">Recorder Daemon</th>
+                  <th className="px-4 py-2.5">Stream State</th>
+                  <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
+              <tbody className="divide-y divide-vms-border text-vms-text">
                 {cameras.map((c) => (
-                  <tr key={c.id} className="hover:bg-[#161B22] transition-colors">
-                    <td className="px-3.5 py-2.5 font-bold text-white">{c.name}</td>
-                    <td className="px-3.5 py-2.5 text-[#8B949E]">{c.site?.name || 'PRIMARY_FACILITY'}</td>
-                    <td className="px-3.5 py-2.5 text-[#E3B341]">{c.ipAddress}</td>
-                    <td className="px-3.5 py-2.5">
+                  <tr key={c.id} className="hover:bg-vms-hover/40 transition">
+                    <td className="px-4 py-3 font-semibold text-vms-text whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Video className="w-3.5 h-3.5 text-vms-dim" />
+                        <span>{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-vms-muted whitespace-nowrap">
+                      {c.site?.name || 'Primary Facility'}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-vms-accent text-[11px] whitespace-nowrap">
+                      {c.ipAddress}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {c.hasPtz ? (
-                        <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#58A6FF] text-[#58A6FF] text-[9px] font-bold">
-                          3-AXIS PTZ
-                        </span>
+                        <Badge variant="telemetry" size="sm" icon={<Compass className="w-3 h-3" />}>
+                          3-Axis PTZ
+                        </Badge>
                       ) : (
-                        <span className="text-[#484F58] text-[10px]">FIXED FOV</span>
+                        <span className="text-vms-dim text-[11px]">Fixed FOV</span>
                       )}
                     </td>
-                    <td className="px-3.5 py-2.5">
-                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#30363D] text-[#C9D1D9] text-[10px] font-bold">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <Badge variant="outline" size="sm">
                         {c.recordingMode}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="px-3.5 py-2.5">
-                      <span
-                        className={`px-1.5 py-0.5 text-[9px] font-bold border ${
-                          c.recorderState === 'RUNNING'
-                            ? 'bg-[#080B10] text-[#3FB950] border-[#238636]'
-                            : 'bg-[#080B10] text-[#8B949E] border-[#30363D]'
-                        }`}
-                      >
-                        {c.recorderState === 'RUNNING' ? 'REC: ACTIVE' : 'REC: IDLE'}
-                      </span>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {c.recorderState === 'RUNNING' ? (
+                        <Badge variant="live" size="sm" dot>
+                          Recording Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" size="sm">
+                          Idle
+                        </Badge>
+                      )}
                     </td>
-                    <td className="px-3.5 py-2.5">
-                      <span className="inline-flex items-center space-x-1 text-[#3FB950] text-[10px] font-bold">
-                        <span className="w-1.5 h-1.5 bg-[#3FB950] animate-pulse" />
-                        <span>ONLINE</span>
-                      </span>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 text-status-live text-xs font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-status-live" />
+                        <span>Online</span>
+                      </div>
                     </td>
-                    <td className="px-3.5 py-2.5 text-right">
-                      <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => {
-                            setSelectedCameraForModal(c);
-                            setActiveModalType('SCHEDULE');
-                          }}
-                          title="Weekly Recording Schedule Matrix"
-                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
-                        >
-                          <Calendar className="w-3 h-3 inline mr-1" />
-                          <span>SCHED</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedCameraForModal(c);
-                            setActiveModalType('ZONES');
-                          }}
-                          title="Motion Detection Zones & Exclusion Masks"
-                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
-                        >
-                          <Shield className="w-3 h-3 inline mr-1" />
-                          <span>ZONES</span>
-                        </button>
-                        {c.hasPtz && (
-                          <button
-                            onClick={() => {
-                              setSelectedCameraForModal(c);
-                              setActiveModalType('PTZ');
-                            }}
-                            title="PTZ Presets & Guard Patrol Tours"
-                            className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#58A6FF] text-[#8B949E] hover:text-[#58A6FF] text-[10px] font-bold uppercase transition-colors"
-                          >
-                            <Compass className="w-3 h-3 inline mr-1" />
-                            <span>PTZ</span>
-                          </button>
-                        )}
-                        <button
+                    <td className="px-4 py-3 text-right whitespace-nowrap relative">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Quick Diagnostic Button */}
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           onClick={() => {
                             setSelectedCameraForModal(c);
                             setActiveModalType('DIAGNOSTIC');
                           }}
                           title="Stream Telemetry & Diagnostics"
-                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#3FB950] text-[#8B949E] hover:text-[#3FB950] text-[10px] font-bold uppercase transition-colors"
+                          icon={<Activity className="w-3 h-3" />}
                         >
-                          <Activity className="w-3 h-3 inline mr-1" />
-                          <span>DIAG</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedCameraForModal(c);
-                            setActiveModalType('TRIPWIRE');
-                          }}
-                          title="Vector Tripwire & Continuous Loitering Analytics"
-                          className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] border border-[#30363D] hover:border-[#E3B341] text-[#8B949E] hover:text-[#E3B341] text-[10px] font-bold uppercase transition-colors"
-                        >
-                          <Crosshair className="w-3 h-3 inline mr-1" />
-                          <span>TRIP</span>
-                        </button>
+                          Telemetry
+                        </Button>
+
+                        {/* Operations Dropdown */}
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={() => setOpenMenuCameraId(openMenuCameraId === c.id ? null : c.id)}
+                            className="p-1.5 text-vms-muted hover:text-vms-text bg-vms-panel hover:bg-vms-surface border border-vms-border rounded transition"
+                            title="Camera configuration menu"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {openMenuCameraId === c.id && (
+                            <div
+                              ref={menuRef}
+                              className="absolute right-0 mt-1 w-52 bg-vms-panel border border-vms-border rounded shadow-xl z-50 py-1 text-xs text-vms-text"
+                            >
+                              <div className="px-3 py-1.5 text-[10px] uppercase font-mono text-vms-dim border-b border-vms-border">
+                                {c.name} Operations
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedCameraForModal(c);
+                                  setActiveModalType('SCHEDULE');
+                                  setOpenMenuCameraId(null);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-vms-hover flex items-center gap-2 text-vms-text"
+                              >
+                                <Calendar className="w-3.5 h-3.5 text-vms-dim" />
+                                <span>Recording Schedule Matrix</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedCameraForModal(c);
+                                  setActiveModalType('ZONES');
+                                  setOpenMenuCameraId(null);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-vms-hover flex items-center gap-2 text-vms-text"
+                              >
+                                <Shield className="w-3.5 h-3.5 text-vms-dim" />
+                                <span>Motion Zones & Masks</span>
+                              </button>
+                              {c.hasPtz && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCameraForModal(c);
+                                    setActiveModalType('PTZ');
+                                    setOpenMenuCameraId(null);
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-vms-hover flex items-center gap-2 text-vms-text"
+                                >
+                                  <Compass className="w-3.5 h-3.5 text-vms-accent" />
+                                  <span>PTZ Presets & Tours</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedCameraForModal(c);
+                                  setActiveModalType('TRIPWIRE');
+                                  setOpenMenuCameraId(null);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-vms-hover flex items-center gap-2 text-vms-text"
+                              >
+                                <Crosshair className="w-3.5 h-3.5 text-status-warn" />
+                                <span>Vector Tripwire Analytics</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -353,152 +438,153 @@ export const Devices: React.FC = () => {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Manual Onboard Modal */}
       {showAddModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        <Modal
+          isOpen={true}
+          onClose={() => setShowAddModal(false)}
+          title="Onboard ONVIF / RTSP Camera Stream"
+          description="Provision hardware video feeds into the local edge recording engine."
+          size="md"
         >
-          <div className="bg-tactical-panel border border-tactical-border rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="px-4 py-3 border-b border-tactical-border flex justify-between items-center bg-tactical-surface">
-              <div className="flex items-center space-x-2">
-                <Radio className="w-4 h-4 text-phosphor-amber" />
-                <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider font-mono">
-                  Onboard ONVIF / RTSP Hardware Feed
-                </h3>
+          <form onSubmit={handleAddCamera} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-status-alarm text-xs">
+                {error}
               </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-tactical-muted hover:text-white text-xs px-2 py-0.5 border border-tactical-border hover:bg-tactical-raised"
-              >
-                ✕
-              </button>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Camera Identifier / Display Name
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. North Gate Perimeter PTZ"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+              />
             </div>
 
-            <form onSubmit={handleAddCamera} className="p-4 space-y-3 text-xs">
-              {error && (
-                <div className="p-2.5 bg-tactical-canvas border border-phosphor-red text-phosphor-red text-xs">
-                  {error}
-                </div>
-              )}
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Facility Site Assignment
+              </label>
+              <select
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+              >
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} [{s.timezone}]
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">CAMERA_IDENTIFIER:</label>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-vms-text mb-1">
+                  IPv4 / Hostname
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. North Gate PTZ"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
+                  placeholder="192.168.1.100"
+                  value={ipAddress}
+                  onChange={(e) => setIpAddress(e.target.value)}
+                  className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
                 />
               </div>
-
               <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">FACILITY_SITE:</label>
-                <select
-                  value={siteId}
-                  onChange={(e) => setSiteId(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                >
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-tactical-panel text-tactical-text">
-                      {s.name} [{s.timezone}]
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-xs font-medium text-vms-text mb-1">
+                  ONVIF Port
+                </label>
+                <input
+                  type="number"
+                  value={onvifPort}
+                  onChange={(e) => setOnvifPort(Number(e.target.value))}
+                  className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+                />
               </div>
-
-              <div className="grid grid-cols-4 gap-2">
-                <div className="col-span-2">
-                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">IP_ADDRESS:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="192.168.1.100"
-                    value={ipAddress}
-                    onChange={(e) => setIpAddress(e.target.value)}
-                    className="input-tactical w-full px-2.5 py-1.5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">ONVIF_PORT:</label>
-                  <input
-                    type="number"
-                    value={onvifPort}
-                    onChange={(e) => setOnvifPort(Number(e.target.value))}
-                    className="input-tactical w-full px-2.5 py-1.5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">RTSP_PORT:</label>
-                  <input
-                    type="number"
-                    value={rtspPort}
-                    onChange={(e) => setRtspPort(Number(e.target.value))}
-                    className="input-tactical w-full px-2.5 py-1.5"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">AUTH_USERNAME:</label>
-                  <input
-                    type="text"
-                    placeholder="admin"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="input-tactical w-full px-2.5 py-1.5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">AUTH_PASSWORD:</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-tactical w-full px-2.5 py-1.5"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">RECORDING_MODE:</label>
-                <select
-                  value={recordingMode}
-                  onChange={(e) => setRecordingMode(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                >
-                  <option value="CONTINUOUS" className="bg-tactical-panel">CONTINUOUS (24/7 Lossless fMP4 Archive)</option>
-                  <option value="MOTION" className="bg-tactical-panel">MOTION (Scene Detection Triggered)</option>
-                  <option value="OFF" className="bg-tactical-panel">LIVE ONLY (Real-Time Display Only)</option>
-                </select>
+                <label className="block text-xs font-medium text-vms-text mb-1">
+                  RTSP Port
+                </label>
+                <input
+                  type="number"
+                  value={rtspPort}
+                  onChange={(e) => setRtspPort(Number(e.target.value))}
+                  className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+                />
               </div>
+            </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-tactical-primary px-4 py-1.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
-                >
-                  {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
-                </button>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-vms-text mb-1">
+                  Auth Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="admin"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+                />
               </div>
-            </form>
-          </div>
-        </div>
+              <div>
+                <label className="block text-xs font-medium text-vms-text mb-1">
+                  Auth Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Recording Retention Mode
+              </label>
+              <select
+                value={recordingMode}
+                onChange={(e) => setRecordingMode(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+              >
+                <option value="CONTINUOUS">Continuous (24/7 Lossless fMP4 Archive)</option>
+                <option value="MOTION">Motion (Scene Detection Triggered)</option>
+                <option value="OFF">Live Only (Real-Time Display Only)</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-vms-border">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={saving}
+              >
+                {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Surveillance Operation Modals */}

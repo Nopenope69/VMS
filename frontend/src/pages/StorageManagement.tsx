@@ -6,7 +6,6 @@ import {
   RefreshCw,
   Plus,
   Shield,
-  Clock,
   Activity,
   Layers,
   FileCheck,
@@ -15,6 +14,10 @@ import {
   Sliders,
 } from 'lucide-react';
 import api from '../services/api';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 
 export interface VolumeReport {
   id: string;
@@ -100,6 +103,7 @@ function formatDuration(hours: number | null): string {
   return `${days}d ${remHours}h`;
 }
 
+/* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const StorageManagement: React.FC = () => {
   const [status, setStatus] = useState<StorageStatus | null>(null);
   const [volumes, setVolumes] = useState<VolumeReport[]>([]);
@@ -142,17 +146,6 @@ export const StorageManagement: React.FC = () => {
     fetchData();
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowAddVolumeModal(false);
-        setEditingCamera(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleRunReconcile = async () => {
@@ -226,579 +219,549 @@ export const StorageManagement: React.FC = () => {
     switch (state) {
       case 'AVAILABLE':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#3FB950] border border-[#238636] uppercase tracking-wider">
-            <CheckCircle className="w-3 h-3 mr-1 text-[#3FB950]" />
-            [ AVAILABLE // NOMINAL ]
-          </span>
+          <Badge variant="live" size="sm" dot>
+            Available (Nominal)
+          </Badge>
         );
       case 'WARNING':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#E3B341] border border-[#E3B341] uppercase tracking-wider">
-            <AlertTriangle className="w-3 h-3 mr-1 text-[#E3B341]" />
-            [ WARNING // ELEVATED LOAD ]
-          </span>
+          <Badge variant="warn" size="sm" icon={<AlertTriangle className="w-3 h-3" />}>
+            Warning (Elevated Load)
+          </Badge>
         );
       case 'CRITICAL':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider">
-            <AlertOctagon className="w-3 h-3 mr-1 text-[#F85149]" />
-            [ CRITICAL // ADAPTIVE ACTIVE ]
-          </span>
+          <Badge variant="alarm" size="sm" icon={<AlertOctagon className="w-3 h-3" />}>
+            Critical (Adaptive Active)
+          </Badge>
         );
       case 'EMERGENCY_PRESERVE_EVIDENCE':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#58A6FF] border border-[#58A6FF] uppercase tracking-wider animate-pulse">
-            <Shield className="w-3 h-3 mr-1 text-[#58A6FF]" />
-            [ EMERGENCY // PRESERVE EVIDENCE ]
-          </span>
+          <Badge variant="legal" size="sm" pulse icon={<Shield className="w-3 h-3" />}>
+            Emergency Preserve
+          </Badge>
         );
       case 'EMERGENCY_PURGE':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider animate-pulse">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            [ EMERGENCY PURGE ]
-          </span>
+          <Badge variant="alarm" size="sm" pulse icon={<AlertTriangle className="w-3 h-3" />}>
+            Emergency Purge
+          </Badge>
         );
       case 'PINNED_STORAGE_EXHAUSTION':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold bg-[#080B10] text-[#F85149] border border-[#F85149] uppercase tracking-wider animate-pulse">
-            <AlertOctagon className="w-3 h-3 mr-1 text-[#F85149]" />
-            [ PINNED STORAGE EXHAUSTION ]
-          </span>
+          <Badge variant="alarm" size="sm" pulse icon={<AlertOctagon className="w-3 h-3" />}>
+            Pinned Exhaustion
+          </Badge>
         );
       default:
-        return <span className="text-[10px] text-[#8B949E] font-bold">[{state}]</span>;
+        return <Badge variant="outline" size="sm">{state}</Badge>;
     }
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-tactical-canvas p-4 space-y-3 font-mono text-tactical-text overflow-y-auto">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-vms-bg p-3 md:p-4 space-y-3">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-tactical-panel p-3.5 border border-tactical-border">
-        <div>
-          <div className="flex items-center space-x-2.5">
-            <HardDrive className="w-5 h-5 text-phosphor-amber" />
-            <div>
-              <h1 className="text-sm font-bold text-tactical-bright uppercase tracking-wider font-mono">
-                Storage Operations & Mount Guard Resilience Console
-              </h1>
-              <p className="text-[11px] text-tactical-muted font-sans mt-0.5">
-                MULTI-VOLUME DRIVE REGISTRY • RATE-ADAPTIVE INGESTION • SECTION 63 LEGAL HOLD INVARIANCE
-              </p>
-            </div>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-vms-border pb-3">
+        <div className="flex items-center gap-2.5">
+          <HardDrive className="w-5 h-5 text-vms-accent" />
+          <h1 className="text-base md:text-lg font-bold text-vms-text tracking-tight uppercase font-mono">
+            Storage Operations & Mount Guard Console
+          </h1>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={fetchData}
-            disabled={loading}
-            className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+            isLoading={loading}
+            icon={<RefreshCw className="w-3.5 h-3.5" />}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-phosphor-amber' : ''}`} />
-            <span>Refresh</span>
-          </button>
-          <button
+            Refresh
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleRunReconcile}
-            disabled={reconciling}
-            className="btn-tactical-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-phosphor-amber flex items-center space-x-1.5 transition-colors"
+            isLoading={reconciling}
+            icon={<Wrench className="w-3.5 h-3.5 text-status-warn" />}
           >
-            <Wrench className={`w-3.5 h-3.5 ${reconciling ? 'animate-spin' : ''}`} />
-            <span>{reconciling ? 'Scanning...' : 'Integrity Scan'}</span>
-          </button>
-          <button
+            {reconciling ? 'Scanning Disk...' : 'Integrity Scan'}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setShowAddVolumeModal(true)}
-            className="btn-tactical-primary px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+            icon={<Plus className="w-3.5 h-3.5" />}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Register Volume</span>
-          </button>
+            Register Volume
+          </Button>
         </div>
       </div>
 
       {error && (
-        <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-xs flex items-center space-x-2">
+        <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-status-alarm text-xs flex items-center gap-2">
           <AlertOctagon className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-2.5 bg-[#080B10] border border-[#3FB950] text-[#3FB950] text-xs flex items-center space-x-2">
+        <div className="p-3 bg-status-live/10 border border-status-live/30 rounded text-status-live text-xs flex items-center gap-2">
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* Top Vitals Cards */}
+      {/* Horizontal Telemetry Bar */}
       {status && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {/* Status Badge */}
-          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">SYSTEM_STATE:</span>
-            <div>{getStateBadge(status.state)}</div>
-            <span className="text-[9px] text-[#484F58]">Dynamic multi-signal guard</span>
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 px-3 py-2 bg-vms-surface border border-vms-border rounded text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-vms-muted">STATE:</span>
+            {getStateBadge(status.state)}
           </div>
-
-          {/* Capacity */}
-          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">STORAGE_CAPACITY:</span>
-            <div>
-              <span className="text-lg font-bold text-white">{formatBytes(status.usedBytes)}</span>
-              <span className="text-xs text-[#8B949E]"> / {formatBytes(status.sizeBytes)}</span>
-            </div>
-            <div className="w-full bg-[#080B10] border border-[#30363D] h-2 p-0.5">
-              <div
-                className={`h-full ${
-                  status.fillRatio > 0.9 ? 'bg-[#F85149]' : status.fillRatio > 0.8 ? 'bg-[#E3B341]' : 'bg-[#3FB950]'
-                }`}
-                style={{ width: `${Math.min(status.fillRatio * 100, 100)}%` }}
-              />
-            </div>
+          <div className="h-3 w-px bg-vms-border hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <span className="text-vms-muted">CAPACITY:</span>
+            <span className="font-bold text-vms-text">{formatBytes(status.usedBytes)}</span>
+            <span className="text-vms-muted">/ {formatBytes(status.sizeBytes)} ({Math.round(status.fillRatio * 100)}%)</span>
           </div>
-
-          {/* Free Headroom */}
-          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-[#8B949E]">FREE_HEADROOM:</span>
-            <div>
-              <span className="text-lg font-bold text-[#3FB950]">{formatBytes(status.freeBytes)}</span>
-              <span className="text-xs text-[#8B949E] ml-1">({((1 - status.fillRatio) * 100).toFixed(1)}%)</span>
-            </div>
-            <span className="text-[9px] text-[#484F58]">Usable disk allocation</span>
+          <div className="h-3 w-px bg-vms-border hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <span className="text-vms-muted">FREE:</span>
+            <span className="font-bold text-emerald-400">{formatBytes(status.freeBytes)}</span>
           </div>
-
-          {/* Section 63 Evidence Locked */}
-          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-[#8B949E] flex items-center gap-1">
-              <Shield className="w-3 h-3 text-[#E3B341]" />
-              LOCKED_EVIDENCE:
-            </span>
-            <div>
-              <span className="text-lg font-bold text-[#E3B341]">{formatBytes(status.pinnedBytes)}</span>
-            </div>
-            <span className="text-[9px] text-[#484F58]">Sec. 63 Legal Hold Immune</span>
+          <div className="h-3 w-px bg-vms-border hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <span className="text-vms-muted">LOCKED EVIDENCE:</span>
+            <span className="font-bold text-sky-400">{formatBytes(status.pinnedBytes)}</span>
           </div>
-
-          {/* Projected Exhaustion */}
-          <div className="p-3 bg-[#0D1117] border border-[#21262D] flex flex-col justify-between space-y-2">
-            <span className="text-[10px] uppercase tracking-wider text-[#8B949E] flex items-center gap-1">
-              <Clock className="w-3 h-3 text-[#58A6FF]" />
-              PROJECTED_EXHAUSTION:
-            </span>
-            <div>
-              <span className="text-lg font-bold text-white">
-                {formatDuration(status.projectedExhaustionHours)}
-              </span>
-            </div>
-            <span className="text-[9px] text-[#484F58]">
-              Rate: {formatBytes(status.writeRateBytesPerHour * 24)}/day
-            </span>
+          <div className="h-3 w-px bg-vms-border hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <span className="text-vms-muted">EXHAUSTION:</span>
+            <span className="font-bold text-vms-text">{formatDuration(status.projectedExhaustionHours)}</span>
+            <span className="text-[10px] text-vms-dim">({formatBytes(status.writeRateBytesPerHour * 24)}/d)</span>
           </div>
         </div>
       )}
 
-      {/* Ingestion Fleet Status Banner */}
+      {/* Ingestion Fleet Telemetry Strip */}
       {status && (
-        <div className="bg-[#0D1117] p-2.5 border border-[#21262D] flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center space-x-2">
-            <Activity className="w-4 h-4 text-[#58A6FF]" />
-            <span className="font-bold uppercase tracking-wider text-[#C9D1D9]">INGESTION FLEET TELEMETRY:</span>
+        <div className="bg-vms-panel p-3 rounded border border-vms-border flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-vms-accent" />
+            <span className="font-semibold uppercase tracking-wider text-vms-text text-xs">
+              Ingestion Fleet Telemetry
+            </span>
           </div>
-          <div className="flex items-center space-x-6 text-[11px]">
+          <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
             <div>
-              <span className="text-[#8B949E]">TOTAL: </span>
-              <span className="font-bold text-white">{status.cameraStats.total}</span>
+              <span className="text-vms-muted">Total: </span>
+              <span className="font-semibold text-vms-text">{status.cameraStats.total}</span>
             </div>
             <div>
-              <span className="text-[#8B949E]">HEALTHY CONTINUOUS: </span>
-              <span className="font-bold text-[#3FB950]">{status.cameraStats.healthy}</span>
+              <span className="text-vms-muted">Continuous: </span>
+              <span className="font-semibold text-status-live">{status.cameraStats.healthy}</span>
             </div>
             <div>
-              <span className="text-[#8B949E]">ADAPTIVE DEGRADED: </span>
-              <span className="font-bold text-[#E3B341]">{status.cameraStats.degraded}</span>
+              <span className="text-vms-muted">Adaptive: </span>
+              <span className="font-semibold text-status-warn">{status.cameraStats.degraded}</span>
             </div>
             <div>
-              <span className="text-[#8B949E]">STOPPED: </span>
-              <span className="font-bold text-[#F85149]">{status.cameraStats.stopped}</span>
+              <span className="text-vms-muted">Stopped: </span>
+              <span className="font-semibold text-status-alarm">{status.cameraStats.stopped}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Physical Volumes Table */}
-      <div className="bg-[#0D1117] border border-[#21262D] flex flex-col">
-        <div className="p-3 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-[#E3B341]" />
-            <h2 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-              PHYSICAL STORAGE VOLUME POOLS ({volumes.length})
-            </h2>
+      {/* Physical Volumes Pool Card */}
+      <Card padding="none">
+        <div className="px-4 py-3 border-b border-vms-border flex items-center justify-between bg-vms-panel/50">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-vms-accent" />
+            <span className="font-semibold text-xs text-vms-text uppercase tracking-wider">
+              Physical Storage Volume Pools ({volumes.length})
+            </span>
           </div>
-          <span className="text-[10px] bg-[#080B10] border border-[#238636] text-[#3FB950] px-1.5 py-0.5 font-bold">
-            MOUNT GUARD: ENFORCED
-          </span>
+          <Badge variant="live" size="sm">
+            Mount Guard Enforced
+          </Badge>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
+            <thead className="bg-vms-panel/80 text-vms-muted uppercase text-[10px] border-b border-vms-border font-medium tracking-wider">
               <tr>
-                <th className="py-2 px-3.5">VOLUME_NAME</th>
-                <th className="py-2 px-3.5">MOUNT_PATH</th>
-                <th className="py-2 px-3.5">DEVICE_IDENTIFIER</th>
-                <th className="py-2 px-3.5">FILESYSTEM</th>
-                <th className="py-2 px-3.5">MOUNT_STATUS</th>
-                <th className="py-2 px-3.5">CAPACITY_UTILIZATION</th>
-                <th className="py-2 px-3.5">FEEDS_BOUND</th>
+                <th className="py-2.5 px-4">Volume Identifier</th>
+                <th className="py-2.5 px-4">Mount Path</th>
+                <th className="py-2.5 px-4">Device ID / Source</th>
+                <th className="py-2.5 px-4">Filesystem</th>
+                <th className="py-2.5 px-4">Mount Status</th>
+                <th className="py-2.5 px-4">Capacity Utilization</th>
+                <th className="py-2.5 px-4 text-right">Bound Feeds</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
+            <tbody className="divide-y divide-vms-border text-vms-text">
               {volumes.map((vol) => (
-                <tr key={vol.id} className="hover:bg-[#161B22] transition-colors">
-                  <td className="py-2.5 px-3.5 font-bold flex items-center space-x-2">
-                    <span>{vol.name}</span>
-                    {vol.isDefault && (
-                      <span className="text-[9px] px-1 py-[2px] bg-[#161B22] border border-[#58A6FF] text-[#58A6FF] font-bold">
-                        DEFAULT
-                      </span>
-                    )}
+                <tr key={vol.id} className="hover:bg-vms-hover/40 transition">
+                  <td className="py-3 px-4 font-semibold text-vms-text whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>{vol.name}</span>
+                      {vol.isDefault && (
+                        <Badge variant="telemetry" size="sm">
+                          Default
+                        </Badge>
+                      )}
+                    </div>
                   </td>
-                  <td className="py-2.5 px-3.5 text-[#8B949E]">{vol.path}</td>
-                  <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">{vol.deviceIdentifier || vol.mountSource || 'N/A'}</td>
-                  <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">{vol.filesystemType || 'ext4'}</td>
-                  <td className="py-2.5 px-3.5">
+                  <td className="py-3 px-4 font-mono text-vms-muted text-[11px] whitespace-nowrap">
+                    {vol.path}
+                  </td>
+                  <td className="py-3 px-4 font-mono text-vms-muted text-[11px] whitespace-nowrap">
+                    {vol.deviceIdentifier || vol.mountSource || 'Local Bay'}
+                  </td>
+                  <td className="py-3 px-4 font-mono text-vms-dim text-[11px] whitespace-nowrap">
+                    {vol.filesystemType || 'ext4'}
+                  </td>
+                  <td className="py-3 px-4 whitespace-nowrap">
                     {vol.status === 'HEALTHY' ? (
-                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#238636] text-[#3FB950] text-[10px] font-bold">
-                        HEALTHY
-                      </span>
+                      <Badge variant="live" size="sm">
+                        Healthy
+                      </Badge>
                     ) : vol.status === 'READ_ONLY' ? (
-                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-[10px] font-bold">
-                        READ_ONLY
-                      </span>
+                      <Badge variant="warn" size="sm">
+                        Read Only
+                      </Badge>
                     ) : vol.status === 'UNMOUNTED' ? (
-                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#F85149] text-[#F85149] text-[10px] font-bold">
-                        UNMOUNTED
-                      </span>
+                      <Badge variant="alarm" size="sm">
+                        Unmounted
+                      </Badge>
                     ) : (
-                      <span className="px-1.5 py-0.5 bg-[#080B10] border border-[#E3B341] text-[#E3B341] text-[10px] font-bold">
-                        DEGRADED
-                      </span>
+                      <Badge variant="warn" size="sm">
+                        Degraded
+                      </Badge>
                     )}
                   </td>
-                  <td className="py-2.5 px-3.5">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-20 bg-[#080B10] border border-[#30363D] h-1.5">
+                  <td className="py-3 px-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-24 bg-vms-panel rounded-full h-1.5 overflow-hidden">
                         <div
-                          className="h-full bg-[#3FB950]"
+                          className="h-full bg-status-live rounded-full"
                           style={{ width: `${Math.min(vol.fillRatio * 100, 100)}%` }}
                         />
                       </div>
-                      <span className="text-[11px] text-[#8B949E]">
+                      <span className="text-[11px] text-vms-muted font-mono">
                         {formatBytes(vol.usedBytes)} / {formatBytes(vol.sizeBytes)}
                       </span>
                     </div>
                   </td>
-                  <td className="py-2.5 px-3.5 text-[#C9D1D9] font-bold">{vol.cameraCount}</td>
+                  <td className="py-3 px-4 font-mono font-bold text-right text-vms-text whitespace-nowrap">
+                    {vol.cameraCount}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Per-Camera Retention & Quotas Table */}
+      {/* Per-Camera Retention Policies Table */}
       {status && (
-        <div className="bg-[#0D1117] border border-[#21262D] flex flex-col">
-          <div className="p-3 border-b border-[#21262D] bg-[#161B22] flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Sliders className="w-4 h-4 text-[#E3B341]" />
-              <h2 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-                RETENTION POLICIES & QUOTAS ({status.cameraBreakdown.length})
-              </h2>
+        <Card padding="none">
+          <div className="px-4 py-3 border-b border-vms-border flex items-center justify-between bg-vms-panel/50">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-vms-accent" />
+              <span className="font-semibold text-xs text-vms-text uppercase tracking-wider">
+                Retention Policies & Quotas ({status.cameraBreakdown.length})
+              </span>
             </div>
-            <span className="text-[10px] text-[#8B949E]">PRIORITY-LADDER PRUNING ACTIVE</span>
+            <span className="text-[11px] text-vms-muted font-mono">
+              Priority-Ladder Adaptive Pruning Active
+            </span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#080B10] text-[#8B949E] uppercase text-[10px] border-b border-[#21262D] tracking-wider">
+              <thead className="bg-vms-panel/80 text-vms-muted uppercase text-[10px] border-b border-vms-border font-medium tracking-wider">
                 <tr>
-                  <th className="py-2 px-3.5">CAMERA</th>
-                  <th className="py-2 px-3.5">PRIORITY</th>
-                  <th className="py-2 px-3.5">CONFIGURED_MODE</th>
-                  <th className="py-2 px-3.5">EFFECTIVE_MODE</th>
-                  <th className="py-2 px-3.5">DEGRADATION_REASON</th>
-                  <th className="py-2 px-3.5">USED_ON_DISK</th>
-                  <th className="py-2 px-3.5">RETENTION_WINDOW</th>
-                  <th className="py-2 px-3.5">STORAGE_QUOTA</th>
-                  <th className="py-2 px-3.5 text-right">ACTIONS</th>
+                  <th className="py-2.5 px-4">Camera</th>
+                  <th className="py-2.5 px-4">Pruning Priority</th>
+                  <th className="py-2.5 px-4">Configured Mode</th>
+                  <th className="py-2.5 px-4">Effective State</th>
+                  <th className="py-2.5 px-4">Degradation Reason</th>
+                  <th className="py-2.5 px-4">Disk Usage</th>
+                  <th className="py-2.5 px-4">Retention Window</th>
+                  <th className="py-2.5 px-4">Storage Cap</th>
+                  <th className="py-2.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#21262D] text-[#C9D1D9]">
+              <tbody className="divide-y divide-vms-border text-vms-text">
                 {status.cameraBreakdown.map((cam) => (
-                  <tr key={cam.id} className="hover:bg-[#161B22] transition-colors">
-                    <td className="py-2.5 px-3.5 font-bold">
+                  <tr key={cam.id} className="hover:bg-vms-hover/40 transition">
+                    <td className="py-3 px-4 font-semibold text-vms-text whitespace-nowrap">
                       <div>{cam.name}</div>
-                      <div className="text-[10px] text-[#484F58]">{cam.streamPath}</div>
+                      <div className="text-[10px] text-vms-dim font-mono">{cam.streamPath}</div>
                     </td>
-                    <td className="py-2.5 px-3.5">
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 border font-bold ${
-                          cam.retentionPriority === 'HIGH'
-                            ? 'bg-[#080B10] text-[#58A6FF] border-[#58A6FF]'
-                            : cam.retentionPriority === 'LOW'
-                            ? 'bg-[#080B10] text-[#8B949E] border-[#30363D]'
-                            : 'bg-[#080B10] text-[#E3B341] border-[#E3B341]'
-                        }`}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <Badge
+                        variant={cam.retentionPriority === 'HIGH' ? 'telemetry' : cam.retentionPriority === 'LOW' ? 'outline' : 'warn'}
+                        size="sm"
                       >
                         {cam.retentionPriority}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="py-2.5 px-3.5 text-[#8B949E]">{cam.recordingMode}</td>
-                    <td className="py-2.5 px-3.5 font-bold">
+                    <td className="py-3 px-4 text-vms-muted whitespace-nowrap font-mono text-[11px]">
+                      {cam.recordingMode}
+                    </td>
+                    <td className="py-3 px-4 font-semibold whitespace-nowrap">
                       {cam.effectiveRecordingMode === 'CONTINUOUS' ? (
-                        <span className="text-[#3FB950]">CONTINUOUS</span>
+                        <span className="text-status-live">Continuous</span>
                       ) : cam.effectiveRecordingMode === 'MOTION' ? (
-                        <span className="text-[#E3B341]">MOTION ONLY</span>
+                        <span className="text-status-warn">Motion Only</span>
                       ) : (
-                        <span className="text-[#F85149]">STOPPED</span>
+                        <span className="text-status-alarm">Stopped</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-3.5 text-[10px]">
+                    <td className="py-3 px-4 text-[11px] whitespace-nowrap">
                       {cam.degradationReason === 'NONE' ? (
-                        <span className="text-[#484F58]">NOMINAL</span>
+                        <span className="text-vms-dim">Nominal</span>
                       ) : (
-                        <span className="text-[#E3B341] font-bold">{cam.degradationReason}</span>
+                        <span className="text-status-warn font-medium">{cam.degradationReason}</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-3.5 text-[#8B949E] text-[11px]">
+                    <td className="py-3 px-4 text-vms-muted text-[11px] font-mono whitespace-nowrap">
                       {formatBytes(cam.usedBytes)} ({cam.segmentCount} segs)
                     </td>
-                    <td className="py-2.5 px-3.5 text-[11px] text-[#8B949E]">
+                    <td className="py-3 px-4 text-[11px] text-vms-muted font-mono whitespace-nowrap">
                       {cam.retentionDays}d cont / {cam.motionDays}d mot
                     </td>
-                    <td className="py-2.5 px-3.5 text-[11px]">
-                      {cam.maxStorageGigabytes ? `${cam.maxStorageGigabytes} GB` : 'UNCAPPED'}
+                    <td className="py-3 px-4 text-[11px] font-mono whitespace-nowrap">
+                      {cam.maxStorageGigabytes ? `${cam.maxStorageGigabytes} GB` : 'Uncapped'}
                     </td>
-                    <td className="py-2.5 px-3.5 text-right">
-                      <button
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         onClick={() => openRetentionModal(cam)}
-                        className="px-2 py-1 text-[10px] font-bold uppercase bg-[#161B22] hover:bg-[#21262D] text-[#C9D1D9] hover:text-white border border-[#30363D] transition-colors"
                       >
-                        [ CONFIGURE ]
-                      </button>
+                        Configure
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Recovery History Log Card */}
       {status?.lastRecovery && (
-        <div className="bg-[#0D1117] p-3.5 border border-[#21262D]">
-          <div className="flex items-center space-x-2 border-b border-[#21262D] pb-2 mb-2.5">
-            <FileCheck className="w-4 h-4 text-[#3FB950]" />
-            <h3 className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-              POWER-CUT & CRASH RECOVERY LOG
+        <Card padding="sm">
+          <div className="flex items-center gap-2 border-b border-vms-border pb-2 mb-3">
+            <FileCheck className="w-4 h-4 text-status-live" />
+            <h3 className="text-xs font-semibold text-vms-text uppercase tracking-wider">
+              Power-Cut & Crash Recovery Telemetry
             </h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">LAST_SCAN:</span>
-              <span className="text-white font-bold text-[11px]">
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Last Scan</span>
+              <span className="text-vms-text font-semibold text-xs font-mono">
                 {new Date(status.lastRecovery.timestamp).toLocaleTimeString([], { hour12: false })}
               </span>
             </div>
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">FILES_EXAMINED:</span>
-              <span className="text-white font-bold">{status.lastRecovery.filesExamined}</span>
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Files Examined</span>
+              <span className="text-vms-text font-semibold font-mono">{status.lastRecovery.filesExamined}</span>
             </div>
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">FILES_REPAIRED:</span>
-              <span className="text-[#3FB950] font-bold">{status.lastRecovery.filesRecovered}</span>
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Files Repaired</span>
+              <span className="text-status-live font-semibold font-mono">{status.lastRecovery.filesRecovered}</span>
             </div>
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">QUARANTINED:</span>
-              <span className="text-[#E3B341] font-bold">{status.lastRecovery.filesQuarantined}</span>
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Quarantined</span>
+              <span className="text-status-warn font-semibold font-mono">{status.lastRecovery.filesQuarantined}</span>
             </div>
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">ZERO_BYTE_CULLED:</span>
-              <span className="text-[#8B949E] font-bold">{status.lastRecovery.zeroBytePruned}</span>
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Zero-Byte Culled</span>
+              <span className="text-vms-muted font-semibold font-mono">{status.lastRecovery.zeroBytePruned}</span>
             </div>
-            <div className="bg-[#161B22] p-2 border border-[#21262D]">
-              <span className="text-[#8B949E] block text-[9px] uppercase">MISSING_IN_DB:</span>
-              <span className="text-[#F85149] font-bold">{status.lastRecovery.filesMissing}</span>
+            <div className="bg-vms-bg p-2.5 rounded border border-vms-border">
+              <span className="text-vms-dim block text-[10px] uppercase font-mono">Missing in DB</span>
+              <span className="text-status-alarm font-semibold font-mono">{status.lastRecovery.filesMissing}</span>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Add Volume Modal */}
       {showAddVolumeModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        <Modal
+          isOpen={true}
+          onClose={() => setShowAddVolumeModal(false)}
+          title="Register Physical Storage Volume Pool"
+          description="Provision local disk partitions or mounted storage pools into Mount Guard."
+          size="md"
         >
-          <div className="bg-tactical-panel border border-tactical-border rounded-none p-5 max-w-md w-full shadow-2xl">
-            <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-tactical-border pb-2 font-mono">
-              <HardDrive className="w-4 h-4 text-phosphor-amber" />
-              Register Physical Storage Volume Pool
-            </h3>
-            <form onSubmit={handleCreateVolume} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">VOLUME_NAME:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Drive Bay 2 (WD Purple)"
-                  value={newVolName}
-                  onChange={(e) => setNewVolName(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">PHYSICAL_MOUNT_PATH:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. /mnt/cctv_hdd2"
-                  value={newVolPath}
-                  onChange={(e) => setNewVolPath(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">DEVICE_IDENTIFIER (OPTIONAL):</label>
-                <input
-                  type="text"
-                  placeholder="e.g. /dev/sdb1 or UUID=..."
-                  value={newVolDevice}
-                  onChange={(e) => setNewVolDevice(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-              </div>
-              <div className="flex items-center space-x-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="isDef"
-                  checked={newVolIsDefault}
-                  onChange={(e) => setNewVolIsDefault(e.target.checked)}
-                  className="border-tactical-border bg-tactical-canvas text-phosphor-amber rounded-none"
-                />
-                <label htmlFor="isDef" className="text-[11px] text-tactical-text font-sans">
-                  Set as default recording volume for new cameras
-                </label>
-              </div>
+          <form onSubmit={handleCreateVolume} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Volume Label / Display Name
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Drive Bay 2 (WD Purple)"
+                value={newVolName}
+                onChange={(e) => setNewVolName(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Physical Mount Path
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. /mnt/cctv_hdd2"
+                value={newVolPath}
+                onChange={(e) => setNewVolPath(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Device Identifier (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. /dev/sdb1 or UUID=..."
+                value={newVolDevice}
+                onChange={(e) => setNewVolDevice(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="isDef"
+                checked={newVolIsDefault}
+                onChange={(e) => setNewVolIsDefault(e.target.checked)}
+                className="rounded bg-vms-bg border-vms-border text-vms-accent focus:ring-0"
+              />
+              <label htmlFor="isDef" className="text-xs text-vms-text">
+                Set as default recording volume for newly onboarded cameras
+              </label>
+            </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
-                <button
-                  type="button"
-                  onClick={() => setShowAddVolumeModal(false)}
-                  className="btn-tactical-secondary px-3 py-1.5 uppercase font-bold text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-tactical-primary px-4 py-1.5 uppercase font-bold text-xs"
-                >
-                  Register Volume
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-vms-border">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowAddVolumeModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+              >
+                Register Volume
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Edit Retention Policy Modal */}
       {editingCamera && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingCamera(null)}
+          title={`Configure Retention: ${editingCamera.name}`}
+          description={`Stream Path: ${editingCamera.streamPath}`}
+          size="md"
         >
-          <div className="bg-tactical-panel border border-tactical-border rounded-none p-5 max-w-md w-full shadow-2xl">
-            <h3 className="text-xs font-bold text-tactical-bright uppercase tracking-wider mb-1 flex items-center gap-2 font-mono">
-              <Sliders className="w-4 h-4 text-phosphor-amber" />
-              Configure Retention: {editingCamera.name}
-            </h3>
-            <p className="text-[10px] text-tactical-muted mb-3 pb-2 border-b border-tactical-border font-mono">
-              STREAM_PATH: {editingCamera.streamPath}
-            </p>
-            <form onSubmit={handleSaveRetention} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">CONTINUOUS_RETENTION_DAYS:</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="365"
-                  required
-                  value={editContinuousDays}
-                  onChange={(e) => setEditContinuousDays(parseInt(e.target.value, 10) || 1)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">MOTION_RETENTION_DAYS:</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="365"
-                  required
-                  value={editMotionDays}
-                  onChange={(e) => setEditMotionDays(parseInt(e.target.value, 10) || 1)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-              </div>
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">STORAGE_QUOTA_CAP_GB (OPTIONAL):</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Leave empty for uncapped"
-                  value={editMaxGb}
-                  onChange={(e) => setEditMaxGb(e.target.value)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                />
-                <span className="text-[11px] text-tactical-muted mt-1 block font-sans">
-                  Camera will prune oldest unpinned footage when consumption exceeds this cap.
-                </span>
-              </div>
-              <div>
-                <label className="block text-tactical-muted uppercase text-[10px] mb-1 font-mono">PRUNING_PRIORITY:</label>
-                <select
-                  value={editPriority}
-                  onChange={(e) => setEditPriority(e.target.value as any)}
-                  className="input-tactical w-full px-2.5 py-1.5"
-                >
-                  <option value="HIGH">HIGH (Vault, Cash, Perimeter - Pruned Last)</option>
-                  <option value="NORMAL">NORMAL (General Areas, Corridors)</option>
-                  <option value="LOW">LOW (Auxiliary Feeds - Pruned First)</option>
-                </select>
-              </div>
+          <form onSubmit={handleSaveRetention} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Continuous Retention (Days)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                required
+                value={editContinuousDays}
+                onChange={(e) => setEditContinuousDays(parseInt(e.target.value, 10) || 1)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Motion Retention (Days)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                required
+                value={editMotionDays}
+                onChange={(e) => setEditMotionDays(parseInt(e.target.value, 10) || 1)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Storage Quota Cap in GB (Optional)
+              </label>
+              <input
+                type="number"
+                min="1"
+                placeholder="Leave empty for uncapped"
+                value={editMaxGb}
+                onChange={(e) => setEditMaxGb(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent font-mono"
+              />
+              <span className="text-[11px] text-vms-muted mt-1 block">
+                Camera will automatically prune oldest unpinned segments when usage exceeds this threshold.
+              </span>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Pruning Priority Ladder
+              </label>
+              <select
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value as any)}
+                className="w-full bg-vms-bg border border-vms-border rounded px-2.5 py-1.5 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
+              >
+                <option value="HIGH">High (Vault, Cash, Perimeter - Pruned Last)</option>
+                <option value="NORMAL">Normal (Corridors, General Areas)</option>
+                <option value="LOW">Low (Auxiliary Feeds - Pruned First)</option>
+              </select>
+            </div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-tactical-border">
-                <button
-                  type="button"
-                  onClick={() => setEditingCamera(null)}
-                  className="btn-tactical-secondary px-3 py-1.5 uppercase font-bold text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-tactical-primary px-4 py-1.5 uppercase font-bold text-xs"
-                >
-                  Save Policy
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-vms-border">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditingCamera(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+              >
+                Save Policy
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

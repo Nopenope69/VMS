@@ -4,136 +4,103 @@
 
 @layer base {
   body {
-    @apply bg-tactical-bg text-tactical-text font-sans antialiased selection:bg-phosphor-amber/30 selection:text-white;
+    @apply bg-vms-bg text-vms-text font-sans antialiased selection:bg-vms-accent/30 selection:text-vms-text;
     color-scheme: dark;
   }
-}
-
-/* Tactical Telemetry Blueprint Grid */
-.tactical-grid {
-  background-size: 24px 24px;
-  background-image: 
-    linear-gradient(to right, rgba(33, 38, 45, 0.4) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(33, 38, 45, 0.4) 1px, transparent 1px);
-}
-
-/* Simulated CRT Scanline Filter */
-.crt-scanlines {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.15) 2px,
-    rgba(0, 0, 0, 0.15) 4px
-  );
-  pointer-events: none;
-}
-
-/* Optical Corner Reticle (+) */
-.corner-reticle {
-  position: relative;
-}
-.corner-reticle::before,
-.corner-reticle::after {
-  content: '+';
-  position: absolute;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: rgba(125, 133, 144, 0.5);
-  line-height: 1;
-  pointer-events: none;
-  z-index: 15;
-}
-.corner-reticle::before {
-  top: 4px;
-  left: 4px;
-}
-.corner-reticle::after {
-  bottom: 4px;
-  right: 4px;
 }
 
 /* Authentic CCTV REC Blinking Beacon */
 @keyframes rec-blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.15; }
+  50% { opacity: 0.2; }
 }
 
 .animate-rec {
   animation: rec-blink 1.2s infinite ease-in-out;
 }
 
-/* Phosphor Status Pulse */
-@keyframes phosphor-pulse {
-  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px currentColor); }
-  50% { opacity: 0.4; filter: drop-shadow(0 0 1px currentColor); }
+/* Status Pulse Animation */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
-.animate-phosphor {
-  animation: phosphor-pulse 2s infinite ease-in-out;
+.animate-status-pulse {
+  animation: status-pulse 2s infinite ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-rec,
-  .animate-phosphor {
+  .animate-status-pulse,
+  .animate-pulse {
     animation: none !important;
     opacity: 1 !important;
   }
 }
 
+/* Deprecated scanline/reticle classes neutralized for Video-First clarity */
+.crt-scanlines {
+  display: none !important;
+}
+
+.corner-reticle::before,
+.corner-reticle::after {
+  display: none !important;
+}
+
 @layer components {
-  /* High-Contrast Sodium Amber Primary Action */
+  /* High-Contrast Primary Action */
   .btn-tactical-primary {
-    @apply font-mono text-xs font-bold uppercase tracking-wider bg-phosphor-amber text-[#07090E] hover:bg-phosphor-amber-hover active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-amber disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+    @apply font-sans text-xs font-semibold bg-amber-500 hover:bg-amber-400 active:bg-amber-600 active:translate-y-[1px] text-slate-950 px-3 py-1.5 rounded transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400 disabled:opacity-40 disabled:pointer-events-none inline-flex items-center space-x-1.5 select-none;
   }
 
-  /* Deep Control Chassis Secondary Action */
+  /* Quiet Opaque Secondary Action */
   .btn-tactical-secondary {
-    @apply font-mono text-xs font-bold uppercase tracking-wider bg-tactical-surface hover:bg-tactical-raised text-tactical-text border border-tactical-border hover:border-tactical-border-active active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+    @apply font-sans text-xs font-medium bg-vms-surface hover:bg-vms-hover active:bg-vms-elevated active:translate-y-[1px] text-vms-text border border-vms-border px-3 py-1.5 rounded transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400 disabled:opacity-40 disabled:pointer-events-none inline-flex items-center space-x-1.5 select-none;
   }
 
-  /* Signal Flare Destructive Action */
+  /* Destructive Action */
   .btn-tactical-danger {
-    @apply font-mono text-xs font-bold uppercase tracking-wider bg-phosphor-red/15 hover:bg-phosphor-red/25 text-phosphor-red border border-phosphor-red/40 active:translate-y-[1px] active:brightness-95 transition-all duration-75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-red disabled:opacity-40 disabled:pointer-events-none rounded-none px-3.5 py-1.5 inline-flex items-center space-x-1.5 select-none;
+    @apply font-sans text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/30 active:translate-y-[1px] text-rose-400 border border-rose-500/40 px-3 py-1.5 rounded transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-500 disabled:opacity-40 disabled:pointer-events-none inline-flex items-center space-x-1.5 select-none;
   }
 
-  /* Physical Keyboard Hotkey Badge */
+  /* Hotkey Badge */
   .badge-hotkey {
-    @apply px-1.5 py-[2px] bg-tactical-raised border border-tactical-border text-tactical-muted text-[10px] font-mono font-bold leading-none select-none;
+    @apply px-1.5 py-0.5 bg-vms-elevated border border-vms-border text-vms-muted text-[10px] font-mono font-semibold rounded leading-none select-none;
   }
 
-  /* Zero-Terminal Monospace Input Well */
+  /* Standardized Form Input Well */
   .input-tactical {
-    @apply bg-tactical-canvas border border-tactical-border focus:border-phosphor-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-amber text-tactical-text text-xs font-mono rounded-none px-3 py-2 transition-colors;
+    @apply bg-vms-bg border border-vms-border focus:border-vms-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-vms-accent text-vms-text text-xs rounded px-3 py-2 transition-colors placeholder:text-vms-dim;
   }
 
-  /* Section 63 BSA & Critical Legal Disclaimer Box */
+  /* Section 63 BSA & Legal Notice Card */
   .legal-disclaimer {
-    @apply text-[14px] leading-relaxed font-sans text-tactical-text bg-tactical-surface border-l-2 border-phosphor-amber p-4;
+    @apply text-[14px] leading-relaxed font-sans text-vms-text bg-vms-surface border-l-2 border-amber-500 p-4 rounded-r;
   }
 }
 
-/* Mechanical Rectangular Industrial Scrollbars */
+/* Refined Minimal Control-Room Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #07090E;
+  background: #150E07;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1F2735;
-  border-radius: 0px;
+  background: #5E401C;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2E3A4E;
+  background: #713600;
 }
 
-/* Tactical Focus Rings for Strict WCAG Keyboard Accessibility */
+/* High-Contrast Accessible Keyboard Focus */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 1px #F59E0B !important;
+  box-shadow: 0 0 0 2px #C05800 !important;
 }

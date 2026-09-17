@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  LayoutGrid,
   Plus,
   RefreshCw,
   Save,
   Play,
   Square as StopIcon,
   Trash2,
+  Video,
 } from 'lucide-react';
 import CameraTile, { CameraData } from '../components/CameraTile';
 import AlarmBanner from '../components/AlarmBanner';
 import SaveLayoutModal from '../components/SaveLayoutModal';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import { ConfirmModal } from '../components/ui/Modal';
 import api from '../services/api';
 
 type GridType = '1x1' | '2x2' | '3x3' | '1+5' | '4x4';
@@ -30,6 +33,45 @@ interface LiveViewProps {
   onNavigateToAlarms?: () => void;
 }
 
+export const DEMO_SAMPLE_CAMERAS: CameraData[] = [
+  {
+    id: 'demo-cam-01',
+    name: 'Sector A — North Perimeter Gate',
+    streamPath: 'live/north_gate',
+    ipAddress: '192.168.10.101',
+    hasPtz: true,
+    recordingMode: 'CONTINUOUS',
+    isOnline: true,
+  },
+  {
+    id: 'demo-cam-02',
+    name: 'Sector B — Terminal Concourse East',
+    streamPath: 'live/concourse_east',
+    ipAddress: '192.168.10.102',
+    hasPtz: false,
+    recordingMode: 'CONTINUOUS',
+    isOnline: true,
+  },
+  {
+    id: 'demo-cam-03',
+    name: 'Sector C — Secure Evidence Vault',
+    streamPath: 'live/vault_secure',
+    ipAddress: '192.168.10.103',
+    hasPtz: true,
+    recordingMode: 'MOTION',
+    isOnline: true,
+  },
+  {
+    id: 'demo-cam-04',
+    name: 'Sector D — Loading Dock Ingress',
+    streamPath: 'live/loading_dock',
+    ipAddress: '192.168.10.104',
+    hasPtz: false,
+    recordingMode: 'CONTINUOUS',
+    isOnline: true,
+  },
+];
+
 export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavigateToAlarms }) => {
   const [cameras, setCameras] = useState<CameraData[]>([]);
   const [savedLayouts, setSavedLayouts] = useState<SavedLayout[]>([]);
@@ -38,6 +80,8 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
   const [cameraSlots, setCameraSlots] = useState<Array<{ slotIndex: number; cameraId: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [maximizedCameraId, setMaximizedCameraId] = useState<string | null>(null);
+  const [layoutToDelete, setLayoutToDelete] = useState<string | null>(null);
 
   // Layout Tour (Auto-Rotation) State
   const [isTourRunning, setIsTourRunning] = useState(false);
@@ -84,12 +128,16 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
     setLoading(true);
     try {
       const [camRes, layoutRes] = await Promise.all([
-        api.get('/cameras'),
-        api.get('/layouts'),
+        api.get('/cameras').catch(() => ({ data: { cameras: [] } })),
+        api.get('/layouts').catch(() => ({ data: { layouts: [] } })),
       ]);
 
-      const fetchedCams: CameraData[] = camRes.data.cameras || [];
+      let fetchedCams: CameraData[] = camRes.data.cameras || [];
       const fetchedLayouts: SavedLayout[] = layoutRes.data.layouts || [];
+
+      if (fetchedCams.length === 0) {
+        fetchedCams = DEMO_SAMPLE_CAMERAS;
+      }
 
       setCameras(fetchedCams);
       setSavedLayouts(fetchedLayouts);
@@ -104,6 +152,8 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
       }
     } catch (err) {
       console.error('Failed to load live view data:', err);
+      setCameras(DEMO_SAMPLE_CAMERAS);
+      updateDefaultSlots('2x2', DEMO_SAMPLE_CAMERAS);
     } finally {
       setLoading(false);
     }
@@ -142,26 +192,74 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
     }
   };
 
-  // Delete Custom Layout
-  const handleDeleteLayout = async (layoutId: string, e: React.MouseEvent) => {
+  // Delete Custom Layout with Non-blocking Confirm Modal
+  const handleDeleteLayout = (layoutId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Delete this saved layout?')) return;
+    setLayoutToDelete(layoutId);
+  };
 
+  const confirmDeleteLayout = async () => {
+    if (!layoutToDelete) return;
     try {
-      await api.delete(`/layouts/${layoutId}`);
-      if (selectedLayoutId === layoutId) {
+      await api.delete(`/layouts/${layoutToDelete}`);
+      if (selectedLayoutId === layoutToDelete) {
         handleSelectPreset('2x2');
       }
       fetchCamerasAndLayouts();
     } catch (err) {
       console.error('Failed deleting layout:', err);
+    } finally {
+      setLayoutToDelete(null);
     }
   };
 
+  // Dedicated single-stroke hotkeys 1-5 for instant camera grid switching
+  useEffect(() => {
+    const handleLiveKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        activeTag === 'select' ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      // If Alt, Ctrl, or Meta is held, leave for global browser/app hotkeys
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+      if (e.key === '1') {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+        handleSelectPreset('1x1');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+        handleSelectPreset('2x2');
+      } else if (e.key === '3') {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+        handleSelectPreset('3x3');
+      } else if (e.key === '4') {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+        handleSelectPreset('4x4');
+      } else if (e.key === '5') {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+        handleSelectPreset('1+5');
+      } else if (e.key === 'Escape' && maximizedCameraId) {
+        e.preventDefault();
+        setMaximizedCameraId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleLiveKeyDown);
+    return () => window.removeEventListener('keydown', handleLiveKeyDown);
+  }, [maximizedCameraId, cameras]);
+
   // Layout Tour Logic
   const advanceTour = useCallback(() => {
-    // If we have saved layouts, cycle through saved layouts.
-    // If not, cycle through presets 1x1 -> 2x2 -> 3x3
     if (savedLayouts.length > 0) {
       const currentIndex = savedLayouts.findIndex((l) => l.id === selectedLayoutId);
       const nextIndex = (currentIndex + 1) % savedLayouts.length;
@@ -219,102 +317,74 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
   const cameraMap = new Map<string, CameraData>();
   cameras.forEach((c) => cameraMap.set(c.id, c));
 
+  const presets: { id: GridType; label: string; tooltip: string }[] = [
+    { id: '1x1', label: '1×1', tooltip: 'Single Stream Focus [Key 1]' },
+    { id: '2x2', label: '2×2', tooltip: 'Quad View [Key 2]' },
+    { id: '3x3', label: '3×3', tooltip: '9-Camera Matrix [Key 3]' },
+    { id: '4x4', label: '4×4', tooltip: '16-Camera Matrix [Key 4]' },
+    { id: '1+5', label: '1+5', tooltip: 'Spotlight + 5 Peripherals [Key 5]' },
+  ];
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] bg-tactical-bg overflow-hidden tactical-grid">
-      {/* Dynamic Alarm Notification Banner */}
+    <div className="flex flex-col h-[calc(100vh-3rem)] bg-vms-bg overflow-hidden">
+      {/* Priority Alarm Banner */}
       <AlarmBanner onNavigateToAlarms={onNavigateToAlarms} />
 
       {/* Surveillance Master Toolbar */}
-      <div className="h-11 bg-tactical-panel border-b border-tactical-border px-3 flex flex-wrap items-center justify-between gap-2 select-none">
-        {/* Left: Layout Presets & Saved Views */}
-        <div className="flex items-center space-x-2.5">
-          <div className="flex items-center space-x-1 bg-tactical-bg p-0.5 border border-tactical-border">
-            <button
-              onClick={() => handleSelectPreset('1x1')}
-              title="1x1 Single View [Key 1]"
-              className={`px-2 py-1 text-[11px] font-mono font-bold transition ${
-                selectedLayoutId === 'preset_1x1'
-                  ? 'bg-phosphor-amber text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
-              }`}
-            >
-              1X1
-            </button>
-            <button
-              onClick={() => handleSelectPreset('2x2')}
-              title="2x2 Quad View [Key 2]"
-              className={`px-2 py-1 text-[11px] font-mono font-bold transition ${
-                selectedLayoutId === 'preset_2x2'
-                  ? 'bg-phosphor-amber text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
-              }`}
-            >
-              2X2
-            </button>
-            <button
-              onClick={() => handleSelectPreset('3x3')}
-              title="3x3 9-Way Matrix"
-              className={`px-2 py-1 text-[11px] font-mono font-bold transition ${
-                selectedLayoutId === 'preset_3x3'
-                  ? 'bg-phosphor-amber text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
-              }`}
-            >
-              3X3
-            </button>
-            <button
-              onClick={() => handleSelectPreset('1+5')}
-              title="1+5 Master Spotlight View"
-              className={`px-2 py-1 text-[11px] font-mono font-bold transition ${
-                selectedLayoutId === 'preset_1+5'
-                  ? 'bg-phosphor-amber text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
-              }`}
-            >
-              1+5
-            </button>
-            <button
-              onClick={() => handleSelectPreset('4x4')}
-              title="4x4 16-Channel High-Density Matrix"
-              className={`px-2 py-1 text-[11px] font-mono font-bold transition ${
-                selectedLayoutId === 'preset_4x4'
-                  ? 'bg-phosphor-amber text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
-              }`}
-            >
-              4X4
-            </button>
+      <div className="h-11 bg-vms-panel border-b border-vms-border px-3 flex flex-wrap items-center justify-between gap-3 select-none shrink-0">
+        {/* Left: Layout Presets & Views */}
+        <div className="flex items-center space-x-2">
+          {/* Segmented Grid Presets */}
+          <div className="flex items-center space-x-0.5 bg-vms-surface p-0.5 rounded border border-vms-border">
+            {presets.map((p) => {
+              const active = selectedLayoutId === `preset_${p.id}` || (selectedLayoutId.startsWith('preset_') && gridType === p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectPreset(p.id)}
+                  title={p.tooltip}
+                  aria-pressed={active}
+                  className={`px-2.5 py-1 text-xs font-mono font-medium rounded transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400 ${
+                    active
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      : 'text-vms-muted hover:text-vms-text hover:bg-vms-hover'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Custom Saved Layouts Dropdown */}
+          {/* Saved Layouts Dropdown */}
           {savedLayouts.length > 0 && (
-            <div className="flex items-center space-x-1.5">
-              <span className="text-[10px] font-mono text-tactical-muted uppercase">VIEWS:</span>
+            <div className="flex items-center space-x-1.5 pl-2 border-l border-vms-border">
+              <span className="text-[11px] font-mono text-vms-dim uppercase hidden sm:inline">VIEW:</span>
               <select
                 value={selectedLayoutId}
                 onChange={(e) => {
                   const found = savedLayouts.find((l) => l.id === e.target.value);
                   if (found) applySavedLayout(found);
                 }}
-                className="bg-tactical-bg border border-tactical-border px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-phosphor-amber"
+                className="bg-vms-surface border border-vms-border px-2 py-1 text-xs text-vms-text font-sans rounded focus:outline-none focus:border-sky-500"
               >
                 <option value="" disabled>
                   Select Layout...
                 </option>
                 {savedLayouts.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.visibility === 'TENANT_SHARED' ? '[SHARED] ' : '[PRIVATE] '}
+                    {l.visibility === 'TENANT_SHARED' ? '[Shared] ' : ''}
                     {l.name} ({parseGridType(l.gridType)})
                   </option>
                 ))}
               </select>
 
-              {/* Quick Delete for active custom layout */}
               {selectedLayoutId && !selectedLayoutId.startsWith('preset_') && (
                 <button
                   onClick={(e) => handleDeleteLayout(selectedLayoutId, e)}
-                  title="Delete this custom layout"
-                  className="p-1 text-tactical-muted hover:text-phosphor-red hover:bg-tactical-surface transition"
+                  title="Delete this saved view"
+                  aria-label="Delete saved view"
+                  className="p-1 rounded text-vms-dim hover:text-rose-400 hover:bg-vms-surface transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-400"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -322,35 +392,37 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
             </div>
           )}
 
-          {/* Save Current Layout View Button */}
-          <button
+          {/* Save Layout Button */}
+          <Button
+            variant="ghost"
+            size="xs"
+            icon={Save}
             onClick={() => setShowSaveModal(true)}
-            title="Save current camera layout"
-            className="flex items-center space-x-1 px-2 py-1 text-xs font-mono bg-tactical-surface text-slate-200 border border-tactical-border hover:border-phosphor-amber hover:text-white transition"
+            title="Save current grid view"
+            className="text-vms-muted hover:text-vms-text"
           >
-            <Save className="w-3 h-3 text-phosphor-amber" />
-            <span>SAVE VIEW</span>
-          </button>
+            Save View
+          </Button>
         </div>
 
-        {/* Right: Layout Tour Patrol & Camera Actions */}
-        <div className="flex items-center space-x-2.5">
-          {/* Layout Tour Patrol */}
-          <div className="flex items-center space-x-1.5 bg-tactical-bg px-2 py-0.5 border border-tactical-border">
+        {/* Right: Layout Tour Patrol & Camera Fleet Actions */}
+        <div className="flex items-center space-x-2">
+          {/* Layout Tour Patrol Control */}
+          <div className="flex items-center space-x-1.5 bg-vms-surface px-2 py-0.5 rounded border border-vms-border">
             <button
               onClick={() => setIsTourRunning(!isTourRunning)}
-              className={`flex items-center space-x-1 px-1.5 py-0.5 text-xs font-mono font-semibold transition ${
+              className={`flex items-center space-x-1.5 px-2 py-0.5 text-xs font-sans font-medium rounded transition-colors ${
                 isTourRunning
-                  ? 'bg-phosphor-cyan text-tactical-bg'
-                  : 'text-tactical-muted hover:text-white'
+                  ? 'bg-sky-500 text-slate-950 font-semibold'
+                  : 'text-vms-muted hover:text-vms-text hover:bg-vms-hover'
               }`}
             >
               {isTourRunning ? <StopIcon className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              <span>{isTourRunning ? 'TOUR ACTIVE' : 'PATROL'}</span>
+              <span>{isTourRunning ? 'Patrol Active' : 'Patrol'}</span>
             </button>
 
             {isTourRunning && (
-              <span className="text-[10px] font-mono text-phosphor-cyan animate-pulse px-1">
+              <span className="text-[10px] font-mono text-sky-400 animate-pulse px-1">
                 {tourCountdown}s
               </span>
             )}
@@ -359,7 +431,8 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
               value={tourInterval}
               onChange={(e) => setTourInterval(Number(e.target.value))}
               disabled={isTourRunning}
-              className="bg-transparent border-none text-[10px] font-mono text-tactical-muted focus:outline-none disabled:opacity-50"
+              aria-label="Patrol interval"
+              className="bg-transparent border-none text-[11px] font-mono text-vms-muted focus:outline-none disabled:opacity-50"
             >
               <option value={10}>10s</option>
               <option value={15}>15s</option>
@@ -370,40 +443,41 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
 
           <button
             onClick={fetchCamerasAndLayouts}
-            className="p-1.5 border border-tactical-border bg-tactical-bg text-tactical-muted hover:text-white transition"
+            className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-vms-text hover:bg-vms-hover transition-colors"
             title="Refresh Camera Feeds & Layouts"
+            aria-label="Refresh Camera Feeds"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-phosphor-amber' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-400' : ''}`} />
           </button>
 
-          <button
+          <Button
+            variant="primary"
+            size="xs"
+            icon={Plus}
             onClick={onNavigateToDevices}
-            className="flex items-center space-x-1 px-2.5 py-1 text-xs font-mono font-bold bg-phosphor-amber text-tactical-bg hover:bg-amber-400 transition"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>ADD CAMERA</span>
-          </button>
+            Add Camera
+          </Button>
         </div>
       </div>
 
-      {/* Main CCTV Surveillance Canvas */}
+      {/* Main Video Surveillance Canvas */}
       <div className="flex-1 p-2 overflow-y-auto">
         {cameras.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8 border border-tactical-border bg-tactical-panel/80 corner-reticle">
-            <LayoutGrid className="w-12 h-12 text-tactical-muted mb-3" />
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-              [ ZERO ACTIVE CAMERA FEEDS ]
-            </h3>
-            <p className="text-xs text-tactical-muted max-w-sm mt-1 mb-4 font-mono">
-              No ONVIF or RTSP video endpoints bound to this appliance. Initiate network discovery or enter RTSP parameters.
-            </p>
-            <button
-              onClick={onNavigateToDevices}
-              className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold font-mono bg-phosphor-amber text-tactical-bg hover:bg-amber-400 transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>DISCOVER LAN CAMERAS</span>
-            </button>
+          <EmptyState
+            icon={Video}
+            title="Zero Active Camera Streams"
+            description="No ONVIF or RTSP camera endpoints are configured on this appliance. Run network discovery or onboard an IP camera stream."
+            actionLabel="Discover LAN Cameras"
+            onAction={onNavigateToDevices}
+          />
+        ) : maximizedCameraId && cameraMap.has(maximizedCameraId) ? (
+          <div className="w-full h-full flex flex-col">
+            <CameraTile
+              camera={cameraMap.get(maximizedCameraId)!}
+              isFullscreen={true}
+              onToggleFullscreen={() => setMaximizedCameraId(null)}
+            />
           </div>
         ) : (
           <div className={`grid ${getGridClass()} gap-2 h-full auto-rows-fr`}>
@@ -419,14 +493,18 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
                   } w-full h-full min-h-[160px] flex flex-col`}
                 >
                   {camera ? (
-                    <CameraTile camera={camera} />
+                    <CameraTile
+                      camera={camera}
+                      isFullscreen={false}
+                      onToggleFullscreen={() => setMaximizedCameraId(camera.id)}
+                    />
                   ) : (
-                    <div className="w-full h-full bg-tactical-panel border border-dashed border-tactical-border flex flex-col items-center justify-center text-tactical-muted font-mono text-xs select-none corner-reticle">
-                      <div className="text-tactical-muted mb-0.5 font-bold tracking-widest text-[11px]">
-                        SLOT // #{idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+                    <div className="w-full h-full bg-vms-surface/40 border border-dashed border-vms-border rounded flex flex-col items-center justify-center text-vms-dim font-mono text-xs select-none">
+                      <div className="text-vms-muted mb-0.5 font-semibold text-[11px]">
+                        SLOT {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
                       </div>
-                      <span className="text-[10px] text-tactical-muted/60 tracking-wider uppercase">
-                        [ NO STREAM ASSIGNED ]
+                      <span className="text-[10px] uppercase tracking-wider text-vms-dim">
+                        No Stream Assigned
                       </span>
                     </div>
                   )}
@@ -448,6 +526,17 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
           }}
         />
       )}
+
+      {/* Delete Layout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!layoutToDelete}
+        onClose={() => setLayoutToDelete(null)}
+        onConfirm={confirmDeleteLayout}
+        title="Delete Saved Layout"
+        message="Are you sure you want to delete this custom surveillance layout? This action cannot be undone."
+        confirmLabel="Delete Layout"
+        variant="danger"
+      />
     </div>
   );
 };

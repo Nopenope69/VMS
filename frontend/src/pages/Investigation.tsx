@@ -9,11 +9,16 @@ import {
   X,
   Download,
   Film,
-  Clock,
+  Search,
+  Calendar,
 } from 'lucide-react';
 import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
 import EvidenceReviewModal from '../components/EvidenceReviewModal';
+import SmartSearchModal from '../components/SmartSearchModal';
+import TimelineScrubber, { TimelineSegment } from '../components/TimelineScrubber';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
 
 interface CameraItem {
   id: string;
@@ -35,19 +40,25 @@ interface CameraPlaybackTile {
 export const Investigation: React.FC = () => {
   const [cameras, setCameras] = useState<CameraItem[]>([]);
   const [selectedCameraIds, setSelectedCameraIds] = useState<string[]>([]);
+  const [focusedCameraId, setFocusedCameraId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'matrix' | 'single'>('matrix');
   const [gridLayout, setGridLayout] = useState<'1x1' | '2x2' | '1+5' | '3x3'>('2x2');
 
   // Master UTC Investigation Timeline
   const [masterUtc, setMasterUtc] = useState<Date>(new Date(Date.now() - 3600000));
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date(Date.now() - 3600000).toISOString().slice(0, 10)
+  );
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cameraStates, setCameraStates] = useState<Record<string, CameraPlaybackTile>>({});
-  const [coverageBlocks, setCoverageBlocks] = useState<Record<string, any[]>>({});
+  const [singleCameraSegments, setSingleCameraSegments] = useState<TimelineSegment[]>([]);
 
   // Modals
   const [showExportModal, setShowExportModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showSmartSearch, setShowSmartSearch] = useState(false);
   const [activeManifestId, setActiveManifestId] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -60,6 +71,7 @@ export const Investigation: React.FC = () => {
       setCameras(cams);
       if (cams.length > 0) {
         setSelectedCameraIds(cams.slice(0, 4).map((c) => c.id));
+        setFocusedCameraId(cams[0].id);
       }
     });
   }, []);
@@ -79,19 +91,23 @@ export const Investigation: React.FC = () => {
       })
       .catch((err) => console.error('Failed to create synchronized session:', err));
 
-    // Fetch coverage for selected cameras for current 24-hour window
-    const windowStart = new Date(masterUtc.getTime() - 12 * 3600000).toISOString();
-    const windowEnd = new Date(masterUtc.getTime() + 12 * 3600000).toISOString();
+  }, [selectedCameraIds, selectedDate]);
 
-    selectedCameraIds.forEach((camId) => {
-      api
-        .get(`/playback/${camId}/coverage`, { params: { start: windowStart, end: windowEnd } })
-        .then((res) => {
-          setCoverageBlocks((prev) => ({ ...prev, [camId]: res.data.blocks || [] }));
-        })
-        .catch(() => {});
-    });
-  }, [selectedCameraIds]);
+  // Load single camera segments when focused camera changes
+  useEffect(() => {
+    const activeCam = focusedCameraId || selectedCameraIds[0];
+    if (!activeCam || !selectedDate) return;
+
+    const start = new Date(`${selectedDate}T00:00:00Z`).toISOString();
+    const end = new Date(`${selectedDate}T23:59:59Z`).toISOString();
+
+    api
+      .get(`/playback/${activeCam}/segments`, { params: { start, end } })
+      .then((res) => {
+        setSingleCameraSegments(res.data.segments || []);
+      })
+      .catch(() => setSingleCameraSegments([]));
+  }, [focusedCameraId, selectedCameraIds, selectedDate]);
 
   const updateCameraStatesFromSeek = (camList: any[]) => {
     const stateMap: Record<string, CameraPlaybackTile> = {};
@@ -109,7 +125,7 @@ export const Investigation: React.FC = () => {
     setCameraStates(stateMap);
   };
 
-  // Playback timer advances monotonic clock delta
+  // Advance playback timer
   useEffect(() => {
     if (!isPlaying || !sessionId) {
       if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
@@ -121,7 +137,6 @@ export const Investigation: React.FC = () => {
       setMasterUtc((prev) => {
         const deltaWallClock = intervalMs * playbackRate;
         const nextTime = new Date(prev.getTime() + deltaWallClock);
-        // Call backend seek periodically to keep per-camera PTS updated
         api
           .post(`/playback/sync/sessions/${sessionId}/seek`, { targetUtc: nextTime.toISOString() })
           .then((res) => updateCameraStatesFromSeek(res.data.cameras || []))
@@ -137,6 +152,10 @@ export const Investigation: React.FC = () => {
 
   const handleSeek = (newUtc: Date) => {
     setMasterUtc(newUtc);
+    const newDateStr = newUtc.toISOString().slice(0, 10);
+    if (newDateStr !== selectedDate) {
+      setSelectedDate(newDateStr);
+    }
     if (sessionId) {
       api
         .post(`/playback/sync/sessions/${sessionId}/seek`, { targetUtc: newUtc.toISOString() })
@@ -179,7 +198,63 @@ export const Investigation: React.FC = () => {
 
   const removeCameraFromGrid = (camId: string) => {
     setSelectedCameraIds(selectedCameraIds.filter((id) => id !== camId));
+    if (focusedCameraId === camId) {
+      setFocusedCameraId(selectedCameraIds.find((id) => id !== camId) || null);
+    }
   };
+
+  const handleSeekToTimestamp = (isoTimestamp: string) => {
+    const targetDate = new Date(isoTimestamp);
+    handleSeek(targetDate);
+  };
+
+  // Keyboard transport accelerators for forensic review (Space, Arrows, J-K-L)
+  useEffect(() => {
+    const handleTransportKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        activeTag === 'select' ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      if (showSmartSearch || showReviewModal || showExportModal) {
+        return;
+      }
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleStep('BACKWARD');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleStep('FORWARD');
+      } else if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        handleStep('BACKWARD');
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        setIsPlaying(false);
+        handleRateChange(0.0);
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        if (!isPlaying) {
+          setIsPlaying(true);
+          handleRateChange(1.0);
+        } else {
+          handleRateChange(Math.min(playbackRate * 2, 16.0));
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleTransportKeyDown);
+    return () => window.removeEventListener('keydown', handleTransportKeyDown);
+  }, [isPlaying, playbackRate, sessionId, showSmartSearch, showReviewModal, showExportModal]);
 
   const gridClass =
     gridLayout === '1x1'
@@ -190,239 +265,297 @@ export const Investigation: React.FC = () => {
       ? 'grid-cols-3'
       : 'grid-cols-3';
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] text-slate-100 overflow-hidden select-none font-sans">
-      {/* Top Tactical Bar: Layout Presets & Evidentiary Actions */}
-      <div className="h-12 border-b border-[#21262D] px-4 flex items-center justify-between bg-[#0D1117] z-10">
-        <div className="flex items-center gap-3">
-          <Film className="w-4 h-4 text-[#E3B341]" />
-          <h1 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-            <span>MULTI-STREAM INVESTIGATION MATRIX</span>
-            <span className="text-slate-600 font-normal">//</span>
-            <span className="text-[#58A6FF] font-normal">SYNCHRONIZED FORENSIC CLOCK</span>
-          </h1>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-none bg-[#3FB950]/10 text-[#3FB950] border border-[#3FB950]/30 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-[#3FB950] animate-pulse" />
-            <span>UTC_LOCK: MONOTONIC</span>
-          </span>
-        </div>
+  const activeFocusCam = cameras.find((c) => c.id === (focusedCameraId || selectedCameraIds[0]));
 
-        <div className="flex items-center gap-2">
-          {/* Matrix Presets */}
-          <div className="flex items-center bg-tactical-canvas border border-tactical-border p-0.5">
-            {(['1x1', '2x2', '1+5', '3x3'] as const).map((l) => (
-              <button
-                key={l}
-                onClick={() => setGridLayout(l)}
-                className={`px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider transition ${
-                  gridLayout === l
-                    ? 'bg-phosphor-amber text-tactical-canvas font-bold'
-                    : 'text-tactical-muted hover:text-white hover:bg-tactical-surface'
-                }`}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
+  return (
+    <div className="flex flex-col h-[calc(100vh-3rem)] bg-vms-bg text-vms-text overflow-hidden select-none font-sans">
+      {/* Top Investigation Toolbar */}
+      <div className="h-11 border-b border-vms-border px-3.5 flex flex-wrap items-center justify-between bg-vms-panel z-10 shrink-0 gap-2">
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <Film className="w-4 h-4 text-amber-400" />
+            <h1 className="text-xs font-mono font-bold uppercase tracking-wider text-vms-text">
+              Forensic Investigation
+            </h1>
           </div>
 
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="btn-tactical-primary flex items-center gap-1.5 px-3 py-1.5 font-mono font-bold text-xs uppercase tracking-wider transition shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export BSA 63 Evidence</span>
-          </button>
+          {/* Mode Switcher: Matrix vs Single */}
+          <div className="flex items-center bg-vms-surface p-0.5 rounded border border-vms-border text-xs">
+            <button
+              onClick={() => setViewMode('matrix')}
+              className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                viewMode === 'matrix'
+                  ? 'bg-amber-500 text-slate-950 font-bold'
+                  : 'text-vms-muted hover:text-vms-text'
+              }`}
+            >
+              Sync Matrix
+            </button>
+            <button
+              onClick={() => setViewMode('single')}
+              className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                viewMode === 'single'
+                  ? 'bg-amber-500 text-slate-950 font-bold'
+                  : 'text-vms-muted hover:text-vms-text'
+              }`}
+            >
+              Single Stream
+            </button>
+          </div>
 
-          <button
+          {/* Matrix Presets (when in matrix view) */}
+          {viewMode === 'matrix' && (
+            <div className="hidden sm:flex items-center bg-vms-surface p-0.5 rounded border border-vms-border">
+              {(['1x1', '2x2', '1+5', '3x3'] as const).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setGridLayout(l)}
+                  className={`px-2 py-0.5 text-xs font-mono rounded transition-colors ${
+                    gridLayout === l
+                      ? 'bg-vms-elevated text-amber-400 font-bold border border-vms-border'
+                      : 'text-vms-muted hover:text-vms-text'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Date Picker */}
+          <div className="flex items-center space-x-1.5 bg-vms-surface px-2 py-1 rounded border border-vms-border text-xs">
+            <Calendar className="w-3.5 h-3.5 text-vms-muted" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                const newDate = e.target.value;
+                setSelectedDate(newDate);
+                const d = new Date(masterUtc);
+                const [y, m, day] = newDate.split('-').map(Number);
+                d.setFullYear(y, m - 1, day);
+                handleSeek(d);
+              }}
+              className="bg-transparent border-none text-xs text-vms-text font-mono focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="secondary"
+            size="xs"
+            icon={Search}
+            onClick={() => setShowSmartSearch(true)}
+            title="Smart Motion & Region Search"
+          >
+            Smart Search
+          </Button>
+
+          <Button
+            variant="primary"
+            size="xs"
+            icon={Download}
+            onClick={() => setShowExportModal(true)}
+            disabled={selectedCameraIds.length === 0}
+            title="Export Tamper-Evident Evidence Package"
+          >
+            Export BSA 63 Evidence
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="xs"
+            icon={ShieldCheck}
             onClick={() => {
               setActiveManifestId(undefined);
               setShowReviewModal(true);
             }}
-            className="btn-tactical-secondary flex items-center gap-1.5 px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition"
+            title="Review Chain-of-Custody Signatures"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-phosphor-cyan" />
-            <span>Audit Custody</span>
-          </button>
+            Audit Custody
+          </Button>
         </div>
       </div>
 
       {notice && (
-        <div className="bg-[#161B22] border-b border-[#3FB950]/40 px-4 py-2 text-[#3FB950] text-xs font-mono flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-[#3FB950]" />
+        <div className="bg-vms-surface border-b border-emerald-500/40 px-4 py-2 text-emerald-400 text-xs font-mono flex items-center justify-between shrink-0">
+          <span className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span>{notice}</span>
           </span>
-          <button onClick={() => setNotice(null)} className="text-[#3FB950] hover:text-white">
+          <button onClick={() => setNotice(null)} className="text-emerald-400 hover:text-white">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Main Grid Canvas */}
-      <div className="flex-1 bg-[#080B10] p-2 overflow-hidden tactical-grid">
-        <div className={`grid ${gridClass} gap-2 h-full w-full`}>
-          {selectedCameraIds.map((camId, idx) => {
-            const cam = cameras.find((c) => c.id === camId);
-            const state = cameraStates[camId];
-            const isReady = state?.status === 'READY';
+      {/* Main Video Canvas: Video First Primary Surface */}
+      <div className="flex-1 bg-vms-bg p-2 overflow-hidden flex flex-col min-h-0">
+        {viewMode === 'matrix' ? (
+          <div className={`grid ${gridClass} gap-2 h-full w-full auto-rows-fr`}>
+            {selectedCameraIds.map((camId, idx) => {
+              const cam = cameras.find((c) => c.id === camId);
+              const state = cameraStates[camId];
+              const isReady = state?.status === 'READY';
+              const isFocused = focusedCameraId === camId;
 
-            return (
-              <div
-                key={camId}
-                className="relative bg-[#0D1117] border border-[#21262D] rounded-none flex flex-col justify-between overflow-hidden group select-none shadow-lg"
-              >
-                {/* Optical Corner Reticles */}
-                <span className="absolute -top-1 -left-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
-                <span className="absolute -top-1 -right-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
-                <span className="absolute -bottom-1 -left-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
-                <span className="absolute -bottom-1 -right-1 text-[9px] font-mono text-[#30363D] select-none leading-none z-20">+</span>
-
-                {/* Tile Header OSD */}
-                <div className="absolute top-0 inset-x-0 p-2 bg-[#0D1117]/90 border-b border-[#21262D] z-10 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono text-slate-500 font-bold">
-                      #{String(idx + 1).padStart(2, '0')}
-                    </span>
-                    <span
-                      className={`w-1.5 h-1.5 ${
-                        isReady ? 'bg-[#3FB950]' : 'bg-[#E3B341] animate-pulse'
-                      }`}
-                    />
-                    <span className="font-mono text-xs font-semibold text-white tracking-wider truncate max-w-[180px]">
-                      {cam?.name || camId}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-500 uppercase">
-                      [{cam?.streamPath ? 'RTSP' : 'DIRECT'}]
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-mono px-1.5 py-[2px] bg-tactical-canvas border border-tactical-border text-tactical-muted">
-                      {isReady ? 'PTS_LOCKED' : 'GAP_HOLD'}
-                    </span>
-                    <button
-                      onClick={() => removeCameraFromGrid(camId)}
-                      className="text-tactical-muted hover:text-phosphor-red p-0.5 rounded-none transition"
-                      title="Unassign stream from slot"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Video / Gap Display with CRT effect */}
-                <div className="flex-1 flex items-center justify-center bg-[#080B10] relative crt-scanlines">
-                  {isReady ? (
-                    <div className="flex flex-col items-center justify-center space-y-2 text-slate-400 z-10">
-                      <Film className="w-10 h-10 text-slate-700 animate-pulse" />
-                      <div className="font-mono text-[11px] text-slate-300 tracking-wider">
-                        PTS: <span className="text-[#58A6FF]">{state.currentPts || '1726278000'}</span>
-                      </div>
-                      <div className="text-[10px] font-mono text-[#3FB950] bg-[#3FB950]/10 px-2 py-0.5 border border-[#3FB950]/30 tracking-widest uppercase">
-                        [ MASTER_UTC_SYNC // LOCK ]
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center space-y-2 p-4 text-center z-10">
-                      <AlertCircle className="w-8 h-8 text-[#E3B341]/80" />
-                      <div className="font-mono text-xs font-semibold text-[#E3B341] uppercase tracking-wider">
-                        [ NO SEGMENT AT TIMECODE ]
-                      </div>
-                      <p className="text-[10px] text-slate-500 font-mono max-w-[220px] leading-relaxed">
-                        Holding previous decoded keyframe. Awaiting continuous sequence alignment.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tile Telemetry Footer */}
-                <div className="p-1.5 bg-[#0D1117] border-t border-[#21262D] font-mono text-[10px] text-slate-400 flex items-center justify-between z-10">
-                  <span className="text-slate-500">
-                    CODEC: <span className="text-slate-300">{state?.codec?.toUpperCase() || 'H.264'}</span> /{' '}
-                    <span className="text-slate-300">{state?.fps || 25} FPS</span>
-                  </span>
-                  <span className="text-[#58A6FF] tracking-wider">
-                    {masterUtc.toISOString().slice(11, 23)} UTC
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
-          {selectedCameraIds.length === 0 && (
-            <div className="col-span-full h-full flex flex-col items-center justify-center text-slate-500 font-mono text-xs space-y-3 bg-[#0D1117] border border-dashed border-[#21262D]">
-              <Film className="w-12 h-12 text-slate-700" />
-              <span className="uppercase tracking-widest">[ NO CHANNELS ASSIGNED TO INVESTIGATION MATRIX ]</span>
-              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-                {cameras.slice(0, 6).map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => addCameraToGrid(c.id)}
-                    className="btn-tactical-secondary px-2.5 py-1 text-[11px] font-mono uppercase transition"
-                  >
-                    + Assign {c.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Timeline & Variable Transport Shuttle */}
-      <div className="border-t border-[#21262D] bg-[#0D1117] p-3 flex flex-col justify-between space-y-2 select-none">
-        {/* Coverage Tracks Readout */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-            <span className="tracking-wider uppercase flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-[#E3B341]" />
-              <span>RECORDING CONTINUITY TRACKS</span>
-            </span>
-            <span className="text-[#E3B341] font-bold font-mono tracking-wider">
-              {masterUtc.toISOString()} UTC
-            </span>
-          </div>
-
-          <div className="h-10 bg-[#080B10] border border-[#21262D] relative overflow-hidden flex flex-col justify-center px-1">
-            {/* Multi-track coverage bar */}
-            {selectedCameraIds.map((camId) => {
-              const blocks = coverageBlocks[camId] || [];
               return (
-                <div key={camId} className="h-1.5 w-full bg-[#161B22] my-0.5 overflow-hidden flex rounded-none">
-                  {blocks.length > 0 ? (
-                    blocks.map((b, idx) => (
-                      <div
-                        key={idx}
-                        className={`h-full ${b.type === 'RECORDING' ? 'bg-[#3FB950]' : 'bg-[#F85149]/60'}`}
-                        style={{ width: `${Math.max(2, (b.durationMs / (24 * 3600000)) * 100)}%` }}
-                      />
-                    ))
-                  ) : (
-                    <div className="h-full bg-[#3FB950]/60 w-full" />
-                  )}
+                <div
+                  key={camId}
+                  onClick={() => setFocusedCameraId(camId)}
+                  className={`relative bg-black border ${
+                    isFocused ? 'border-sky-500 shadow-md' : 'border-vms-border'
+                  } rounded overflow-hidden flex flex-col justify-between select-none transition-colors group aspect-video min-h-0`}
+                >
+                  {/* Top Bar OSD */}
+                  <div className="absolute top-2 inset-x-2 z-10 flex items-center justify-between pointer-events-none">
+                    <div className="flex items-center space-x-1.5 pointer-events-auto">
+                      <span className="bg-slate-950/85 px-1.5 py-0.5 rounded border border-vms-border text-vms-dim font-mono text-[10px] font-bold">
+                        #{String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <span className="bg-slate-950/85 px-2 py-0.5 rounded border border-vms-border text-white font-medium text-[11px] truncate max-w-[160px]">
+                        {cam?.name || camId}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5 pointer-events-auto">
+                      <Badge variant={isReady ? 'live' : 'warn'} size="sm">
+                        {isReady ? 'PTS LOCKED' : 'GAP HOLD'}
+                      </Badge>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCameraFromGrid(camId);
+                        }}
+                        className="p-1 rounded bg-slate-950/85 border border-vms-border text-vms-dim hover:text-rose-400 transition-colors"
+                        title="Unassign camera from slot"
+                        aria-label="Unassign camera"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Feed Display Center */}
+                  <div className="flex-1 flex items-center justify-center bg-vms-bg relative">
+                    {isReady ? (
+                      <div className="flex flex-col items-center justify-center space-y-2 text-vms-muted">
+                        <Film className="w-8 h-8 text-vms-dim" />
+                        <div className="font-mono text-[11px] text-vms-text">
+                          PTS: <span className="text-sky-400">{state.currentPts || '1726278000'}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                          UTC SYNC LOCKED
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center space-y-1.5 p-4 text-center">
+                        <AlertCircle className="w-6 h-6 text-amber-400" />
+                        <div className="font-mono text-xs font-semibold text-amber-400 uppercase tracking-wide">
+                          No Recording at Timecode
+                        </div>
+                        <p className="text-[10px] text-vms-dim font-sans max-w-[200px]">
+                          Holding preceding decoded keyframe.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Telemetry Footer */}
+                  <div className="p-1.5 bg-slate-950/85 border-t border-vms-border font-mono text-[10px] text-vms-muted flex items-center justify-between z-10 pointer-events-none">
+                    <span className="text-vms-dim">
+                      {state?.codec?.toUpperCase() || 'H.264'} • {state?.fps || 25} FPS
+                    </span>
+                    <span className="text-sky-400 font-mono font-semibold">
+                      {masterUtc.toISOString().slice(11, 23)} UTC
+                    </span>
+                  </div>
                 </div>
               );
             })}
 
-            {/* Authoritative Master UTC Playhead Needle */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-[#E3B341] z-10 shadow-[0_0_8px_#E3B341]"
-              style={{ left: '50%' }}
-            />
+            {selectedCameraIds.length === 0 && (
+              <div className="col-span-full h-full flex flex-col items-center justify-center text-vms-muted font-sans text-xs space-y-3 bg-vms-surface border border-dashed border-vms-border rounded p-8">
+                <Film className="w-10 h-10 text-vms-dim" />
+                <span className="font-semibold text-vms-text">No Streams Assigned to Investigation Matrix</span>
+                <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+                  {cameras.slice(0, 6).map((c) => (
+                    <Button
+                      key={c.id}
+                      variant="secondary"
+                      size="xs"
+                      onClick={() => addCameraToGrid(c.id)}
+                    >
+                      + Assign {c.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          /* Single Stream Deep Focus View */
+          <div className="h-full flex flex-col bg-black border border-vms-border rounded overflow-hidden relative">
+            <div className="px-4 py-2 border-b border-vms-border bg-vms-panel flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="font-mono text-xs font-bold text-amber-400">INSPECTION FOCUS:</span>
+                <span className="text-xs font-semibold text-vms-text">{activeFocusCam?.name || 'Selected Camera'}</span>
+                <span className="text-[10px] font-mono text-vms-dim">{activeFocusCam?.streamPath}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={focusedCameraId || ''}
+                  onChange={(e) => setFocusedCameraId(e.target.value)}
+                  className="bg-vms-surface border border-vms-border text-xs px-2 py-1 rounded text-vms-text font-sans"
+                >
+                  {cameras.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center bg-black relative">
+              <div className="text-center space-y-2">
+                <Film className="w-12 h-12 text-vms-dim mx-auto" />
+                <div className="font-mono text-sm text-vms-text font-semibold">
+                  {activeFocusCam?.name}
+                </div>
+                <div className="font-mono text-xs text-sky-400">
+                  Target PTS: {masterUtc.toISOString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Forensic Timeline & Variable Transport Shuttle */}
+      <div className="border-t border-vms-border bg-vms-panel p-3 flex flex-col justify-between space-y-2 select-none shrink-0">
+        {/* Interactive 24-Hour Timeline Scrubber */}
+        <TimelineScrubber
+          currentDate={new Date(`${selectedDate}T00:00:00Z`)}
+          currentTime={masterUtc}
+          segments={singleCameraSegments}
+          onSeek={handleSeek}
+        />
 
         {/* Transport & Variable Shuttle Controls */}
-        <div className="flex items-center justify-between pt-1">
+        <div className="flex flex-wrap items-center justify-between pt-1 gap-2">
           {/* Speed Shuttles */}
-          <div className="flex items-center gap-1 font-mono text-[10px]">
+          <div className="flex items-center space-x-1 font-mono text-[10px]">
             {[-16, -8, -4, -2, -1, 1, 2, 4, 8, 16].map((rate) => (
               <button
                 key={rate}
                 onClick={() => handleRateChange(rate)}
-                className={`px-2 py-0.5 border rounded-none transition ${
+                className={`px-2 py-0.5 rounded border transition-colors ${
                   playbackRate === rate && isPlaying
-                    ? 'bg-[#E3B341] text-[#080B10] border-[#E3B341] font-bold'
-                    : 'bg-[#161B22] text-slate-400 border-[#21262D] hover:text-white hover:bg-[#21262D]'
+                    ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
+                    : 'bg-vms-surface text-vms-muted border-vms-border hover:text-vms-text hover:bg-vms-hover'
                 }`}
               >
                 {rate > 0 ? `+${rate}X` : `${rate}X`}
@@ -431,43 +564,45 @@ export const Investigation: React.FC = () => {
           </div>
 
           {/* Primary Transport Controls */}
-          <div className="flex items-center gap-1.5">
-            <button
+          <div className="flex items-center space-x-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={StepBack}
               onClick={() => handleStep('BACKWARD')}
               title="Step Frame Backward"
-              className="p-2 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] rounded-none transition"
-            >
-              <StepBack className="w-4 h-4" />
-            </button>
+              aria-label="Step Frame Backward"
+            />
 
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              icon={isPlaying ? Pause : Play}
               onClick={togglePlay}
-              className={`px-4 py-2 text-[#080B10] font-mono font-bold text-xs uppercase tracking-wider transition rounded-none shadow-md flex items-center gap-1.5 ${
-                isPlaying ? 'bg-[#E3B341] hover:bg-amber-400' : 'bg-[#3FB950] hover:bg-emerald-400'
-              }`}
+              className="px-5"
             >
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-              <span>{isPlaying ? 'PAUSE' : 'PLAY'}</span>
-            </button>
+              {isPlaying ? 'PAUSE' : 'PLAY'}
+            </Button>
 
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={StepForward}
               onClick={() => handleStep('FORWARD')}
               title="Step Frame Forward"
-              className="p-2 bg-[#161B22] hover:bg-[#21262D] text-slate-200 border border-[#21262D] rounded-none transition"
-            >
-              <StepForward className="w-4 h-4" />
-            </button>
+              aria-label="Step Frame Forward"
+            />
           </div>
 
-          {/* Time Delta Fast Seeks */}
-          <div className="flex items-center gap-1 text-xs font-mono">
+          {/* Quick Jump Buttons */}
+          <div className="flex items-center space-x-1 text-xs font-mono">
             {[-60, -10, 10, 60].map((deltaSec) => (
               <button
                 key={deltaSec}
                 onClick={() => handleSeek(new Date(masterUtc.getTime() + deltaSec * 1000))}
-                className="px-2 py-1 bg-[#161B22] hover:bg-[#21262D] text-slate-300 border border-[#21262D] rounded-none text-[11px]"
+                className="px-2 py-1 bg-vms-surface hover:bg-vms-hover text-vms-text border border-vms-border rounded text-[11px] transition-colors"
               >
-                {deltaSec > 0 ? `+${deltaSec}S` : `${deltaSec}S`}
+                {deltaSec > 0 ? `+${deltaSec}s` : `${deltaSec}s`}
               </button>
             ))}
           </div>
@@ -477,8 +612,11 @@ export const Investigation: React.FC = () => {
       {/* Modals */}
       {showExportModal && selectedCameraIds.length > 0 && (
         <EvidenceExportModal
-          cameraId={selectedCameraIds[0]}
-          cameraName={cameras.find((c) => c.id === selectedCameraIds[0])?.name || selectedCameraIds[0]}
+          cameraId={focusedCameraId || selectedCameraIds[0]}
+          cameraName={
+            cameras.find((c) => c.id === (focusedCameraId || selectedCameraIds[0]))?.name ||
+            'Camera'
+          }
           defaultStartTime={new Date(masterUtc.getTime() - 300000)}
           defaultEndTime={masterUtc}
           onClose={() => setShowExportModal(false)}
@@ -495,6 +633,14 @@ export const Investigation: React.FC = () => {
           onClose={() => setShowReviewModal(false)}
         />
       )}
+
+      <SmartSearchModal
+        isOpen={showSmartSearch}
+        onClose={() => setShowSmartSearch(false)}
+        cameraId={focusedCameraId || selectedCameraIds[0]}
+        cameras={cameras}
+        onSeekToTimestamp={handleSeekToTimestamp}
+      />
     </div>
   );
 };

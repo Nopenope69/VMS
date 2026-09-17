@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  X,
   Compass,
   Square,
   Trash2,
   Save,
   ArrowRight,
   Info,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import api from '../services/api';
+import Modal from './ui/Modal';
+import Button from './ui/Button';
+import Input from './ui/Input';
 
 interface Point2D {
   x: number;
@@ -46,6 +50,9 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
   const [direction, setDirection] = useState<'A_TO_B' | 'B_TO_A' | 'BIDIRECTIONAL'>('A_TO_B');
   const [dwellSeconds, setDwellSeconds] = useState(15);
   const [cooldownSeconds, setCooldownSeconds] = useState(10);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
 
   // Drawing state
   const [linePoints, setLinePoints] = useState<Point2D[]>([]);
@@ -66,6 +73,8 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
       fetchRules();
       setLinePoints([]);
       setPolygonPoints([]);
+      setErrorNotice(null);
+      setSuccessNotice(null);
     }
   }, [isOpen, cameraId]);
 
@@ -80,7 +89,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw grid lines
-    ctx.strokeStyle = '#2d3748';
+    ctx.strokeStyle = '#38240D';
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 40) {
       ctx.beginPath();
@@ -97,72 +106,63 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
 
     // Draw active drawing: Tripwire line
     if (ruleType === 'TRIPWIRE' && linePoints.length > 0) {
-      ctx.strokeStyle = '#fbbf24'; // CCTV amber
+      ctx.strokeStyle = '#C05800'; // VMS safety accent
       ctx.lineWidth = 3;
-      ctx.fillStyle = '#fbbf24';
-
-      // First point
       ctx.beginPath();
-      ctx.arc(linePoints[0].x * canvas.width, linePoints[0].y * canvas.height, 6, 0, 2 * Math.PI);
-      ctx.fill();
+      ctx.moveTo(linePoints[0].x, linePoints[0].y);
+      for (let i = 1; i < linePoints.length; i++) {
+        ctx.lineTo(linePoints[i].x, linePoints[i].y);
+      }
+      ctx.stroke();
 
-      // Second point and line
-      if (linePoints.length > 1) {
+      linePoints.forEach((p, idx) => {
+        ctx.fillStyle = idx === 0 ? '#10B981' : '#EF4444';
         ctx.beginPath();
-        ctx.moveTo(linePoints[0].x * canvas.width, linePoints[0].y * canvas.height);
-        ctx.lineTo(linePoints[1].x * canvas.width, linePoints[1].y * canvas.height);
+        ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = '#FDFBD4';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(linePoints[1].x * canvas.width, linePoints[1].y * canvas.height, 6, 0, 2 * Math.PI);
-        ctx.fill();
-
-        // Direction arrow
-        const midX = ((linePoints[0].x + linePoints[1].x) / 2) * canvas.width;
-        const midY = ((linePoints[0].y + linePoints[1].y) / 2) * canvas.height;
-        ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 12px monospace';
-        ctx.fillText(`LINE CROSS: ${direction}`, midX + 10, midY - 10);
-      }
+        ctx.fillStyle = '#FDFBD4';
+        ctx.font = '11px monospace';
+        ctx.fillText(idx === 0 ? 'Point A' : 'Point B', p.x + 8, p.y - 8);
+      });
     }
 
-    // Draw active drawing: Loitering Polygon
+    // Draw active drawing: Loitering polygon
     if (ruleType === 'LOITERING' && polygonPoints.length > 0) {
-      ctx.strokeStyle = '#2dd4bf'; // CCTV teal
-      ctx.fillStyle = 'rgba(45, 212, 191, 0.2)';
+      ctx.strokeStyle = '#38BDF8';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
       ctx.lineWidth = 2;
-
       ctx.beginPath();
-      polygonPoints.forEach((pt, idx) => {
-        const px = pt.x * canvas.width;
-        const py = pt.y * canvas.height;
-        if (idx === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-
-      if (polygonPoints.length > 2) {
+      ctx.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+      for (let i = 1; i < polygonPoints.length; i++) {
+        ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+      }
+      if (polygonPoints.length >= 3) {
         ctx.closePath();
         ctx.fill();
       }
       ctx.stroke();
 
-      polygonPoints.forEach((pt) => {
-        ctx.fillStyle = '#2dd4bf';
+      polygonPoints.forEach((p) => {
+        ctx.fillStyle = '#38BDF8';
         ctx.beginPath();
-        ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 4, 0, 2 * Math.PI);
+        ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
         ctx.fill();
       });
     }
-  }, [linePoints, polygonPoints, ruleType, direction]);
-
-  if (!isOpen) return null;
+  }, [linePoints, polygonPoints, ruleType]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / canvas.width;
-    const y = (e.clientY - rect.top) / canvas.height;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
 
     if (ruleType === 'TRIPWIRE') {
       if (linePoints.length >= 2) {
@@ -176,15 +176,17 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
   };
 
   const handleSaveRule = async () => {
+    setErrorNotice(null);
+    setSuccessNotice(null);
     if (!ruleName.trim()) {
-      alert('Please provide a rule name');
+      setErrorNotice('Please provide a rule name');
       return;
     }
 
     try {
       if (ruleType === 'TRIPWIRE') {
         if (linePoints.length < 2) {
-          alert('Click two points on the canvas to define the tripwire boundary');
+          setErrorNotice('Click two points on the canvas to define the tripwire boundary');
           return;
         }
         await api.post('/spatial-rules', {
@@ -197,7 +199,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
         });
       } else {
         if (polygonPoints.length < 3) {
-          alert('Click at least 3 points on the canvas to form a loitering polygon');
+          setErrorNotice('Click at least 3 points on the canvas to form a loitering polygon');
           return;
         }
         await api.post('/spatial-rules', {
@@ -213,47 +215,68 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
       setRuleName('');
       setLinePoints([]);
       setPolygonPoints([]);
+      setSuccessNotice('Spatial rule deployed successfully.');
       fetchRules();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to create spatial rule');
+      setErrorNotice(err.response?.data?.error || 'Failed to create spatial rule');
     }
   };
 
   const handleDeleteRule = async (id: string) => {
     try {
+      setErrorNotice(null);
       await api.delete(`/spatial-rules/${id}`);
+      setRuleToDelete(null);
+      setSuccessNotice('Rule removed.');
       fetchRules();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete spatial rule');
+      setErrorNotice(err.response?.data?.error || 'Failed to delete spatial rule');
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-sans text-slate-100">
-      <div className="bg-graphite-900 border border-graphite-700 rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-graphite-700 flex items-center justify-between bg-graphite-850">
-          <div className="flex items-center space-x-2">
-            <Compass className="w-5 h-5 text-cctv-amber" />
-            <div>
-              <h2 className="text-base font-bold tracking-wider uppercase text-slate-100">
-                Spatial Analytics: Vector Tripwire & Continuous Loitering
-              </h2>
-              <p className="text-[11px] font-mono text-slate-400">
-                Target: {cameraName} ({cameraId}) • Hysteresis debounced & exit-reset invariant
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-graphite-700 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  if (!isOpen) return null;
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Spatial Analytics: Vector Tripwire & Continuous Loitering"
+      subtitle={`Target: ${cameraName} (${cameraId}) • Hysteresis debounced & exit-reset invariant`}
+      icon={<Compass className="w-4 h-4 text-vms-accent" />}
+      size="4xl"
+      footer={
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {/* Notice Banners */}
+        {errorNotice && (
+          <div className="p-3 bg-rose-950/70 border border-rose-800 rounded text-xs font-mono text-rose-300 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{errorNotice}</span>
+            </div>
+            <button type="button" onClick={() => setErrorNotice(null)} className="text-vms-muted hover:text-vms-text">
+              ×
+            </button>
+          </div>
+        )}
+
+        {successNotice && (
+          <div className="p-3 bg-emerald-950/70 border border-emerald-800 rounded text-xs font-mono text-emerald-300 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{successNotice}</span>
+            </div>
+            <button type="button" onClick={() => setSuccessNotice(null)} className="text-vms-muted hover:text-vms-text">
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Canvas Drawer */}
           <div className="lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
@@ -264,10 +287,10 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
                     setRuleType('TRIPWIRE');
                     setLinePoints([]);
                   }}
-                  className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center space-x-1.5 transition ${
+                  className={`px-3 py-1.5 rounded text-xs font-semibold font-mono flex items-center space-x-1.5 transition-colors ${
                     ruleType === 'TRIPWIRE'
-                      ? 'bg-cctv-amber text-graphite-900 font-bold'
-                      : 'bg-graphite-800 text-slate-300 hover:bg-graphite-700'
+                      ? 'bg-vms-accent text-vms-text font-bold'
+                      : 'bg-vms-panel text-vms-muted hover:bg-vms-hover'
                   }`}
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -279,10 +302,10 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
                     setRuleType('LOITERING');
                     setPolygonPoints([]);
                   }}
-                  className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center space-x-1.5 transition ${
+                  className={`px-3 py-1.5 rounded text-xs font-semibold font-mono flex items-center space-x-1.5 transition-colors ${
                     ruleType === 'LOITERING'
-                      ? 'bg-cctv-teal text-graphite-900 font-bold'
-                      : 'bg-graphite-800 text-slate-300 hover:bg-graphite-700'
+                      ? 'bg-sky-500/20 text-sky-400 border border-sky-400 font-bold'
+                      : 'bg-vms-panel text-vms-muted hover:bg-vms-hover'
                   }`}
                 >
                   <Square className="w-3.5 h-3.5" />
@@ -296,14 +319,14 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
                   setLinePoints([]);
                   setPolygonPoints([]);
                 }}
-                className="text-[11px] font-mono text-slate-400 hover:text-rose-400"
+                className="text-[11px] font-mono text-vms-muted hover:text-rose-400 transition-colors"
               >
                 Clear Canvas
               </button>
             </div>
 
             {/* Interactive Canvas */}
-            <div className="relative aspect-video bg-graphite-950 border border-graphite-750 rounded-lg overflow-hidden flex items-center justify-center">
+            <div className="relative aspect-video bg-[#0D0804] border border-vms-border rounded overflow-hidden flex items-center justify-center">
               <canvas
                 ref={canvasRef}
                 width={640}
@@ -311,7 +334,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
                 onClick={handleCanvasClick}
                 className="w-full h-full cursor-crosshair"
               />
-              <div className="absolute top-2 left-2 px-2 py-1 bg-graphite-900/80 backdrop-blur rounded font-mono text-[10px] text-slate-400">
+              <div className="absolute top-2 left-2 px-2 py-1 bg-vms-panel/90 backdrop-blur rounded font-mono text-[10px] text-vms-muted border border-vms-border">
                 {ruleType === 'TRIPWIRE'
                   ? `Tripwire: Click 2 points to define line (${linePoints.length}/2)`
                   : `Loitering: Click points to draw polygon (${polygonPoints.length} points)`}
@@ -319,41 +342,44 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
             </div>
 
             {/* Invariant Note */}
-            <div className="p-3 bg-graphite-850 border border-graphite-750 rounded text-xs text-slate-400 flex items-start space-x-2">
-              <Info className="w-4 h-4 text-cctv-teal shrink-0 mt-0.5" />
+            <div className="p-3 bg-vms-panel border border-vms-border rounded text-xs text-vms-muted flex items-start space-x-2">
+              <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed">
-                <strong className="text-slate-200">Architectural Invariant:</strong> Directional tripwires
-                use 2D vector cross products with track-state hysteresis to eliminate false rapid triggers.
-                Loitering requires continuous dwell inside the polygon; any exit immediately resets the dwell timer.
+                <strong className="text-vms-text">Architectural Invariant:</strong> Directional tripwires use
+                2D vector cross products with track-state hysteresis to eliminate false rapid triggers.
+                Loitering requires continuous dwell inside polygon; any exit immediately resets dwell timer.
               </div>
             </div>
           </div>
 
           {/* Configuration Sidebar */}
           <div className="space-y-4">
-            <div className="p-4 bg-graphite-850 border border-graphite-700 rounded-lg space-y-3">
-              <h3 className="font-bold text-xs uppercase tracking-wider text-cctv-amber">
+            <div className="p-3.5 bg-vms-panel border border-vms-border rounded space-y-3">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-vms-accent font-mono">
                 Configure Rule Parameters
               </h3>
 
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Rule Name</label>
-                <input
-                  type="text"
+                <label className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                  Rule Name
+                </label>
+                <Input
                   placeholder="e.g. Perimeter Fence North"
                   value={ruleName}
                   onChange={(e) => setRuleName(e.target.value)}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded p-2 text-xs text-slate-200"
+                  className="w-full"
                 />
               </div>
 
               {ruleType === 'TRIPWIRE' ? (
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Crossing Direction</label>
+                  <label className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                    Crossing Direction
+                  </label>
                   <select
                     value={direction}
                     onChange={(e) => setDirection(e.target.value as any)}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded p-2 text-xs text-slate-200 font-mono"
+                    className="w-full bg-vms-surface border border-vms-border rounded p-2 text-xs text-vms-text font-mono focus:outline-none focus:border-vms-accent"
                   >
                     <option value="A_TO_B">A → B (Side A to Side B)</option>
                     <option value="B_TO_A">B → A (Side B to Side A)</option>
@@ -362,69 +388,93 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
                 </div>
               ) : (
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
+                  <label className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
                     Continuous Dwell Threshold (Seconds)
                   </label>
-                  <input
+                  <Input
                     type="number"
                     min="3"
                     max="600"
                     value={dwellSeconds}
                     onChange={(e) => setDwellSeconds(Number(e.target.value))}
-                    className="w-full bg-graphite-900 border border-graphite-700 rounded p-2 text-xs text-slate-200 font-mono"
+                    className="w-full"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
+                <label className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
                   Alert Hysteresis Cooldown (Seconds)
                 </label>
-                <input
+                <Input
                   type="number"
                   min="1"
                   max="120"
                   value={cooldownSeconds}
                   onChange={(e) => setCooldownSeconds(Number(e.target.value))}
-                  className="w-full bg-graphite-900 border border-graphite-700 rounded p-2 text-xs text-slate-200 font-mono"
+                  className="w-full"
                 />
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
+                icon={Save}
                 onClick={handleSaveRule}
-                className="w-full py-2 rounded bg-cctv-amber text-graphite-900 font-bold text-xs hover:bg-amber-400 transition flex items-center justify-center space-x-1.5"
+                className="w-full"
               >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Spatial Rule</span>
-              </button>
+                Save Spatial Rule
+              </Button>
             </div>
 
             {/* Configured Rules List */}
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-400">Existing Rules ({rules.length})</div>
+              <div className="text-xs font-semibold text-vms-muted font-mono uppercase tracking-wider">
+                Existing Rules ({rules.length})
+              </div>
               {rules.length === 0 ? (
-                <div className="p-3 bg-graphite-850 rounded border border-graphite-750 text-center text-slate-500 font-mono text-[11px]">
+                <div className="p-3 bg-vms-panel rounded border border-vms-border text-center text-vms-dim font-mono text-[11px]">
                   No spatial rules deployed for this camera.
                 </div>
               ) : (
                 rules.map((r) => (
                   <div
                     key={r.id}
-                    className="p-2.5 bg-graphite-850 border border-graphite-750 rounded flex items-center justify-between text-xs"
+                    className="p-2.5 bg-vms-surface border border-vms-border rounded flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-semibold text-slate-200">{r.name}</div>
-                      <div className="text-[10px] font-mono text-slate-400">
+                      <div className="font-semibold text-vms-text font-mono">{r.name}</div>
+                      <div className="text-[10px] font-mono text-vms-dim">
                         {r.type} • {r.type === 'TRIPWIRE' ? r.tripwireDirection : `${r.dwellThresholdSeconds}s dwell`}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteRule(r.id)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {ruleToDelete === r.id ? (
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRule(r.id)}
+                          className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-mono"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRuleToDelete(null)}
+                          className="px-1 py-0.5 text-vms-muted text-[10px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setRuleToDelete(r.id)}
+                        className="p-1 rounded text-vms-dim hover:text-rose-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -432,7 +482,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

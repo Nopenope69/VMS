@@ -11,10 +11,14 @@ import {
   Play,
   Bookmark,
   Trash2,
-  X,
   ShieldAlert,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import api from '../services/api';
+import Modal from './ui/Modal';
+import Button from './ui/Button';
+import Input from './ui/Input';
 
 interface Preset {
   id: string;
@@ -45,6 +49,8 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
   const [savingPreset, setSavingPreset] = useState(false);
   const [activeTab, setActiveTab] = useState<'CONTROLS' | 'PRESETS' | 'TOURS'>('CONTROLS');
   const [arbiterNotice, setArbiterNotice] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [presetToDelete, setPresetToDelete] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -57,7 +63,7 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
       if (resPresets.data.presets?.length > 0 && !selectedPresetForTour) {
         setSelectedPresetForTour(resPresets.data.presets[0].presetToken);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load PTZ data:', err);
     }
   };
@@ -83,12 +89,14 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
     e.preventDefault();
     if (!newPresetName.trim()) return;
     setSavingPreset(true);
+    setStatusNotice(null);
     try {
       await api.post(`/cameras/${camera.id}/ptz/presets`, { name: newPresetName });
       setNewPresetName('');
+      setStatusNotice({ type: 'success', text: `Preset '${newPresetName}' saved successfully.` });
       fetchData();
     } catch (err: any) {
-      alert(`Failed to save preset: ${err.response?.data?.error || err.message}`);
+      setStatusNotice({ type: 'error', text: `Failed to save preset: ${err.response?.data?.error || err.message}` });
     } finally {
       setSavingPreset(false);
     }
@@ -97,23 +105,26 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
   const handleGotoPreset = async (presetId: string) => {
     try {
       setArbiterNotice(null);
+      setStatusNotice(null);
       await api.post(`/cameras/${camera.id}/ptz/presets/${presetId}/goto`);
     } catch (err: any) {
       if (err.response?.status === 409) {
         setArbiterNotice('Camera is locked by another operator.');
       } else {
-        alert(`Goto failed: ${err.message}`);
+        setStatusNotice({ type: 'error', text: `Goto failed: ${err.message}` });
       }
     }
   };
 
   const handleDeletePreset = async (presetId: string) => {
-    if (!confirm('Delete preset?')) return;
     try {
+      setStatusNotice(null);
       await api.delete(`/cameras/${camera.id}/ptz/presets/${presetId}`);
+      setPresetToDelete(null);
+      setStatusNotice({ type: 'success', text: 'Preset deleted.' });
       fetchData();
     } catch (err: any) {
-      alert(`Delete error: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Delete error: ${err.message}` });
     }
   };
 
@@ -128,92 +139,125 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
 
   const handleCreateTour = async () => {
     if (!tourName.trim() || tourSteps.length === 0) {
-      alert('Please provide tour name and at least 1 preset step');
+      setStatusNotice({ type: 'error', text: 'Please provide tour name and at least 1 preset step' });
       return;
     }
     try {
+      setStatusNotice(null);
       await api.post(`/cameras/${camera.id}/ptz/tours`, {
         name: tourName,
         steps: tourSteps,
       });
       setTourName('');
       setTourSteps([]);
+      setStatusNotice({ type: 'success', text: `Patrol tour '${tourName}' created.` });
       fetchData();
     } catch (err: any) {
-      alert(`Failed to create tour: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Failed to create tour: ${err.message}` });
     }
   };
 
   const handleStartTour = async (tourId: string) => {
     try {
+      setStatusNotice(null);
       await api.post(`/cameras/${camera.id}/ptz/tours/${tourId}/start`);
       fetchData();
     } catch (err: any) {
-      alert(`Start tour error: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Start tour error: ${err.message}` });
     }
   };
 
   const handleStopTour = async (tourId: string) => {
     try {
+      setStatusNotice(null);
       await api.post(`/cameras/${camera.id}/ptz/tours/${tourId}/stop`);
       fetchData();
     } catch (err: any) {
-      alert(`Stop tour error: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Stop tour error: ${err.message}` });
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm select-none">
-      <div className="bg-graphite-850 border border-graphite-700 rounded-md w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-graphite-700 flex justify-between items-center bg-graphite-800">
-          <div className="flex items-center space-x-2">
-            <Compass className="w-4 h-4 text-cctv-amber" />
-            <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
-              PTZ Arbiter & Guard Tours — {camera.name}
-            </h3>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={`PTZ Arbiter & Guard Tours — ${camera.name}`}
+      subtitle="Proportional mechanical positioning, guard sweeps, and operator arbitration"
+      icon={<Compass className="w-4 h-4 text-vms-accent" />}
+      size="2xl"
+      footer={
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <div className="space-y-4">
         {/* Arbiter Lock Notice */}
         {arbiterNotice && (
-          <div className="px-4 py-2 bg-red-950/80 border-b border-red-800 text-xs font-mono text-red-300 flex items-center space-x-2">
-            <ShieldAlert className="w-4 h-4 text-red-400" />
+          <div className="px-3.5 py-2 bg-rose-950/70 border border-rose-800 rounded text-xs font-mono text-rose-300 flex items-center space-x-2">
+            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{arbiterNotice}</span>
           </div>
         )}
 
+        {/* Status Notice */}
+        {statusNotice && (
+          <div
+            className={`px-3.5 py-2 rounded text-xs font-mono flex items-center justify-between ${
+              statusNotice.type === 'error'
+                ? 'bg-rose-950/70 border border-rose-800 text-rose-300'
+                : 'bg-emerald-950/70 border border-emerald-800 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              {statusNotice.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              )}
+              <span>{statusNotice.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatusNotice(null)}
+              className="text-vms-muted hover:text-vms-text ml-2"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Tab Selector */}
-        <div className="flex border-b border-graphite-700 bg-graphite-900 px-4 pt-2">
+        <div className="flex border-b border-vms-border bg-vms-panel px-2 pt-1.5 rounded-t">
           <button
+            type="button"
             onClick={() => setActiveTab('CONTROLS')}
-            className={`px-4 py-2 text-xs font-mono font-medium border-b-2 transition ${
+            className={`px-3.5 py-1.5 text-xs font-mono font-medium border-b-2 transition-colors ${
               activeTab === 'CONTROLS'
-                ? 'border-cctv-amber text-cctv-amber font-bold'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'border-vms-accent text-vms-accent font-bold'
+                : 'border-transparent text-vms-muted hover:text-vms-text'
             }`}
           >
             Virtual Joystick
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('PRESETS')}
-            className={`px-4 py-2 text-xs font-mono font-medium border-b-2 transition ${
+            className={`px-3.5 py-1.5 text-xs font-mono font-medium border-b-2 transition-colors ${
               activeTab === 'PRESETS'
-                ? 'border-cctv-amber text-cctv-amber font-bold'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'border-vms-accent text-vms-accent font-bold'
+                : 'border-transparent text-vms-muted hover:text-vms-text'
             }`}
           >
             Presets ({presets.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('TOURS')}
-            className={`px-4 py-2 text-xs font-mono font-medium border-b-2 transition ${
+            className={`px-3.5 py-1.5 text-xs font-mono font-medium border-b-2 transition-colors ${
               activeTab === 'TOURS'
-                ? 'border-cctv-amber text-cctv-amber font-bold'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'border-vms-accent text-vms-accent font-bold'
+                : 'border-transparent text-vms-muted hover:text-vms-text'
             }`}
           >
             Guard Tours ({tours.length})
@@ -222,49 +266,59 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
 
         {/* Tab 1: Virtual Joystick & Direct D-Pad */}
         {activeTab === 'CONTROLS' && (
-          <div className="p-6 flex flex-col items-center justify-center space-y-6 bg-graphite-900">
-            <div className="text-[11px] font-mono text-slate-400 text-center">
-              Press and hold to move. Manual movement immediately preempts running guard tours.
+          <div className="p-6 flex flex-col items-center justify-center space-y-5 bg-vms-panel/50 rounded border border-vms-border">
+            <div className="text-[11px] font-mono text-vms-muted text-center max-w-sm">
+              Press and hold directional buttons to move camera optics. Manual movement preempts active patrol sweeps.
             </div>
 
             {/* D-Pad */}
             <div className="grid grid-cols-3 gap-2 w-48 h-48">
               <div />
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', 0, 1)}
                 onMouseUp={() => handlePtz('stop')}
-                className="bg-graphite-800 hover:bg-cctv-amber hover:text-graphite-900 border border-graphite-700 rounded-md flex items-center justify-center text-slate-200 active:scale-95 transition shadow"
+                title="Pan/Tilt Up"
+                className="bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border rounded flex items-center justify-center text-vms-text active:scale-95 transition-all shadow"
               >
                 <ArrowUp className="w-6 h-6" />
               </button>
               <div />
 
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', -1, 0)}
                 onMouseUp={() => handlePtz('stop')}
-                className="bg-graphite-800 hover:bg-cctv-amber hover:text-graphite-900 border border-graphite-700 rounded-md flex items-center justify-center text-slate-200 active:scale-95 transition shadow"
+                title="Pan Left"
+                className="bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border rounded flex items-center justify-center text-vms-text active:scale-95 transition-all shadow"
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <button
+                type="button"
                 onClick={() => handlePtz('stop')}
-                className="bg-graphite-850 hover:bg-red-600 hover:text-white border border-graphite-700 rounded-md flex items-center justify-center text-slate-400 active:scale-95 transition"
+                title="Emergency Halt"
+                className="bg-vms-panel hover:bg-rose-600 hover:text-white border border-vms-border rounded flex items-center justify-center text-vms-muted active:scale-95 transition-all"
               >
                 <Square className="w-5 h-5" />
               </button>
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', 1, 0)}
                 onMouseUp={() => handlePtz('stop')}
-                className="bg-graphite-800 hover:bg-cctv-amber hover:text-graphite-900 border border-graphite-700 rounded-md flex items-center justify-center text-slate-200 active:scale-95 transition shadow"
+                title="Pan Right"
+                className="bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border rounded flex items-center justify-center text-vms-text active:scale-95 transition-all shadow"
               >
                 <ArrowRight className="w-6 h-6" />
               </button>
 
               <div />
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', 0, -1)}
                 onMouseUp={() => handlePtz('stop')}
-                className="bg-graphite-800 hover:bg-cctv-amber hover:text-graphite-900 border border-graphite-700 rounded-md flex items-center justify-center text-slate-200 active:scale-95 transition shadow"
+                title="Pan/Tilt Down"
+                className="bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border rounded flex items-center justify-center text-vms-text active:scale-95 transition-all shadow"
               >
                 <ArrowDown className="w-6 h-6" />
               </button>
@@ -274,17 +328,19 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
             {/* Zoom Controls */}
             <div className="flex space-x-3">
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', 0, 0, 1)}
                 onMouseUp={() => handlePtz('stop')}
-                className="flex items-center space-x-1.5 px-4 py-2 rounded bg-graphite-800 hover:bg-cctv-teal hover:text-graphite-900 border border-graphite-700 text-slate-200 font-mono text-xs transition"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border text-vms-text font-mono text-xs transition-colors"
               >
                 <ZoomIn className="w-4 h-4" />
                 <span>Zoom In</span>
               </button>
               <button
+                type="button"
                 onMouseDown={() => handlePtz('move', 0, 0, -1)}
                 onMouseUp={() => handlePtz('stop')}
-                className="flex items-center space-x-1.5 px-4 py-2 rounded bg-graphite-800 hover:bg-cctv-teal hover:text-graphite-900 border border-graphite-700 text-slate-200 font-mono text-xs transition"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded bg-vms-surface hover:bg-vms-accent hover:text-vms-text border border-vms-border text-vms-text font-mono text-xs transition-colors"
               >
                 <ZoomOut className="w-4 h-4" />
                 <span>Zoom Out</span>
@@ -295,61 +351,85 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
 
         {/* Tab 2: Presets */}
         {activeTab === 'PRESETS' && (
-          <div className="p-4 space-y-4 bg-graphite-850 overflow-y-auto">
+          <div className="space-y-4">
             {/* Save Current Position */}
-            <form onSubmit={handleSavePreset} className="flex space-x-2 bg-graphite-900 p-3 rounded border border-graphite-700">
-              <input
-                type="text"
+            <form onSubmit={handleSavePreset} className="flex space-x-2 bg-vms-panel p-3 rounded border border-vms-border">
+              <Input
                 placeholder="e.g. North Gate Gatehouse"
                 value={newPresetName}
                 onChange={(e) => setNewPresetName(e.target.value)}
-                className="flex-1 bg-graphite-850 border border-graphite-700 rounded px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                className="flex-1"
               />
-              <button
+              <Button
                 type="submit"
-                disabled={savingPreset || !newPresetName.trim()}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 disabled:opacity-50 font-mono"
+                variant="primary"
+                size="sm"
+                icon={Bookmark}
+                isLoading={savingPreset}
+                disabled={!newPresetName.trim()}
               >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>{savingPreset ? 'Saving...' : 'Save Current Position'}</span>
-              </button>
+                Save Current Position
+              </Button>
             </form>
 
             {/* Presets List */}
             <div className="space-y-2">
-              <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-mono text-vms-muted uppercase tracking-wider">
                 Saved Positions ({presets.length})
               </div>
 
               {presets.length === 0 ? (
-                <div className="text-center p-6 border border-dashed border-graphite-700 rounded text-slate-500 text-xs font-mono">
-                  No presets configured yet. Aim camera and save positions above.
+                <div className="text-center p-6 border border-dashed border-vms-border rounded text-vms-dim text-xs font-mono">
+                  No presets configured yet. Aim camera using joystick and save position above.
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {presets.map((p) => (
                     <div
                       key={p.id}
-                      className="p-2.5 bg-graphite-900 rounded border border-graphite-700 flex items-center justify-between"
+                      className="p-2.5 bg-vms-surface rounded border border-vms-border flex items-center justify-between"
                     >
                       <div>
-                        <div className="text-xs font-semibold text-white font-mono">{p.name}</div>
-                        <div className="text-[10px] font-mono text-slate-500">{p.presetToken}</div>
+                        <div className="text-xs font-semibold text-vms-text font-mono">{p.name}</div>
+                        <div className="text-[10px] font-mono text-vms-dim">{p.presetToken}</div>
                       </div>
 
                       <div className="flex items-center space-x-1">
-                        <button
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="xs"
                           onClick={() => handleGotoPreset(p.id)}
-                          className="px-2.5 py-1 rounded bg-cctv-teal/20 text-cctv-teal hover:bg-cctv-teal/30 font-mono text-xs font-semibold border border-cctv-teal/40 transition"
                         >
                           Goto
-                        </button>
-                        <button
-                          onClick={() => handleDeletePreset(p.id)}
-                          className="p-1 text-slate-500 hover:text-red-400"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </Button>
+                        {presetToDelete === p.id ? (
+                          <div className="flex items-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePreset(p.id)}
+                              className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-mono"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPresetToDelete(null)}
+                              className="px-1 py-0.5 text-vms-muted text-[10px]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setPresetToDelete(p.id)}
+                            title="Delete Preset"
+                            className="p-1 text-vms-dim hover:text-rose-400 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -361,31 +441,34 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
 
         {/* Tab 3: Guard Tours */}
         {activeTab === 'TOURS' && (
-          <div className="p-4 space-y-4 bg-graphite-850 overflow-y-auto">
+          <div className="space-y-4">
             {/* New Tour Builder */}
-            <div className="p-3 bg-graphite-900 rounded border border-graphite-700 space-y-3">
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            <div className="p-3 bg-vms-panel rounded border border-vms-border space-y-3">
+              <h4 className="text-xs font-semibold text-vms-text uppercase tracking-wider font-mono">
                 Create Automated Patrol Tour
               </h4>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 mb-1">Tour Name</label>
-                <input
-                  type="text"
+                <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                  Tour Name
+                </label>
+                <Input
                   placeholder="e.g. 24/7 Perimeter Patrol"
                   value={tourName}
                   onChange={(e) => setTourName(e.target.value)}
-                  className="w-full bg-graphite-850 border border-graphite-700 rounded px-3 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                  className="w-full"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div className="col-span-2">
-                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Select Preset</label>
+                  <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                    Select Preset
+                  </label>
                   <select
                     value={selectedPresetForTour}
                     onChange={(e) => setSelectedPresetForTour(e.target.value)}
-                    className="w-full bg-graphite-850 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-vms-surface border border-vms-border rounded px-2.5 py-1 text-xs text-vms-text font-mono focus:outline-none focus:border-vms-accent"
                   >
                     {presets.map((p) => (
                       <option key={p.id} value={p.presetToken}>
@@ -396,33 +479,36 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Dwell: {dwellTime}s</label>
+                  <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                    Dwell: {dwellTime}s
+                  </label>
                   <input
                     type="range"
                     min={5}
                     max={60}
                     value={dwellTime}
                     onChange={(e) => setDwellTime(Number(e.target.value))}
-                    className="w-full accent-cctv-amber"
+                    className="w-full accent-[#C05800]"
                   />
                 </div>
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="xs"
                 onClick={handleAddTourStep}
                 disabled={presets.length === 0}
-                className="px-3 py-1 rounded bg-graphite-800 hover:bg-graphite-700 text-slate-200 font-mono text-xs border border-graphite-700"
               >
                 + Add Preset to Sequence ({tourSteps.length} steps)
-              </button>
+              </Button>
 
               {tourSteps.length > 0 && (
-                <div className="p-2 bg-graphite-850 rounded border border-graphite-700 text-xs font-mono text-slate-300 space-y-1">
-                  <div className="text-[10px] text-slate-400 uppercase">Sequence:</div>
+                <div className="p-2 bg-vms-surface rounded border border-vms-border text-xs font-mono text-vms-text space-y-1">
+                  <div className="text-[10px] text-vms-muted uppercase tracking-wider">Sequence:</div>
                   <div className="flex flex-wrap gap-1">
                     {tourSteps.map((s, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-graphite-900 rounded border border-graphite-700">
+                      <span key={idx} className="px-2 py-0.5 bg-vms-panel rounded border border-vms-border text-[11px]">
                         {idx + 1}. {s.presetName || s.presetToken} ({s.dwellSeconds}s)
                       </span>
                     ))}
@@ -430,82 +516,84 @@ export const PtzControlModal: React.FC<PtzControlModalProps> = ({ camera, onClos
                 </div>
               )}
 
-              <div className="flex justify-end">
-                <button
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
                   onClick={handleCreateTour}
                   disabled={!tourName || tourSteps.length === 0}
-                  className="px-4 py-1.5 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 disabled:opacity-50 font-mono shadow"
                 >
                   Save Guard Tour
-                </button>
+                </Button>
               </div>
             </div>
 
             {/* Tours List */}
             <div className="space-y-2">
-              <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-mono text-vms-muted uppercase tracking-wider">
                 Configured Patrol Tours ({tours.length})
               </div>
 
-              {tours.map((t) => (
-                <div
-                  key={t.id}
-                  className="p-3 bg-graphite-900 rounded border border-graphite-700 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-semibold text-white font-mono">{t.name}</span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                          t.state === 'RUNNING'
-                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                            : 'bg-graphite-800 text-slate-400'
-                        }`}
-                      >
-                        {t.state}
-                      </span>
-                    </div>
-                    <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                      {t.stepsJson.length} presets in loop
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-1.5">
-                    {t.state === 'RUNNING' ? (
-                      <button
-                        onClick={() => handleStopTour(t.id)}
-                        className="flex items-center space-x-1 px-3 py-1 rounded bg-red-950 text-red-400 border border-red-800 font-mono text-xs font-semibold hover:bg-red-900 transition"
-                      >
-                        <Square className="w-3.5 h-3.5" />
-                        <span>Stop</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleStartTour(t.id)}
-                        className="flex items-center space-x-1 px-3 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono text-xs font-semibold hover:bg-emerald-900 transition"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        <span>Start Patrol</span>
-                      </button>
-                    )}
-                  </div>
+              {tours.length === 0 ? (
+                <div className="text-center p-4 border border-dashed border-vms-border rounded text-vms-dim text-xs font-mono">
+                  No guard patrol tours defined. Create tour sequence above.
                 </div>
-              ))}
+              ) : (
+                tours.map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3 bg-vms-surface rounded border border-vms-border flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-semibold text-vms-text font-mono">{t.name}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                            t.state === 'RUNNING'
+                              ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800'
+                              : 'bg-vms-panel text-vms-dim'
+                          }`}
+                        >
+                          {t.state}
+                        </span>
+                      </div>
+                      <div className="text-[10px] font-mono text-vms-dim mt-0.5">
+                        {t.stepsJson.length} presets in loop
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      {t.state === 'RUNNING' ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="xs"
+                          icon={Square}
+                          onClick={() => handleStopTour(t.id)}
+                        >
+                          Stop
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="xs"
+                          icon={Play}
+                          onClick={() => handleStartTour(t.id)}
+                        >
+                          Start Patrol
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-graphite-700 flex justify-end bg-graphite-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded text-xs font-semibold bg-graphite-700 text-white hover:bg-graphite-600 font-mono"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

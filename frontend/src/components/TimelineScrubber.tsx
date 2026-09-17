@@ -86,23 +86,23 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Substrate background
-    ctx.fillStyle = '#080B10';
+    // Canvas background
+    ctx.fillStyle = '#080B11';
     ctx.fillRect(0, 0, width, height);
 
     // Track trough
-    ctx.fillStyle = '#0D1117';
-    ctx.fillRect(0, 24, width, height - 24);
+    ctx.fillStyle = '#0E131F';
+    ctx.fillRect(0, 22, width, height - 22);
 
-    // Grid baseline
-    ctx.strokeStyle = '#21262D';
+    // Baseline divider
+    ctx.strokeStyle = '#1E293B';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, 24);
-    ctx.lineTo(width, 24);
+    ctx.moveTo(0, 22);
+    ctx.lineTo(width, 22);
     ctx.stroke();
 
-    // Draw recorded footage segments
+    // Draw recorded segments
     for (const seg of segments) {
       const segStart = new Date(seg.startTime).getTime();
       const segEnd = new Date(seg.endTime).getTime();
@@ -113,55 +113,45 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       const xEnd = Math.min(width, ((segEnd - viewStart) / viewTotalMs) * width);
       const segWidth = Math.max(2, xEnd - xStart);
 
-      // Phosphor green block with solid top border
-      ctx.fillStyle = '#238636';
-      ctx.fillRect(xStart, 25, segWidth, height - 25);
+      // Emerald block
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.45)';
+      ctx.fillRect(xStart, 23, segWidth, height - 23);
 
-      ctx.fillStyle = '#3FB950';
-      ctx.fillRect(xStart, 24, segWidth, 2);
+      ctx.fillStyle = '#10B981';
+      ctx.fillRect(xStart, 22, segWidth, 2);
     }
 
-    // Draw selection range overlay if active
+    // Selection range overlay
     if (selectionRange) {
       const selStart = timeToX(selectionRange.start, width);
       const selEnd = timeToX(selectionRange.end, width);
       const selWidth = Math.max(4, selEnd - selStart);
 
-      ctx.fillStyle = 'rgba(227, 179, 65, 0.2)';
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.2)';
       ctx.fillRect(selStart, 0, selWidth, height);
-      ctx.strokeStyle = '#E3B341';
+      ctx.strokeStyle = '#F59E0B';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(selStart, 0, selWidth, height);
-
-      // Diagonal hazard hatching for selection
-      ctx.strokeStyle = 'rgba(227, 179, 65, 0.4)';
-      ctx.lineWidth = 1;
-      for (let x = selStart - height; x < selStart + selWidth; x += 12) {
-        ctx.beginPath();
-        ctx.moveTo(Math.max(selStart, x), 0);
-        ctx.lineTo(Math.min(selStart + selWidth, x + height), height);
-        ctx.stroke();
-      }
     }
 
     // Ticks & Timecode Labels
-    ctx.strokeStyle = '#30363D';
-    ctx.fillStyle = '#8B949E';
+    ctx.strokeStyle = '#1E293B';
+    ctx.fillStyle = '#64748B';
     ctx.font = '10px "JetBrains Mono", monospace';
     ctx.lineWidth = 1;
 
-    let tickIntervalMs = 3600 * 1000; // 1 hour for 24H
-    let labelIntervalMs = 2 * 3600 * 1000; // every 2 hours
+    let tickIntervalMs = 3600 * 1000;
+    let labelIntervalMs = 2 * 3600 * 1000;
 
     if (zoom === '6H') {
-      tickIntervalMs = 30 * 60 * 1000; // 30 mins
-      labelIntervalMs = 60 * 60 * 1000; // 1 hour
+      tickIntervalMs = 30 * 60 * 1000;
+      labelIntervalMs = 60 * 60 * 1000;
     } else if (zoom === '1H') {
-      tickIntervalMs = 5 * 60 * 1000; // 5 mins
-      labelIntervalMs = 10 * 60 * 1000; // 10 mins
+      tickIntervalMs = 5 * 60 * 1000;
+      labelIntervalMs = 10 * 60 * 1000;
     } else if (zoom === '15M') {
-      tickIntervalMs = 60 * 1000; // 1 min
-      labelIntervalMs = 3 * 60 * 1000; // 3 mins
+      tickIntervalMs = 60 * 1000;
+      labelIntervalMs = 3 * 60 * 1000;
     }
 
     const firstTickTime = Math.ceil(viewStart / tickIntervalMs) * tickIntervalMs;
@@ -172,8 +162,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
       ctx.beginPath();
       ctx.moveTo(x, isMajor ? 6 : 14);
-      ctx.lineTo(x, 24);
-      ctx.strokeStyle = isMajor ? '#484F58' : '#21262D';
+      ctx.lineTo(x, 22);
+      ctx.strokeStyle = isMajor ? '#334155' : '#1E293B';
       ctx.stroke();
 
       if (isMajor) {
@@ -186,38 +176,30 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         });
         const textWidth = ctx.measureText(timeStr).width;
         const textX = Math.min(width - textWidth - 4, Math.max(4, x - textWidth / 2));
-        ctx.fillStyle = '#C9D1D9';
-        ctx.fillText(timeStr, textX, 16);
+        ctx.fillStyle = '#94A3B8';
+        ctx.fillText(timeStr, textX, 15);
       }
     }
 
-    // Playhead line & optical cursor needle
+    // Playhead line & needle
     const playheadTime = currentTime.getTime();
     if (playheadTime >= viewStart && playheadTime <= viewEnd) {
       const playheadX = ((playheadTime - viewStart) / viewTotalMs) * width;
 
-      // Needle glowing core
-      ctx.strokeStyle = '#E3B341';
+      // Needle core
+      ctx.strokeStyle = '#F59E0B';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(playheadX, 0);
       ctx.lineTo(playheadX, height);
       ctx.stroke();
 
-      // Top arrow / reticle
-      ctx.fillStyle = '#E3B341';
+      // Top indicator arrow
+      ctx.fillStyle = '#F59E0B';
       ctx.beginPath();
       ctx.moveTo(playheadX - 5, 0);
       ctx.lineTo(playheadX + 5, 0);
-      ctx.lineTo(playheadX, 8);
-      ctx.closePath();
-      ctx.fill();
-
-      // Bottom arrow
-      ctx.beginPath();
-      ctx.moveTo(playheadX - 4, height);
-      ctx.lineTo(playheadX + 4, height);
-      ctx.lineTo(playheadX, height - 6);
+      ctx.lineTo(playheadX, 7);
       ctx.closePath();
       ctx.fill();
     }
@@ -254,45 +236,45 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full bg-[#0D1117] border border-[#21262D] rounded-none p-2.5 select-none font-mono"
+      className="w-full bg-vms-surface border border-vms-border rounded p-2.5 select-none font-mono"
     >
       {/* Telemetry Strip & Controls */}
-      <div className="flex flex-wrap justify-between items-center mb-2 gap-2 border-b border-[#21262D] pb-2 text-xs">
+      <div className="flex flex-wrap justify-between items-center mb-2 gap-2 border-b border-vms-border pb-2 text-xs">
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1.5">
-            <span className="text-[10px] text-[#8B949E] tracking-wider uppercase">CUE_TIMECODE:</span>
-            <span className="text-[#E3B341] font-bold tracking-tight text-xs bg-[#161B22] px-2 py-0.5 border border-[#30363D]">
+            <span className="text-[10px] text-vms-dim tracking-wider uppercase font-mono">SEEK:</span>
+            <span className="text-amber-400 font-bold tracking-tight text-xs bg-vms-panel px-2 py-0.5 rounded border border-vms-border font-mono">
               {formattedTimecode}
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center space-x-1.5 text-[10px] text-[#8B949E]">
-            <span>WINDOW:</span>
-            <span className="text-[#C9D1D9]">
-              {new Date(viewStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} -{' '}
+          <div className="hidden sm:flex items-center space-x-1.5 text-[10px] text-vms-muted font-mono">
+            <span className="text-vms-dim">RANGE:</span>
+            <span>
+              {new Date(viewStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} –{' '}
               {new Date(viewEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
             </span>
           </div>
 
-          <div className="hidden md:flex items-center space-x-1.5 text-[10px]">
-            <span className="text-[#8B949E]">SECTOR_FOOTAGE:</span>
-            <span className="text-[#3FB950] font-bold">
-              [{segments.length} {segments.length === 1 ? 'SEGMENT' : 'SEGMENTS'}]
+          <div className="hidden md:flex items-center space-x-1.5 text-[10px] font-mono">
+            <span className="text-vms-dim">RECORDINGS:</span>
+            <span className="text-emerald-400 font-semibold">
+              {segments.length} {segments.length === 1 ? 'block' : 'blocks'}
             </span>
           </div>
         </div>
 
         {/* Zoom Presets & Legend */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center border border-[#30363D] bg-[#080B10]">
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center rounded border border-vms-border bg-vms-panel p-0.5">
             {(['24H', '6H', '1H', '15M'] as ZoomLevel[]).map((lvl) => (
               <button
                 key={lvl}
                 onClick={() => setZoom(lvl)}
-                className={`px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide transition-colors ${
+                className={`px-2 py-0.5 text-[10px] uppercase font-mono font-medium rounded transition-colors ${
                   zoom === lvl
-                    ? 'bg-[#E3B341] text-[#080B10]'
-                    : 'text-[#8B949E] hover:text-[#C9D1D9] hover:bg-[#161B22]'
+                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    : 'text-vms-muted hover:text-vms-text hover:bg-vms-hover'
                 }`}
               >
                 {lvl}
@@ -300,25 +282,25 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             ))}
           </div>
 
-          <div className="hidden lg:flex items-center space-x-3 text-[10px]">
+          <div className="hidden lg:flex items-center space-x-2.5 text-[10px] font-mono text-vms-dim">
             <div className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-[#3FB950] border border-[#238636]" />
-              <span className="text-[#8B949E]">fMP4 RECORDBLOCK</span>
+              <span className="w-2 h-2 rounded-sm bg-emerald-500" />
+              <span>Footage</span>
             </div>
             <div className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-[#0D1117] border border-[#30363D]" />
-              <span className="text-[#8B949E]">SIGNAL LOSS / VOID</span>
+              <span className="w-2 h-2 rounded-sm bg-vms-panel border border-vms-border" />
+              <span>Gap / Void</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Crosshair Scrub Canvas */}
-      <div className="relative w-full h-16 cursor-crosshair bg-[#080B10] border border-[#21262D]">
+      {/* Scrub Canvas */}
+      <div className="relative w-full h-14 cursor-crosshair bg-vms-bg border border-vms-border rounded overflow-hidden">
         <canvas
           ref={canvasRef}
           width={1200}
-          height={64}
+          height={56}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

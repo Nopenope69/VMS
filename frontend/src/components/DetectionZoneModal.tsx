@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Plus, Trash2, X, Eye, EyeOff, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { Shield, Plus, Trash2, Eye, EyeOff, CheckCircle2, AlertOctagon, AlertCircle } from 'lucide-react';
 import api from '../services/api';
+import Modal from './ui/Modal';
+import Button from './ui/Button';
+import Input from './ui/Input';
 
 interface Point {
   x: number;
@@ -21,6 +24,7 @@ interface DetectionZoneModalProps {
   onClose: () => void;
 }
 
+/* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, onClose }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -31,6 +35,8 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
   const [mode, setMode] = useState<'DRAW' | 'TEST'>('DRAW');
   const [testResult, setTestResult] = useState<any>(null);
   const [testPoint, setTestPoint] = useState<Point | null>(null);
+  const [statusNotice, setStatusNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [zoneToDelete, setZoneToDelete] = useState<string | null>(null);
 
   const fetchZones = async () => {
     try {
@@ -57,7 +63,7 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
     ctx.clearRect(0, 0, w, h);
 
     // Draw background grid
-    ctx.strokeStyle = '#222a32';
+    ctx.strokeStyle = '#38240D';
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x += 40) {
       ctx.beginPath();
@@ -98,91 +104,82 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
       ctx.fill();
       ctx.stroke();
 
-      // Label zone
-      const center = zone.polygonCoordinates[0];
-      ctx.fillStyle = '#ffffff';
+      // Zone label
+      ctx.fillStyle = '#FDFBD4';
       ctx.font = '10px monospace';
-      ctx.fillText(`${zone.name} (${zone.type})`, center.x * w + 5, center.y * h + 15);
+      ctx.fillText(
+        `${zone.name} (${zone.type[0]}-P${zone.priority})`,
+        first.x * w + 5,
+        first.y * h - 5
+      );
     });
 
-    // Draw active drawing in progress
+    // Draw in-progress polygon
     if (currentVertices.length > 0) {
       ctx.beginPath();
       ctx.moveTo(currentVertices[0].x * w, currentVertices[0].y * h);
+
       for (let i = 1; i < currentVertices.length; i++) {
         ctx.lineTo(currentVertices[i].x * w, currentVertices[i].y * h);
       }
 
-      ctx.strokeStyle = zoneType === 'INCLUSION' ? '#34d399' : '#f87171';
+      ctx.strokeStyle = '#C05800';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Draw vertex handles
-      currentVertices.forEach((v, idx) => {
-        ctx.fillStyle = idx === 0 ? '#f59e0b' : '#ffffff';
+      currentVertices.forEach((pt, idx) => {
+        ctx.fillStyle = idx === 0 ? '#10b981' : '#C05800';
         ctx.beginPath();
-        ctx.arc(v.x * w, v.y * h, 4, 0, Math.PI * 2);
+        ctx.arc(pt.x * w, pt.y * h, 4, 0, Math.PI * 2);
         ctx.fill();
       });
     }
 
-    // Draw test point if testing
+    // Draw test probe point
     if (testPoint) {
       ctx.fillStyle = testResult?.allowed ? '#10b981' : '#ef4444';
       ctx.beginPath();
       ctx.arc(testPoint.x * w, testPoint.y * h, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
-  }, [zones, currentVertices, zoneType, testPoint, testResult]);
+  }, [zones, currentVertices, testPoint, testResult]);
 
   const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1000) / 1000;
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 1000) / 1000;
 
-    const normalizedPoint = {
-      x: Math.round(x * 1000) / 1000,
-      y: Math.round(y * 1000) / 1000,
-    };
-
-    if (mode === 'TEST') {
-      setTestPoint(normalizedPoint);
+    if (mode === 'DRAW') {
+      setCurrentVertices([...currentVertices, { x, y }]);
+    } else if (mode === 'TEST') {
+      setTestPoint({ x, y });
       try {
-        const res = await api.post(`/cameras/${camera.id}/zones/test`, { point: normalizedPoint });
-        setTestResult(res.data.evaluation);
-      } catch (err) {
-        console.error('Test error:', err);
-      }
-      return;
-    }
-
-    // DRAW mode
-    if (currentVertices.length >= 3) {
-      // If clicking near first vertex, auto-close
-      const first = currentVertices[0];
-      const dist = Math.hypot(first.x - normalizedPoint.x, first.y - normalizedPoint.y);
-      if (dist < 0.04) {
-        return; // Clicked near start
+        const res = await api.post(`/cameras/${camera.id}/zones/evaluate`, {
+          testPoint: { x, y },
+        });
+        setTestResult(res.data);
+      } catch (err: any) {
+        setStatusNotice({ type: 'error', text: `Probe evaluation failed: ${err.message}` });
       }
     }
-
-    setCurrentVertices((prev) => [...prev, normalizedPoint]);
   };
 
   const handleSaveZone = async () => {
+    setStatusNotice(null);
     if (!zoneName.trim()) {
-      alert('Please enter a zone name');
+      setStatusNotice({ type: 'error', text: 'Please enter a zone name' });
       return;
     }
     if (currentVertices.length < 3) {
-      alert('A polygon zone requires at least 3 vertices');
+      setStatusNotice({ type: 'error', text: 'A polygon zone requires at least 3 vertices' });
       return;
     }
 
@@ -197,80 +194,107 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
 
       setCurrentVertices([]);
       setZoneName('');
+      setStatusNotice({ type: 'success', text: `Zone '${zoneName}' saved.` });
       fetchZones();
     } catch (err: any) {
-      alert(`Failed to save zone: ${err.response?.data?.error || err.message}`);
+      setStatusNotice({ type: 'error', text: `Failed to save zone: ${err.response?.data?.error || err.message}` });
     }
   };
 
   const handleDeleteZone = async (id: string) => {
-    if (!confirm('Delete this detection zone?')) return;
     try {
+      setStatusNotice(null);
       await api.delete(`/cameras/${camera.id}/zones/${id}`);
+      setZoneToDelete(null);
+      setStatusNotice({ type: 'success', text: 'Zone deleted.' });
       fetchZones();
     } catch (err: any) {
-      alert(`Delete error: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Delete error: ${err.message}` });
     }
   };
 
   const handleToggleZone = async (zone: Zone) => {
     try {
+      setStatusNotice(null);
       await api.put(`/cameras/${camera.id}/zones/${zone.id}`, {
         enabled: !zone.enabled,
       });
       fetchZones();
     } catch (err: any) {
-      alert(`Toggle error: ${err.message}`);
+      setStatusNotice({ type: 'error', text: `Toggle error: ${err.message}` });
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm select-none">
-      <div className="bg-graphite-850 border border-graphite-700 rounded-md w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-graphite-700 flex justify-between items-center bg-graphite-800">
-          <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-cctv-teal" />
-            <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider">
-              Motion Detection Zones & Exclusion Masks — {camera.name}
-            </h3>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={`Motion Detection Zones & Exclusion Masks — ${camera.name}`}
+      subtitle="Geometric polygon masks with priority override rules"
+      icon={<Shield className="w-4 h-4 text-vms-accent" />}
+      size="4xl"
+      footer={
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {statusNotice && (
+          <div
+            className={`p-3 rounded text-xs font-mono flex items-center justify-between ${
+              statusNotice.type === 'error'
+                ? 'bg-rose-950/70 border border-rose-800 text-rose-300'
+                : 'bg-emerald-950/70 border border-emerald-800 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              {statusNotice.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              )}
+              <span>{statusNotice.text}</span>
+            </div>
+            <button type="button" onClick={() => setStatusNotice(null)} className="text-vms-muted hover:text-vms-text ml-2">
+              ×
+            </button>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        )}
 
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Canvas Drawer Area (2 cols) */}
-          <div className="md:col-span-2 p-4 flex flex-col bg-graphite-900 border-r border-graphite-700">
-            <div className="flex items-center justify-between mb-2">
+          <div className="md:col-span-2 flex flex-col space-y-3 bg-vms-panel p-3.5 rounded border border-vms-border">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <button
+                  type="button"
                   onClick={() => { setMode('DRAW'); setTestPoint(null); setTestResult(null); }}
-                  className={`px-3 py-1 rounded text-xs font-mono font-medium transition ${
-                    mode === 'DRAW' ? 'bg-cctv-amber text-graphite-900 font-bold' : 'bg-graphite-800 text-slate-300'
+                  className={`px-3 py-1 rounded text-xs font-mono font-medium transition-colors ${
+                    mode === 'DRAW' ? 'bg-vms-accent text-vms-text font-bold' : 'bg-vms-surface text-vms-muted hover:text-vms-text'
                   }`}
                 >
                   Draw Polygon
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMode('TEST')}
-                  className={`px-3 py-1 rounded text-xs font-mono font-medium transition ${
-                    mode === 'TEST' ? 'bg-cctv-teal text-graphite-900 font-bold' : 'bg-graphite-800 text-slate-300'
+                  className={`px-3 py-1 rounded text-xs font-mono font-medium transition-colors ${
+                    mode === 'TEST' ? 'bg-sky-500/20 text-sky-400 border border-sky-400 font-bold' : 'bg-vms-surface text-vms-muted hover:text-vms-text'
                   }`}
                 >
                   Test Geometry Probe
                 </button>
               </div>
 
-              <div className="text-[11px] font-mono text-slate-400">
+              <div className="text-[11px] font-mono text-vms-muted">
                 {mode === 'DRAW'
-                  ? 'Click to place vertices. Need at least 3 points.'
-                  : 'Click anywhere on canvas to evaluate motion filter.'}
+                  ? 'Click to place vertices (≥3 points).'
+                  : 'Click anywhere to evaluate filter.'}
               </div>
             </div>
 
-            <div className="relative aspect-video w-full bg-black rounded border border-graphite-700 overflow-hidden flex items-center justify-center">
+            <div className="relative aspect-video w-full bg-[#0D0804] rounded border border-vms-border overflow-hidden flex items-center justify-center">
               <canvas
                 ref={canvasRef}
                 width={640}
@@ -283,17 +307,17 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
             {/* Test Mode Result Alert */}
             {mode === 'TEST' && testResult && (
               <div
-                className={`mt-2 p-2.5 rounded border text-xs font-mono flex items-center justify-between ${
+                className={`p-2.5 rounded border text-xs font-mono flex items-center justify-between ${
                   testResult.allowed
                     ? 'bg-emerald-950/70 border-emerald-800 text-emerald-300'
-                    : 'bg-red-950/70 border-red-800 text-red-300'
+                    : 'bg-rose-950/70 border-rose-800 text-rose-300'
                 }`}
               >
                 <div className="flex items-center space-x-2">
                   {testResult.allowed ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   ) : (
-                    <AlertOctagon className="w-4 h-4 text-red-400" />
+                    <AlertOctagon className="w-4 h-4 text-rose-400" />
                   )}
                   <span>
                     Point ({testPoint?.x}, {testPoint?.y}):{' '}
@@ -306,140 +330,156 @@ export const DetectionZoneModal: React.FC<DetectionZoneModalProps> = ({ camera, 
           </div>
 
           {/* Zones Config & List (1 col) */}
-          <div className="p-4 flex flex-col bg-graphite-850 overflow-y-auto space-y-4">
+          <div className="flex flex-col space-y-4">
             {/* New Zone Form */}
-            <div className="p-3 bg-graphite-900 rounded border border-graphite-700 space-y-3">
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            <div className="p-3 bg-vms-panel rounded border border-vms-border space-y-3">
+              <h4 className="text-xs font-semibold text-vms-text uppercase tracking-wider font-mono">
                 Create Detection Zone
               </h4>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 mb-1">Zone Name</label>
-                <input
-                  type="text"
+                <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                  Zone Name
+                </label>
+                <Input
                   placeholder="e.g. Driveway Walkway"
                   value={zoneName}
                   onChange={(e) => setZoneName(e.target.value)}
-                  className="w-full bg-graphite-850 border border-graphite-700 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                  className="w-full"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Zone Type</label>
+                  <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                    Zone Type
+                  </label>
                   <select
                     value={zoneType}
                     onChange={(e) => setZoneType(e.target.value as any)}
-                    className="w-full bg-graphite-850 border border-graphite-700 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full bg-vms-surface border border-vms-border rounded px-2 py-1 text-xs text-vms-text font-mono focus:outline-none focus:border-vms-accent"
                   >
                     <option value="INCLUSION">INCLUSION (Detect)</option>
-                    <option value="EXCLUSION">EXCLUSION (Ignore Mask)</option>
+                    <option value="EXCLUSION">EXCLUSION (Mask)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-slate-400 mb-1">Priority</label>
-                  <input
+                  <label className="block text-[11px] font-mono text-vms-muted mb-1 uppercase tracking-wider">
+                    Priority
+                  </label>
+                  <Input
                     type="number"
                     min={0}
                     max={10}
                     value={priority}
                     onChange={(e) => setPriority(Number(e.target.value))}
-                    className="w-full bg-graphite-850 border border-graphite-700 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-cctv-amber"
+                    className="w-full"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[10px] font-mono text-slate-400">
-                  Vertices: {currentVertices.length}
-                </span>
-                <div className="flex items-center space-x-1.5">
-                  <button
-                    onClick={() => setCurrentVertices([])}
-                    disabled={currentVertices.length === 0}
-                    className="px-2 py-1 rounded text-[11px] text-slate-400 hover:text-white disabled:opacity-40 font-mono"
-                  >
-                    Clear Points
-                  </button>
-                  <button
-                    onClick={handleSaveZone}
-                    disabled={currentVertices.length < 3}
-                    className="flex items-center space-x-1 px-3 py-1 rounded text-xs font-semibold bg-cctv-amber text-graphite-900 hover:bg-amber-400 disabled:opacity-50 font-mono shadow"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Save Zone</span>
-                  </button>
-                </div>
+              <div className="flex justify-between items-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentVertices([])}
+                  disabled={currentVertices.length === 0}
+                  className="text-[11px] font-mono text-vms-muted hover:text-rose-400 disabled:opacity-30"
+                >
+                  Reset ({currentVertices.length})
+                </button>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="xs"
+                  icon={Plus}
+                  onClick={handleSaveZone}
+                  disabled={currentVertices.length < 3 || !zoneName.trim()}
+                >
+                  Save Zone
+                </Button>
               </div>
             </div>
 
-            {/* Configured Zones List */}
-            <div className="space-y-2 flex-1">
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            {/* Existing Zones List */}
+            <div className="space-y-2 flex-1 overflow-y-auto">
+              <div className="text-[11px] font-mono text-vms-muted uppercase tracking-wider">
                 Configured Zones ({zones.length})
-              </h4>
+              </div>
 
               {zones.length === 0 ? (
-                <div className="text-center p-6 border border-dashed border-graphite-700 rounded text-slate-500 text-xs font-mono">
-                  No zones configured. Motion evaluates across entire camera frame.
+                <div className="p-3 border border-dashed border-vms-border rounded text-center text-vms-dim font-mono text-xs">
+                  No zones configured. Draw polygon on left.
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  {zones.map((z) => (
-                    <div
-                      key={z.id}
-                      className="p-2 bg-graphite-900 rounded border border-graphite-700 flex items-center justify-between"
-                    >
-                      <div className="flex items-center space-x-2">
+                zones.map((z) => (
+                  <div
+                    key={z.id}
+                    className={`p-2.5 rounded border transition-colors flex items-center justify-between ${
+                      z.enabled
+                        ? 'bg-vms-surface border-vms-border'
+                        : 'bg-vms-panel/50 border-vms-border/50 opacity-60'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center space-x-1.5">
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            z.type === 'INCLUSION' ? 'bg-emerald-400' : 'bg-red-400'
+                            z.type === 'INCLUSION' ? 'bg-emerald-400' : 'bg-rose-400'
                           }`}
                         />
-                        <div>
-                          <div className="text-xs font-semibold text-white font-mono">{z.name}</div>
-                          <div className="text-[10px] font-mono text-slate-400">
-                            {z.type} • Priority: {z.priority} • {z.polygonCoordinates.length} pts
-                          </div>
-                        </div>
+                        <span className="text-xs font-semibold text-vms-text font-mono">{z.name}</span>
                       </div>
+                      <div className="text-[10px] font-mono text-vms-muted mt-0.5">
+                        {z.type} • Priority {z.priority} • {z.polygonCoordinates?.length || 0} pts
+                      </div>
+                    </div>
 
-                      <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleZone(z)}
+                        title={z.enabled ? 'Disable Zone' : 'Enable Zone'}
+                        className="p-1 text-vms-muted hover:text-vms-text transition-colors"
+                      >
+                        {z.enabled ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-vms-dim" />}
+                      </button>
+                      {zoneToDelete === z.id ? (
+                        <div className="flex items-center space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteZone(z.id)}
+                            className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-mono"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setZoneToDelete(null)}
+                            className="px-1 py-0.5 text-vms-muted text-[10px]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          onClick={() => handleToggleZone(z)}
-                          title={z.enabled ? 'Disable Zone' : 'Enable Zone'}
-                          className="p-1 text-slate-400 hover:text-white"
-                        >
-                          {z.enabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-slate-600" />}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteZone(z.id)}
-                          title="Delete Zone"
-                          className="p-1 text-slate-400 hover:text-red-400"
+                          type="button"
+                          onClick={() => setZoneToDelete(z.id)}
+                          className="p-1 text-vms-dim hover:text-rose-400 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-graphite-700 flex justify-end bg-graphite-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded text-xs font-semibold bg-graphite-700 text-white hover:bg-graphite-600 font-mono"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

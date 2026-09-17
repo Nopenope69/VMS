@@ -1,7 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { KeyRound, Shield, CheckCircle, AlertTriangle, UploadCloud, X } from 'lucide-react';
+import {
+  KeyRound,
+  Shield,
+  AlertTriangle,
+  UploadCloud,
+  CheckCircle2,
+  Lock,
+  Cpu,
+  Layers,
+} from 'lucide-react';
 import api from '../services/api';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { KpiStat } from '../components/ui/KpiStat';
 
+/* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const License: React.FC = () => {
   const [licenseData, setLicenseData] = useState<any>(null);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -21,17 +36,6 @@ export const License: React.FC = () => {
   useEffect(() => {
     fetchLicense();
   }, []);
-
-  useEffect(() => {
-    if (!showApplyModal) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowApplyModal(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showApplyModal]);
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,207 +68,270 @@ export const License: React.FC = () => {
     : 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-[#080B10] p-4 space-y-3 overflow-y-auto font-mono text-[#C9D1D9]">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-vms-bg p-4 md:p-6 space-y-5">
       {/* Top Header */}
-      <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-vms-border pb-4">
         <div>
-          <div className="flex items-center space-x-2">
-            <KeyRound className="w-5 h-5 text-[#E3B341]" />
-            <h2 className="text-sm font-bold text-[#C9D1D9] uppercase tracking-wider">
-              Commercial License & Cryptographic Entitlements
-            </h2>
-            <span className="text-[10px] bg-[#161B22] text-[#3FB950] border border-[#238636] px-1.5 py-0.5 font-bold">
-              ED25519 LOCAL VERIFICATION
-            </span>
+          <div className="flex items-center gap-2 text-xs text-vms-muted uppercase tracking-wider mb-1 font-mono">
+            <span>Governance & Entitlements</span>
+            <span>/</span>
+            <span className="text-vms-accent">Commercial License</span>
           </div>
-          <p className="text-[11px] text-[#8B949E] mt-1 max-w-4xl leading-relaxed">
-            Offline Ed25519 cryptographic license authority. Verification executes strictly on the local NVR hardware against the vendor public key with zero cloud dependencies and guaranteed non-disruptive surveillance continuity.
+          <div className="flex items-center gap-2.5">
+            <KeyRound className="w-5 h-5 text-vms-accent" />
+            <h1 className="text-lg md:text-xl font-bold text-vms-text tracking-tight">
+              Commercial License & Cryptographic Entitlements
+            </h1>
+            <Badge variant="live" size="sm">
+              Ed25519 Local Verification
+            </Badge>
+          </div>
+          <p className="text-xs text-vms-muted mt-0.5 max-w-3xl">
+            Air-gapped Ed25519 cryptographic license authority. Verification executes strictly on the local NVR hardware against the vendor public key with zero cloud dependencies and guaranteed non-disruptive surveillance continuity.
           </p>
         </div>
 
-        <button
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => setShowApplyModal(true)}
-          className="btn-tactical-primary flex items-center space-x-1.5"
+          icon={<UploadCloud className="w-3.5 h-3.5" />}
         >
-          <UploadCloud className="w-3.5 h-3.5" />
-          <span>Apply License Artifact</span>
-        </button>
+          Apply License Artifact
+        </Button>
+      </div>
+
+      {/* KPI Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiStat
+          label="License Tier"
+          value={licenseData ? `${licenseData.tier || 'Standard'} Tier` : '—'}
+          status="default"
+          icon={<KeyRound className="w-4 h-4 text-vms-accent" />}
+        />
+        <KpiStat
+          label="Camera Allocation"
+          value={licenseData ? `${licenseData.cameraCount} / ${licenseData.maxCameras}` : '—'}
+          subtext={`${usagePercent}% capacity utilized`}
+          status={usagePercent >= 90 ? 'alarm' : usagePercent >= 75 ? 'warn' : 'live'}
+          icon={<Cpu className="w-4 h-4 text-status-live" />}
+        />
+        <KpiStat
+          label="Cryptographic Authority"
+          value="Ed25519 Local"
+          status="telemetry"
+          icon={<Lock className="w-4 h-4 text-status-telemetry" />}
+        />
+        <KpiStat
+          label="Recording Continuity"
+          value="Fail-Safe Invariant"
+          status="legal"
+          icon={<Shield className="w-4 h-4 text-status-legal" />}
+        />
       </div>
 
       {/* Main License Cards */}
       {licenseData && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Status & Tier */}
-          <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-col justify-between space-y-2.5">
-            <div className="text-[10px] uppercase tracking-wider text-[#8B949E]">CRYPTOGRAPHIC_STATUS:</div>
-            <div className="flex items-center space-x-2">
-              <span
-                className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider border ${
-                  licenseData.status === 'ACTIVE'
-                    ? 'bg-[#080B10] text-[#3FB950] border-[#238636]'
-                    : 'bg-[#080B10] text-[#F85149] border-[#F85149]'
-                }`}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Status & Term Card */}
+          <Card padding="md" className="flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between border-b border-vms-border pb-2.5">
+              <span className="text-xs font-semibold text-vms-text uppercase tracking-wider">
+                Cryptographic Status
+              </span>
+              <Badge
+                variant={licenseData.status === 'ACTIVE' ? 'live' : 'alarm'}
+                size="sm"
               >
-                [{licenseData.status}]
+                {licenseData.status}
+              </Badge>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-vms-dim">Licensing Model:</span>
+                <span className="font-semibold text-vms-text">
+                  {licenseData.expiresAt ? 'Term Subscription' : 'Perpetual Commercial'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-vms-dim">Validity Window:</span>
+                <span className="text-vms-text font-mono">
+                  {licenseData.expiresAt ? new Date(licenseData.expiresAt).toLocaleDateString() : 'Never (Perpetual)'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-vms-dim">License ID:</span>
+                <span className="text-vms-accent font-mono">
+                  {licenseData.claims?.licenseId || 'LIC_AIRGAP_STD'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-vms-border text-[11px] text-vms-muted">
+              Digitally sealed by VigilOne Appliance CA
+            </div>
+          </Card>
+
+          {/* Feed Capacity Card */}
+          <Card padding="md" className="flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between border-b border-vms-border pb-2.5">
+              <span className="text-xs font-semibold text-vms-text uppercase tracking-wider">
+                Feed Capacity Quota
               </span>
-              <span className="px-2 py-0.5 text-xs font-bold uppercase bg-[#161B22] text-[#58A6FF] border border-[#30363D]">
-                {licenseData.tier} TIER
-              </span>
+              <Badge
+                variant={usagePercent >= 90 ? 'alarm' : usagePercent >= 75 ? 'warn' : 'live'}
+                size="sm"
+              >
+                {usagePercent}% Used
+              </Badge>
             </div>
 
-            <div className="text-xs text-[#8B949E] space-y-1 pt-2 border-t border-[#21262D]">
-              <div>TYPE: {licenseData.expiresAt ? 'TERM SUBSCRIPTION' : 'PERPETUAL AIR-GAPPED COMMERCIAL'}</div>
-              <div>EXPIRATION: {licenseData.expiresAt ? new Date(licenseData.expiresAt).toLocaleDateString() : 'NEVER (PERPETUAL)'}</div>
-              <div>LICENSE_ID: <span className="text-[#C9D1D9]">{licenseData.claims?.licenseId || 'N/A'}</span></div>
-            </div>
-          </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xl font-bold text-vms-text font-mono">
+                  {licenseData.cameraCount}{' '}
+                  <span className="text-xs font-normal text-vms-muted">/ {licenseData.maxCameras} Max Feeds</span>
+                </span>
+              </div>
 
-          {/* Camera Capacity Gauge */}
-          <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-col justify-between space-y-2.5">
-            <div className="text-[10px] uppercase tracking-wider text-[#8B949E]">FEED_CAPACITY_QUOTA:</div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-xl font-bold text-white">
-                {licenseData.cameraCount}{' '}
-                <span className="text-xs font-normal text-[#8B949E]">/ {licenseData.maxCameras} MAX FEEDS</span>
-              </span>
-              <span className="text-xs font-bold text-[#E3B341]">[{usagePercent}% USED]</span>
-            </div>
+              <div className="w-full bg-vms-panel rounded-full h-2 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usagePercent >= 90 ? 'bg-status-alarm' : usagePercent >= 75 ? 'bg-status-warn' : 'bg-status-live'
+                  }`}
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
 
-            {/* Segmented Progress Bar */}
-            <div className="w-full h-2 bg-[#080B10] border border-[#30363D] p-0.5">
-              <div
-                className={`h-full transition-all ${
-                  usagePercent >= 90 ? 'bg-[#F85149]' : usagePercent >= 75 ? 'bg-[#E3B341]' : 'bg-[#3FB950]'
-                }`}
-                style={{ width: `${usagePercent}%` }}
-              />
+              <p className="text-[11px] text-vms-muted mt-1">
+                {licenseData.maxCameras - licenseData.cameraCount > 0
+                  ? `Capacity Headroom: ${licenseData.maxCameras - licenseData.cameraCount} additional camera feeds permitted.`
+                  : 'Capacity Ceiling Reached: Upgrade tier to expand hardware sensor fleet.'}
+              </p>
             </div>
 
-            <p className="text-[10px] text-[#8B949E]">
-              {licenseData.maxCameras - licenseData.cameraCount > 0
-                ? `[ CAPACITY HEADROOM: ${licenseData.maxCameras - licenseData.cameraCount} ADDITIONAL FEEDS ]`
-                : '[ CAPACITY CEILING: UPGRADE TIER TO EXPAND SENSOR FLEET ]'}
-            </p>
-          </div>
-
-          {/* Non-Disruptive Policy Guarantee */}
-          <div className="bg-[#0D1117] p-3.5 border border-[#21262D] flex flex-col justify-between space-y-2">
-            <div className="text-[10px] uppercase tracking-wider text-[#8B949E] flex items-center space-x-1.5">
-              <Shield className="w-3.5 h-3.5 text-[#58A6FF]" />
-              <span>FAIL-SAFE SURVEILLANCE CONTINUITY</span>
+            <div className="pt-2 border-t border-vms-border text-[11px] text-vms-dim font-mono">
+              Hardware Engine: Profile S/G/T
             </div>
-            <p className="text-[11px] text-[#8B949E] leading-relaxed">
+          </Card>
+
+          {/* Non-Disruptive Fail-Safe Policy */}
+          <Card padding="md" className="flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between border-b border-vms-border pb-2.5">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-status-live" />
+                <span className="text-xs font-semibold text-vms-text uppercase tracking-wider">
+                  Surveillance Continuity
+                </span>
+              </div>
+              <Badge variant="live" size="sm">
+                Enforced
+              </Badge>
+            </div>
+
+            <p className="text-xs text-vms-muted leading-relaxed">
               VigilOne enforces an inviolable air-gapped commercial principle: licensing validation never intercepts or terminates live view or real-time recording engines. Even under expired credentials, live video pipelines continue uninterrupted.
             </p>
-            <div className="text-[10px] text-[#3FB950] font-bold">
-              INVARIANT: NON-DISRUPTIVE FAIL-SAFE ACTIVE
+
+            <div className="pt-2 border-t border-vms-border text-[11px] text-status-live font-semibold">
+              Invariant: Non-disruptive fail-safe active
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Entitled Features Matrix */}
-      <div className="bg-[#0D1117] border border-[#21262D] flex flex-col p-3.5">
-        <div className="text-xs font-bold uppercase tracking-wider text-[#C9D1D9] mb-3 pb-2 border-b border-[#21262D]">
-          CRYPTOGRAPHIC ENTITLEMENT MATRIX
+      <Card padding="md">
+        <div className="flex items-center gap-2 mb-4 border-b border-vms-border pb-3">
+          <Layers className="w-4 h-4 text-vms-accent" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-vms-text">
+            Cryptographic Entitlement Matrix
+          </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {[
             { id: 'EVIDENCE_EXPORT', name: 'Section 63 BSA Evidence Package Generator', desc: 'SHA-256 Merkle root & statutory Part A & B certificates' },
-            { id: 'ADVANCED_PTZ', name: 'Continuous PTZ & Virtual Joystick Controls', desc: 'Hardware camera pan-tilt-zoom & patrol tours' },
+            { id: 'ADVANCED_PTZ', name: 'Continuous PTZ & Virtual Joystick Controls', desc: 'Hardware camera pan-tilt-zoom & guard patrol tours' },
             { id: 'MULTI_SITE', name: 'Multi-Facility & Site Partitioning', desc: 'Per-site timezone isolation & physical tenancy boundaries' },
-            { id: 'ANPR', name: 'Automatic Number Plate Recognition (Phase 4)', desc: 'High-speed OCR plate extraction & hotlist triggers' },
+            { id: 'ANPR', name: 'Automatic Number Plate Recognition (v2.0)', desc: 'High-speed OCR plate extraction & hotlist triggers' },
             { id: 'AUDIT_INTEGRITY', name: 'Tamper-Evident Hash Chain Audit Registry', desc: 'Cryptographically linked operator audit ledger' },
           ].map((feat) => {
             const isEntitled = licenseData?.features?.includes(feat.id);
             return (
               <div
                 key={feat.id}
-                className={`p-2.5 border flex items-start space-x-2.5 ${
+                className={`p-3 rounded border flex items-start gap-3 transition ${
                   isEntitled
-                    ? 'bg-[#161B22] border-[#21262D] text-[#C9D1D9]'
-                    : 'bg-[#080B10] border-[#21262D] text-[#484F58]'
+                    ? 'bg-vms-panel/80 border-vms-border text-vms-text'
+                    : 'bg-vms-bg border-vms-border/50 text-vms-dim'
                 }`}
               >
                 {isEntitled ? (
-                  <CheckCircle className="w-4 h-4 text-[#3FB950] flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-status-live flex-shrink-0 mt-0.5" />
                 ) : (
-                  <AlertTriangle className="w-4 h-4 text-[#484F58] flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-4 h-4 text-vms-dim flex-shrink-0 mt-0.5" />
                 )}
                 <div>
-                  <div className="text-xs font-bold">{feat.name}</div>
-                  <div className="text-[10px] text-[#8B949E] mt-0.5">{feat.desc}</div>
+                  <div className="text-xs font-semibold">{feat.name}</div>
+                  <div className="text-[11px] text-vms-muted mt-0.5 leading-normal">{feat.desc}</div>
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      </Card>
 
       {/* Apply License Modal */}
       {showApplyModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="license-modal-title"
-          className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 font-mono"
+        <Modal
+          isOpen={true}
+          onClose={() => setShowApplyModal(false)}
+          title="Apply Ed25519 Signed License Artifact"
+          description="Paste the signed JSON license artifact provided by the appliance vendor."
+          size="md"
         >
-          <div className="bg-[#0D1117] border border-[#30363D] rounded-none w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="px-4 py-3 border-b border-[#21262D] flex justify-between items-center bg-[#161B22]">
-              <h3 id="license-modal-title" className="text-xs font-bold text-[#C9D1D9] uppercase tracking-wider">
-                Apply Ed25519 Signed License Artifact
-              </h3>
-              <button
-                onClick={() => setShowApplyModal(false)}
-                className="text-[#8B949E] hover:text-white transition"
-                aria-label="Close modal"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          <form onSubmit={handleApply} className="space-y-4">
+            {applyError && (
+              <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 text-xs text-status-alarm rounded flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>{applyError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-vms-text mb-1">
+                Canonical License JSON Artifact
+              </label>
+              <textarea
+                rows={7}
+                required
+                placeholder='{"signedPayload": "...", "signatureEd25519": "..."}'
+                value={rawArtifact}
+                onChange={(e) => setRawArtifact(e.target.value)}
+                className="w-full bg-vms-bg border border-vms-border rounded p-2.5 text-xs text-vms-text font-mono placeholder-vms-dim focus:outline-none focus:border-vms-accent resize-none"
+              />
             </div>
 
-            <form onSubmit={handleApply} className="p-4 space-y-3 text-xs">
-              {applyError && (
-                <div className="p-2.5 bg-[#080B10] border border-[#F85149] text-xs text-[#F85149] flex items-center space-x-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  <span>{applyError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] uppercase text-[#8B949E] mb-1">
-                  CANONICAL_LICENSE_JSON_ARTIFACT:
-                </label>
-                <textarea
-                  rows={8}
-                  required
-                  placeholder='{"signedPayload": "...", "signatureEd25519": "..."}'
-                  value={rawArtifact}
-                  onChange={(e) => setRawArtifact(e.target.value)}
-                  className="input-tactical w-full"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2 border-t border-[#21262D]">
-                <button
-                  type="button"
-                  onClick={() => setShowApplyModal(false)}
-                  className="btn-tactical-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={applyLoading}
-                  className="btn-tactical-primary disabled:opacity-50"
-                >
-                  {applyLoading ? 'Verifying Ed25519...' : 'Verify & Activate'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-vms-border">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowApplyModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={applyLoading}
+              >
+                {applyLoading ? 'Verifying Ed25519...' : 'Verify & Activate'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

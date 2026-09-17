@@ -13,7 +13,8 @@ import {
   Compass,
   Database,
   Server,
-  Activity,
+  Clock,
+  KeyRound,
 } from 'lucide-react';
 import api from '../services/api';
 import NotificationSettingsModal from './NotificationSettingsModal';
@@ -26,6 +27,15 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
+interface NavItem {
+  id: string;
+  index: string;
+  label: string;
+  icon: any;
+  badge?: number;
+  roles: string[];
+}
+
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, onLogout }) => {
   const [unackAlarms, setUnackAlarms] = useState<number>(0);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -36,13 +46,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
     const updateTime = () => {
       const now = new Date();
       const pad = (n: number) => n.toString().padStart(2, '0');
-      const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
-      setUtcClock(timeStr);
+      const s = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(
+        now.getUTCHours()
+      )}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
+      setUtcClock(s);
     };
 
     updateTime();
-    const clockTimer = setInterval(updateTime, 1000);
-    return () => clearInterval(clockTimer);
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -62,27 +74,36 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
 
   const role = user?.role || 'VIEWER';
 
-  const allNavItems = [
-    { id: 'live', index: '1', label: 'LIVE', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'investigation', index: '2', label: 'INVESTIGATE', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'floorplans', index: '3', label: 'MAPS', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'devices', index: '4', label: 'CAMERAS', icon: HardDrive, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'events', index: '5', label: 'EVENTS', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'evidence', index: '6', label: 'SEC-63', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'users', index: '7', label: 'STAFF', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'storage', index: '8', label: 'STORAGE', icon: Database, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'appliance', index: '9', label: 'APPLIANCE', icon: Server, roles: ['SUPER_ADMIN'] },
-    { id: 'audit', index: '0', label: 'AUDIT', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+  // Semantic Categories
+  const surveillanceItems: NavItem[] = [
+    { id: 'live', index: '1', label: 'Live Grid', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'investigation', index: '2', label: 'Investigation', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'floorplans', index: '3', label: 'Floorplans', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
   ];
 
-  const navItems = allNavItems.filter((item) => item.roles.includes(role));
+  const incidentItems: NavItem[] = [
+    { id: 'events', index: '4', label: 'Alarms', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'evidence', index: '5', label: 'Evidence (Sec. 63)', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+  ];
+
+  const adminItems: NavItem[] = [
+    { id: 'devices', index: '6', label: 'Cameras', icon: HardDrive, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'storage', index: '7', label: 'Storage', icon: Database, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'appliance', index: '8', label: 'Appliance', icon: Server, roles: ['SUPER_ADMIN'] },
+    { id: 'users', index: '9', label: 'Staff', icon: Users, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'audit', index: '0', label: 'Audit', icon: FileText, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'license', index: 'L', label: 'License', icon: KeyRound, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+  ];
+
+  const allItems: NavItem[] = [...surveillanceItems, ...incidentItems, ...adminItems];
+  const activeAllowedItems = allItems.filter((item) => item.roles.includes(role));
+
   const canManageNotifications = role === 'OPERATOR' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
   const canBackup = role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
 
-  // Functional keyboard navigation: map numbers 1-9, 0 to active nav tabs
+  // Global hotkey navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Never trigger when user is focused on an interactive input
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
       if (
         activeTag === 'input' ||
@@ -101,7 +122,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
         return;
       }
 
-      const matched = navItems.find((item) => item.index === e.key);
+      // Require Alt modifier for global tab navigation to preserve bare 1-5 for control-room camera grid presets
+      if (!e.altKey) return;
+
+      const pressedKey = e.key.toUpperCase();
+      const matched = activeAllowedItems.find((item) => item.index === e.key || item.index.toUpperCase() === pressedKey);
       if (matched) {
         e.preventDefault();
         onSelectTab(matched.id);
@@ -110,66 +135,108 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navItems, onSelectTab, showNotificationModal, showBackupModal]);
+  }, [activeAllowedItems, onSelectTab, showNotificationModal, showBackupModal]);
+
+  const renderNavGroup = (items: typeof allItems) => {
+    return items
+      .filter((item) => item.roles.includes(role))
+      .map((item) => {
+        const Icon = item.icon;
+        const active = currentTab === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelectTab(item.id)}
+            aria-current={active ? 'page' : undefined}
+            title={`${item.label} [Alt+${item.index}]`}
+            className={`group relative flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-sans font-medium transition-colors rounded select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+              active
+                ? 'bg-vms-surface text-vms-text font-semibold border border-vms-border shadow-sm'
+                : 'text-vms-muted hover:text-vms-text hover:bg-vms-hover/70'
+            }`}
+          >
+            <Icon
+              className={`w-3.5 h-3.5 transition-colors ${
+                active ? 'text-amber-400' : 'text-vms-dim group-hover:text-vms-muted'
+              }`}
+            />
+            <span>{item.label}</span>
+            <span
+              className={`badge-hotkey px-1 py-0.5 rounded text-[9px] font-mono leading-none border ${
+                active
+                  ? 'bg-vms-elevated border-vms-border text-amber-400 font-bold'
+                  : 'bg-vms-bg/60 border-vms-border/50 text-vms-dim'
+              }`}
+            >
+              ⌥{item.index}
+            </span>
+            {item.badge !== undefined && item.badge > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-rose-500 text-white animate-pulse">
+                {item.badge}
+              </span>
+            )}
+          </button>
+        );
+      });
+  };
 
   return (
-    <header className="bg-tactical-panel border-b border-tactical-border select-none relative z-30">
-      <div className="w-full px-3 h-12 flex items-center justify-between gap-2">
-        {/* Left: Tactical Brand & Hardware Telemetry */}
+    <header className="bg-vms-panel border-b border-vms-border select-none relative z-30 shrink-0">
+      <div className="w-full px-3 h-12 flex items-center justify-between gap-3">
+        {/* Left: Brand & Telemetry */}
         <div className="flex items-center space-x-3 shrink-0">
-          <div className="flex items-center space-x-2 bg-tactical-canvas px-2.5 py-1 border border-tactical-border">
-            <div className="w-2 h-2 rounded-none bg-phosphor-green animate-phosphor" />
-            <span className="font-mono font-bold tracking-wider text-tactical-text text-xs uppercase">
-              VIGILONE <span className="text-phosphor-amber">//</span> NVR-01
+          <div className="flex items-center space-x-2 bg-vms-surface px-2.5 py-1 rounded border border-vms-border">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            <span className="text-[10px] text-tactical-muted font-mono border-l border-tactical-border pl-2">
-              v1.0.0
+            <span className="font-mono font-bold tracking-wider text-vms-text text-xs uppercase">
+              VigilOne
+            </span>
+            <span className="text-[10px] text-vms-dim font-mono border-l border-vms-border pl-2">
+              NVR-01
             </span>
           </div>
 
-          {/* Real-time UTC Precision Clock */}
-          <div className="hidden lg:flex items-center space-x-1.5 font-mono text-[11px] text-phosphor-cyan bg-tactical-canvas px-2 py-1 border border-tactical-border">
-            <Activity className="w-3 h-3 text-phosphor-cyan animate-pulse" />
+          {/* UTC Precision Time */}
+          <div className="hidden xl:flex items-center space-x-1.5 font-mono text-[11px] text-sky-400 bg-vms-surface px-2.5 py-1 rounded border border-vms-border">
+            <Clock className="w-3.5 h-3.5 text-sky-400" />
             <span>{utcClock || '00:00:00 UTC'}</span>
           </div>
         </div>
 
-        {/* Center: Mission-Critical Hotkey-Wired Navigation */}
-        <nav className="flex items-center space-x-0.5 overflow-x-auto" aria-label="Main Navigation">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onSelectTab(item.id)}
-                aria-current={active ? 'page' : undefined}
-                className={`relative flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-mono tracking-wider transition-all duration-75 border-b-2 active:translate-y-[1px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phosphor-cyan ${
-                  active
-                    ? 'border-phosphor-amber bg-tactical-surface text-tactical-bright font-bold'
-                    : 'border-transparent text-tactical-muted hover:text-tactical-text hover:bg-tactical-surface/60'
-                }`}
-              >
-                <span className="badge-hotkey">{item.index}</span>
-                <Icon className={`w-3.5 h-3.5 ${active ? 'text-phosphor-amber' : 'text-tactical-muted'}`} />
-                <span>{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="ml-1 px-1.5 py-[2px] text-[9px] font-mono font-bold bg-phosphor-red text-tactical-canvas animate-pulse">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Center: Semantic Grouped Navigation */}
+        <nav
+          className="flex items-center space-x-3 overflow-x-auto py-1"
+          aria-label="Surveillance Control Navigation"
+        >
+          {/* Surveillance Cluster */}
+          <div className="flex items-center space-x-1 bg-vms-bg/60 p-0.5 rounded border border-vms-border/50">
+            {renderNavGroup(surveillanceItems)}
+          </div>
+
+          <div className="h-4 w-px bg-vms-border hidden md:block" />
+
+          {/* Incidents & Legal Cluster */}
+          <div className="flex items-center space-x-1 bg-vms-bg/60 p-0.5 rounded border border-vms-border/50">
+            {renderNavGroup(incidentItems)}
+          </div>
+
+          <div className="h-4 w-px bg-vms-border hidden lg:block" />
+
+          {/* Appliance Administration Cluster */}
+          <div className="hidden lg:flex items-center space-x-1 bg-vms-bg/60 p-0.5 rounded border border-vms-border/50">
+            {renderNavGroup(adminItems)}
+          </div>
         </nav>
 
-        {/* Right: Telemetry Actions & User Profile */}
-        <div className="flex items-center space-x-2 shrink-0 text-xs font-mono">
+        {/* Right: Quick Tools & Profile */}
+        <div className="flex items-center space-x-2 shrink-0 text-xs">
           {canManageNotifications && (
             <button
               onClick={() => setShowNotificationModal(true)}
               title="Notification Channels & Webhooks"
-              className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-amber hover:border-tactical-border-active active:translate-y-[1px] transition-all"
+              className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-amber-400 hover:border-vms-hover active:translate-y-[1px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
@@ -179,25 +246,31 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
             <button
               onClick={() => setShowBackupModal(true)}
               title="Disaster Recovery & Appliance Backup"
-              className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-cyan hover:border-tactical-border-active active:translate-y-[1px] transition-all"
+              className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-sky-400 hover:border-vms-hover active:translate-y-[1px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
             >
               <Archive className="w-3.5 h-3.5" />
             </button>
           )}
 
-          <div className="hidden sm:block text-right border-l border-tactical-border pl-2.5 py-0.5">
-            <div className="font-mono text-tactical-bright text-[11px] font-semibold uppercase tracking-wider">
-              {user?.name || 'OPERATOR'}
+          {/* User Role Tag */}
+          <div className="hidden sm:flex items-center space-x-2 border-l border-vms-border pl-2.5 py-0.5">
+            <div className="w-6 h-6 rounded bg-vms-elevated border border-vms-border flex items-center justify-center font-mono font-bold text-[10px] text-amber-400">
+              {(user?.name || 'OP').slice(0, 2).toUpperCase()}
             </div>
-            <div className="text-tactical-muted text-[10px]">
-              ROLE // <span className="text-phosphor-amber font-semibold">{user?.role || 'VIEWER'}</span>
+            <div className="text-left leading-tight">
+              <div className="font-sans text-vms-text text-[11px] font-semibold">
+                {user?.name || 'Operator'}
+              </div>
+              <div className="text-vms-dim text-[10px] font-mono">
+                {user?.role || 'VIEWER'}
+              </div>
             </div>
           </div>
 
           <button
             onClick={onLogout}
             title="Sign Out of Appliance"
-            className="p-1.5 border border-tactical-border bg-tactical-canvas text-tactical-muted hover:text-phosphor-red hover:border-tactical-border-active active:translate-y-[1px] transition-all"
+            className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-rose-400 hover:border-rose-500/40 active:translate-y-[1px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
