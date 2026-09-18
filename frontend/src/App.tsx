@@ -15,6 +15,9 @@ import ApplianceConsole from './pages/ApplianceConsole';
 import { AlertTriangle } from 'lucide-react';
 import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
+import CommandPalette from './components/CommandPalette';
+import HotkeyHelpModal from './components/HotkeyHelpModal';
+import { DEMO_SAMPLE_CAMERAS } from './pages/LiveView';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 
 const OutOfScopeNotice: React.FC<{ name: string; description: string }> = ({ name, description }) => (
@@ -55,6 +58,9 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('live');
   const [loading, setLoading] = useState(true);
   const [isBootstrapped, setIsBootstrapped] = useState<boolean | null>(null);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showHotkeyHelp, setShowHotkeyHelp] = useState(false);
+  const [camerasList, setCamerasList] = useState<any[]>([]);
 
   const handleLogout = useCallback(() => {
     api.post('/auth/logout').catch(() => {});
@@ -128,6 +134,47 @@ export const App: React.FC = () => {
     localStorage.setItem('vigilone_user', JSON.stringify(userData));
     localStorage.setItem('vigilone_token', userToken);
   };
+
+  // Fetch cameras for command palette search
+  useEffect(() => {
+    if (token) {
+      api
+        .get('/cameras')
+        .then((res) => {
+          const cams = res.data.cameras || [];
+          setCamerasList(cams.length > 0 ? cams : DEMO_SAMPLE_CAMERAS);
+        })
+        .catch(() => {
+          setCamerasList(DEMO_SAMPLE_CAMERAS);
+        });
+    }
+  }, [token]);
+
+  // Global accelerators: Cmd+K / Ctrl+K and ?
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      const isInput =
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        activeTag === 'select' ||
+        (document.activeElement as HTMLElement)?.isContentEditable;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+        return;
+      }
+
+      if (!isInput && e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setShowHotkeyHelp(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   const allowedTabsByRole: Record<string, string[]> = {
     VIEWER: ['live', 'investigation', 'floorplans', 'playback'],
@@ -219,6 +266,8 @@ export const App: React.FC = () => {
         onSelectTab={handleSelectTab}
         user={user}
         onLogout={handleLogout}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
+        onOpenHotkeyHelp={() => setShowHotkeyHelp(true)}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -258,6 +307,18 @@ export const App: React.FC = () => {
         {currentTab === 'storage' && <StorageManagement />}
         {currentTab === 'appliance' && <ApplianceConsole />}
       </main>
+
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onSelectTab={handleSelectTab}
+        cameras={camerasList}
+      />
+
+      <HotkeyHelpModal
+        isOpen={showHotkeyHelp}
+        onClose={() => setShowHotkeyHelp(false)}
+      />
     </div>
   );
 };

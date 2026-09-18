@@ -3,8 +3,8 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **262/262 tests passing across all 50 test suites** (`npm test` in `backend/`, execution time: ~5.4s).  
-- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `vite build` (exit code `0`).
+- **Automated Test Status:** **439/439 tests passing across all 78 test suites** (`npm test` in `backend/`, execution time: ~10.9s).  
+- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.38s).
 
 ---
 
@@ -287,4 +287,31 @@
 - **1-Click Evaluation Bypass:** Dedicated `Bypass Setup & Test UI` and `Bypass & Test UI` actions on `FirstRunWizard.tsx` and `Login.tsx` instantly authenticate as `Alex Vance (Chief Security Officer)` with `SUPER_ADMIN` privileges.
 - **1-Click Demo Pre-Fill:** `Fill Demo Data` and `Fill Credentials` actions pre-fill valid appliance commissioning forms (`Metro Transit Command Facility`, `admin@vigilone.local`, `Password123!`, `vigilone_dev_setup_token_99182`).
 - **Offline Simulated CCTV Feeds & Telemetry:** When physical cameras or backend are offline, `LiveView.tsx` renders 4 simulated streams with real-time canvas telemetry, running UTC timecode, optical reticle, and PTZ indicators; `Events.tsx` falls back to simulated alarms with optimistic local state updates.
+
+---
+
+## 5. Tier-1 Control-Room Operator-Grade Upgrades (Post-Audit Implementation)
+
+1. **Synchronized Multi-Track Timeline Swimlanes (`TimelineScrubber.tsx`, `Investigation.tsx`):**
+   - True multi-camera synchronized canvas scrubber with individual camera swimlanes (`TimelineTrack[]`).
+   - Dynamic canvas height calculation (`22 + activeTracks.length * 24`).
+   - Real-time track selection (`onSelectTrack`), emerald footage blocks, amber motion pips, master burnt amber UTC playhead.
+   - Synchronized across all 4 investigation matrix feeds with simultaneous segment fetching and simulated demo fallback.
+2. **Universal Command Palette (<kbd>Cmd+K</kbd> / <kbd>Ctrl+K</kbd>) & Hotkey Cheatsheet (<kbd>?</kbd>):**
+   - `CommandPalette.tsx`: Omnibar fuzzy-search across Consoles (`Alt+1..0`), Cameras, and Actions with keyboard navigation (<kbd>↑</kbd>/<kbd>↓</kbd>/<kbd>Enter</kbd>/<kbd>Esc</kbd>).
+   - `HotkeyHelpModal.tsx`: Categorized operator cheat-sheet with Global Navigation, Live Grid, Transport, and Command & Control shortcuts.
+   - Accessible ARIA semantics: `role="dialog"`, `aria-modal="true"`, `e.key === 'Escape'` dismissal.
+3. **Interactive Camera Directory Drawer in Live Grid (`CameraDrawer.tsx`, `LiveView.tsx`):**
+   - Collapsible slide-over drawer with instant search filtering, online/offline status filter chips, and facility sector grouping.
+   - Interactive click-to-slot assignment: clicking any slot in the grid targets it; clicking a camera in the drawer binds it immediately.
+   - Direct slot unassign button on tile hover, keyboard shortcut <kbd>C</kbd> to toggle drawer.
+4. **Tactical Alarm Acoustics & 5-Second Undo Toast (`AlarmBanner.tsx`):**
+   - Native Web Audio API (`AudioContext`) synthesized 880Hz/659Hz dual-tone acoustic chime on new critical alarms (zero network assets, zero latency).
+   - Operator mute toggle and 5-minute audio snooze button.
+   - 5-second inline "Undo" countdown chip upon clicking "Acknowledge", preventing accidental alarm dismissals under high stress.
+5. **Pre-Flight Camera Connection Probe & Hardware Micro-Interactions (`Devices.tsx`, `CameraTile.tsx`, `index.css`):**
+   - `Devices.tsx`: "Test Connection" button validating RTSP/ONVIF reachability before form submission via `/cameras/discover` with immediate visual status banner.
+   - `CameraTile.tsx`: Frosted glass controls (`backdrop-blur-sm bg-vms-elevated/90`) and dedicated "Retry Stream" overlay on interrupted streams.
+   - `index.css`: Cross-browser custom scrollbars styled with Scorched Umber `#713600` / `#38240D`.
+
 

@@ -81,6 +81,11 @@
 }
 
 /* Refined Minimal Control-Room Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5E401C #150E07;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

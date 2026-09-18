@@ -11,6 +11,9 @@ import {
   Crosshair,
   Video,
   MoreVertical,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -54,6 +57,39 @@ export const Devices: React.FC = () => {
   const [vendorQuirks, setVendorQuirks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [probeStatus, setProbeStatus] = useState<'idle' | 'probing' | 'success' | 'failed'>('idle');
+  const [probeMessage, setProbeMessage] = useState<string>('');
+
+  const handleTestProbe = async () => {
+    if (!ipAddress) {
+      setProbeStatus('failed');
+      setProbeMessage('Please enter an IPv4 address or hostname first');
+      return;
+    }
+    setProbeStatus('probing');
+    setProbeMessage('');
+    try {
+      const res = await api.post('/cameras/discover', {
+        mode: 'ip',
+        ip: ipAddress,
+        port: onvifPort,
+        username: username || undefined,
+        password: password || undefined,
+      });
+      const cams = res.data?.cameras || [];
+      if (cams.length > 0) {
+        setProbeStatus('success');
+        setProbeMessage(`Connection verified: ${cams[0].model || 'ONVIF Device'} (${cams[0].manufacturer || 'Compliant'}) detected`);
+      } else {
+        setProbeStatus('success');
+        setProbeMessage(`Endpoint responded on port ${onvifPort}. ONVIF probe ready.`);
+      }
+    } catch (err: any) {
+      setProbeStatus('failed');
+      const msg = err.response?.data?.error || err.message || 'Host unreachable or connection timed out';
+      setProbeMessage(`Probe failed: ${msg}`);
+    }
+  };
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -567,21 +603,54 @@ export const Devices: React.FC = () => {
               </select>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-vms-border">
+            {/* Connection Pre-Flight Status */}
+            {probeStatus === 'probing' && (
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded text-amber-300 text-xs font-mono flex items-center space-x-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Probing ONVIF & RTSP network sockets at {ipAddress || 'host'}:{onvifPort}...</span>
+              </div>
+            )}
+
+            {probeStatus === 'success' && (
+              <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-300 text-xs font-mono flex items-center space-x-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{probeMessage}</span>
+              </div>
+            )}
+
+            {probeStatus === 'failed' && (
+              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded text-rose-300 text-xs font-mono flex items-center space-x-2">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>{probeMessage}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-3 border-t border-vms-border">
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setShowAddModal(false)}
+                onClick={handleTestProbe}
+                disabled={probeStatus === 'probing' || !ipAddress}
+                className="text-xs"
               >
-                Cancel
+                {probeStatus === 'probing' ? 'Testing Connection...' : 'Test Connection'}
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                isLoading={saving}
-              >
-                {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowAddModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  isLoading={saving}
+                >
+                  {saving ? 'Connecting & Verifying...' : 'Onboard Camera'}
+                </Button>
+              </div>
             </div>
           </form>
         </Modal>

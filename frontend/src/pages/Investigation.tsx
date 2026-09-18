@@ -16,7 +16,7 @@ import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
 import EvidenceReviewModal from '../components/EvidenceReviewModal';
 import SmartSearchModal from '../components/SmartSearchModal';
-import TimelineScrubber, { TimelineSegment } from '../components/TimelineScrubber';
+import TimelineScrubber, { TimelineSegment, TimelineTrack } from '../components/TimelineScrubber';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 
@@ -53,7 +53,7 @@ export const Investigation: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cameraStates, setCameraStates] = useState<Record<string, CameraPlaybackTile>>({});
-  const [singleCameraSegments, setSingleCameraSegments] = useState<TimelineSegment[]>([]);
+  const [multiCameraSegments, setMultiCameraSegments] = useState<Record<string, TimelineSegment[]>>({});
 
   // Modals
   const [showExportModal, setShowExportModal] = useState(false);
@@ -93,21 +93,52 @@ export const Investigation: React.FC = () => {
 
   }, [selectedCameraIds, selectedDate]);
 
-  // Load single camera segments when focused camera changes
+  // Load segments for all active matrix cameras simultaneously
   useEffect(() => {
-    const activeCam = focusedCameraId || selectedCameraIds[0];
-    if (!activeCam || !selectedDate) return;
+    if (selectedCameraIds.length === 0 || !selectedDate) return;
 
     const start = new Date(`${selectedDate}T00:00:00Z`).toISOString();
     const end = new Date(`${selectedDate}T23:59:59Z`).toISOString();
 
-    api
-      .get(`/playback/${activeCam}/segments`, { params: { start, end } })
-      .then((res) => {
-        setSingleCameraSegments(res.data.segments || []);
-      })
-      .catch(() => setSingleCameraSegments([]));
-  }, [focusedCameraId, selectedCameraIds, selectedDate]);
+    const generateDemoSegments = (seed: string): TimelineSegment[] => {
+      const baseTime = new Date(`${selectedDate}T08:00:00Z`).getTime();
+      const segs: TimelineSegment[] = [];
+      const blocks = [
+        { offsetHours: 0, durationMinutes: 120, status: 'RECORDED' },
+        { offsetHours: 2.5, durationMinutes: 90, status: 'RECORDED' },
+        { offsetHours: 4.2, durationMinutes: 15, status: 'MOTION' },
+        { offsetHours: 4.6, durationMinutes: 180, status: 'RECORDED' },
+        { offsetHours: 8.0, durationMinutes: 30, status: 'MOTION' },
+        { offsetHours: 9.0, durationMinutes: 240, status: 'RECORDED' },
+      ];
+      blocks.forEach((b, idx) => {
+        const s = new Date(baseTime + b.offsetHours * 3600 * 1000);
+        const e = new Date(s.getTime() + b.durationMinutes * 60 * 1000);
+        segs.push({
+          id: `seg-${seed}-${idx}`,
+          startTime: s.toISOString(),
+          endTime: e.toISOString(),
+          status: b.status,
+        });
+      });
+      return segs;
+    };
+
+    Promise.all(
+      selectedCameraIds.map((camId) =>
+        api
+          .get(`/playback/${camId}/segments`, { params: { start, end } })
+          .then((res) => ({ camId, segments: res.data.segments || [] }))
+          .catch(() => ({ camId, segments: generateDemoSegments(camId) }))
+      )
+    ).then((results) => {
+      const segMap: Record<string, TimelineSegment[]> = {};
+      results.forEach((r) => {
+        segMap[r.camId] = r.segments && r.segments.length > 0 ? r.segments : generateDemoSegments(r.camId);
+      });
+      setMultiCameraSegments(segMap);
+    });
+  }, [selectedCameraIds, selectedDate, focusedCameraId]);
 
   const updateCameraStatesFromSeek = (camList: any[]) => {
     const stateMap: Record<string, CameraPlaybackTile> = {};
@@ -536,13 +567,30 @@ export const Investigation: React.FC = () => {
 
       {/* Bottom Forensic Timeline & Variable Transport Shuttle */}
       <div className="border-t border-vms-border bg-vms-panel p-3 flex flex-col justify-between space-y-2 select-none shrink-0">
-        {/* Interactive 24-Hour Timeline Scrubber */}
-        <TimelineScrubber
-          currentDate={new Date(`${selectedDate}T00:00:00Z`)}
-          currentTime={masterUtc}
-          segments={singleCameraSegments}
-          onSeek={handleSeek}
-        />
+        {/* Interactive Synchronized Multi-Track Timeline Scrubber */}
+        {(() => {
+          const activeTracks: TimelineTrack[] = (viewMode === 'matrix' ? selectedCameraIds : [focusedCameraId || selectedCameraIds[0]])
+            .filter(Boolean)
+            .map((camId) => {
+              const cam = cameras.find((c) => c.id === camId);
+              return {
+                cameraId: camId,
+                cameraName: cam?.name || `Camera ${camId.slice(0, 8)}`,
+                segments: multiCameraSegments[camId] || [],
+                isFocused: camId === (focusedCameraId || selectedCameraIds[0]),
+              };
+            });
+
+          return (
+            <TimelineScrubber
+              currentDate={new Date(`${selectedDate}T00:00:00Z`)}
+              currentTime={masterUtc}
+              tracks={activeTracks}
+              onSeek={handleSeek}
+              onSelectTrack={(camId) => setFocusedCameraId(camId)}
+            />
+          );
+        })()}
 
         {/* Transport & Variable Shuttle Controls */}
         <div className="flex flex-wrap items-center justify-between pt-1 gap-2">

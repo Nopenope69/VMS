@@ -11,6 +11,8 @@ import {
   Activity,
   Compass,
   Navigation,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { WhepClient } from '../services/whepPlayer';
 import api from '../services/api';
@@ -35,6 +37,7 @@ interface CameraTileProps {
 
 export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, onToggleFullscreen }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const clientRef = useRef<WhepClient | null>(null);
   const [streamStatus, setStreamStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
   const [clock, setClock] = useState('');
   const [showPtz, setShowPtz] = useState(false);
@@ -73,12 +76,36 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
       onError: (err) => console.warn(`[WHEP ${camera.name}] stream notice:`, err.message),
     });
 
+    clientRef.current = client;
     client.start();
 
     return () => {
       client.destroy();
+      clientRef.current = null;
     };
   }, [camera.id, camera.name]);
+
+  const handleRetryConnection = () => {
+    setStreamStatus('connecting');
+    if (camera.id.startsWith('demo-')) {
+      setTimeout(() => setStreamStatus('connected'), 400);
+      return;
+    }
+    if (clientRef.current) {
+      clientRef.current.destroy();
+      clientRef.current = null;
+    }
+    if (videoRef.current) {
+      const client = new WhepClient({
+        cameraId: camera.id,
+        videoElement: videoRef.current,
+        onStatusChange: (status) => setStreamStatus(status),
+        onError: (err) => console.warn(`[WHEP ${camera.name}] stream retry notice:`, err.message),
+      });
+      clientRef.current = client;
+      client.start();
+    }
+  };
 
   // PTZ continuous move handlers
   const handlePtz = async (action: 'move' | 'stop', x = 0, y = 0, zoom = 0) => {
@@ -122,6 +149,29 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
           muted
           className="w-full h-full object-contain bg-black"
         />
+      )}
+
+      {/* Stream Failure Overlay with Direct Retry */}
+      {streamStatus === 'failed' && (
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center z-15 space-y-2 select-none">
+          <AlertCircle className="w-6 h-6 text-rose-400" />
+          <div className="text-xs font-semibold text-rose-300 font-sans">
+            Stream Signal Interrupted
+          </div>
+          <div className="text-[10px] text-vms-dim font-mono max-w-[220px]">
+            WHEP WebRTC pipeline lost transport socket to {camera.ipAddress}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRetryConnection();
+            }}
+            className="mt-1 px-3 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-mono font-medium flex items-center space-x-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-400 active:translate-y-[1px]"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry Stream</span>
+          </button>
+        </div>
       )}
 
       {/* Top OSD Bar: Quiet, high-contrast, non-interfering */}
@@ -172,7 +222,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
       </div>
 
       {/* Action Controls Overlay (Appears on Hover) */}
-      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity bg-vms-elevated/95 p-1 border border-vms-border rounded shadow-lg z-20">
+      <div className="absolute bottom-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity backdrop-blur-sm bg-vms-elevated/90 p-1 border border-vms-border rounded shadow-lg z-20">
         <button
           onClick={() => setShowDiagModal(true)}
           title="Stream Quality & Diagnostics"

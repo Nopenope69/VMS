@@ -15,6 +15,8 @@ import {
   Server,
   Clock,
   KeyRound,
+  Search,
+  Keyboard,
 } from 'lucide-react';
 import api from '../services/api';
 import NotificationSettingsModal from './NotificationSettingsModal';
@@ -25,6 +27,8 @@ interface NavbarProps {
   onSelectTab: (tab: string) => void;
   user: any;
   onLogout: () => void;
+  onOpenCommandPalette?: () => void;
+  onOpenHotkeyHelp?: () => void;
 }
 
 interface NavItem {
@@ -36,7 +40,14 @@ interface NavItem {
   roles: string[];
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, onLogout }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onSelectTab,
+  user,
+  onLogout,
+  onOpenCommandPalette,
+  onOpenHotkeyHelp,
+}) => {
   const [unackAlarms, setUnackAlarms] = useState<number>(0);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -231,7 +242,32 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, user, o
         </nav>
 
         {/* Right: Quick Tools & Profile */}
-        <div className="flex items-center space-x-2 shrink-0 text-xs">
+        <div className="flex items-center space-x-1.5 shrink-0 text-xs">
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Command Palette & Fast Switcher (Cmd+K)"
+              aria-label="Open Command Palette"
+              className="flex items-center space-x-1 px-2 py-1 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-vms-text hover:border-amber-500/40 active:translate-y-[1px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden xl:inline text-[11px] font-sans">Search</span>
+              <kbd className="hidden sm:inline px-1 py-0.5 rounded text-[9px] font-mono bg-vms-elevated border border-vms-border text-vms-dim">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+
+          {onOpenHotkeyHelp && (
+            <button
+              onClick={onOpenHotkeyHelp}
+              title="Keyboard Accelerators & Shortcuts (?)"
+              aria-label="Keyboard Shortcuts"
+              className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-amber-400 hover:border-vms-hover active:translate-y-[1px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sky-400"
+            >
+              <Keyboard className="w-3.5 h-3.5" />
+            </button>
+          )}
           {canManageNotifications && (
             <button
               onClick={() => setShowNotificationModal(true)}

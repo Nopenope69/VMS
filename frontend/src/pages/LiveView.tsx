@@ -7,8 +7,11 @@ import {
   Square as StopIcon,
   Trash2,
   Video,
+  Layers,
+  XCircle,
 } from 'lucide-react';
 import CameraTile, { CameraData } from '../components/CameraTile';
+import CameraDrawer from '../components/CameraDrawer';
 import AlarmBanner from '../components/AlarmBanner';
 import SaveLayoutModal from '../components/SaveLayoutModal';
 import Button from '../components/ui/Button';
@@ -82,6 +85,28 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [maximizedCameraId, setMaximizedCameraId] = useState<string | null>(null);
   const [layoutToDelete, setLayoutToDelete] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number>(0);
+
+  const handleAssignCameraToSlot = (cameraId: string, slotIndex: number) => {
+    setCameraSlots((prev) => {
+      const next = [...prev];
+      const existingIndex = next.findIndex((s) => s.slotIndex === slotIndex);
+      if (existingIndex !== -1) {
+        next[existingIndex] = { ...next[existingIndex], cameraId };
+      } else {
+        next.push({ slotIndex, cameraId });
+      }
+      return next;
+    });
+  };
+
+  const handleClearSlot = (slotIndex: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCameraSlots((prev) =>
+      prev.map((s) => (s.slotIndex === slotIndex ? { ...s, cameraId: null } : s))
+    );
+  };
 
   // Layout Tour (Auto-Rotation) State
   const [isTourRunning, setIsTourRunning] = useState(false);
@@ -248,6 +273,9 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
         e.preventDefault();
         setMaximizedCameraId(null);
         handleSelectPreset('1+5');
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setIsDrawerOpen((prev) => !prev);
       } else if (e.key === 'Escape' && maximizedCameraId) {
         e.preventDefault();
         setMaximizedCameraId(null);
@@ -441,6 +469,21 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
             </select>
           </div>
 
+          {/* Camera Directory Toggle */}
+          <button
+            onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+            title="Toggle Camera Directory [C]"
+            aria-label="Toggle Camera Directory"
+            className={`px-2.5 py-1 text-xs font-sans font-medium rounded border transition-colors flex items-center space-x-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500 ${
+              isDrawerOpen
+                ? 'bg-vms-elevated border-amber-500/50 text-amber-400 font-semibold shadow-sm'
+                : 'bg-vms-surface border-vms-border text-vms-muted hover:text-vms-text hover:bg-vms-hover'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Directory ({cameras.length})</span>
+          </button>
+
           <button
             onClick={fetchCamerasAndLayouts}
             className="p-1.5 rounded border border-vms-border bg-vms-surface text-vms-muted hover:text-vms-text hover:bg-vms-hover transition-colors"
@@ -461,58 +504,93 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
         </div>
       </div>
 
-      {/* Main Video Surveillance Canvas */}
-      <div className="flex-1 p-2 overflow-y-auto">
-        {cameras.length === 0 ? (
-          <EmptyState
-            icon={Video}
-            title="Zero Active Camera Streams"
-            description="No ONVIF or RTSP camera endpoints are configured on this appliance. Run network discovery or onboard an IP camera stream."
-            actionLabel="Discover LAN Cameras"
-            onAction={onNavigateToDevices}
-          />
-        ) : maximizedCameraId && cameraMap.has(maximizedCameraId) ? (
-          <div className="w-full h-full flex flex-col">
-            <CameraTile
-              camera={cameraMap.get(maximizedCameraId)!}
-              isFullscreen={true}
-              onToggleFullscreen={() => setMaximizedCameraId(null)}
-            />
-          </div>
-        ) : (
-          <div className={`grid ${getGridClass()} gap-2 h-full auto-rows-fr`}>
-            {cameraSlots.map((slot, idx) => {
-              const camera = slot.cameraId ? cameraMap.get(slot.cameraId) : null;
-              const isSpotlightSlot = gridType === '1+5' && idx === 0;
+      {/* Main Video Surveillance Canvas & Camera Directory Drawer */}
+      <div className="flex-1 flex overflow-hidden">
+        <CameraDrawer
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+          cameras={cameras}
+          selectedSlotIndex={selectedSlotIndex}
+          cameraSlots={cameraSlots}
+          onAssignCameraToSlot={handleAssignCameraToSlot}
+          onSelectSlot={(idx) => setSelectedSlotIndex(idx)}
+          slotCount={getSlotCount(gridType)}
+        />
 
-              return (
-                <div
-                  key={`slot_${idx}`}
-                  className={`${
-                    isSpotlightSlot ? 'col-span-2 row-span-2' : ''
-                  } w-full h-full min-h-[160px] flex flex-col`}
-                >
-                  {camera ? (
-                    <CameraTile
-                      camera={camera}
-                      isFullscreen={false}
-                      onToggleFullscreen={() => setMaximizedCameraId(camera.id)}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-vms-surface/40 border border-dashed border-vms-border rounded flex flex-col items-center justify-center text-vms-dim font-mono text-xs select-none">
-                      <div className="text-vms-muted mb-0.5 font-semibold text-[11px]">
-                        SLOT {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+        <div className="flex-1 p-2 overflow-y-auto">
+          {cameras.length === 0 ? (
+            <EmptyState
+              icon={Video}
+              title="Zero Active Camera Streams"
+              description="No ONVIF or RTSP camera endpoints are configured on this appliance. Run network discovery or onboard an IP camera stream."
+              actionLabel="Discover LAN Cameras"
+              onAction={onNavigateToDevices}
+            />
+          ) : maximizedCameraId && cameraMap.has(maximizedCameraId) ? (
+            <div className="w-full h-full flex flex-col">
+              <CameraTile
+                camera={cameraMap.get(maximizedCameraId)!}
+                isFullscreen={true}
+                onToggleFullscreen={() => setMaximizedCameraId(null)}
+              />
+            </div>
+          ) : (
+            <div className={`grid ${getGridClass()} gap-2 h-full auto-rows-fr`}>
+              {cameraSlots.map((slot, idx) => {
+                const camera = slot.cameraId ? cameraMap.get(slot.cameraId) : null;
+                const isSpotlightSlot = gridType === '1+5' && idx === 0;
+                const isSelected = selectedSlotIndex === idx;
+
+                return (
+                  <div
+                    key={`slot_${idx}`}
+                    onClick={() => setSelectedSlotIndex(idx)}
+                    className={`${
+                      isSpotlightSlot ? 'col-span-2 row-span-2' : ''
+                    } w-full h-full min-h-[160px] flex flex-col relative rounded transition-all duration-150 group ${
+                      isSelected
+                        ? 'ring-2 ring-amber-500/90 ring-offset-1 ring-offset-vms-panel'
+                        : 'hover:ring-1 hover:ring-vms-border'
+                    }`}
+                  >
+                    {camera ? (
+                      <div className="relative w-full h-full flex flex-col">
+                        <CameraTile
+                          camera={camera}
+                          isFullscreen={false}
+                          onToggleFullscreen={() => setMaximizedCameraId(camera.id)}
+                        />
+                        {/* Hover Quick Action: Unassign slot */}
+                        <div className="absolute top-2 right-12 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => handleClearSlot(idx, e)}
+                            title={`Clear Slot ${idx + 1}`}
+                            aria-label={`Clear Slot ${idx + 1}`}
+                            className="p-1 rounded bg-vms-panel/90 text-vms-dim hover:text-rose-400 border border-vms-border text-[10px] shadow"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[10px] uppercase tracking-wider text-vms-dim">
-                        No Stream Assigned
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    ) : (
+                      <div className="w-full h-full bg-vms-surface/40 border border-dashed border-vms-border rounded flex flex-col items-center justify-center text-vms-dim font-mono text-xs select-none hover:bg-vms-surface/60 transition-colors p-3 text-center">
+                        <div className="text-vms-muted mb-0.5 font-semibold text-[11px]">
+                          SLOT {idx + 1 < 10 ? `0${idx + 1}` : idx + 1}
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wider text-vms-dim">
+                          No Stream Assigned
+                        </span>
+                        <span className="text-[10px] text-amber-500/90 mt-1 font-sans">
+                          {isSelected ? 'Active Target • Choose camera in directory' : 'Click to target this slot'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Save Layout Modal Dialog */}
