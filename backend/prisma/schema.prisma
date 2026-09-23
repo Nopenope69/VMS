@@ -826,24 +826,52 @@ model Alarm {
 }
 
 model DetectionEvent {
-  id             String        @id @default(uuid())
-  tenantId       String
-  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cameraId       String
-  camera         Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  trackId        String?
-  type           EventType     // MOTION, PERSON_DETECTED, VEHICLE_DETECTED, etc.
-  confidence     Float         @default(1.0)
+  id              String         @id @default(uuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId        String
+  camera          Camera         @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  trackId         String?
+  inferenceId     String?        @unique
+  modelManifestId String?
+  modelManifest   ModelManifest? @relation(fields: [modelManifestId], references: [id], onDelete: SetNull)
+  type            EventType      // MOTION, PERSON_DETECTED, VEHICLE_DETECTED, etc.
+  confidence      Float          @default(1.0)
   
   // Spatial coordinates normalized [0..1]
-  boundingBox    Json?         // { x: number, y: number, width: number, height: number }
-  centroid       Json?         // { x: number, y: number }
-  attributesJson Json?         // Arbitrary classifier attributes (e.g. color, sub-category)
+  boundingBox    Json?          // { x: number, y: number, width: number, height: number }
+  centroid       Json?          // { x: number, y: number }
+  attributesJson Json?          // Arbitrary classifier attributes (e.g. color, sub-category)
   snapshotPath   String?
-  timestamp      DateTime      @default(now())
+  timestamp      DateTime       @default(now())
 
   @@index([tenantId, type, timestamp])
   @@index([cameraId, timestamp])
+  @@index([modelManifestId])
+}
+
+model ModelManifest {
+  id                  String           @id @default(uuid())
+  name                String
+  version             String
+  sha256              String
+  codeLicense         String
+  weightLicense       String
+  trainingDataJson    Json
+  thresholdsJson      Json?
+  runtimeConfigJson   Json
+  attributionRequired Boolean          @default(false)
+  noticeRequired      Boolean          @default(false)
+  licenseNotes        String?
+  isActive            Boolean          @default(true)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  detectionEvents     DetectionEvent[]
+
+  @@unique([name, version])
+  @@index([name, version, sha256])
+  @@index([isActive])
 }
 
 model VehicleObservation {
