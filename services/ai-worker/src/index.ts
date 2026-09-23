@@ -5,3 +5,8 @@ export * from './detectionNormalizer';
 export * from './apiClient';
 export * from './health';
 export * from './worker';
+export * from './rtspUrlBuilder';
+export * from './frameExtractor';
+export * from './frameQueue';
+export * from './streamManager';
+export * from './streamSupervisor';
