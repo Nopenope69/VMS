@@ -18,7 +18,8 @@
     "test:media-auth": "jest src/__tests__/mediaAuth.test.ts",
     "test:ffmpeg": "jest src/__tests__/ffmpeg.test.ts",
     "test:evidence": "jest src/__tests__/evidence.test.ts",
-    "check:hygiene": "ts-node scripts/ci/check-repo-hygiene.ts"
+    "check:hygiene": "ts-node scripts/ci/check-repo-hygiene.ts",
+    "check:model-licenses": "ts-node scripts/ci/check-model-licenses.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
