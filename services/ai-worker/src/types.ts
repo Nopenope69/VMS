@@ -82,6 +82,16 @@ export interface DiscoveredCamera {
   isOnline: boolean;
 }
 
+export interface FrameGeometry {
+  sourceWidth: number;
+  sourceHeight: number;
+  modelWidth: number;
+  modelHeight: number;
+  scale: number;
+  padX: number;
+  padY: number;
+}
+
 export interface VideoFrame {
   cameraId: string;
   tenantId: string;
@@ -94,6 +104,7 @@ export interface VideoFrame {
   height: number;
   channels: number;
   data: Buffer;
+  geometry: FrameGeometry;
 }
 
 export type StreamLifecycleState =
@@ -114,6 +125,8 @@ export interface CameraStreamConfig {
   fps?: number;
   width?: number;
   height?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   letterbox?: boolean;
   queueCapacity?: number;
 }
@@ -134,4 +147,42 @@ export interface ResourceLimits {
   maxFps: number;
   maxWidth: number;
   maxHeight: number;
+}
+
+export interface ModelTensorSignature {
+  name: string;
+  shape: number[];
+  dtype: 'float32' | 'int64' | string;
+  format?: string;
+}
+
+export interface ModelSignature {
+  input: ModelTensorSignature;
+  output: ModelTensorSignature;
+  coordinateFormat: 'cxcywh' | 'xywh' | 'xyxy';
+  hasObjectness: boolean;
+  classCount: number;
+}
+
+export interface ModelClassMapping {
+  [classIndex: string]: string;
+}
+
+export interface ModelThresholds {
+  [className: string]: number;
+}
+
+export interface ModelNmsConfig {
+  iouThreshold: number;
+}
+
+export interface InferenceSchedulerTelemetry {
+  inferenceCount: number;
+  successCount: number;
+  errorCount: number;
+  timeoutCount: number;
+  droppedStaleCount: number;
+  avgInferenceMs: number;
+  maxInferenceMs: number;
+  activeConcurrent: number;
 }

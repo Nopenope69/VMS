@@ -156,6 +156,15 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
         height: 48,
         channels: 3,
         data: Buffer.alloc(64 * 48 * 3),
+        geometry: {
+          sourceWidth: 640,
+          sourceHeight: 480,
+          modelWidth: 64,
+          modelHeight: 48,
+          scale: 0.1,
+          padX: 0,
+          padY: 0,
+        },
       };
 
       let errorCaptured: any = null;

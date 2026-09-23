@@ -14,6 +14,15 @@ function createDummyFrame(cameraId: string, sequenceNumber: number): VideoFrame 
     height: 480,
     channels: 3,
     data: Buffer.alloc(100),
+    geometry: {
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      modelWidth: 640,
+      modelHeight: 480,
+      scale: 0.3333,
+      padX: 0,
+      padY: 60,
+    },
   };
 }
 

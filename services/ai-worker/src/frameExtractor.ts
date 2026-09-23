@@ -2,7 +2,8 @@ import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import crypto from 'crypto';
 import { buildLoopbackRtspUrl } from './rtspUrlBuilder';
-import { VideoFrame, CameraStreamConfig } from './types';
+import { VideoFrame, CameraStreamConfig, FrameGeometry } from './types';
+import { CoordinateTransformer } from './coordinateTransformer';
 
 export interface FrameExtractorOptions extends CameraStreamConfig {
   rtspPort?: number;
@@ -31,6 +32,7 @@ export class FrameExtractor extends EventEmitter {
   public readonly fps: number;
   public readonly frameByteSize: number;
   public readonly maxAccumulatorBytes: number;
+  public readonly geometry: FrameGeometry;
 
   constructor(options: FrameExtractorOptions) {
     super();
@@ -40,6 +42,17 @@ export class FrameExtractor extends EventEmitter {
     this.fps = options.fps && options.fps > 0 && options.fps <= 5 ? options.fps : 1;
     this.frameByteSize = this.width * this.height * 3; // RGB24
     this.maxAccumulatorBytes = this.frameByteSize * 2;
+
+    const sourceWidth = options.sourceWidth || 1920;
+    const sourceHeight = options.sourceHeight || 1080;
+    const letterbox = options.letterbox !== false;
+    this.geometry = CoordinateTransformer.computeGeometry(
+      sourceWidth,
+      sourceHeight,
+      this.width,
+      this.height,
+      letterbox
+    );
   }
 
   /**
@@ -150,6 +163,7 @@ export class FrameExtractor extends EventEmitter {
         height: this.height,
         channels: 3,
         data: frameBuffer,
+        geometry: this.geometry,
       };
 
       this.emit('frame', frame);
