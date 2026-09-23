@@ -3,8 +3,8 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **474/474 tests passing across all 80 test suites** (`npm test` in `backend/`, execution time: ~10.9s).  
-- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.4s).
+- **Automated Test Status:** **515/515 tests passing across all 87 test suites** (82 backend suites with 484 tests + 5 AI Worker suites with 31 tests).  
+- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), AI Worker `tsc` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.5s).
 - **Hygiene & Governance Gates:** `npm run check:hygiene` (exit code `0`), `npm run check:model-licenses` (exit code `0`).
 
 ---
@@ -166,6 +166,17 @@
    - Standardized `DetectionNormalizer` producing UUID `inferenceId` and normalized bounding boxes.
    - Resilient `AuthenticatedInternalApiClient` with exponential retry backoff.
    - `WorkerHealthMonitor` reporting operational status, loaded model state, and inference count.
+4. **MediaMTX Localhost Loopback & Frame Acquisition Pipeline (Completed):**
+   - **Absolute Loopback Invariant**: `buildLoopbackRtspUrl` strictly restricts connection targets to `rtsp://127.0.0.1:8554/<streamPath>`; external/private network camera addresses are strictly rejected.
+   - **Safe Process Spawning**: FFmpeg spawned via argument arrays (`child_process.spawn`) with sanitized `streamPath` regex (`/^[a-zA-Z0-9_\-\/]+$/`); no shell interpolation.
+   - **Filter-Level Frame Decimation and Output Bounding**: FFmpeg downsamples to 1 fps and applies aspect-ratio preserving scaling with letterboxing (`force_original_aspect_ratio=decrease,pad=...`) directly inside the filter pipeline before emitting raw RGB24 bytes to stdout (`-an`, `-pix_fmt rgb24`, `-f rawvideo`).
+   - **Memory-Bounded Extractor & Accumulator Reset**: `FrameExtractor` bounds stdout accumulator to $\le 2 \times \text{frameByteSize}$; on disconnect/reconnect, accumulator is explicitly purged (`resetAccumulator()`) preventing misaligned RGB frame boundaries. Emits structured `VideoFrame` with monotonic `sequenceNumber`, `streamSessionId`, `sampledAt`, and `receivedAt`.
+   - **Per-Camera Bounded Queues**: `BoundedFrameQueue` (default capacity 10) per camera drops oldest frames on saturation; Camera A spikes never starve Camera B.
+   - **Appliance Resource Limits**: `ResourceGovernor` limits concurrency (`MAX_CONCURRENT_STREAMS = 16`, `MAX_FPS = 5`, `MAX_WIDTH = 1280`, `MAX_HEIGHT = 720`).
+   - **8-State Stream Lifecycle**: `StreamManager` (`DISCOVERED` $\rightarrow$ `CONNECTING` $\rightarrow$ `CONNECTED` $\rightarrow$ `RUNNING` $\rightarrow$ `DISCONNECTED` $\rightarrow$ `BACKOFF` $\rightarrow$ `STOPPING` $\rightarrow$ `STOPPED`) with exponential backoff ($1\text{s} \times 2^N$ up to 30s) and randomized jitter.
+   - **Camera Discovery**: `GET /internal/cameras` returns strictly safe metadata (`id, tenantId, name, streamPath, isOnline`), never leaking credentials, hardware IPs, or external RTSP URIs.
+   - **Evidence Plane Isolation Invariant**: AI crashes, FFmpeg non-zero exits, and loopback reconnects have zero impact on MediaMTX recording, fMP4 segmenting, or Section 63 BSA evidence manifests.
+
 5. **Interactive Indoor Spatial Maps & Camera Geometry:**
    - Multi-level architectural floorplan management (`Floorplan`) with scale (pixels/meter) and rotation.
    - Camera spatial placement (`CameraSpatialPlacement`) with 3D coordinates, mount height, heading (0-360° navigational), pitch, horizontal/vertical FOV, and optical zoom.
@@ -224,10 +235,18 @@
 ---
 
 ## 3. Test & Verification Summary
-- **Backend Test Suites:** 80 suites, 474 tests passing.
+- **Backend Test Suites:** 82 suites, 484 tests passing.
+  - `internalCameras.test.ts` (7 passed)
+  - `evidenceIsolation.test.ts` (3 passed)
   - `modelManifest.test.ts` (24 passed)
   - `aiWorker.test.ts` (8 passed)
   - `redaction.test.ts` (10 passed)
+- **AI Worker Dedicated Test Suites:** 5 suites, 31 tests passing (`cd services/ai-worker && npm test`).
+  - `frameExtractor.test.ts` (7 passed)
+  - `frameQueue.test.ts` (7 passed)
+  - `rtspUrlBuilder.test.ts` (10 passed)
+  - `streamManager.test.ts` (3 passed)
+  - `streamSupervisor.test.ts` (4 passed)
   - `floorplan.test.ts` (5 passed)
   - `federationAuth.test.ts` (7 passed)
   - `storeAndForwardSync.test.ts` (6 passed)
