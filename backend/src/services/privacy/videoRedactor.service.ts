@@ -6,6 +6,8 @@ import {
   RedactionJobStatus,
 } from '@prisma/client';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { ChainOfCustodyService } from '../evidence/chainOfCustody.service';
 
 export interface TemporalMask {
@@ -63,7 +65,7 @@ export class VideoRedactorService {
         privacyPolicyId: input.privacyPolicyId,
         status: RedactionJobStatus.QUEUED,
         redactionMode: input.redactionMode,
-        modelVersion: input.modelVersion ?? '1.2.0-yolo-cctv',
+        modelVersion: input.modelVersion,
         maskMetadataJson: input.masks ? (input.masks as any) : [],
         createdByUserId: input.createdByUserId,
       },
@@ -141,11 +143,26 @@ export class VideoRedactorService {
     });
 
     const derivativeObjectKey = `derivatives/${job.tenantId}/${job.id}.mp4`;
-    // Deterministic hash of derivative based on job parameters and parent hash
-    const derivativeSha256 = crypto
-      .createHash('sha256')
-      .update(`${job.sourceManifest.masterEvidenceHash}:${job.redactionMode}:${derivativeObjectKey}`)
-      .digest('hex');
+    const outputPath = path.join(
+      process.env.EXPORTS_DIR || '/recordings/exports',
+      'derivatives',
+      job.tenantId,
+      `${job.id}.mp4`
+    );
+
+    if (!fs.existsSync(outputPath)) {
+      const error = `Redaction output file was not produced: ${outputPath}`;
+      await this.prisma.redactionJob.update({
+        where: { id: jobId },
+        data: {
+          status: RedactionJobStatus.FAILED,
+          error,
+        },
+      });
+      throw new Error(error);
+    }
+
+    const derivativeSha256 = await this.hashFile(outputPath);
 
     // Complete job
     const completedJob = await this.prisma.redactionJob.update({
@@ -175,5 +192,15 @@ export class VideoRedactorService {
     });
 
     return completedJob;
+  }
+
+  private hashFile(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', reject);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+    });
   }
 }
