@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "../../backend/node_modules/.bin/tsc",
+    "test": "../../backend/node_modules/.bin/jest --config jest.config.js"
   }
 }
