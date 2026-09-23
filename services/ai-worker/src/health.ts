@@ -5,6 +5,8 @@ export class WorkerHealthMonitor {
   private workerId: string;
   private loadedModel?: ModelManifestRecord & { verified: boolean };
   private inferenceCount: number = 0;
+  private lastError?: string;
+  private isErrorState: boolean = false;
 
   constructor(workerId?: string) {
     this.startTime = Date.now();
@@ -13,6 +15,12 @@ export class WorkerHealthMonitor {
 
   public recordModelLoaded(manifest: ModelManifestRecord, verified: boolean): void {
     this.loadedModel = { ...manifest, verified };
+    this.isErrorState = false;
+  }
+
+  public recordError(errorMessage: string): void {
+    this.lastError = errorMessage;
+    this.isErrorState = true;
   }
 
   public incrementInference(): void {
@@ -21,9 +29,13 @@ export class WorkerHealthMonitor {
 
   public getStatus(): WorkerHealthStatus {
     const uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);
-    const status: 'HEALTHY' | 'DEGRADED' | 'INITIALIZING' = this.loadedModel?.verified
-      ? 'HEALTHY'
-      : 'INITIALIZING';
+    let status: 'HEALTHY' | 'DEGRADED' | 'INITIALIZING' | 'ERROR' = 'INITIALIZING';
+
+    if (this.isErrorState) {
+      status = 'ERROR';
+    } else if (this.loadedModel?.verified) {
+      status = 'HEALTHY';
+    }
 
     return {
       status,
@@ -39,6 +51,7 @@ export class WorkerHealthMonitor {
           }
         : undefined,
       inferenceCount: this.inferenceCount,
+      lastError: this.lastError,
     };
   }
 }

@@ -24,6 +24,10 @@ export interface ModelManifestRecord {
   codeLicense: string;
   weightLicense: string;
   runtimeConfigJson: RuntimeConfig;
+  thresholdsJson?: ModelThresholds;
+  classesJson?: ModelClassMapping;
+  modelSignatureJson?: ModelSignature;
+  nmsConfigJson?: ModelNmsConfig;
   isActive: boolean;
 }
 
@@ -61,7 +65,7 @@ export interface NormalizedDetectionEvent {
 }
 
 export interface WorkerHealthStatus {
-  status: 'HEALTHY' | 'DEGRADED' | 'INITIALIZING';
+  status: 'HEALTHY' | 'DEGRADED' | 'INITIALIZING' | 'ERROR';
   workerId: string;
   uptimeSeconds: number;
   loadedModel?: {
@@ -72,6 +76,7 @@ export interface WorkerHealthStatus {
     verified: boolean;
   };
   inferenceCount: number;
+  lastError?: string;
 }
 
 export interface DiscoveredCamera {

@@ -170,11 +170,7 @@ export class StreamSupervisor extends EventEmitter {
 
     try {
       // Process frame through decoupled AI worker interface
-      await this.aiWorker.processFrame(frame.data, {
-        tenantId: frame.tenantId,
-        cameraId: frame.cameraId,
-        frameTimestamp: frame.sampledAt,
-      });
+      await this.aiWorker.processFrame(frame);
 
       this.emit('frameProcessed', {
         cameraId: frame.cameraId,
