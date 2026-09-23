@@ -1,4 +1,8 @@
 import { PrismaClient, RedactionMode, RedactionJobStatus, Role } from '@prisma/client';
+import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { PrivacyPolicyService } from '../services/privacy/privacyPolicy.service';
 import { VideoRedactorService } from '../services/privacy/videoRedactor.service';
 import { ChainOfCustodyService } from '../services/evidence/chainOfCustody.service';
@@ -8,6 +12,20 @@ describe('Bucket 6: Privacy Policy Enforcement & Video Redaction', () => {
   let chainOfCustody: any;
   let privacyService: PrivacyPolicyService;
   let redactorService: VideoRedactorService;
+  let tempExportsDir: string;
+  const originalExportsDir = process.env.EXPORTS_DIR;
+
+  beforeAll(() => {
+    tempExportsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vigilone-redact-test-'));
+    process.env.EXPORTS_DIR = tempExportsDir;
+  });
+
+  afterAll(() => {
+    process.env.EXPORTS_DIR = originalExportsDir;
+    if (tempExportsDir && fs.existsSync(tempExportsDir)) {
+      fs.rmSync(tempExportsDir, { recursive: true, force: true });
+    }
+  });
 
   beforeEach(() => {
     prisma = {
@@ -129,13 +147,49 @@ describe('Bucket 6: Privacy Policy Enforcement & Video Redaction', () => {
     });
   });
 
+  describe('Redaction Job Creation & Model Identity', () => {
+    it('creates redaction job without injecting fake 1.2.0-yolo-cctv model identity', async () => {
+      (prisma.evidenceManifest.findUnique as jest.Mock).mockResolvedValue({
+        id: 'manifest-1',
+        masterEvidenceHash: 'hash-abc',
+      });
+
+      await redactorService.createRedactionJob({
+        tenantId: 'tenant-1',
+        createdByUserId: 'user-1',
+        sourceManifestId: 'manifest-1',
+        redactionMode: RedactionMode.FACE,
+      });
+
+      expect(prisma.redactionJob.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            modelVersion: undefined,
+          }),
+        })
+      );
+      const callData = (prisma.redactionJob.create as jest.Mock).mock.calls[0][0].data;
+      expect(callData.modelVersion).not.toBe('1.2.0-yolo-cctv');
+    });
+  });
+
   describe('Redaction Job Execution & Cryptographic Derivative Lineage', () => {
     it('executes redaction job; records derivative SHA-256 and preserves parent manifest hash', async () => {
       const parentMasterHash = 'master-sha256-root-112233';
+      const tenantId = 'tenant-1';
+      const jobId = 'job-redact-99';
+
+      const derivativesDir = path.join(tempExportsDir, 'derivatives', tenantId);
+      fs.mkdirSync(derivativesDir, { recursive: true });
+      const testFilePath = path.join(derivativesDir, `${jobId}.mp4`);
+      const fileBytes = Buffer.from('mock-redacted-mp4-stream-content-42');
+      fs.writeFileSync(testFilePath, fileBytes);
+
+      const expectedSha256 = crypto.createHash('sha256').update(fileBytes).digest('hex');
 
       (prisma.redactionJob.findUnique as jest.Mock).mockResolvedValue({
-        id: 'job-redact-99',
-        tenantId: 'tenant-1',
+        id: jobId,
+        tenantId,
         sourceManifestId: 'man-1',
         createdByUserId: 'user-op',
         redactionMode: RedactionMode.FACE,
@@ -145,19 +199,116 @@ describe('Bucket 6: Privacy Policy Enforcement & Video Redaction', () => {
         },
       });
 
-      const completed = await redactorService.executeRedactionJob('job-redact-99');
+      const completed = await redactorService.executeRedactionJob(jobId);
 
       expect(completed.status).toBe(RedactionJobStatus.COMPLETED);
-      expect(completed.outputObjectKey).toContain('job-redact-99.mp4');
-      expect(completed.outputSha256).toBeDefined();
+      expect(completed.outputObjectKey).toBe(`derivatives/${tenantId}/${jobId}.mp4`);
+      expect(completed.outputSha256).toBe(expectedSha256);
 
-      // Verify custodial log links master hash to new derivative hash
+      // Verify custodial log links master hash to authentic derivative hash
       expect(prisma.chainOfCustodyLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             action: 'EVIDENCE_REDACTED',
             sourceHash: parentMasterHash,
-            resultHash: completed.outputSha256,
+            resultHash: expectedSha256,
+          }),
+        })
+      );
+    });
+
+    it('fails and marks job FAILED if output file was not produced', async () => {
+      const tenantId = 'tenant-fail';
+      const jobId = 'job-missing-output';
+
+      const missingFilePath = path.join(tempExportsDir, 'derivatives', tenantId, `${jobId}.mp4`);
+      if (fs.existsSync(missingFilePath)) {
+        fs.unlinkSync(missingFilePath);
+      }
+
+      (prisma.redactionJob.findUnique as jest.Mock).mockResolvedValue({
+        id: jobId,
+        tenantId,
+        sourceManifestId: 'man-fail',
+        createdByUserId: 'user-op',
+        redactionMode: RedactionMode.FACE,
+        sourceManifest: {
+          id: 'man-fail',
+          masterEvidenceHash: 'master-hash-fail',
+        },
+      });
+
+      await expect(redactorService.executeRedactionJob(jobId)).rejects.toThrow(
+        `Redaction output file was not produced: ${missingFilePath}`
+      );
+
+      // Verify job status updated to FAILED with meaningful error
+      expect(prisma.redactionJob.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: jobId },
+          data: expect.objectContaining({
+            status: RedactionJobStatus.FAILED,
+            error: `Redaction output file was not produced: ${missingFilePath}`,
+          }),
+        })
+      );
+
+      // Verify custodial log was NOT created for failed job
+      expect(prisma.chainOfCustodyLog.create).not.toHaveBeenCalled();
+    });
+
+    it('verifies physical output bytes produce authentic SHA-256 in ChainOfCustodyLog', async () => {
+      const parentMasterHash = 'master-sha256-verified-root-999';
+      const tenantId = 'tenant-custody-check';
+      const jobId = 'job-authentic-hash';
+
+      const derivativesDir = path.join(tempExportsDir, 'derivatives', tenantId);
+      fs.mkdirSync(derivativesDir, { recursive: true });
+      const testFilePath = path.join(derivativesDir, `${jobId}.mp4`);
+
+      // Distinct binary buffer representing physical video bytes
+      const physicalVideoBytes = crypto.randomBytes(4096);
+      fs.writeFileSync(testFilePath, physicalVideoBytes);
+
+      // Independent authentic hash calculation
+      const authenticExpectedSha256 = crypto
+        .createHash('sha256')
+        .update(physicalVideoBytes)
+        .digest('hex');
+
+      (prisma.redactionJob.findUnique as jest.Mock).mockResolvedValue({
+        id: jobId,
+        tenantId,
+        sourceManifestId: 'man-custody',
+        createdByUserId: 'user-forensics',
+        redactionMode: RedactionMode.STATIC_MASK,
+        sourceManifest: {
+          id: 'man-custody',
+          masterEvidenceHash: parentMasterHash,
+        },
+      });
+
+      const completed = await redactorService.executeRedactionJob(jobId);
+
+      // Authentic hash assertion
+      expect(completed.outputSha256).toBe(authenticExpectedSha256);
+
+      // Verify ChainOfCustodyLog recorded the authentic hash of the physical bytes
+      expect(prisma.chainOfCustodyLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId,
+            evidenceId: 'man-custody',
+            actorUserId: 'user-forensics',
+            action: 'EVIDENCE_REDACTED',
+            sourceHash: parentMasterHash,
+            resultHash: authenticExpectedSha256,
+            metadata: {
+              redactionJobId: jobId,
+              redactionMode: RedactionMode.STATIC_MASK,
+              derivativeObjectKey: `derivatives/${tenantId}/${jobId}.mp4`,
+              derivativeSha256: authenticExpectedSha256,
+            },
           }),
         })
       );
