@@ -1,6 +1,7 @@
 import { PrismaClient, RedactionMode, RedactionJob, RedactionJobStatus } from '@prisma/client';
 import crypto from 'crypto';
 import fs from 'fs';
+import path from 'path';
 import { ChainOfCustodyService } from '../evidence/chainOfCustody.service';
 
 export interface TemporalMask {
@@ -65,9 +66,6 @@ export class VideoRedactorService {
     });
   }
 
-  /**
-   * Generates production FFmpeg filter complex expressions for blur/delogo/static masks.
-   */
   public generateFfmpegFilter(
     mode: RedactionMode,
     masks: TemporalMask[],
@@ -75,15 +73,10 @@ export class VideoRedactorService {
     videoHeight: number = 1080
   ): FfmpegFilterResult {
     if (!masks || masks.length === 0) {
-      return {
-        filterComplex: 'copy',
-        totalMasks: 0,
-        estimatedEncodingOverheadMs: 0,
-      };
+      return { filterComplex: 'copy', totalMasks: 0, estimatedEncodingOverheadMs: 0 };
     }
 
     const filters: string[] = [];
-
     masks.forEach((m) => {
       const x = Math.max(0, Math.min(videoWidth - 1, Math.round(m.x)));
       const y = Math.max(0, Math.min(videoHeight - 1, Math.round(m.y)));
@@ -92,15 +85,11 @@ export class VideoRedactorService {
       const tStart = Math.max(0, m.startSec);
       const tEnd = Math.max(tStart, m.endSec);
 
-      if (mode === RedactionMode.STATIC_MASK) {
-        filters.push(
-          `drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=black@1.0:t=fill:enable='between(t,${tStart},${tEnd})'`
-        );
-      } else {
-        filters.push(
-          `delogo=x=${x}:y=${y}:w=${w}:h=${h}:enable='between(t,${tStart},${tEnd})'`
-        );
-      }
+      filters.push(
+        mode === RedactionMode.STATIC_MASK
+          ? `drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=black@1.0:t=fill:enable='between(t,${tStart},${tEnd})'`
+          : `delogo=x=${x}:y=${y}:w=${w}:h=${h}:enable='between(t,${tStart},${tEnd})'`
+      );
     });
 
     return {
@@ -111,8 +100,11 @@ export class VideoRedactorService {
   }
 
   /**
-   * Executes a queued redaction job, generating an attributable derivative export.
-   * INVARIANT: The original master manifest is untouched; derivative SHA-256 is logged.
+   * Executes a queued redaction job and records derivative lineage.
+   *
+   * The FFmpeg redaction worker is not wired into this service yet. Until it is,
+   * this method deliberately fails closed. A hash is calculated only from the
+   * output file produced by that worker; it is never derived from job metadata.
    */
   public async executeRedactionJob(jobId: string): Promise<RedactionJob> {
     const job = await this.prisma.redactionJob.findUnique({
@@ -128,8 +120,15 @@ export class VideoRedactorService {
       data: { status: RedactionJobStatus.PROCESSING },
     });
 
+    // EXPORTS_DIR is the same recording/export volume used by the backend
+    // container. Do not resolve derivatives relative to the process cwd.
+    const outputPath = path.join(
+      process.env.EXPORTS_DIR || '/recordings/exports',
+      'derivatives',
+      job.tenantId,
+      `${job.id}.mp4`
+    );
     const derivativeObjectKey = `derivatives/${job.tenantId}/${job.id}.mp4`;
-    const outputPath = `./${derivativeObjectKey}`;
 
     if (!fs.existsSync(outputPath)) {
       const error = `Redaction output file was not produced: ${outputPath}`;
@@ -158,12 +157,7 @@ export class VideoRedactorService {
       action: 'EVIDENCE_REDACTED',
       sourceHash: job.sourceManifest.masterEvidenceHash,
       resultHash: derivativeSha256,
-      metadata: {
-        redactionJobId: job.id,
-        redactionMode: job.redactionMode,
-        derivativeObjectKey,
-        derivativeSha256,
-      },
+      metadata: { redactionJobId: job.id, redactionMode: job.redactionMode, derivativeObjectKey, derivativeSha256 },
     });
 
     return completedJob;
