@@ -3,8 +3,9 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **439/439 tests passing across all 78 test suites** (`npm test` in `backend/`, execution time: ~10.9s).  
-- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.38s).
+- **Automated Test Status:** **474/474 tests passing across all 80 test suites** (`npm test` in `backend/`, execution time: ~10.9s).  
+- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.4s).
+- **Hygiene & Governance Gates:** `npm run check:hygiene` (exit code `0`), `npm run check:model-licenses` (exit code `0`).
 
 ---
 
@@ -144,6 +145,27 @@
    - Dual-custody supervisory approval enforcement for unredacted raw footage exports.
    - FFmpeg filter complex generator for temporal bounding box masks (`delogo` for faces/plates, `drawbox` for static zones).
    - Asynchronous redaction job execution producing cryptographically attributable derivative exports.
+   - Physical derivative path enforcement under `EXPORTS_DIR/derivatives/<tenantId>/<jobId>.mp4`.
+   - Mandatory fail-closed verification: `status: FAILED` if output derivative is missing or empty.
+   - Authentic SHA-256 computation via streaming disk read into `crypto.createHash('sha256')`.
+   - Purged fabricated model version strings (`1.2.0-yolo-cctv`).
+   - Added CI corruption hygiene gate `scripts/ci/check-repo-hygiene.ts` (`npm run check:hygiene`).
+
+### Bucket 7: Governed AI Foundation & Decoupled Worker Plane (Completed)
+1. **Model Governance & Schema Registry:**
+   - Database model `ModelManifest` (`name, version, sha256` unique/index, runtime config, licenses, training data provenance, obligations).
+   - Commercial license policy enforcement (`MIT, Apache-2.0, BSD-2/3, ISC` approved; `MPL-2.0` reviewed file-level copyleft exception; `GPL, AGPL, CC-BY-NC, proprietary` rejected).
+   - Immutable model version pinning and SHA-256 artifact verification.
+   - Pre-deployment CI model license gate (`scripts/ci/check-model-licenses.ts`).
+2. **Authenticated Detection Ingestion & Database-Native Idempotency:**
+   - Internal API endpoints (`POST /internal/model-manifests`, `POST /internal/detections`) secured with `X-Internal-Secret`.
+   - `DetectionEvent` unique `inferenceId` with atomic database-native upsert idempotency handling concurrent retry races (`P2002`).
+   - Strict architectural decoupling: AI failures never impact evidence, recording, manifests, or camera playback.
+3. **Decoupled AI Worker Skeleton (`services/ai-worker/`):**
+   - Independent service process with `ModelLoader` verifying authentic SHA-256 and runtime config before execution.
+   - Standardized `DetectionNormalizer` producing UUID `inferenceId` and normalized bounding boxes.
+   - Resilient `AuthenticatedInternalApiClient` with exponential retry backoff.
+   - `WorkerHealthMonitor` reporting operational status, loaded model state, and inference count.
 5. **Interactive Indoor Spatial Maps & Camera Geometry:**
    - Multi-level architectural floorplan management (`Floorplan`) with scale (pixels/meter) and rotation.
    - Camera spatial placement (`CameraSpatialPlacement`) with 3D coordinates, mount height, heading (0-360° navigational), pitch, horizontal/vertical FOV, and optical zoom.
@@ -202,16 +224,10 @@
 ---
 
 ## 3. Test & Verification Summary
-- **Backend Test Suites:** 50 suites, 262 tests passing.
-  - `incidentOrchestrator.test.ts` (15 passed)
-  - `spatialEngine.test.ts` (15 passed)
-  - `evidenceArchive.test.ts` (9 passed)
-  - `recordingCatalog.test.ts` (9 passed)
-  - `recordingIndex.test.ts` (6 passed)
-  - `playbackSync.test.ts` (5 passed)
-  - `evidenceManifest.test.ts` (4 passed)
-  - `oidc.test.ts` (10 passed)
-  - `redaction.test.ts` (6 passed)
+- **Backend Test Suites:** 80 suites, 474 tests passing.
+  - `modelManifest.test.ts` (24 passed)
+  - `aiWorker.test.ts` (8 passed)
+  - `redaction.test.ts` (10 passed)
   - `floorplan.test.ts` (5 passed)
   - `federationAuth.test.ts` (7 passed)
   - `storeAndForwardSync.test.ts` (6 passed)
