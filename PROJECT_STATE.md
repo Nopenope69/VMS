@@ -3,8 +3,8 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **515/515 tests passing across all 87 test suites** (82 backend suites with 484 tests + 5 AI Worker suites with 31 tests).  
-- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), AI Worker `tsc` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.5s).
+- **Automated Test Status:** **561/561 tests passing across all 96 test suites** (84 backend suites with 494 tests + 12 AI Worker suites with 67 tests).  
+- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), AI Worker `tsc` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.4s).
 - **Hygiene & Governance Gates:** `npm run check:hygiene` (exit code `0`), `npm run check:model-licenses` (exit code `0`).
 
 ---
@@ -348,5 +348,43 @@
    - `Devices.tsx`: "Test Connection" button validating RTSP/ONVIF reachability before form submission via `/cameras/discover` with immediate visual status banner.
    - `CameraTile.tsx`: Frosted glass controls (`backdrop-blur-sm bg-vms-elevated/90`) and dedicated "Retry Stream" overlay on interrupted streams.
    - `index.css`: Cross-browser custom scrollbars styled with Scorched Umber `#713600` / `#38240D`.
+
+---
+
+## 6. Bucket 6: Clean Governed AI Pipeline & Evidence Decoupling (Steps 0, 1, 2 & 3)
+
+### Step 0: Redaction/Evidence Integrity (`ab05273`)
+- Eliminated fake fallback models (`1.2.0-yolo-cctv`).
+- Configured output resolution strictly under `EXPORTS_DIR/derivatives/<tenantId>/<jobId>.mp4`.
+- Enforced fail-closed behavior on missing derivative files.
+- Computed authentic SHA-256 via streaming hash calculation.
+- Established repository corruption hygiene gate (`npm run check:hygiene`).
+
+### Step 1: Governed AI Foundation (`e9480d3`)
+- Database model `ModelManifest` with immutable versioning, license classification, and runtime configuration.
+- Commercial license governance policy rejecting copyleft/viral licenses.
+- Pre-deployment CI license gate (`npm run check:model-licenses`).
+- Decoupled AI Worker skeleton (`services/ai-worker/`) with `ModelLoader`, `DetectionNormalizer`, and `WorkerHealthMonitor`.
+- Database-native idempotency on `inferenceId` in `DetectionEvent` (`P2002` race handling).
+
+### Step 2: MediaMTX RTSP Loopback & Frame Acquisition (`9a84ab4`)
+- Absolute loopback invariant: AI worker connects strictly to `rtsp://127.0.0.1:8554/<streamPath>`, with zero camera/ONVIF access.
+- Safe `child_process.spawn()` argument arrays with shell escape injection prevention.
+- Filter-level decimation (`fps=1`, letterbox padding) inside FFmpeg.
+- Memory-bounded stdout chunk accumulator (max 2x frame size) with automatic purge on reconnect.
+- `BoundedFrameQueue` with drop-oldest policy and `ResourceGovernor`.
+- 8-state stream lifecycle with exponential backoff and randomized jitter.
+- Privacy-preserving internal camera discovery (`GET /internal/cameras`).
+
+### Step 3: Governed ONNX Runtime & Object Detection Model (`ba79517`)
+- **Hard Production Guard**: `OnnxInferenceEngine` throws `FATAL CONFIGURATION ERROR` if `AI_INFERENCE_MODE=test-stub` in production. Native mode fails fast if `onnxruntime-node` is missing, setting worker health to `ERROR`.
+- **Authoritative `FrameGeometry` & Coordinate Reversal**: `CoordinateTransformer` unpads and unscales model-space boxes back to normalized source camera coordinates $[0..1]$. Frames missing geometry are rejected without guessing.
+- **Class-Scoped NMS**: `classScopedNms` groups candidates by class before IoU suppression; person and vehicle boxes never suppress each other.
+- **Governed Signature Decoding**: `SignatureDecoder` dynamically decodes ONNX outputs according to `modelSignatureJson`, mapping classes from `classesJson` and filtering by thresholds from `thresholdsJson`.
+- **Global `InferenceScheduler`**: Concurrency bounded to 2, hard deadline timeout `INFERENCE_TIMEOUT_MS = 1000`, newest-frame preference dropping stale frames to prevent latency lag.
+- **Planar Tensor Buffer Pool**: `TensorBufferPool` pre-allocates Float32Array buffers, eliminating memory leaks and GC overhead.
+- **Database-Native Idempotent Ingestion**: `POST /internal/detections` handles duplicate inference IDs via unique upsert and `P2002` race recovery.
+- **Architectural Evidence Isolation Under Load**: `evidenceIsolationLoad.test.ts` proves that severe AI frame load, timeouts, and drops have zero effect on MediaMTX recording, fMP4 segment ingestion, or Section 63 BSA evidence manifests.
+
 
 
