@@ -218,6 +218,38 @@ export async function handleIngestDetection(req: Request, res: Response) {
   }
 }
 
+// Camera Discovery for AI Worker Loopback Feeds (Strict Privacy Redaction)
+export async function handleGetInternalCameras(req: Request, res: Response) {
+  try {
+    const where: any = {};
+    if (typeof req.query.tenantId === 'string' && req.query.tenantId.trim()) {
+      where.tenantId = req.query.tenantId.trim();
+    }
+    if (req.query.isOnline !== undefined) {
+      where.isOnline = req.query.isOnline === 'true';
+    }
+
+    // Explicitly select only non-sensitive fields. Never expose IP, ONVIF credentials, or external RTSP URIs.
+    const cameras = await prisma.camera.findMany({
+      where,
+      select: {
+        id: true,
+        tenantId: true,
+        name: true,
+        streamPath: true,
+        isOnline: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return res.status(200).json({ cameras });
+  } catch (err: any) {
+    console.error('Error fetching internal cameras:', err);
+    return res.status(500).json({ error: 'Failed to retrieve internal cameras' });
+  }
+}
+
+router.get('/cameras', handleGetInternalCameras);
 router.post('/segment-complete', handleSegmentComplete);
 router.post('/model-manifests', handleRegisterModelManifest);
 router.post('/detections', handleIngestDetection);

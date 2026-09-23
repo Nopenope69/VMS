@@ -73,3 +73,65 @@ export interface WorkerHealthStatus {
   };
   inferenceCount: number;
 }
+
+export interface DiscoveredCamera {
+  id: string;
+  tenantId: string;
+  name: string;
+  streamPath: string;
+  isOnline: boolean;
+}
+
+export interface VideoFrame {
+  cameraId: string;
+  tenantId: string;
+  streamPath: string;
+  streamSessionId: string;
+  sequenceNumber: number;
+  sampledAt: Date;
+  receivedAt: Date;
+  width: number;
+  height: number;
+  channels: number;
+  data: Buffer;
+}
+
+export type StreamLifecycleState =
+  | 'DISCOVERED'
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'RUNNING'
+  | 'DISCONNECTED'
+  | 'BACKOFF'
+  | 'STOPPING'
+  | 'STOPPED'
+  | 'FAILED';
+
+export interface CameraStreamConfig {
+  cameraId: string;
+  tenantId: string;
+  streamPath: string;
+  fps?: number;
+  width?: number;
+  height?: number;
+  letterbox?: boolean;
+  queueCapacity?: number;
+}
+
+export interface StreamTelemetry {
+  cameraId: string;
+  state: StreamLifecycleState;
+  lastSampledAt?: Date;
+  lastError?: string;
+  reconnectCount: number;
+  queueDepth: number;
+  droppedFrames: number;
+  processedFrames: number;
+}
+
+export interface ResourceLimits {
+  maxConcurrentStreams: number;
+  maxFps: number;
+  maxWidth: number;
+  maxHeight: number;
+}
