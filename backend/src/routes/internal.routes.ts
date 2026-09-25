@@ -4,6 +4,22 @@ import prisma from '../config/database';
 import { EventType, JobStatus } from '@prisma/client';
 import config from '../config/env';
 import { ModelManifestService } from '../services/ai/modelManifest.service';
+import {
+  spatialEngine,
+  Point2D,
+  TripwireRuleInput,
+  LoiteringRuleInput,
+} from '../services/spatial/engine';
+
+let currentSpatialEngine = spatialEngine;
+
+export function setSpatialEngine(engine: any) {
+  currentSpatialEngine = engine;
+}
+
+export function getSpatialEngine() {
+  return currentSpatialEngine;
+}
 
 const router = Router();
 
@@ -116,6 +132,9 @@ export async function handleIngestDetection(req: Request, res: Response) {
     confidence,
     boundingBox,
     centroid,
+    trackId,
+    trackState,
+    velocity,
     attributesJson,
     timestamp,
     snapshotPath,
@@ -188,6 +207,16 @@ export async function handleIngestDetection(req: Request, res: Response) {
     // 7. Database-native idempotency on inferenceId
     const eventTime = timestamp ? new Date(timestamp) : new Date();
 
+    const effectiveCentroid =
+      centroid && typeof centroid.x === 'number' && typeof centroid.y === 'number'
+        ? { x: centroid.x, y: centroid.y }
+        : boundingBox
+        ? {
+            x: +(boundingBox.x + boundingBox.width / 2).toFixed(4),
+            y: +(boundingBox.y + boundingBox.height / 2).toFixed(4),
+          }
+        : undefined;
+
     const detection = await prisma.detectionEvent.upsert({
       where: { inferenceId },
       update: {}, // Idempotent: duplicate submission leaves original record unmodified
@@ -199,12 +228,143 @@ export async function handleIngestDetection(req: Request, res: Response) {
         type: type as EventType,
         confidence,
         boundingBox: boundingBox ?? undefined,
-        centroid: centroid ?? undefined,
+        centroid: effectiveCentroid ?? undefined,
+        trackId: trackId ?? undefined,
         attributesJson: attributesJson ?? undefined,
         snapshotPath: snapshotPath ?? undefined,
         timestamp: eventTime,
       },
     });
+
+    // 8. Spatial Analytics Rule Evaluation (Only for CONFIRMED tracks with valid trackId & centroid)
+    if (
+      trackId &&
+      trackState === 'CONFIRMED' &&
+      effectiveCentroid &&
+      typeof effectiveCentroid.x === 'number' &&
+      typeof effectiveCentroid.y === 'number'
+    ) {
+      try {
+        const activeRules = await prisma.spatialAnalyticsRule.findMany({
+          where: {
+            cameraId: camera.id,
+            enabled: true,
+          },
+        });
+
+        const currentTimeMs = eventTime.getTime();
+
+        for (const rule of activeRules) {
+          if (rule.type === 'TRIPWIRE' && rule.lineCoordinatesJson) {
+            const lineCoordinates = rule.lineCoordinatesJson as unknown as [Point2D, Point2D];
+            const tripwireRule: TripwireRuleInput = {
+              id: rule.id,
+              name: rule.name,
+              direction: rule.direction,
+              lineCoordinates,
+              cooldownSeconds: rule.cooldownSeconds,
+            };
+
+            const result = currentSpatialEngine.evaluateTripwire(
+              tripwireRule,
+              {
+                trackId,
+                centroid: effectiveCentroid,
+                timestamp: eventTime,
+                cameraId: camera.id,
+              },
+              currentTimeMs
+            );
+
+            if (result) {
+              const cooldownSec = rule.cooldownSeconds || 10;
+              const cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSec * 1000)));
+
+              try {
+                await prisma.incident.create({
+                  data: {
+                    tenantId,
+                    cameraId: camera.id,
+                    ruleId: rule.id,
+                    trackId,
+                    cooldownBucket,
+                    ruleType: 'TRIPWIRE',
+                    title: `Tripwire Breach: ${rule.name}`,
+                    description: `Track ${trackId} crossed tripwire ${rule.name} (${result.directionCrossed})`,
+                    metadataJson: {
+                      directionCrossed: result.directionCrossed,
+                      ruleName: rule.name,
+                      centroid: effectiveCentroid,
+                      inferenceId,
+                    },
+                    timestamp: eventTime,
+                  },
+                });
+              } catch (dbErr: any) {
+                // Database-level uniqueness on (cameraId, ruleId, trackId, cooldownBucket)
+                if (dbErr.code !== 'P2002') {
+                  console.error('Error creating tripwire incident:', dbErr);
+                }
+              }
+            }
+          } else if (rule.type === 'LOITERING' && rule.polygonCoordinatesJson) {
+            const polygon = rule.polygonCoordinatesJson as unknown as Point2D[];
+            const loiteringRule: LoiteringRuleInput = {
+              id: rule.id,
+              name: rule.name,
+              polygon,
+              dwellThresholdSeconds: rule.dwellThresholdSeconds ?? 30,
+              cooldownSeconds: rule.cooldownSeconds,
+            };
+
+            const result = currentSpatialEngine.evaluateLoitering(
+              loiteringRule,
+              {
+                trackId,
+                centroid: effectiveCentroid,
+                timestamp: eventTime,
+                cameraId: camera.id,
+              },
+              currentTimeMs
+            );
+
+            if (result) {
+              const cooldownSec = rule.cooldownSeconds || 30;
+              const cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSec * 1000)));
+
+              try {
+                await prisma.incident.create({
+                  data: {
+                    tenantId,
+                    cameraId: camera.id,
+                    ruleId: rule.id,
+                    trackId,
+                    cooldownBucket,
+                    ruleType: 'LOITERING',
+                    title: `Loitering Detected: ${rule.name}`,
+                    description: `Track ${trackId} loitered in ${rule.name} for ${result.dwellDurationSeconds}s`,
+                    metadataJson: {
+                      dwellDurationSeconds: result.dwellDurationSeconds,
+                      ruleName: rule.name,
+                      centroid: effectiveCentroid,
+                      inferenceId,
+                    },
+                    timestamp: eventTime,
+                  },
+                });
+              } catch (dbErr: any) {
+                // Database-level uniqueness on (cameraId, ruleId, trackId, cooldownBucket)
+                if (dbErr.code !== 'P2002') {
+                  console.error('Error creating loitering incident:', dbErr);
+                }
+              }
+            }
+          }
+        }
+      } catch (spatialErr: any) {
+        console.error('Error evaluating spatial rules:', spatialErr);
+      }
+    }
 
     return res.status(200).json({ success: true, detectionId: detection.id, inferenceId });
   } catch (err: any) {

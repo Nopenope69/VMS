@@ -316,6 +316,7 @@ model Tenant {
   chainOfCustodyLogs    ChainOfCustodyLog[]
   storageVolumes        StorageVolume[]
   storageEpochs         StorageEpoch[]
+  incidents             Incident[]
 }
 
 model License {
@@ -448,6 +449,7 @@ model Camera {
   vehicleObservations   VehicleObservation[]
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   spatialPlacement        CameraSpatialPlacement?
+  incidents               Incident[]
 
   @@index([tenantId, siteId])
   @@index([streamPath])
@@ -1122,7 +1124,33 @@ model SpatialAnalyticsRule {
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
 
+  incidents              Incident[]
+
   @@index([cameraId, type, enabled])
+}
+
+model Incident {
+  id             String                @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId       String
+  camera         Camera                @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  ruleId         String
+  rule           SpatialAnalyticsRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  trackId        String
+  cooldownBucket BigInt
+  ruleType       String                // TRIPWIRE or LOITERING
+  title          String
+  description    String?
+  severity       EventSeverity         @default(WARNING)
+  metadataJson   Json?
+  timestamp      DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([cameraId, ruleId, trackId, cooldownBucket])
+  @@index([tenantId, cameraId, timestamp])
+  @@index([ruleId, trackId])
 }
 
 model DigitalIoPin {
