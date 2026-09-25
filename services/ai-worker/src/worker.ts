@@ -9,6 +9,7 @@ import {
   StaleFrameDroppedError,
   InferenceSchedulerOptions,
 } from './inferenceScheduler';
+import { MultiObjectTracker, MultiObjectTrackerConfig } from './tracker';
 import {
   ModelManifestRecord,
   NormalizedDetectionEvent,
@@ -22,6 +23,7 @@ export interface AiWorkerConfig {
   internalSecret: string;
   workerId?: string;
   schedulerOptions?: InferenceSchedulerOptions;
+  trackerConfig?: MultiObjectTrackerConfig;
 }
 
 export class AiWorker {
@@ -31,6 +33,7 @@ export class AiWorker {
   private healthMonitor: WorkerHealthMonitor;
   private scheduler: InferenceScheduler;
   private loadedModel?: LoadedModelArtifact;
+  private trackers: Map<string, MultiObjectTracker> = new Map();
 
   constructor(config: AiWorkerConfig, engine?: IInferenceEngine) {
     this.config = config;
@@ -41,6 +44,18 @@ export class AiWorker {
     });
     this.healthMonitor = new WorkerHealthMonitor(config.workerId);
     this.scheduler = new InferenceScheduler(config.schedulerOptions || { maxConcurrency: 2, timeoutMs: 1000 });
+  }
+
+  /**
+   * Retrieves or initializes the isolated MultiObjectTracker for a specific camera.
+   */
+  public getTracker(cameraId: string): MultiObjectTracker {
+    let tracker = this.trackers.get(cameraId);
+    if (!tracker) {
+      tracker = new MultiObjectTracker(this.config.trackerConfig);
+      this.trackers.set(cameraId, tracker);
+    }
+    return tracker;
   }
 
   /**
@@ -137,9 +152,15 @@ export class AiWorker {
           })
         );
 
-        // Transmit normalized events to backend internal API
+        // Update camera-isolated MultiObjectTracker
+        const tracker = this.getTracker(cameraId);
+        tracker.trackDetections(normalizedEvents, frameTimestamp || new Date());
+
+        // Transmit ONLY CONFIRMED tracks to backend internal API
         for (const event of normalizedEvents) {
-          await this.apiClient.submitDetection(event);
+          if (event.trackState === 'CONFIRMED') {
+            await this.apiClient.submitDetection(event);
+          }
         }
 
         return normalizedEvents;

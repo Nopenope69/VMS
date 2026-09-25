@@ -150,4 +150,63 @@ describe('AiWorker End-to-End', () => {
     expect(health.status).toBe('ERROR');
     expect(health.lastError).toBeDefined();
   });
+
+  it('maintains camera-isolated tracking state and transmits only CONFIRMED tracks downstream', async () => {
+    const worker = new AiWorker({
+      backendBaseUrl: 'http://127.0.0.1:4000',
+      internalSecret: 'test-secret',
+      trackerConfig: { minHitsToConfirm: 2 },
+    });
+
+    const submitSpy = jest.fn().mockResolvedValue({ success: true, detectionId: 'det-1', inferenceId: 'inf-1' });
+    (worker as any).apiClient.submitDetection = submitSpy;
+
+    await worker.initializeModel(manifest, artifactPath);
+
+    const geometry = CoordinateTransformer.computeGeometry(1920, 1080, 640, 640, true);
+    const frame1: VideoFrame = {
+      cameraId: 'cam-gate',
+      tenantId: 'tenant-100',
+      streamPath: 'cam_gate_feed',
+      streamSessionId: 'sess-1',
+      sequenceNumber: 1,
+      sampledAt: new Date('2026-09-25T10:00:00Z'),
+      receivedAt: new Date('2026-09-25T10:00:00Z'),
+      width: 640,
+      height: 640,
+      channels: 3,
+      data: Buffer.alloc(640 * 640 * 3),
+      geometry,
+    };
+
+    // Frame 1: Tentative hits -> No downstream submission yet
+    const eventsF1 = await worker.processFrame(frame1);
+    expect(eventsF1.length).toBeGreaterThan(0);
+    expect(eventsF1[0].trackState).toBe('TENTATIVE');
+    expect(eventsF1[0].trackId).toBeDefined();
+    expect(submitSpy).not.toHaveBeenCalled();
+
+    // Frame 2: Confirmed hits -> Submits to backend with persistent trackId
+    const frame2: VideoFrame = {
+      ...frame1,
+      sequenceNumber: 2,
+      sampledAt: new Date('2026-09-25T10:00:01Z'),
+      receivedAt: new Date('2026-09-25T10:00:01Z'),
+    };
+
+    const eventsF2 = await worker.processFrame(frame2);
+    expect(eventsF2.length).toBeGreaterThan(0);
+    expect(eventsF2[0].trackState).toBe('CONFIRMED');
+    expect(eventsF2[0].trackId).toBe(eventsF1[0].trackId);
+    expect(submitSpy).toHaveBeenCalled();
+    expect(submitSpy.mock.calls[0][0].trackState).toBe('CONFIRMED');
+    expect(submitSpy.mock.calls[0][0].trackId).toBe(eventsF1[0].trackId);
+
+    // Verify camera tracker isolation: cam-gate tracker is independent from cam-lobby
+    const trackerGate = worker.getTracker('cam-gate');
+    const trackerLobby = worker.getTracker('cam-lobby');
+    expect(trackerGate).not.toBe(trackerLobby);
+    expect(trackerGate.getTracks().length).toBeGreaterThan(0);
+    expect(trackerLobby.getTracks().length).toBe(0);
+  });
 });

@@ -285,6 +285,15 @@ export class MultiObjectTracker {
         // Recovery of lost track preserves persistent trackId!
         track.state = 'CONFIRMED';
       }
+
+      // If input detection object is NormalizedDetectionEvent or has trackId/trackState properties, attach tracking metadata
+      const rawDet = rawDetections[match.detIndex] as any;
+      if (rawDet) {
+        rawDet.trackId = track.trackId;
+        rawDet.trackState = track.state;
+        rawDet.velocity = { ...track.velocity };
+        rawDet.centroid = { ...track.centroid };
+      }
     }
 
     // 4. Update unmatched active tracks (missed frame)
@@ -321,6 +330,11 @@ export class MultiObjectTracker {
       const canCreate = this.ensureCapacityForNewTrack();
       if (!canCreate) {
         this.stats.capacityDrops++;
+        const rawDet = rawDetections[d] as any;
+        if (rawDet) {
+          rawDet.trackId = undefined;
+          rawDet.trackState = undefined;
+        }
         continue;
       }
 
@@ -352,6 +366,14 @@ export class MultiObjectTracker {
       }
 
       this.tracks.set(newTrack.trackId, newTrack);
+
+      const rawDet = rawDetections[d] as any;
+      if (rawDet) {
+        rawDet.trackId = newTrack.trackId;
+        rawDet.trackState = newTrack.state;
+        rawDet.velocity = { ...newTrack.velocity };
+        rawDet.centroid = { ...newTrack.centroid };
+      }
     }
 
     // 6. Purge TERMINATED tracks from active tracker memory
@@ -362,6 +384,18 @@ export class MultiObjectTracker {
     }
 
     return Array.from(this.tracks.values());
+  }
+
+  /**
+   * Tracks incoming normalized detection events, attaching persistent trackId,
+   * trackState, centroid, and velocity in-place.
+   */
+  public trackDetections(
+    events: NormalizedDetectionEvent[],
+    frameTimestamp: Date = new Date()
+  ): NormalizedDetectionEvent[] {
+    this.update(events, frameTimestamp);
+    return events;
   }
 
   /**
