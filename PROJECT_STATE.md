@@ -3,8 +3,8 @@
 **Document Purpose:** Master memory snapshot preserving system state, architectural invariants, verified components, and exact specifications for continuing development.
 
 **Remote Repository:** `https://github.com/Nopenope69/VMS.git` (Branches: `master`, `main`)  
-- **Automated Test Status:** **561/561 tests passing across all 96 test suites** (84 backend suites with 494 tests + 12 AI Worker suites with 67 tests).  
-- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), AI Worker `tsc` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.4s).
+- **Automated Test Status:** **586/586 tests passing across all 98 test suites** (85 backend suites with 505 tests + 13 AI Worker suites with 81 tests).  
+- **Build Status:** Backend `tsc && prisma generate` (exit code `0`), AI Worker `tsc` (exit code `0`), Frontend `tsc && vite build` (exit code `0`, ~2.3s).
 - **Hygiene & Governance Gates:** `npm run check:hygiene` (exit code `0`), `npm run check:model-licenses` (exit code `0`).
 
 ---
@@ -235,17 +235,27 @@
 ---
 
 ## 3. Test & Verification Summary
-- **Backend Test Suites:** 82 suites, 484 tests passing.
+- **Backend Test Suites:** 85 suites, 505 tests passing.
+  - `spatialAnalyticsIntegration.test.ts` (11 passed)
+  - `evidenceIsolationLoad.test.ts` (1 passed)
   - `internalCameras.test.ts` (7 passed)
   - `evidenceIsolation.test.ts` (3 passed)
   - `modelManifest.test.ts` (24 passed)
   - `aiWorker.test.ts` (8 passed)
   - `redaction.test.ts` (10 passed)
-- **AI Worker Dedicated Test Suites:** 5 suites, 31 tests passing (`cd services/ai-worker && npm test`).
+- **AI Worker Dedicated Test Suites:** 13 suites, 81 tests passing (`cd services/ai-worker && npm test`).
+  - `tracker.test.ts` (8 passed)
+  - `classScopedNms.test.ts` (5 passed)
+  - `signatureDecoder.test.ts` (7 passed)
+  - `inferenceEngine.test.ts` (6 passed)
+  - `inferenceScheduler.test.ts` (6 passed)
   - `frameExtractor.test.ts` (7 passed)
-  - `frameQueue.test.ts` (7 passed)
-  - `rtspUrlBuilder.test.ts` (10 passed)
+  - `tensorPool.test.ts` (6 passed)
   - `streamManager.test.ts` (3 passed)
+  - `worker.test.ts` (6 passed)
+  - `coordinateTransformer.test.ts` (8 passed)
+  - `rtspUrlBuilder.test.ts` (10 passed)
+  - `frameQueue.test.ts` (7 passed)
   - `streamSupervisor.test.ts` (4 passed)
   - `floorplan.test.ts` (5 passed)
   - `federationAuth.test.ts` (7 passed)
@@ -385,6 +395,16 @@
 - **Planar Tensor Buffer Pool**: `TensorBufferPool` pre-allocates Float32Array buffers, eliminating memory leaks and GC overhead.
 - **Database-Native Idempotent Ingestion**: `POST /internal/detections` handles duplicate inference IDs via unique upsert and `P2002` race recovery.
 - **Architectural Evidence Isolation Under Load**: `evidenceIsolationLoad.test.ts` proves that severe AI frame load, timeouts, and drops have zero effect on MediaMTX recording, fMP4 segment ingestion, or Section 63 BSA evidence manifests.
+
+### Step 4: Multi-Object Tracking & Spatial Analytics Integration (`b5f3844`)
+- **Class-Scoped Association Invariant**: IoU association is strictly partitioned by object class (`person` $\leftrightarrow$ `person`, `vehicle` $\leftrightarrow$ `vehicle`). Cross-class candidate pairs receive $\text{cost} = \infty$ and are discarded before IoU calculation, preventing cross-class track corruption.
+- **Deterministic 4-State Lifecycle**: Tracks advance through `TENTATIVE` $\rightarrow$ `CONFIRMED` $\rightarrow$ `LOST` $\rightarrow$ `TERMINATED`. Persistent UUIDv4 `trackId` is assigned at creation and maintained until termination. Only `CONFIRMED` tracks are emitted downstream to backend spatial analytics.
+- **Bounded Memory & Eviction Precedence**: Strict per-camera capacity limit of 50 active tracks. Eviction order on capacity pressure: `TERMINATED` $\rightarrow$ `LOST` $\rightarrow$ `TENTATIVE`. `CONFIRMED` tracks are never evicted for capacity; incoming candidate tracks are rejected when all 50 slots are occupied by active confirmed tracks.
+- **Constant-Velocity Projection & Bounded Trajectory**: Predicts search bounding box locations during tracking gaps using calculated velocity ($dx = v_x \cdot \Delta t, dy = v_y \cdot \Delta t$). Trajectory history is chronological and bounded to the last 30 points.
+- **Per-Camera Isolation**: `AiWorker` manages independent `MultiObjectTracker` instances isolated by `cameraId`. Tracker states and capacity are strictly separated across feeds.
+- **Directional Tripwires & Continuous Loitering**: Ingestion route `POST /internal/detections` evaluates confirmed tracks against active `SpatialAnalyticsRule`s via `SpatialEngine`. Supports `A_TO_B`, `B_TO_A`, and `BIDIRECTIONAL` tripwire crossings with track-state hysteresis. Continuous loitering requires unbroken presence inside the polygon; exiting the polygon resets the dwell timer immediately.
+- **Database-Level Incident Uniqueness & Cooldown Deduplication**: `Incident` model enforces `@@unique([cameraId, ruleId, trackId, cooldownBucket])` with `cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSeconds * 1000)))`, providing atomic database-level concurrency protection against duplicate alerts during race conditions.
+- **Strict Evidence Plane Isolation**: Spatial analytics evaluation and incident creation operate strictly asynchronously or decoupled from recording, retaining zero coupling to MediaMTX streaming, fMP4 segmenting, or Section 63 BSA evidence manifests.
 
 
 
