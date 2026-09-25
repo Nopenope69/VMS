@@ -43,6 +43,43 @@ export interface RawDetection {
   };
 }
 
+export type TrackState =
+  | 'TENTATIVE'
+  | 'CONFIRMED'
+  | 'LOST'
+  | 'TERMINATED';
+
+export interface TrackedObject {
+  trackId: string;
+  classId: number;
+  label: string;
+  state: TrackState;
+  box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  centroid: {
+    x: number;
+    y: number;
+  };
+  velocity: {
+    vx: number;
+    vy: number;
+  };
+  trajectory: Array<{
+    x: number;
+    y: number;
+    timestamp: Date;
+  }>;
+  hits: number;
+  consecutiveHits: number;
+  lostFrames: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+}
+
 export interface NormalizedDetectionEvent {
   tenantId: string;
   cameraId: string;
@@ -59,6 +96,12 @@ export interface NormalizedDetectionEvent {
   centroid?: {
     x: number;
     y: number;
+  };
+  trackId?: string;
+  trackState?: TrackState;
+  velocity?: {
+    vx: number;
+    vy: number;
   };
   attributesJson?: Record<string, any>;
   timestamp: string;
