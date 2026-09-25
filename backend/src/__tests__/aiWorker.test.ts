@@ -176,6 +176,7 @@ describe('AI Worker Skeleton: Artifact Integrity & Inference Verification', () =
           backendBaseUrl: 'http://127.0.0.1:4000/api/v1/internal',
           internalSecret: 'test-secret',
           workerId: 'test-worker-01',
+          trackerConfig: { minHitsToConfirm: 1 },
         },
         engine
       );
