@@ -30,12 +30,14 @@ describe('Frontend Static Distribution & Contract Validation Test Suite', () => 
             execSync('npm ci', { cwd: frontendDir, stdio: 'pipe' });
           }
           execSync('npm run build', { cwd: frontendDir, stdio: 'pipe' });
-        } catch {
-          // If compilation fails or tools are unavailable, let assertions report exact failure
+        } catch (err: any) {
+          // Surface the real build failure; the dist assertions below will then fail loudly.
+          const detail = err?.stderr?.toString?.() || err?.message || String(err);
+          console.error(`[frontendStaticValidation] frontend build failed on fresh checkout:\n${detail}`);
         }
       }
     }
-  }, 30000);
+  }, 300000);
 
   it('verifies production frontend dist bundle exists and references assets', () => {
     expect(fs.existsSync(frontendDist)).toBe(true);

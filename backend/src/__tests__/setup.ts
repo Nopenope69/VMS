@@ -1,3 +1,7 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ||
   'postgresql://vigilone:vigilone_dev_secret_2026@localhost:5432/vigilone_db?schema=public';
@@ -5,3 +9,19 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'vigilone_dev_jwt_signing_key
 process.env.INTERNAL_API_SECRET =
   process.env.INTERNAL_API_SECRET || 'vigilone_internal_secret_token_98234';
 process.env.NODE_ENV = 'test';
+
+// Host-state isolation: services default to /etc/vigilone/*. When the suite runs as root
+// (containers, sandboxes) those writes succeed and leak between test files and runs
+// (e.g. a ClockGuard floor persisted "now" makes later fixed-date assertions fail).
+// Give every test file its own throwaway state directory.
+const hostStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vigilone-test-state-'));
+process.env.CLOCK_GUARD_STATE_PATH =
+  process.env.CLOCK_GUARD_STATE_PATH || path.join(hostStateDir, 'clock_guard.state');
+process.env.OTA_RELEASE_STATE_PATH =
+  process.env.OTA_RELEASE_STATE_PATH || path.join(hostStateDir, 'ota_release.state');
+process.env.APPLIANCE_MANIFEST_PATH =
+  process.env.APPLIANCE_MANIFEST_PATH || path.join(hostStateDir, 'appliance_manifest.json');
+process.env.LICENSE_MIRROR_PATH =
+  process.env.LICENSE_MIRROR_PATH || path.join(hostStateDir, 'license.json');
+process.env.PIN_STATE_MIRROR_PATH =
+  process.env.PIN_STATE_MIRROR_PATH || path.join(hostStateDir, 'pinned_segments.state');
