@@ -14,3 +14,9 @@ found. Pick them up in the phase noted.
 | `soakHarness.ts` synthetic-payload mode writes non-video bytes; superseded by `scripts/soak` (real ffmpeg streams). Retire or relabel as SIMULATED. | P0.4 | Phase 1 |
 | Frontend chunk is > 500 kB after minification (Vite warning); code-split by page. | P0.1 | Later UI work |
 | `npm audit` reports 3 moderate vulnerabilities in backend dependencies (not triaged). | P0.1 | Phase 1 |
+| ClockGuard state (skew detected, trusted floor) is not exposed via the API or metrics, so the clock-jump drill cannot verify detection automatically. Add it to `/health` or `/metrics`. | P1.2 | Phase 1 follow-up |
+| `RecordingCatalog.registerSegment` may index a segment that is still being written (size/duration of a partial file). Index only after the active-write grace period or on the segment-complete hook. | P1.3 rehearsal | Phase 1 follow-up |
+| Orphan (unregistered-camera) footage moved to `.quarantine/` can later be pruned by the 5 % quarantine cap. Decide whether footage of a camera removed from the database may ever be deleted automatically. | P1.3 rehearsal | Needs a product decision |
+| Soak rehearsal did not register the simulated cameras in the database, so the backend was idle during it. A realistic software soak needs registered cameras with MediaMTX pulling from the simulated sources (the appliance's real topology). | P1.3 | Phase 1 follow-up |
+| `tc netem` is unavailable in the agent sandbox; `network-fault.sh` has only been exercised to its NOT_VERIFIED path. | P1.2 | P1.6 (human run) |
+| Docker image builds could not run in the agent sandbox (build containers cannot use the session proxy), so compose-target drills (`postgres-kill.sh`, compose variants of the others) have not been executed. | P1.2/P1.5 | P1.5/P1.6 (human run) |

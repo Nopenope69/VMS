@@ -307,6 +307,12 @@ install_application_files() {
         mkdir -p "${INSTALL_DIR}/frontend"
         cp -rf "${SOURCE_DIR}/frontend/." "${INSTALL_DIR}/frontend/"
 
+        # Field-validation tooling (bench, fault drills, soak, acceptance) used by vigilonectl.
+        if [[ -d "${SOURCE_DIR}/scripts" ]]; then
+            mkdir -p "${INSTALL_DIR}/scripts"
+            cp -rf "${SOURCE_DIR}/scripts/." "${INSTALL_DIR}/scripts/"
+        fi
+
         if [[ -d "${SOURCE_DIR}/docs" ]]; then
             mkdir -p "${INSTALL_DIR}/docs"
             cp -rf "${SOURCE_DIR}/docs/." "${INSTALL_DIR}/docs/"

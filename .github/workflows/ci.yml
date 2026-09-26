@@ -181,6 +181,28 @@ jobs:
         working-directory: ./backend
         run: npm run check:feature-flag-docs
 
+  field-tooling-checks:
+    name: Field Validation Tooling (bench, fault, soak, acceptance)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests (node --test)
+        run: node --test scripts/lib/*.test.mjs scripts/soak/*.test.mjs
+
+      - name: Shell syntax
+        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done
+
+      - name: Compatibility matrix is generated from committed bench reports
+        run: node scripts/bench/update-matrix.mjs --check
+
   packaging-and-installer-checks:
     name: Packaging, vigilonectl & Installer Invariants
     runs-on: ubuntu-latest
