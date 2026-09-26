@@ -138,6 +138,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
   it('wires StorageSentinelService to ingestEvent on pinned storage exhaustion', async () => {
     // Return 0 unpinned segments -> triggers PINNED_STORAGE_EXHAUSTION
     (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
 
     const sentinel = new StorageSentinelService(prisma as any);
     await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
@@ -149,5 +150,52 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
     expect(eventArg.severity).toBe('CRITICAL');
     expect(eventArg.payload.kind).toBe('SYSTEM_ALERT');
     expect(eventArg.payload.alertCode).toBe('PINNED_STORAGE_EXHAUSTION');
+    // Alarms need a real tenant row (the old 'system-appliance' pseudo-tenant violated the FK).
+    expect(eventArg.tenantId).toBe('tenant-automation');
+  });
+
+  it('reports NON_RECORDING_STORAGE_EXHAUSTION (not "all pinned") when there are no finalized recordings', async () => {
+    (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
+    (prisma.recordingSegment as any).count = jest.fn().mockResolvedValue(0);
+    try {
+      const sentinel = new StorageSentinelService(prisma as any);
+      await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+      const eventArg = ingestSpy.mock.calls[0][0];
+      expect(eventArg.payload.alertCode).toBe('NON_RECORDING_STORAGE_EXHAUSTION');
+      expect(eventArg.payload.message).toMatch(/no finalized recordings to purge/);
+    } finally {
+      delete (prisma.recordingSegment as any).count;
+    }
+  });
+
+  it('reports PINNED_STORAGE_EXHAUSTION with the pinned count when finalized recordings exist but none are purgeable', async () => {
+    (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
+    (prisma.recordingSegment as any).count = jest.fn().mockResolvedValue(12);
+    try {
+      const sentinel = new StorageSentinelService(prisma as any);
+      await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+      const eventArg = ingestSpy.mock.calls[0][0];
+      expect(eventArg.payload.alertCode).toBe('PINNED_STORAGE_EXHAUSTION');
+      expect(eventArg.payload.message).toMatch(/all 12 finalized recordings are pinned/);
+    } finally {
+      delete (prisma.recordingSegment as any).count;
+    }
+  });
+
+  it('raises the storage alarm for every tenant, and for none (loudly) before bootstrap', async () => {
+    (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 't1' }, { id: 't2' }]);
+    await new StorageSentinelService(prisma as any).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+    expect(ingestSpy.mock.calls.map((c: any[]) => c[0].tenantId)).toEqual(['t1', 't2']);
+
+    ingestSpy.mockClear();
+    (prisma.tenant.findMany as jest.Mock).mockResolvedValue([]);
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await new StorageSentinelService(prisma as any).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+    expect(ingestSpy).not.toHaveBeenCalled();
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('no tenant exists yet'))).toBe(true);
+    errSpy.mockRestore();
   });
 });

@@ -1,4 +1,5 @@
 import checkDiskSpace from 'check-disk-space';
+import { monitorEventLoopDelay, IntervalHistogram } from 'perf_hooks';
 import { SegmentStatus } from '@prisma/client';
 import prisma from '../../config/database';
 import config from '../../config/env';
@@ -16,6 +17,18 @@ export class MetricsService {
   private static httpRequestDurationBuckets: Map<string, number> = new Map(); // key = "route_method_le"
   private static httpRequestDurationSum: Map<string, number> = new Map(); // key = "route_method"
   private static httpRequestDurationCount: Map<string, number> = new Map(); // key = "route_method"
+
+  // Event-loop delay histogram (perf_hooks, 20 ms resolution). Created lazily on first scrape so
+  // tests and short-lived scripts do not start a sampler they never read.
+  private static eventLoopDelay: IntervalHistogram | null = null;
+
+  private static getEventLoopDelay(): IntervalHistogram {
+    if (!this.eventLoopDelay) {
+      this.eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+      this.eventLoopDelay.enable();
+    }
+    return this.eventLoopDelay;
+  }
 
   // Standard histogram latency buckets (seconds)
   public static readonly LATENCY_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
@@ -58,6 +71,30 @@ export class MetricsService {
     lines.push('# HELP vigilone_process_resident_memory_bytes Resident memory size in bytes');
     lines.push('# TYPE vigilone_process_resident_memory_bytes gauge');
     lines.push(`vigilone_process_resident_memory_bytes ${mem.rss}`);
+    lines.push('# HELP vigilone_process_heap_used_bytes V8 heap used in bytes');
+    lines.push('# TYPE vigilone_process_heap_used_bytes gauge');
+    lines.push(`vigilone_process_heap_used_bytes ${mem.heapUsed}`);
+
+    const cpu = process.cpuUsage();
+    lines.push('# HELP vigilone_process_cpu_seconds_total Total user+system CPU time consumed by the process');
+    lines.push('# TYPE vigilone_process_cpu_seconds_total counter');
+    lines.push(`vigilone_process_cpu_seconds_total ${((cpu.user + cpu.system) / 1e6).toFixed(3)}`);
+
+    // Event-loop delay since the previous scrape (the histogram is reset after each read, so each
+    // scrape reports the window since the last one; the first scrape starts the sampler).
+    const eld = this.getEventLoopDelay();
+    const hasSamples = eld.count > 0;
+    lines.push('# HELP vigilone_event_loop_lag_seconds Event-loop delay over the last scrape window (perf_hooks)');
+    lines.push('# TYPE vigilone_event_loop_lag_seconds gauge');
+    if (hasSamples) {
+      lines.push(`vigilone_event_loop_lag_seconds{quantile="0.5"} ${(eld.percentile(50) / 1e9).toFixed(6)}`);
+      lines.push(`vigilone_event_loop_lag_seconds{quantile="0.99"} ${(eld.percentile(99) / 1e9).toFixed(6)}`);
+      lines.push(`vigilone_event_loop_lag_seconds{quantile="1"} ${(eld.max / 1e9).toFixed(6)}`);
+    }
+    lines.push('# HELP vigilone_event_loop_lag_samples Number of event-loop delay samples in the last scrape window');
+    lines.push('# TYPE vigilone_event_loop_lag_samples gauge');
+    lines.push(`vigilone_event_loop_lag_samples ${eld.count}`);
+    eld.reset();
 
     // 2. Storage Vitals
     try {

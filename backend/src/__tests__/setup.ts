@@ -27,3 +27,7 @@ process.env.LICENSE_MIRROR_PATH =
   process.env.LICENSE_MIRROR_PATH || path.join(hostStateDir, 'license.json');
 process.env.PIN_STATE_MIRROR_PATH =
   process.env.PIN_STATE_MIRROR_PATH || path.join(hostStateDir, 'pinned_segments.state');
+
+// Crash-recovery classification tests create files and recover them immediately; the active-write
+// grace period is exercised explicitly in crashRecoveryActiveSegment.test.ts.
+process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS = process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS || '0';
