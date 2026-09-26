@@ -1,0 +1,476 @@
+{
+  "valid": [
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "system",
+        "id": "stream-watchdog"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "camera.offline",
+      "severity": "CRITICAL",
+      "payload": {
+        "reason": "RTSP_TIMEOUT",
+        "lastSeenUtc": "2026-09-26T09:59:30.000Z"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "recorder",
+        "id": "mediamtx"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "recording.started",
+      "payload": {
+        "segmentId": "seg_01"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": null,
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "storage",
+        "id": "vol_01"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "storage.critical",
+      "payload": {
+        "volumeId": "vol_01",
+        "usedPercent": 96.5,
+        "freeBytes": 1073741824
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "motion",
+        "id": "scene-diff"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "motion.detected",
+      "payload": {
+        "score": 0.42,
+        "method": "SCENE_DIFF"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "ai",
+        "id": "onnx-worker"
+      },
+      "correlationId": "corr_01",
+      "provenance": {
+        "adapterId": "onnx-worker",
+        "adapterVersion": "0.1.0",
+        "modelId": "mm_01",
+        "modelName": "example-detector",
+        "modelVersion": "0.0.1",
+        "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": "onnxruntime",
+        "executionProvider": "cpu",
+        "inferenceId": "inf_01",
+        "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+      },
+      "type": "ai.person_detected",
+      "payload": {
+        "objectClass": "person",
+        "confidence": 0.87,
+        "bbox": {
+          "x": 0.1,
+          "y": 0.2,
+          "width": 0.2,
+          "height": 0.5
+        },
+        "trackId": "trk_7"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "analytics",
+        "id": "spatial-engine"
+      },
+      "correlationId": "corr_01",
+      "provenance": {
+        "adapterId": "onnx-worker",
+        "adapterVersion": "0.1.0",
+        "modelId": "mm_01",
+        "modelName": "example-detector",
+        "modelVersion": "0.0.1",
+        "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": "onnxruntime",
+        "executionProvider": "cpu",
+        "inferenceId": "inf_01",
+        "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+      },
+      "type": "ai.line_crossing",
+      "payload": {
+        "ruleId": "rule_1",
+        "trackId": "trk_7",
+        "direction": "A_TO_B",
+        "objectClass": "person"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "ai",
+        "id": "anpr-adapter"
+      },
+      "correlationId": "corr_01",
+      "provenance": {
+        "adapterId": "onnx-worker",
+        "adapterVersion": "0.1.0",
+        "modelId": "mm_01",
+        "modelName": "example-detector",
+        "modelVersion": "0.0.1",
+        "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": "onnxruntime",
+        "executionProvider": "cpu",
+        "inferenceId": "inf_01",
+        "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+      },
+      "type": "ai.plate_detected",
+      "payload": {
+        "plateText": "KA01AB1234",
+        "confidence": 0.91
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": null,
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "access",
+        "id": "door-ctrl-1"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "access.door_opened",
+      "payload": {
+        "doorId": "door_1",
+        "forced": false
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": null,
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "alarm_panel",
+        "id": "panel_1"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "alarm.fire",
+      "severity": "CRITICAL",
+      "payload": {
+        "panelId": "panel_1",
+        "zone": "Z3",
+        "state": "ALARM"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": "site_01",
+      "cameraId": "cam_01",
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "pos",
+        "id": "till_4"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "pos.transaction",
+      "payload": {
+        "terminalId": "till_4",
+        "transactionId": "tx_991",
+        "amountMinor": 129900,
+        "currency": "INR"
+      }
+    },
+    {
+      "id": "evt_01",
+      "version": 1,
+      "tenantId": "t_01",
+      "siteId": null,
+      "cameraId": null,
+      "timestampUtc": "2026-09-26T10:00:00.120Z",
+      "source": {
+        "kind": "system",
+        "id": "licensing"
+      },
+      "correlationId": "corr_01",
+      "provenance": null,
+      "type": "system.license_expiring",
+      "payload": {
+        "code": "LICENSE_EXPIRING",
+        "message": "Licence expires in 7 days"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "why": "ai.* event without provenance",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "ai",
+          "id": "w"
+        },
+        "correlationId": "corr_01",
+        "provenance": null,
+        "type": "ai.person_detected",
+        "payload": {
+          "objectClass": "person",
+          "confidence": 0.9,
+          "bbox": {
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.1,
+            "height": 0.1
+          }
+        }
+      }
+    },
+    {
+      "why": "provenance on a non-AI event",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "camera",
+          "id": "cam_01"
+        },
+        "correlationId": "corr_01",
+        "provenance": {
+          "adapterId": "onnx-worker",
+          "adapterVersion": "0.1.0",
+          "modelId": "mm_01",
+          "modelName": "example-detector",
+          "modelVersion": "0.0.1",
+          "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "runtime": "onnxruntime",
+          "executionProvider": "cpu",
+          "inferenceId": "inf_01",
+          "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+        },
+        "type": "camera.online",
+        "payload": {}
+      }
+    },
+    {
+      "why": "unknown event type",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "camera",
+          "id": "cam_01"
+        },
+        "correlationId": "corr_01",
+        "provenance": null,
+        "type": "camera.exploded",
+        "payload": {}
+      }
+    },
+    {
+      "why": "local-offset timestamp",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T15:30:00+05:30",
+        "source": {
+          "kind": "camera",
+          "id": "cam_01"
+        },
+        "correlationId": "corr_01",
+        "provenance": null,
+        "type": "camera.online",
+        "payload": {}
+      }
+    },
+    {
+      "why": "confidence above 1",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "camera",
+          "id": "cam_01"
+        },
+        "correlationId": "corr_01",
+        "provenance": null,
+        "type": "motion.detected",
+        "payload": {
+          "score": 1.4
+        }
+      }
+    },
+    {
+      "why": "bbox outside frame",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "ai",
+          "id": "w"
+        },
+        "correlationId": "corr_01",
+        "provenance": {
+          "adapterId": "onnx-worker",
+          "adapterVersion": "0.1.0",
+          "modelId": "mm_01",
+          "modelName": "example-detector",
+          "modelVersion": "0.0.1",
+          "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "runtime": "onnxruntime",
+          "executionProvider": "cpu",
+          "inferenceId": "inf_01",
+          "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+        },
+        "type": "ai.vehicle_detected",
+        "payload": {
+          "objectClass": "car",
+          "confidence": 0.8,
+          "bbox": {
+            "x": 0.9,
+            "y": 0.1,
+            "width": 0.5,
+            "height": 0.1
+          }
+        }
+      }
+    },
+    {
+      "why": "invented model hash",
+      "event": {
+        "id": "evt_01",
+        "version": 1,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "ai",
+          "id": "w"
+        },
+        "correlationId": "corr_01",
+        "provenance": {
+          "adapterId": "onnx-worker",
+          "adapterVersion": "0.1.0",
+          "modelId": "mm_01",
+          "modelName": "example-detector",
+          "modelVersion": "0.0.1",
+          "modelSha256": "not-a-hash",
+          "runtime": "onnxruntime",
+          "executionProvider": "cpu",
+          "inferenceId": "inf_01",
+          "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+        },
+        "type": "ai.person_detected",
+        "payload": {
+          "objectClass": "person",
+          "confidence": 0.9,
+          "bbox": {
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.1,
+            "height": 0.1
+          }
+        }
+      }
+    },
+    {
+      "why": "wrong version",
+      "event": {
+        "id": "evt_01",
+        "version": 2,
+        "tenantId": "t_01",
+        "siteId": "site_01",
+        "cameraId": "cam_01",
+        "timestampUtc": "2026-09-26T10:00:00.120Z",
+        "source": {
+          "kind": "camera",
+          "id": "cam_01"
+        },
+        "correlationId": "corr_01",
+        "provenance": null,
+        "type": "camera.online",
+        "payload": {}
+      }
+    }
+  ]
+}
