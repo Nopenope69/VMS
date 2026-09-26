@@ -482,6 +482,10 @@ export class OtaUpdateService {
       failedCameraIds: [],
     };
 
+    if (options.mockHealthCheck && process.env.NODE_ENV !== 'test') {
+      throw new Error('OTA_TEST_HOOK_FORBIDDEN: mockHealthCheck is only permitted under NODE_ENV=test');
+    }
+
     while (Date.now() < deadline) {
       if (options.mockHealthCheck) {
         result = await options.mockHealthCheck();
@@ -676,6 +680,13 @@ export class OtaUpdateService {
       mockHealthCheck?: () => Promise<HealthCheckResult>;
     } = {}
   ): Promise<{ success: boolean; version?: string; error?: string }> {
+    if ((options.skipHealthCheck || options.mockHealthCheck) && process.env.NODE_ENV !== 'test') {
+      // Reporting a successful OTA without a real post-update health check is fake success.
+      return {
+        success: false,
+        error: 'OTA_TEST_HOOK_FORBIDDEN: skipHealthCheck/mockHealthCheck are only permitted under NODE_ENV=test',
+      };
+    }
     if (!fs.existsSync(bundleTarOrDir)) {
       return { success: false, error: `OTA_BUNDLE_NOT_FOUND: Path does not exist: ${bundleTarOrDir}` };
     }

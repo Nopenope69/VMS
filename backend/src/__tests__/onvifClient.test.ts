@@ -152,7 +152,7 @@ describe('Phase 5: ONVIF Client Deep Module & PTZ Control Suite', () => {
       });
     });
 
-    it('falls back to safe generic device info if getDeviceInformation errors', async () => {
+    it('reports UNKNOWN (never invented) device info with the error if getDeviceInformation errors', async () => {
       const mockCam = createMockCamInstance({
         getDeviceInformation: jest.fn((cb) => cb(new Error('WSDL Fault'), null)),
       });
@@ -162,9 +162,10 @@ describe('Phase 5: ONVIF Client Deep Module & PTZ Control Suite', () => {
       });
 
       const info = await manager.getDeviceInformation(testCreds);
-      expect(info.manufacturer).toBe('Generic ONVIF');
-      expect(info.model).toBe('Camera');
-      expect(info.firmwareVersion).toBe('1.0.0');
+      expect(info.manufacturer).toBe('UNKNOWN');
+      expect(info.model).toBe('UNKNOWN');
+      expect(info.firmwareVersion).toBe('UNKNOWN');
+      expect(info.deviceInfoError).toBe('WSDL Fault');
     });
 
     it('resolves main & sub stream URIs, embeds credentials, and identifies PTZ support', async () => {

@@ -169,6 +169,10 @@ jobs:
         working-directory: ./backend
         run: npm run check:model-licenses
 
+      - name: Fail-loud gate (no fake-success patterns outside the justified allowlist)
+        working-directory: ./backend
+        run: npm run check:no-fake-success
+
       - name: README feature-flag table is generated, not hand-typed
         working-directory: ./backend
         run: npm run check:feature-flag-docs

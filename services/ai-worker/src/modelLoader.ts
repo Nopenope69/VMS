@@ -36,7 +36,9 @@ export class ModelLoader {
       throw new Error('Missing runtime configuration');
     }
 
-    const supportedRuntimes = ['onnxruntime', 'openvino', 'mock-runtime'];
+    // 'mock-runtime' is a test fixture only (NODE_ENV=test); never a runtime fallback.
+    const supportedRuntimes =
+      process.env.NODE_ENV === 'test' ? ['onnxruntime', 'openvino', 'mock-runtime'] : ['onnxruntime', 'openvino'];
     if (!supportedRuntimes.includes(config.runtime.toLowerCase())) {
       throw new Error(`Unsupported runtime: '${config.runtime}'. Supported: ${supportedRuntimes.join(', ')}`);
     }

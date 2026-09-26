@@ -21,7 +21,8 @@
     "check:hygiene": "ts-node scripts/ci/check-repo-hygiene.ts",
     "check:model-licenses": "ts-node scripts/ci/check-model-licenses.ts",
     "docs:feature-flags": "ts-node scripts/ci/generate-feature-flag-docs.ts",
-    "check:feature-flag-docs": "ts-node scripts/ci/generate-feature-flag-docs.ts --check"
+    "check:feature-flag-docs": "ts-node scripts/ci/generate-feature-flag-docs.ts --check",
+    "check:no-fake-success": "ts-node scripts/ci/check-no-fake-success.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

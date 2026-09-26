@@ -61,6 +61,12 @@ export class OnnxInferenceEngine implements IInferenceEngine {
         'FATAL CONFIGURATION ERROR: AI_INFERENCE_MODE=test-stub is strictly forbidden in production. Production appliances must use native inference.'
       );
     }
+    // Stub detections are a test fixture, not a runtime fallback: allowed only under NODE_ENV=test.
+    if (envMode === 'test-stub' && process.env.NODE_ENV !== 'test') {
+      throw new Error(
+        'FATAL CONFIGURATION ERROR: AI_INFERENCE_MODE=test-stub is only permitted when NODE_ENV=test. Stub detections must never reach a running appliance.'
+      );
+    }
 
     this.mode = envMode === 'test-stub' ? 'test-stub' : 'native';
     this.tensorPool = new TensorBufferPool({ capacity: poolCapacity });
