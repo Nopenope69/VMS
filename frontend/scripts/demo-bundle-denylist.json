@@ -1,0 +1,20 @@
+{
+  "description": "Strings that must never appear in a production frontend bundle (VITE_DEMO_MODE unset). Checked by frontend/scripts/check-no-demo-in-bundle.mjs and backend/src/__tests__/frontendDemoHazards.test.ts.",
+  "strings": [
+    "Bypass & Test UI",
+    "Bypass Setup & Test UI",
+    "Fill Demo Data",
+    "Fill Credentials",
+    "demo-jwt-token-preview-mode",
+    "Password123!",
+    "vigilone_dev_setup_token",
+    "demo-mode-setup-token-not-valid-in-production",
+    "DemoOnly-Change-Me-1!",
+    "Alex Vance",
+    "demo-alm-",
+    "demo-evt-",
+    "demo-cam-",
+    "demo-super-admin",
+    "UI/UX Evaluation & Testing Mode"
+  ]
+}

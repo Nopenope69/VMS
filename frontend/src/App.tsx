@@ -17,7 +17,7 @@ import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import CommandPalette from './components/CommandPalette';
 import HotkeyHelpModal from './components/HotkeyHelpModal';
-import { DEMO_SAMPLE_CAMERAS } from './pages/LiveView';
+import { DEMO_SAMPLE_CAMERAS } from './demo/fixtures';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 import {
   ALL_FEATURES_OFF,
@@ -158,10 +158,10 @@ export const App: React.FC = () => {
         .get('/cameras')
         .then((res) => {
           const cams = res.data.cameras || [];
-          setCamerasList(cams.length > 0 ? cams : DEMO_SAMPLE_CAMERAS);
+          setCamerasList(__DEMO_MODE__ && cams.length === 0 ? DEMO_SAMPLE_CAMERAS : cams);
         })
         .catch(() => {
-          setCamerasList(DEMO_SAMPLE_CAMERAS);
+          setCamerasList(__DEMO_MODE__ ? DEMO_SAMPLE_CAMERAS : []);
         });
     }
   }, [token]);

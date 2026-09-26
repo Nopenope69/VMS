@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { ensureFrontendDist } from './helpers/ensureFrontendDist';
 
 /**
  * Frontend Static Distribution & Contract Validation Test Suite
@@ -20,23 +21,8 @@ describe('Frontend Static Distribution & Contract Validation Test Suite', () => 
   const frontendApi = path.join(rootDir, 'frontend/src/services/api.ts');
 
   beforeAll(() => {
-    // If frontend/dist is missing on local dev or fresh clone, auto-build it if frontend source exists
-    if (!fs.existsSync(frontendDist)) {
-      const frontendDir = path.join(rootDir, 'frontend');
-      if (fs.existsSync(path.join(frontendDir, 'package.json'))) {
-        try {
-          const { execSync } = require('child_process');
-          if (!fs.existsSync(path.join(frontendDir, 'node_modules'))) {
-            execSync('npm ci', { cwd: frontendDir, stdio: 'pipe' });
-          }
-          execSync('npm run build', { cwd: frontendDir, stdio: 'pipe' });
-        } catch (err: any) {
-          // Surface the real build failure; the dist assertions below will then fail loudly.
-          const detail = err?.stderr?.toString?.() || err?.message || String(err);
-          console.error(`[frontendStaticValidation] frontend build failed on fresh checkout:\n${detail}`);
-        }
-      }
-    }
+    // If frontend/dist is missing on local dev or fresh clone, build it (production mode).
+    ensureFrontendDist();
   }, 300000);
 
   it('verifies production frontend dist bundle exists and references assets', () => {

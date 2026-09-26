@@ -15,6 +15,30 @@ export interface SecretsAuditReport {
   timestamp: string;
 }
 
+/** Development defaults that are public (repo, compose file) and therefore never secret. */
+export const KNOWN_DEFAULT_SECRETS = [
+  'eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=',
+  'vigilone_dev_setup_token_99182',
+  'vigilone_turn_secret_dev_38921',
+];
+
+/** Credentials that were once published as defaults in docs or the UI. */
+export const PUBLISHED_DEFAULT_CREDENTIALS = ['Password123!', 'vigilone_dev_setup_token_99182'];
+
+/** Operator-facing locations that must not advertise published default credentials. */
+export const OPERATOR_FACING_FILES = ['README.md', 'docs/operations', 'frontend/src', 'deploy'];
+
+/** Places allowed to mention them (e.g. to reject them). */
+export const DEFAULT_CREDENTIAL_ALLOWLIST: string[] = [];
+
+function listFilesRecursive(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) return e.name === 'node_modules' || e.name === 'dist' ? [] : listFilesRecursive(full);
+    return /\.(md|ts|tsx|js|mjs|json|sh|yml|yaml|txt)$|vigilonectl$/.test(e.name) ? [full] : [];
+  });
+}
+
 export function runSecretsAudit(repoRoot: string): SecretsAuditReport {
   const findings: AuditFinding[] = [];
 
@@ -103,6 +127,75 @@ export function runSecretsAudit(repoRoot: string): SecretsAuditReport {
         remediation: 'Set a custom high-entropy INTERNAL_API_SECRET.',
       });
     }
+  }
+
+  // 4b. Production runtime: setup token, encryption key, TURN secret must be installer-generated
+  if (process.env.NODE_ENV === 'production') {
+    const setupToken = (process.env.SETUP_TOKEN || '').trim();
+    if (
+      !setupToken ||
+      setupToken.length < 16 ||
+      KNOWN_DEFAULT_SECRETS.some((d) => setupToken.includes(d)) ||
+      /change_me|vigilone_dev/i.test(setupToken)
+    ) {
+      findings.push({
+        severity: 'CRITICAL',
+        check: 'PROD_INSECURE_SETUP_TOKEN',
+        message: 'Production SETUP_TOKEN is missing, shorter than 16 characters, or a published default.',
+        remediation: 'Re-run install.sh (generates one with "openssl rand -hex 16") or set a random SETUP_TOKEN.',
+      });
+    }
+    const encKey = process.env.CREDENTIAL_ENCRYPTION_KEY || '';
+    if (KNOWN_DEFAULT_SECRETS.includes(encKey)) {
+      findings.push({
+        severity: 'CRITICAL',
+        check: 'PROD_KNOWN_ENCRYPTION_KEY',
+        message: 'Production CREDENTIAL_ENCRYPTION_KEY is the publicly known development key.',
+        remediation: 'Generate /etc/vigilone/appliance.key with "openssl rand -base64 32" (install.sh does this).',
+      });
+    }
+    const turn = process.env.COTURN_SECRET || '';
+    if (turn && KNOWN_DEFAULT_SECRETS.some((d) => turn.includes(d))) {
+      findings.push({
+        severity: 'HIGH',
+        check: 'PROD_DEFAULT_COTURN_SECRET',
+        message: 'Production COTURN_SECRET is the development default.',
+        remediation: 'Set a random COTURN_SECRET ("openssl rand -hex 32").',
+      });
+    }
+  }
+
+  // 4c. Published default credentials must not be advertised in operator-facing docs or UI source.
+  for (const rel of OPERATOR_FACING_FILES) {
+    const full = path.join(repoRoot, rel);
+    if (!fs.existsSync(full)) continue;
+    const files = fs.statSync(full).isDirectory() ? listFilesRecursive(full) : [full];
+    for (const file of files) {
+      const relFile = path.relative(repoRoot, file);
+      if (DEFAULT_CREDENTIAL_ALLOWLIST.some((allowed) => relFile.startsWith(allowed))) continue;
+      const content = fs.readFileSync(file, 'utf8');
+      for (const cred of PUBLISHED_DEFAULT_CREDENTIALS) {
+        if (content.includes(cred)) {
+          findings.push({
+            severity: 'HIGH',
+            check: 'PUBLISHED_DEFAULT_CREDENTIAL',
+            message: `${relFile} advertises the published default credential "${cred}".`,
+            remediation: 'Remove it; the installer generates per-appliance secrets and the operator chooses the admin password.',
+          });
+        }
+      }
+    }
+  }
+
+  // 4d. docker-compose must pass SETUP_TOKEN into the backend, or the installer's token is ignored.
+  const composePath = path.join(repoRoot, 'docker-compose.yml');
+  if (fs.existsSync(composePath) && !/-\s*SETUP_TOKEN=\$\{SETUP_TOKEN/.test(fs.readFileSync(composePath, 'utf8'))) {
+    findings.push({
+      severity: 'HIGH',
+      check: 'COMPOSE_SETUP_TOKEN_NOT_PASSED',
+      message: 'docker-compose.yml does not pass SETUP_TOKEN to the backend container.',
+      remediation: 'Add "- SETUP_TOKEN=${SETUP_TOKEN:-}" to the backend environment list.',
+    });
   }
 
   // 5. Audit appliance key file permissions if present on disk

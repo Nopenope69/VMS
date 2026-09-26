@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { z } from 'zod';
 
 dotenv.config();
@@ -16,7 +17,8 @@ const envSchema = z.object({
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters long')
     .default('vigilone_dev_jwt_signing_key_32bytes_min!'),
-  SETUP_TOKEN: z.string().default('vigilone_dev_setup_token_99182'),
+  // No default: production requires an installer-generated token; dev gets an ephemeral random one.
+  SETUP_TOKEN: z.string().optional(),
   INTERNAL_API_SECRET: z.string().default('vigilone_internal_secret_token_98234'),
   MANAGEMENT_IP: z.string().default('127.0.0.1'),
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
@@ -59,8 +61,45 @@ function resolveEncryptionKey(rawKey?: string, isProd?: boolean): string {
     );
   }
 
-  // Fallback dev key (32 bytes base64)
-  return 'eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=';
+  // Fallback dev key (32 bytes base64). Public: rejected in production by loadConfig().
+  return KNOWN_DEV_ENCRYPTION_KEY;
+}
+
+/** Publicly known development encryption key (compose default). Never valid in production. */
+export const KNOWN_DEV_ENCRYPTION_KEY = 'eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=';
+
+/** Previously published default setup token. Never valid anywhere. */
+export const RETIRED_DEFAULT_SETUP_TOKEN = 'vigilone_dev_setup_token_99182';
+
+export const MIN_SETUP_TOKEN_LENGTH = 16;
+
+function resolveSetupToken(raw: string | undefined, isProd: boolean): string {
+  const token = (raw || '').trim();
+  if (isProd) {
+    if (
+      !token ||
+      token.length < MIN_SETUP_TOKEN_LENGTH ||
+      token === RETIRED_DEFAULT_SETUP_TOKEN ||
+      token.toLowerCase().includes('change_me') ||
+      token.toLowerCase().includes('vigilone_dev')
+    ) {
+      throw new Error(
+        `FATAL: Production mode detected with default or insecure SETUP_TOKEN (missing, shorter than ${MIN_SETUP_TOKEN_LENGTH} chars, or a known default)! Halting startup.`
+      );
+    }
+    return token;
+  }
+  if (token && token !== RETIRED_DEFAULT_SETUP_TOKEN) {
+    return token;
+  }
+  // Development without a configured token: generate an ephemeral one rather than accept a public default.
+  const ephemeral = crypto.randomBytes(16).toString('hex');
+  if (process.env.NODE_ENV !== 'test') {
+    console.warn(
+      `[VigilOne] SETUP_TOKEN not set (or set to the retired public default). Ephemeral development setup token for this process: ${ephemeral}`
+    );
+  }
+  return ephemeral;
 }
 
 export function loadConfig() {
@@ -72,13 +111,12 @@ export function loadConfig() {
 
   const isProd = parsed.data.NODE_ENV === 'production';
 
+  const resolvedSetupToken = resolveSetupToken(parsed.data.SETUP_TOKEN, isProd);
+
   // Fail-fast checks in production
   if (isProd) {
     if (parsed.data.JWT_SECRET.toLowerCase().includes('change_me') || parsed.data.JWT_SECRET.toLowerCase().includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default or insecure JWT_SECRET! Halting startup.');
-    }
-    if (parsed.data.SETUP_TOKEN.toLowerCase().includes('change_me') || parsed.data.SETUP_TOKEN.toLowerCase().includes('vigilone_dev')) {
-      throw new Error('FATAL: Production mode detected with default or insecure SETUP_TOKEN! Halting startup.');
     }
     if (parsed.data.DATABASE_URL.toLowerCase().includes('change_me') || parsed.data.DATABASE_URL.toLowerCase().includes('vigilone_dev')) {
       throw new Error('FATAL: Production mode detected with default database credentials! Halting startup.');
@@ -106,9 +144,15 @@ export function loadConfig() {
   }
 
   const resolvedEncryptionKey = resolveEncryptionKey(parsed.data.CREDENTIAL_ENCRYPTION_KEY, isProd);
+  if (isProd && resolvedEncryptionKey === KNOWN_DEV_ENCRYPTION_KEY) {
+    throw new Error(
+      'FATAL: Production mode detected with the publicly known development CREDENTIAL_ENCRYPTION_KEY! Halting startup.'
+    );
+  }
 
   return {
     ...parsed.data,
+    SETUP_TOKEN: resolvedSetupToken,
     CREDENTIAL_ENCRYPTION_KEY: resolvedEncryptionKey,
     isProduction: isProd,
   };

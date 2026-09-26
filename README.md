@@ -99,7 +99,7 @@ docker compose --profile test up -d
 ### Initial Bootstrap & Access
 1. Open your browser to `http://localhost` (or the host's LAN IP).
 2. Click **Initial Appliance Setup / First-Run Bootstrap**.
-3. Fill in your Facility Name, Administrator Email, Password, and the `SETUP_TOKEN` from your `.env` file (`vigilone_dev_setup_token_99182`).
+3. Fill in your Facility Name, Administrator Email, a strong Password of your choosing, and the appliance `SETUP_TOKEN`. The installer generates it (`openssl rand -hex 16`) and stores it in `/etc/vigilone/setup-token.txt` (mode 0600); for a local development stack, set `SETUP_TOKEN` in `.env` or read the ephemeral token the backend logs at startup. There is no default token or password.
 4. Click **Bootstrap First-Run Tenant** to initialize the surveillance console with an automatic Enterprise evaluation license.
 
 ---

@@ -139,6 +139,9 @@ services:
       - CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_ENCRYPTION_KEY:-eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
       - MEDIAMTX_API_URL=http://mediamtx:9997
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      # No default: install.sh generates a random SETUP_TOKEN; in development the backend generates
+      # an ephemeral one and logs it. Production refuses to start without a strong token.
+      - SETUP_TOKEN=${SETUP_TOKEN:-}
       - MANAGEMENT_IP=${MANAGEMENT_IP:-127.0.0.1}
       - RECORDINGS_DIR=/recordings
       - EXPORTS_DIR=/recordings/exports
