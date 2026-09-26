@@ -19,7 +19,9 @@
     "test:ffmpeg": "jest src/__tests__/ffmpeg.test.ts",
     "test:evidence": "jest src/__tests__/evidence.test.ts",
     "check:hygiene": "ts-node scripts/ci/check-repo-hygiene.ts",
-    "check:model-licenses": "ts-node scripts/ci/check-model-licenses.ts"
+    "check:model-licenses": "ts-node scripts/ci/check-model-licenses.ts",
+    "docs:feature-flags": "ts-node scripts/ci/generate-feature-flag-docs.ts",
+    "check:feature-flag-docs": "ts-node scripts/ci/generate-feature-flag-docs.ts --check"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -165,6 +165,10 @@ jobs:
         working-directory: ./backend
         run: npm run check:model-licenses
 
+      - name: README feature-flag table is generated, not hand-typed
+        working-directory: ./backend
+        run: npm run check:feature-flag-docs
+
   packaging-and-installer-checks:
     name: Packaging, vigilonectl & Installer Invariants
     runs-on: ubuntu-latest
