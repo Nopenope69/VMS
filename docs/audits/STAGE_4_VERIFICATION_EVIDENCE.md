@@ -1,5 +1,9 @@
 # Stage 4 Internal Engineering Verification Gate & Evidence Pack
 
+> [!IMPORTANT]
+> **INTERNAL SELF-ASSESSMENT.** This document was written by the coding agent that implemented the work. It is not an independent audit, third-party certification, legal opinion or human sign-off. Any "independent verifier", reviewer or sign-off role named below is a role label from the execution contract, not a person who reviewed this work. Treat results as self-reported until re-run (see `docs/STATUS.md` and `docs/generated/TEST_STATUS.md`).
+
+
 > **Gate:** Stage 4 — Operationalize (Weeks 13–15)  
 > **Status:** CODE COMPLETE + REAL CONTAINER DR VERIFIED  
 > **Execution Date:** 2026-09-14 (Updated Post-Critique Remediation)  
@@ -38,7 +42,7 @@ Execution Timestamp: 2026-09-14T00:18:00Z
 | :--- | :--- | :--- | :--- |
 | **Task 4.1: Turnkey Single-Command Installer** | Zero-terminal unattended deployment with `--non-interactive`; strict mount failure exit 1; 45s post-install health verification probe with fatal exit on degradation. | **PASS** | [`deploy/packaging/install.sh`](../../deploy/packaging/install.sh)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) (39/39 passed) |
 | **Task 4.2: Cryptographic OTA Updates** | Dedicated Ed25519 OTA signing key distinct from commercial license domain; manifest and payload verification prior to extraction; path traversal defense; semver/epoch downgrade prevention against persistent monotonic release floor; automated pre-update PostgreSQL database dump (`database.sql`) + `/etc/vigilone` configuration snapshot; deep stream healthcheck (backend + MediaMTX with 5% tolerance); automatic snapshot rollback with database restoration and strict monotonic security state preservation (Clock floor + license revocation floor + trust-anchor floor + OTA release floor). | **PASS** | [`backend/src/config/otaKeys.ts`](../../backend/src/config/otaKeys.ts)<br>[`backend/src/services/appliance/otaUpdate.service.ts`](../../backend/src/services/appliance/otaUpdate.service.ts)<br>[`backend/src/scripts/packageOta.ts`](../../backend/src/scripts/packageOta.ts)<br>[`backend/src/__tests__/otaUpdate.test.ts`](../../backend/src/__tests__/otaUpdate.test.ts) (10/10 passed) |
-| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest ([`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)); unmappable media quarantined; pinned segments restored from host mirror ([`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state), mode 0600) with honest audit logging.<br>**Live Container Drill:** Real PostgreSQL 16 container schema wipe and full restore verified with disk byte/hash matching. | **PASS** (Jest Suites + Real Container DR Drill) | [`backend/src/services/evidence/pinStateMirror.service.ts`](../../backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](../../backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](../../backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](../../backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](../../backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed)<br>[`scripts/dr-drill.sh`](../../scripts/dr-drill.sh) |
+| **Task 4.3: Disaster Recovery & DB Restore Drill** | **Scenario A:** Monotonic state merge prevents rollback of `lastKnownGoodTime`, unions revoked licenses, preserves trust anchors.<br>**Scenario B:** Catastrophic database loss rebuild from surviving files + control plane manifest (`/etc/vigilone/appliance_manifest.json`); unmappable media quarantined; pinned segments restored from host mirror (`/etc/vigilone/pinned_segments.state`, mode 0600) with honest audit logging.<br>**Live Container Drill:** Real PostgreSQL 16 container schema wipe and full restore verified with disk byte/hash matching. | **PASS** (Jest Suites + Real Container DR Drill) | [`backend/src/services/evidence/pinStateMirror.service.ts`](../../backend/src/services/evidence/pinStateMirror.service.ts)<br>[`backend/src/services/appliance/controlPlaneManifest.service.ts`](../../backend/src/services/appliance/controlPlaneManifest.service.ts)<br>[`backend/src/services/appliance/disasterRecovery.service.ts`](../../backend/src/services/appliance/disasterRecovery.service.ts)<br>[`backend/src/services/reconciliation/crashRecovery.service.ts`](../../backend/src/services/reconciliation/crashRecovery.service.ts)<br>[`backend/src/__tests__/disasterRecoveryDrill.test.ts`](../../backend/src/__tests__/disasterRecoveryDrill.test.ts) (2/2 passed)<br>[`scripts/dr-drill.sh`](../../scripts/dr-drill.sh) |
 | **Task 4.4: ClockGuard Host State & Hardware Binding** | Monotonic `/etc/vigilone/clock_guard.state` (`0o600`); clock rollback detection clamps license evaluation to trusted floor; DMI board UUID primary hardware binding corroborated with `machine-id`; active commercial license host mirroring to `/etc/vigilone/license.json` (`0o600`) and boot-time auto-reconciliation on bare-metal DB rebuild. | **PASS** | [`backend/src/utils/clockGuard.ts`](../../backend/src/utils/clockGuard.ts)<br>[`backend/src/utils/license.ts`](../../backend/src/utils/license.ts)<br>[`backend/src/services/appliance/licenseHostMirror.service.ts`](../../backend/src/services/appliance/licenseHostMirror.service.ts)<br>[`backend/src/routes/license.routes.ts`](../../backend/src/routes/license.routes.ts)<br>[`backend/src/services/reconciliation/startupReconciler.service.ts`](../../backend/src/services/reconciliation/startupReconciler.service.ts)<br>[`backend/src/__tests__/clockGuardHostState.test.ts`](../../backend/src/__tests__/clockGuardHostState.test.ts) (9/9 passed) |
 | **CLI Operations (vigilonectl)** | Production appliance CLI support for `ota <apply\|rollback\|status>` and `backup <create\|restore>`. | **PASS** | [`deploy/packaging/vigilonectl`](../../deploy/packaging/vigilonectl)<br>[`scripts/__tests__/installer.test.sh`](../../scripts/__tests__/installer.test.sh) |
 
@@ -90,7 +94,7 @@ The OTA update service (`OtaUpdateService`) enforces strict multi-layered supply
 1. **Dedicated Trust Domain:** Validates that update bundles are signed with `VENDOR_OTA_PUBLIC_KEY` (`OTA_KEY_ID = 'vigilone-ota-2026-v1'`). Commercial licensing root keys are strictly rejected.
 2. **Pre-Extraction Hash Verification:** Hashes of payload files are validated against the signed manifest before unpacking.
 3. **Path Traversal Guard:** Tar entries with `../` or leading `/` are rejected immediately.
-4. **Persistent Monotonic Appliance Release Floor:** Enforces that `highestAcceptedOtaEpoch` is persisted to [`/etc/vigilone/ota_release.state`](file:///etc/vigilone/ota_release.state) (`0o600`). Invariant: cannot be decreased by application rollback, database restore, or appliance reinstall within the supported recovery model. Any update bundle with epoch below this floor is strictly rejected.
+4. **Persistent Monotonic Appliance Release Floor:** Enforces that `highestAcceptedOtaEpoch` is persisted to `/etc/vigilone/ota_release.state` (`0o600`). Invariant: cannot be decreased by application rollback, database restore, or appliance reinstall within the supported recovery model. Any update bundle with epoch below this floor is strictly rejected.
 5. **Comprehensive Pre-Update Snapshot:** Captures an atomic snapshot containing:
    - Application version state from `/opt/vigilone/version.json`
    - Automated PostgreSQL database dump (`database.sql`)
@@ -126,9 +130,9 @@ Disaster recovery drills evaluated the system's resilience under two extreme fai
 #### Scenario B: Catastrophic Database Wipe & Bare-Metal Rebuild
 - Postgres volume wiped cleanly (`rm -rf /var/lib/vigilone/postgres/*`).
 - Surviving storage contained:
-  - 1 valid video segment for configured camera `cam-dr-1` (mapped via [`/etc/vigilone/appliance_manifest.json`](file:///etc/vigilone/appliance_manifest.json)).
+  - 1 valid video segment for configured camera `cam-dr-1` (mapped via `/etc/vigilone/appliance_manifest.json`).
   - 1 rogue/orphan segment for unknown camera `cam-unmapped-99`.
-  - Host-state pin mirror at [`/etc/vigilone/pinned_segments.state`](file:///etc/vigilone/pinned_segments.state) with an active legal hold.
+  - Host-state pin mirror at `/etc/vigilone/pinned_segments.state` with an active legal hold.
 - `DisasterRecoveryService.reconstructFromSurvivingMedia()` was executed:
   - **Orphan Admission Control:** Mapped segment `cam-dr-1` was admitted and re-indexed into the empty database with duration and SHA-256 hash.
   - **Quarantine:** Unmapped segment `cam-unmapped-99` was quarantined to `/recordings/.quarantine`.
@@ -145,12 +149,12 @@ PASS src/__tests__/disasterRecoveryDrill.test.ts
 ### 3.4 Task 4.4: ClockGuard Host State Protection & Hardware Binding
 
 ClockGuard host protection and hardware locking were subjected to rigorous boundary tests:
-1. **Root-Only Permissions:** Verified that state file [`/etc/vigilone/clock_guard.state`](file:///etc/vigilone/clock_guard.state) is created with POSIX mode `0o600`.
+1. **Root-Only Permissions:** Verified that state file `/etc/vigilone/clock_guard.state` is created with POSIX mode `0o600`.
 2. **Clock Rollback Detection:** When system clock was rolled back by 30 days, `ClockGuard.checkClockSanity()` detected skew and clamped licensing evaluation to the monotonic trusted floor.
 3. **Hardware Binding:** Primary binding incorporates DMI board UUID (`/sys/class/dmi/id/product_uuid`), corroborated with system `machine-id`. Verified that:
    - Genuine hardware fingerprint validates successfully.
    - Foreign or tampered hardware ID triggers immediate `HARDWARE_BINDING_MISMATCH` license rejection.
-4. **Commercial License Host Mirroring:** Validated that upon `POST /api/v1/license/apply`, the active commercial license is mirrored to [`/etc/vigilone/license.json`](file:///etc/vigilone/license.json) (`0o600`). On empty database boot, `StartupReconcilerService` auto-ingests and restores the license.
+4. **Commercial License Host Mirroring:** Validated that upon `POST /api/v1/license/apply`, the active commercial license is mirrored to `/etc/vigilone/license.json` (`0o600`). On empty database boot, `StartupReconcilerService` auto-ingests and restores the license.
 5. **Suite Execution:** `backend/src/__tests__/clockGuardHostState.test.ts`: **9/9 tests PASSED**.
 
 ```

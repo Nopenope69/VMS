@@ -22,7 +22,9 @@
     "check:model-licenses": "ts-node scripts/ci/check-model-licenses.ts",
     "docs:feature-flags": "ts-node scripts/ci/generate-feature-flag-docs.ts",
     "check:feature-flag-docs": "ts-node scripts/ci/generate-feature-flag-docs.ts --check",
-    "check:no-fake-success": "ts-node scripts/ci/check-no-fake-success.ts"
+    "check:no-fake-success": "ts-node scripts/ci/check-no-fake-success.ts",
+    "status:generate": "ts-node scripts/ci/generate-status.ts",
+    "check:status-docs": "ts-node scripts/ci/generate-status.ts --check"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -1,0 +1,97 @@
+name: Generated Test Status
+
+# P0.5: test counts in PROJECT_STATE.md and docs/generated/ come only from this workflow.
+# It runs the real suites on master, generates the status from Jest --json output (failures
+# included) and commits the generated files. Humans and agents do not hand-edit them;
+# `npm run check:status-docs` in CI catches hand edits.
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+concurrency:
+  group: generated-test-status
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  generate-status:
+    name: Run suites and commit generated status
+    runs-on: ubuntu-latest
+    # Do not loop on the bot's own status commit.
+    if: "!contains(github.event.head_commit.message, '[status-bot]')"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vigilone
+          POSTGRES_PASSWORD: vigilone_ci_secret_password_2026!
+          POSTGRES_DB: vigilone_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vigilone -d vigilone_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
+      JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
+      CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+      INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: Install dependencies
+        run: |
+          (cd frontend && npm ci && npm run build)
+          (cd backend && npm ci && npx prisma generate && npx prisma migrate deploy)
+
+      - name: Backend suite (JSON report; failures are recorded, not hidden)
+        working-directory: ./backend
+        run: npx jest --runInBand --forceExit --json --outputFile=/tmp/backend-jest.json || echo "BACKEND_FAILED=1" >> "$GITHUB_ENV"
+
+      - name: AI worker suite (JSON report)
+        working-directory: ./services/ai-worker
+        run: ../../backend/node_modules/.bin/jest --config jest.config.js --json --outputFile=/tmp/ai-worker-jest.json || echo "AI_FAILED=1" >> "$GITHUB_ENV"
+
+      - name: Generate status from the reports
+        working-directory: ./backend
+        run: npx ts-node scripts/ci/generate-status.ts --backend /tmp/backend-jest.json --ai-worker /tmp/ai-worker-jest.json
+
+      - name: Commit generated status
+        run: |
+          git config user.name "vigilone-status-bot"
+          git config user.email "vigilone-status-bot@users.noreply.github.com"
+          git add docs/generated/TEST_STATUS.json docs/generated/TEST_STATUS.md PROJECT_STATE.md
+          if git diff --cached --quiet; then
+            echo "No status change."
+          else
+            git commit -m "docs(status): regenerate test status from CI run ${GITHUB_RUN_ID} [status-bot] [skip ci]"
+            git push
+          fi
+
+      - name: Fail if any suite failed
+        if: env.BACKEND_FAILED == '1' || env.AI_FAILED == '1'
+        run: |
+          echo "At least one suite failed; the generated status records the failures."
+          exit 1

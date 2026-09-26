@@ -1,5 +1,9 @@
 # Fail-loud gate and second fake-success sweep (P0.4)
 
+> [!IMPORTANT]
+> **INTERNAL SELF-ASSESSMENT.** This document was written by the coding agent that implemented the work. It is not an independent audit, third-party certification, legal opinion or human sign-off. Any "independent verifier", reviewer or sign-off role named below is a role label from the execution contract, not a person who reviewed this work. Treat results as self-reported until re-run (see `docs/STATUS.md` and `docs/generated/TEST_STATUS.md`).
+
+
 **Date:** 2026-09-26. **Type:** internal self-assessment by the coding agent, not an independent audit.
 **Follows:** `SYSTEMIC_FAKE_SUCCESS_AUDIT_2026-09-12.md`.
 

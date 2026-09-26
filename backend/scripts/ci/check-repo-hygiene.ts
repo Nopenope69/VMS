@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
+import { runDocsHygiene } from './docs-hygiene';
 
 interface HygieneViolation {
   category: string;
@@ -171,6 +172,12 @@ function runHygieneCheck() {
         message: `Found ${diagnostics.length} syntax/parser diagnostics in service file.`,
       });
     }
+  }
+
+  // 6. Documentation hygiene (P0.6): local paths, file:// links, self-assessment disclaimers,
+  //    hand-typed test counts.
+  for (const v of runDocsHygiene(repoRoot)) {
+    violations.push(v);
   }
 
   // Report results

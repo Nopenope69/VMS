@@ -1,5 +1,9 @@
 # Stage 3 Verification Gate & Evidence Pack
 
+> [!IMPORTANT]
+> **INTERNAL SELF-ASSESSMENT.** This document was written by the coding agent that implemented the work. It is not an independent audit, third-party certification, legal opinion or human sign-off. Any "independent verifier", reviewer or sign-off role named below is a role label from the execution contract, not a person who reviewed this work. Treat results as self-reported until re-run (see `docs/STATUS.md` and `docs/generated/TEST_STATUS.md`).
+
+
 > **Gate:** Stage 3 — Prove on Real Hardware (Scale, Soak & Failure Envelopes)  
 > **Status:** LAB VERIFIED (Real 4-Stream ffmpeg fMP4 Load Verified; 64-Cam 168h Field Soak Pending Hardware Bench)  
 > **Execution Date:** 2026-09-14 (Updated Post-Critique Remediation)  
