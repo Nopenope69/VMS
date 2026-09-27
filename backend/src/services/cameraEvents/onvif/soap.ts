@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { parseStringPromise, processors } from 'xml2js';
 import { digestText, Credentials, CameraHttpError } from '../httpDigest';
 
 /**
@@ -48,10 +47,8 @@ export class OnvifFault extends Error {
   }
 }
 
-/** xml2js with namespace prefixes stripped; attributes under '$'. */
-export async function parseXml(xml: string): Promise<any> {
-  return parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [processors.stripPrefix], attrNameProcessors: [processors.stripPrefix], attrkey: '$' });
-}
+export { parseXml } from '../xml';
+import { parseXml } from '../xml';
 
 export async function soapCall(
   url: string,

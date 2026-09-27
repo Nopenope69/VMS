@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { parseStringPromise, processors } from 'xml2js';
+import { parseXml } from './xml';
 import { digestRequest, Credentials } from './httpDigest';
 import { boundaryFromContentType, MultipartStreamParser } from './multipart';
 import { NormalizedCameraEvent } from './types';
@@ -40,7 +40,7 @@ export interface HikParseResult {
 const text = (v: any): string | undefined => (v === undefined || v === null ? undefined : typeof v === 'object' ? (v._ ?? undefined) : String(v));
 
 export async function parseHikvisionAlert(xml: string): Promise<HikParseResult> {
-  const doc = await parseStringPromise(xml, { explicitArray: false, tagNameProcessors: [processors.stripPrefix], attrkey: '$' });
+  const doc = await parseXml(xml);
   const a = doc?.EventNotificationAlert;
   if (!a) throw new Error('not an EventNotificationAlert document');
   const vendorType = String(text(a.eventType) || '').trim();

@@ -89,6 +89,10 @@ describe('Hikvision ISAPI', () => {
   it('treats videoloss/inactive as a heartbeat, not an event', async () => {
     expect(await parseHikvisionAlert(fx('hikvision-videoloss-heartbeat.xml'))).toEqual({ heartbeat: true, event: null });
   });
+  it('refuses DTDs (no entity expansion from a hostile device)', async () => {
+    const bomb = '<?xml version="1.0"?><!DOCTYPE a [<!ENTITY x "xxxxxxxx"><!ENTITY y "&x;&x;&x;&x;">]><EventNotificationAlert><eventType>&y;</eventType></EventNotificationAlert>';
+    await expect(parseHikvisionAlert(bomb)).rejects.toThrow(/DOCTYPE/);
+  });
   it('unknown vendor types are VENDOR_OTHER, never guessed', async () => {
     const xml = fx('hikvision-fielddetection-active.xml').replace('fielddetection</eventType>', 'thermometry</eventType>');
     expect((await parseHikvisionAlert(xml)).event!.analyticType).toBe('VENDOR_OTHER');
