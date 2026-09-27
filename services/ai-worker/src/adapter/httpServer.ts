@@ -32,7 +32,15 @@ function send(res: http.ServerResponse, status: number, body: unknown, correlati
  *   GET  /metrics        -> Prometheus text
  * Every response echoes X-Correlation-Id (generated when the caller sends none).
  */
-export function createAdapterServer(core: AiAdapterCore, opts: AdapterHttpOptions = {}): http.Server {
+/** What the HTTP layer needs from an adapter core (object detection or ANPR). */
+export interface AdapterCoreLike {
+  metrics: AiAdapterCore['metrics'];
+  describe(): ReturnType<AiAdapterCore['describe']>;
+  health(): ReturnType<AiAdapterCore['health']>;
+  handleInferRequest(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
+}
+
+export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOptions = {}): http.Server {
   const maxBody = opts.maxBodyBytes ?? 32 * 1024 * 1024;
 
   return http.createServer((req, res) => {

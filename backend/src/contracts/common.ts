@@ -26,3 +26,7 @@ export const NormalizedBox = z
 /** Licences allowed inside the product (see THIRD_PARTY_LICENSES.md and check:model-licenses). */
 export const PERMISSIVE_LICENSES = ['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC'] as const;
 export const PermissiveLicense = z.enum(PERMISSIVE_LICENSES);
+/** One permissive licence, or several joined with " AND " (a pipeline of differently licensed models). */
+export const PermissiveLicenseExpression = z
+  .string()
+  .refine((s) => s.split(' AND ').every((p) => (PERMISSIVE_LICENSES as readonly string[]).includes(p)), 'every part must be one of ' + PERMISSIVE_LICENSES.join(', '));

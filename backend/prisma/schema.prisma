@@ -416,6 +416,10 @@ model Camera {
   macAddress      String?
   hasPtz          Boolean        @default(false)
   vendorQuirks    String[]       @default([])
+  /// Dedicated licence-plate camera (P4.1): ANPR runs on its frames; see lprConfigJson.
+  lprMode         Boolean        @default(false)
+  /// { fps (1-5), roi: [x1,y1,x2,y2] normalised, maxWidth, minConfidence }
+  lprConfigJson   Json?
   
   // Stream & Recording State
   mainRtspUri           String         // Resolved via ONVIF GetStreamUri
@@ -964,6 +968,11 @@ model VehicleObservation {
   observationCount   Int               @default(1)
   bestConfidence     Float             @default(0.0)
   bestSnapshotPath   String?
+  /// Provenance of the recognition (pipeline definition + component models), never invented.
+  provenanceJson     Json?
+  plateFormat        String?           // STANDARD | BH | DIPLOMATIC
+  rawText            String?           // OCR text before positional correction
+  lines              Int?              // 1 or 2 (two-line plates)
   
   matchedWatchlistId String?
   matchedWatchlist   VehicleWatchlist? @relation(fields: [matchedWatchlistId], references: [id], onDelete: SetNull)
@@ -981,6 +990,8 @@ model VehicleWatchlist {
   tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plateNumber     String
   normalizedPlate String            // Uppercase, alphanumeric only
+  /// EXACT (normalizedPlate), WILDCARD (* any run, ? one char) or REGEX (restricted, anchored).
+  matchType       String            @default("EXACT")
   category        WatchlistCategory @default(BLACKLIST)
   ownerName       String?
   notes           String?

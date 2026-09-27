@@ -46,6 +46,26 @@ export interface CreateModelManifestInput {
   nmsConfig?: Record<string, unknown>;
 }
 
+/** Human approvals for candidate models; see scripts/models/model-license-exceptions.json. */
+export function readModelLicenseApprovals(): Array<{ key: string; sha256: string; approvedBy: string; approvedAt: string; reason: string }> {
+  const candidates = [
+    process.env.VIGILONE_MODEL_EXCEPTIONS,
+    '/etc/vigilone/model-license-exceptions.json',
+    require('path').resolve(__dirname, '../../../../scripts/models/model-license-exceptions.json'),
+  ].filter(Boolean) as string[];
+  const fs = require('fs');
+  const file = candidates.find((f) => fs.existsSync(f));
+  if (!file) return [];
+  try {
+    const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Array.isArray(j.approvals) ? j.approvals : []).filter(
+      (a: any) => a && typeof a.key === 'string' && /^[a-f0-9]{64}$/.test(a.sha256) && a.approvedBy && a.approvedAt && a.reason
+    );
+  } catch {
+    return [];
+  }
+}
+
 export interface ManifestValidationResult {
   valid: boolean;
   errors: string[];
@@ -126,6 +146,13 @@ export class ModelManifestService {
     isException: boolean;
     reason?: string;
   } {
+    // A pipeline of models may carry "A AND B": every part must pass on its own.
+    if (typeof licenseName === 'string' && licenseName.includes(' AND ')) {
+      const parts = licenseName.split(' AND ').map((p) => this.evaluateLicensePolicy(p.trim()));
+      const bad = parts.find((p) => !p.approved);
+      if (bad) return bad;
+      return { approved: true, isException: parts.some((p) => p.isException) };
+    }
     const spdx = this.normalizeSpdx(licenseName);
     if (!spdx) {
       return { approved: false, isException: false, reason: 'License identifier is missing or empty' };
@@ -282,6 +309,21 @@ export class ModelManifestService {
       }
       if (td.commercialUse !== true) {
         errors.push('trainingData.commercialUse must be explicitly true');
+      }
+    }
+
+    // 5b. Pipelines of candidate models (P4.1 ANPR): the training-data declaration comes from
+    // human approvals, so every component must have one for its exact SHA-256 in the approvals
+    // file this backend reads. The worker's claim alone is not enough.
+    const sig: any = input.modelSignature;
+    if (sig && sig.decoder === 'anpr_pipeline') {
+      const comps: any[] = Array.isArray(sig.components) ? sig.components : [];
+      if (comps.length === 0) errors.push('pipeline manifests must list their components');
+      const approvals = readModelLicenseApprovals();
+      for (const c of comps) {
+        if (!approvals.some((a) => a.key === c.key && a.sha256 === c.sha256)) {
+          errors.push(`pipeline component '${c.key}' (${c.sha256}) has no human licence approval (model-license-exceptions.json)`);
+        }
       }
     }
 

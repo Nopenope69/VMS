@@ -143,6 +143,21 @@ export class AuthenticatedInternalApiClient {
     return res.manifest;
   }
 
+  /** Registers an ANPR pipeline manifest (P4.1); the backend re-checks every component approval. */
+  public async registerPipelineManifest(body: Record<string, unknown>): Promise<{ id: string }> {
+    const res = await this.request<{ manifest: { id: string } }>('POST', '/model-manifests', body);
+    return res.manifest;
+  }
+
+  public async getLprCameras(): Promise<Array<{ cameraId: string; tenantId: string; streamPath: string; lpr: { fps?: number; roi?: number[]; maxWidth?: number; minConfidence?: number } }>> {
+    const res = await this.request<{ cameras: any[] }>('GET', '/anpr/cameras');
+    return res.cameras;
+  }
+
+  public postAnprObservations(body: Record<string, unknown>): Promise<{ accepted: number }> {
+    return this.request('POST', '/anpr/observations', body);
+  }
+
   /** First boot only: deploys the manifest if no model is deployed for its task. */
   public bootstrapDeploy(modelManifestId: string, adapterId: string): Promise<{ deployed: boolean }> {
     return this.request('POST', '/ai/models/bootstrap-deploy', { modelManifestId, adapterId });

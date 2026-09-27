@@ -36,6 +36,8 @@ export interface AiProvenanceV1 {
   executionProvider?: string;
   inferenceId: string;
   frameTimestampUtc: string;
+  /** Pipelines: modelSha256 names the pipeline definition; each chained model is listed. */
+  components?: Array<{ role: string; modelName: string; modelVersion: string; modelSha256: string }>;
 }
 
 export interface ModelCardV1 {
@@ -49,7 +51,8 @@ export interface ModelCardV1 {
   weightsLicense: string;
   weightsSource: string;
   runtime: 'onnxruntime' | 'openvino';
-  input: { width: number; height: number; colorSpace: 'RGB' | 'BGR'; letterbox: boolean };
+  input: { width: number; height: number; colorSpace: 'RGB' | 'BGR'; letterbox: boolean; resizeMode?: 'fixed' | 'min_side' };
+  components?: Array<{ role: string; name: string; version: string; sha256: string; weightsLicense: string }>;
   evaluation: { dataset: string; metric: string; value: number; reportRef: string } | null;
 }
 

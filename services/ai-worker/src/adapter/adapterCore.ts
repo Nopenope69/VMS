@@ -376,7 +376,7 @@ export class AiAdapterCore {
   }
 }
 
-function validateRequest(body: unknown): InferenceRequestV1 {
+export function validateRequest(body: unknown): InferenceRequestV1 {
   const b = body as any;
   const fail = (m: string) => {
     throw new AdapterError('INVALID_FRAME', `invalid InferenceRequestV1: ${m}`);
@@ -401,7 +401,7 @@ function validateRequest(body: unknown): InferenceRequestV1 {
   return b as InferenceRequestV1;
 }
 
-function decodeJpeg(bytes: Buffer, width: number, height: number): Promise<Buffer> {
+export function decodeJpeg(bytes: Buffer, width: number, height: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const p = spawn('ffmpeg', ['-v', 'error', '-f', 'image2pipe', '-i', '-', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], {
       stdio: ['pipe', 'pipe', 'pipe'],

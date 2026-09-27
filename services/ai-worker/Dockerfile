@@ -28,6 +28,8 @@ COPY services/ai-worker/package.json services/ai-worker/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /build/dist ./dist
 COPY scripts/models/models.lock.json /app/models.lock.json
+# ANPR pipeline definitions (their SHA-256 is the pipeline hash in provenance).
+COPY scripts/models/pipelines /app/pipelines
 # Code is root-owned and read-only for the service user; models arrive on a read-only volume.
 USER vigilone:vigilone
 EXPOSE 7010

@@ -178,6 +178,13 @@ export const AiProvenanceV1 = z
     executionProvider: z.string().min(1).optional(),
     inferenceId: NonEmptyId,
     frameTimestampUtc: UtcTimestamp,
+    /** Set when the result comes from a pipeline of models (e.g. ANPR text detector + OCR):
+     *  modelSha256 then names the pipeline definition and each model is listed here. */
+    components: z
+      .array(z.object({ role: z.string().min(1), modelName: z.string().min(1), modelVersion: z.string().min(1), modelSha256: Sha256Hex }).strict())
+      .min(1)
+      .max(8)
+      .optional(),
   })
   .strict();
 

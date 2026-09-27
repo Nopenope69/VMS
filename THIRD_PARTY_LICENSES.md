@@ -91,6 +91,14 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | YOLOX nano / tiny / s (Megvii) | **Apache-2.0** | Default detectors. Trained on COCO (see licence questions in docs/STATUS.md). |
 | RF-DETR Nano (Roboflow) | **Apache-2.0** | Exported locally with `scripts/models/export-rfdetr.sh`; optional. |
 
+**Candidate models** (`candidateModels` in the lock file). Their code and weight licences are permissive, but their training data needs a human decision, so the product refuses to run them (`LICENSE_REJECTED`) until `scripts/models/model-license-exceptions.json` holds an approval naming the exact SHA-256. See "Licence questions" in docs/STATUS.md.
+
+| Model | License | Source | Open question |
+| :--- | :--- | :--- | :--- |
+| PP-OCRv4 text detection (`ppocrv4-det`) | **Apache-2.0** | PaddleOCR, ONNX from the `rapidocr_onnxruntime` 1.4.4 wheel (Apache-2.0) | Training datasets not fully published; some public text datasets are research-only |
+| fast-plate-ocr `cct_s_v2_global` (`fast-plate-ocr-cct-s-v2`) | **MIT** | github.com/ankandrew/cnn-ocr-lp release `arg-plates` | Training data unpublished; India is not a listed region |
+| YuNet 2023mar (`yunet-2023mar`) | **MIT** | opencv/opencv_zoo | Trained on WIDER FACE, whose terms forbid commercial use of derived data |
+
 ### 3.2c Test and evaluation tools (never shipped in the appliance)
 | Tool | License | Use |
 | :--- | :--- | :--- |
@@ -98,6 +106,10 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | `pycocotools` | **BSD-2-Clause** (FreeBSD) | Reference COCO evaluation |
 | `onnxruntime` (Python), `opencv-python-headless`, `numpy` | **MIT**, **Apache-2.0 / MIT**, **BSD-3-Clause** | Python reference decoders |
 | MailHog 1.0.1 | **MIT** | SMTP interop test server (binary, CI only) |
+| `rapidocr_onnxruntime` 1.4.4 (Python) | **Apache-2.0** | Reference DB text-detection post-processing for the ANPR golden tests |
+| `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
+| `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
+| DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |
 
 
 ### 3.3 Frontend Runtime Dependencies (`frontend/package.json`)

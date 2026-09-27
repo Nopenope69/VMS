@@ -32,6 +32,19 @@ import { StreamSupervisor } from './streamSupervisor';
 import { ResourceGovernor } from './frameQueue';
 import { MetricsRegistry } from './metrics';
 import { ModelManifestRecord } from './types';
+import { loadAnprPipeline, LoadedAnprPipeline } from './anpr/anprService';
+import { AnprAdapterCore } from './anpr/anprAdapterCore';
+import { LprRunner } from './anpr/lprRunner';
+import { AuthenticatedInternalApiClient as ApiClient } from './apiClient';
+
+/** Version of the installed onnxruntime-node package (what actually runs the pipeline), or undefined. */
+function ortRuntimeVersion(): string | undefined {
+  try {
+    return require('onnxruntime-node/package.json').version;
+  } catch {
+    return undefined;
+  }
+}
 
 export const EXIT_MODEL_REFUSED = 78; // EX_CONFIG
 export const EXIT_TEMPFAIL = 75; // EX_TEMPFAIL
@@ -53,6 +66,7 @@ export interface BootResult {
 
 export async function boot(): Promise<BootResult> {
   const mode = env('AI_WORKER_MODE', 'pipeline');
+  if (mode === 'anpr' || mode === 'anpr-adapter-only') return bootAnpr(mode);
   const lock = readModelLock();
   const key = env('AI_MODEL_KEY', lock.default)!;
   const localEntry = findLockEntry(key, lock);
@@ -149,6 +163,75 @@ export async function boot(): Promise<BootResult> {
   supervisor.on('inferenceError', (e) => log('warn', 'inference error', e));
   await supervisor.start();
   return { worker, close, port: boundPort };
+}
+
+/**
+ * ANPR service (P4.1): the plate_recognition adapter, and in 'anpr' mode the LPR camera runner.
+ * The pipeline's models are candidate models: without a human approval for each SHA-256 the
+ * service refuses to start (LICENSE_REJECTED) and serves FAILED health, never a silent no-op.
+ */
+async function bootAnpr(mode: 'anpr' | 'anpr-adapter-only'): Promise<BootResult> {
+  const adapterId = env('AI_ADAPTER_ID', 'vigilone-anpr')!;
+  const adapterVersion = '1.0.0-phase4';
+  let loaded: LoadedAnprPipeline | null = null;
+  let failure: string | undefined;
+  try {
+    loaded = await loadAnprPipeline();
+    log('info', 'ANPR pipeline loaded', { pipeline: `${loaded.definition.name}@${loaded.definition.version}`, sha256: loaded.definitionSha256 });
+  } catch (e: any) {
+    failure = e.message;
+    log('error', 'ANPR pipeline refused', { error: e.message });
+  }
+  const core = new AnprAdapterCore(loaded, { adapterId, adapterVersion, failure });
+  let runner: LprRunner | null = null;
+  const server = createAdapterServer(core);
+  const host = env('AI_ADAPTER_HOST', '127.0.0.1')!;
+  const port = Number(env('AI_ADAPTER_PORT', '7011'));
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  const boundPort = (server.address() as any).port as number;
+  log('info', 'ai-adapter.v1 (plate_recognition) listening', { host, port: boundPort, mode });
+  const close = async () => {
+    if (runner) await runner.stop();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  };
+  if (!loaded) {
+    if (env('AI_EXIT_ON_REFUSAL', 'true') === 'true') {
+      await close();
+      process.exit(EXIT_MODEL_REFUSED);
+    }
+    return { worker: null as any, close, port: boundPort };
+  }
+  if (mode === 'anpr-adapter-only') return { worker: null as any, close, port: boundPort };
+
+  if (!env('INTERNAL_API_SECRET')) throw new Error('INTERNAL_API_SECRET is required in anpr mode');
+  const api = new ApiClient({ baseUrl: env('BACKEND_INTERNAL_URL', 'http://127.0.0.1:4000/api/v1/internal')!, internalSecret: env('INTERNAL_API_SECRET')! });
+  const l = loaded;
+  const approvals = l.components.map((c) => c.approval!).filter(Boolean);
+  const registered = await api.registerPipelineManifest({
+    name: l.definition.name,
+    version: l.definition.version,
+    sha256: l.definitionSha256,
+    task: 'plate_recognition',
+    codeLicense: [...new Set(l.components.map((c) => c.entry.codeLicense))].join(' AND '),
+    weightLicense: [...new Set(l.components.map((c) => c.entry.weightLicense))].join(' AND '),
+    weightsSource: l.components.map((c) => `${c.role}: ${c.entry.weightsSource}`).join('; '),
+    trainingData: {
+      source: l.components.map((c) => `${c.role}: ${c.entry.trainingData.source}`).join('; '),
+      license: 'HUMAN-APPROVED EXCEPTION',
+      provenance: approvals.map((a) => `${a.key} approved by ${a.approvedBy} on ${a.approvedAt}: ${a.reason}`).join('; '),
+      commercialUse: true,
+    },
+    runtimeConfig: { runtime: 'onnxruntime', runtimeVersion: ortRuntimeVersion(), executionProvider: 'cpu', inputWidth: l.definition.textDetection.limitSideLen, inputHeight: l.definition.textDetection.limitSideLen, colorSpace: 'BGR', modelFormat: 'ONNX' },
+    modelSignature: { decoder: 'anpr_pipeline', components: l.definition.components },
+    classes: { '0': 'license_plate' },
+  });
+  core.setModelId(registered.id);
+  runner = new LprRunner(api, core);
+  runner.on('warn', (m) => log('warn', String(m)));
+  runner.on('streamError', (e) => log('warn', 'LPR stream error', e));
+  runner.on('inferenceError', (e) => log('warn', 'ANPR error', e));
+  await runner.start();
+  return { worker: null as any, close, port: boundPort };
 }
 
 async function loadOrRefuse(

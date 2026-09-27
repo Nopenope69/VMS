@@ -34,3 +34,10 @@ found. Pick them up in the phase noted.
 | `EvidenceArchive` writes `concatTool: 'ffmpeg-v6.1'` into manifests as a constant instead of the version of the ffmpeg binary that ran. | P3.4 | Phase 4 (fail-loud) |
 | Webhook and Slack channels are blocked in air-gapped mode because the SSRF guard only allows public addresses; a LAN webhook target for air-gapped sites needs an explicit, audited allowlist. | P3.3 | Phase 4 |
 | `disasterRecoveryDrill.test.ts` Scenario B failed once in a parallel full run (`orphansIndexed` 0, expected 2), then passed in a second full run and 10/10 isolated runs. All its dependencies are mocked or per-test; cause not found. Investigate before calling it a flake. | Session 2 verification | Phase 4 |
+
+## Phase 4 (ANPR) follow-ups
+
+- **Plate snapshots**: observations store no image crop yet; add crops with retention under P4.6 purge rules.
+- **ANPR on non-LPR cameras**: vehicle-crop → plate detection for overview cameras (needs a licence-clean vehicle/plate detector).
+- **Indian-data evaluation and fine-tune** (P4.3, HUMAN-REQUIRED): measure plate-level accuracy on held-out site footage.
+- **Test flake watch**: one parallel backend run had 1 failure in `anprRealDb.test.ts` and one ai-worker run had 2 failures; neither reproduced in 6 and 4 reruns respectively. Output was not captured; capture it if it recurs.

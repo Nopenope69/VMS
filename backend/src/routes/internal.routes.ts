@@ -7,6 +7,9 @@ import { ModelManifestService } from '../services/ai/modelManifest.service';
 import { ModelRegistryService, ModelRegistryError } from '../services/ai/modelRegistry.service';
 import { DetectionIngestionService, DetectionIngestionError } from '../services/ai/detectionIngestion.service';
 import { spatialEngine } from '../services/spatial/engine';
+import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
+import { aggregator as anprAggregator } from './anpr.routes';
+import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 
 let currentSpatialEngine = spatialEngine;
 
@@ -267,5 +270,32 @@ router.get('/ai/models/deployed', handleGetDeployedModel);
 router.post('/ai/models/bootstrap-deploy', handleBootstrapDeploy);
 router.post('/ai/model-events', handleModelLifecycleEvent);
 router.get('/ai/activity', handleGetAiActivity);
+
+/** ANPR adapter endpoints (P4.1). Off with the ANPR flag, like the public ANPR API. */
+function anprEnabled(res: Response): boolean {
+  if (isFeatureEnabled(FeatureFlag.ANPR)) return true;
+  res.status(501).json({ error: 'ANPR is disabled on this appliance', code: 'FEATURE_DISABLED' });
+  return false;
+}
+
+router.get('/anpr/cameras', async (_req: Request, res: Response) => {
+  if (!anprEnabled(res)) return;
+  const cameras = await prisma.camera.findMany({
+    where: { lprMode: true },
+    select: { id: true, tenantId: true, streamPath: true, lprConfigJson: true },
+  });
+  return res.json({ cameras: cameras.map((c) => ({ cameraId: c.id, tenantId: c.tenantId, streamPath: c.streamPath, lpr: c.lprConfigJson ?? {} })) });
+});
+
+router.post('/anpr/observations', async (req: Request, res: Response) => {
+  if (!anprEnabled(res)) return;
+  try {
+    const results = await new AnprIngestionService(prisma, anprAggregator).ingest(req.body);
+    return res.json({ accepted: results.length, observations: results.map((r) => ({ id: r.observationId, plate: r.normalizedPlate, isNew: r.isNewObservation, watchlist: r.matchedWatchlist.map((m) => m.id) })) });
+  } catch (err: any) {
+    if (err instanceof AnprIngestionError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

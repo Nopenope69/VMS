@@ -7,3 +7,4 @@
 !services/ai-worker/src/**
 services/ai-worker/src/**/__tests__/**
 !scripts/models/models.lock.json
+!scripts/models/pipelines/**

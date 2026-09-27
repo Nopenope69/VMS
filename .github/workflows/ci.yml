@@ -151,7 +151,10 @@ jobs:
         run: npm ci
 
       - name: Fetch pinned models (SHA-256 verified against scripts/models/models.lock.json)
-        run: scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
+        run: |
+          scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
+          # ANPR candidate models (tests only; the product needs a human approval to run them)
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
 
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
@@ -222,12 +225,21 @@ jobs:
           MEDIAMTX_BIN: /tmp/mediamtx
         run: scripts/e2e/ai-tripwire-scenario.sh /tmp/e2e-report.json
 
+      - name: Run ANPR LPR scenario (SYNTHETIC plate, TEST-ONLY model approval)
+        env:
+          MEDIAMTX_BIN: /tmp/mediamtx
+        run: |
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
+          scripts/e2e/anpr-lpr-scenario.sh /tmp/anpr-e2e-report.json
+
       - name: Upload scenario report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ai-e2e-report
-          path: /tmp/e2e-report.json
+          path: |
+            /tmp/e2e-report.json
+            /tmp/anpr-e2e-report.json
           if-no-files-found: ignore
 
   governance-gates:

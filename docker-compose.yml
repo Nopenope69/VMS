@@ -161,6 +161,7 @@ services:
       - VIGILONE_FEATURE_SMART_SEARCH=${VIGILONE_FEATURE_SMART_SEARCH:-false}
       - VIGILONE_FEATURE_FLOORPLANS=${VIGILONE_FEATURE_FLOORPLANS:-false}
       - VIGILONE_FEATURE_CAMERA_EVENTS=${VIGILONE_FEATURE_CAMERA_EVENTS:-false}
+      - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
       - VIGILONE_AIR_GAPPED=${VIGILONE_AIR_GAPPED:-false}
       - INCIDENT_HOLD_PRE_SECONDS=${INCIDENT_HOLD_PRE_SECONDS:-60}
       - INCIDENT_HOLD_POST_SECONDS=${INCIDENT_HOLD_POST_SECONDS:-120}
@@ -168,6 +169,8 @@ services:
     volumes:
       - recordings_data:/recordings
       - appliance_keys:/etc/vigilone
+      # Human approvals for candidate AI models (read-only; see docs/operations/ANPR.md)
+      - ./scripts/models/model-license-exceptions.json:/run/vigilone/model-license-exceptions.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -197,6 +200,52 @@ services:
   # namespace so rtsp://127.0.0.1:8554 IS MediaMTX (loopback + single-RTSP-stream invariants); it
   # never connects to cameras. Recording and evidence do not depend on it: stopping, crashing or
   # overloading it cannot affect them.
+  # P4.1 ANPR (plate_recognition adapter + LPR camera runner). Its models are candidate models:
+  # without a human approval in scripts/models/model-license-exceptions.json it refuses to run
+  # (health FAILED, audited nowhere as success). Enable with --profile anpr and VIGILONE_FEATURE_ANPR.
+  anpr-worker:
+    build:
+      context: .
+      dockerfile: services/ai-worker/Dockerfile
+    image: vigilone-ai-worker:latest
+    container_name: vigilone-anpr-worker
+    profiles: ["anpr"]
+    restart: unless-stopped
+    network_mode: "service:mediamtx"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=production
+      - AI_WORKER_MODE=anpr
+      - BACKEND_INTERNAL_URL=http://backend:4000/api/v1/internal
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - MEDIAMTX_READ_USER=internal
+      - MEDIAMTX_READ_PASSWORD=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - VIGILONE_MODELS_DIR=/models
+      - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
+      - AI_ADAPTER_HOST=127.0.0.1
+      - AI_ADAPTER_PORT=7011
+      - AI_EXIT_ON_REFUSAL=false
+    volumes:
+      - ${VIGILONE_MODELS_DIR:-./.cache/models}:/models:ro
+      - ./scripts/models/model-license-exceptions.json:/run/vigilone/model-license-exceptions.json:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      mediamtx:
+        condition: service_healthy
+        restart: true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1536M
+
   ai-worker:
     build:
       context: .
