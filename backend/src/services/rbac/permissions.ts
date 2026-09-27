@@ -45,6 +45,8 @@ export enum Permission {
   AI_MODEL_MANAGE = 'AI_MODEL_MANAGE',
   /** Mark alarms as false/true alarms (P3.7) and read feedback statistics. */
   ALARM_FEEDBACK = 'ALARM_FEEDBACK',
+  /** Alarm SLA and escalation policies (P3.4). */
+  ALARM_POLICY_MANAGE = 'ALARM_POLICY_MANAGE',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -90,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SPATIAL_RULE_MANAGE,
     Permission.AI_MODEL_MANAGE,
     Permission.ALARM_FEEDBACK,
+    Permission.ALARM_POLICY_MANAGE,
   ],
   TENANT_ADMIN: [
     Permission.CAMERA_VIEW,
@@ -132,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.FLOORPLAN_MANAGE,
     Permission.SPATIAL_RULE_MANAGE,
     Permission.ALARM_FEEDBACK,
+    Permission.ALARM_POLICY_MANAGE,
   ],
   OPERATOR: [
     Permission.CAMERA_VIEW,

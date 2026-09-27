@@ -3,6 +3,7 @@ import config from './config/env';
 import app from './app';
 import { aggregator, aiRuntime } from './routes/anpr.routes';
 import { dispatcher } from './routes/notification.routes';
+import { alarmWorkflow } from './routes/alarm.routes';
 import { FeatureFlag, isFeatureEnabled } from './config/featureFlags';
 import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
@@ -39,6 +40,7 @@ export const server = app.listen(config.PORT, () => {
     }
     dispatcher.start();
     incidentOrchestrator.start();
+    alarmWorkflow.start(15000);
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -60,6 +62,7 @@ process.on('SIGTERM', async () => {
   aiRuntime.stop();
   dispatcher.stop();
   incidentOrchestrator.stop();
+  alarmWorkflow.stop();
   server.close(() => {
     prisma.$disconnect();
     process.exit(0);

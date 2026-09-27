@@ -12,6 +12,8 @@ import {
   FileText,
   Video,
   Filter,
+  UserCheck,
+  Download,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -41,11 +43,43 @@ interface AlarmItem {
   resolvedAt?: string | null;
   resolvedBy?: string | null;
   resolutionNotes?: string | null;
+  /** Incident workflow (P3.4). */
+  assignedToUserId?: string | null;
+  ackDueAt?: string | null;
+  resolveDueAt?: string | null;
+  ackSlaBreachedAt?: string | null;
+  resolveSlaBreachedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   /** Rule-raised alarms carry the canonical event and, for AI events, the model provenance. */
   metadataJson?: { provenance?: { modelName?: string; modelVersion?: string } | null } | null;
 }
+
+/** The signed-in user's id, as stored by the login flow (App.tsx). */
+const currentUserId = (): string | null => {
+  try {
+    return JSON.parse(localStorage.getItem('vigilone_user') || 'null')?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const SlaBadge: React.FC<{ alarm: AlarmItem }> = ({ alarm }) => {
+  if (alarm.state === 'RESOLVED') return null;
+  if (alarm.ackSlaBreachedAt && alarm.state === 'ACTIVE') {
+    return <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-rose-600/20 text-rose-400 border border-rose-600 font-mono">ACK SLA BREACHED</span>;
+  }
+  if (alarm.resolveSlaBreachedAt) {
+    return <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-rose-600/20 text-rose-400 border border-rose-600 font-mono">RESOLVE SLA BREACHED</span>;
+  }
+  const due = alarm.state === 'ACTIVE' ? alarm.ackDueAt : alarm.resolveDueAt;
+  if (!due) return null;
+  return (
+    <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-vms-surface text-vms-muted border border-vms-border font-mono" title={due}>
+      {alarm.state === 'ACTIVE' ? 'ack' : 'resolve'} by {new Date(due).toISOString().slice(11, 16)} UTC
+    </span>
+  );
+};
 
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Events: React.FC = () => {
@@ -174,6 +208,31 @@ export const Events: React.FC = () => {
       fetchEvents();
     }
   }, [consoleTab, alarmStateFilter, alarmSeverityFilter, eventSeverityFilter, unackOnly]);
+
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  // Assign to the signed-in operator, or release the assignment
+  const handleAssign = async (alarm: AlarmItem) => {
+    const me = currentUserId();
+    const target = alarm.assignedToUserId === me ? null : me;
+    try {
+      await api.post(`/alarms/${alarm.id}/assign`, { userId: target });
+      fetchAlarms();
+    } catch (err: any) {
+      setAlarmError(`Assignment failed; nothing changed (${describeError(err)})`);
+    }
+  };
+
+  // One-click evidence export over the alarm's incident window
+  const handleExport = async (alarm: AlarmItem) => {
+    setExportNotice(null);
+    try {
+      const res = await api.post(`/alarms/${alarm.id}/export`);
+      setExportNotice(`Evidence package ${res.data.filename} created (${res.data.window.source === 'INCIDENT_HOLD' ? 'incident hold window' : 'default alarm window'}).`);
+    } catch (err: any) {
+      setAlarmError(`Export failed; no package was created (${describeError(err)})`);
+    }
+  };
 
   // Acknowledge Alarm
   const handleAcknowledgeAlarm = async (alarmId: string) => {
@@ -434,6 +493,12 @@ export const Events: React.FC = () => {
         </div>
       </div>
 
+      {consoleTab === 'ALARMS' && exportNotice && (
+        <div role="status" className="px-3 py-2 text-xs font-mono rounded border border-emerald-800 bg-emerald-950/60 text-emerald-300 flex justify-between">
+          <span>{exportNotice}</span>
+          <button onClick={() => setExportNotice(null)} className="text-vms-muted hover:text-vms-text ml-2">Dismiss</button>
+        </div>
+      )}
       {((consoleTab === 'ALARMS' && alarmError) || (consoleTab === 'EVENTS' && eventError)) && (
         <div
           role="alert"
@@ -620,7 +685,13 @@ export const Events: React.FC = () => {
                           <div className="font-semibold text-vms-text text-xs">
                             {alarm.title}
                             <AiProvenanceBadge provenance={alarm.metadataJson?.provenance} />
+                            <SlaBadge alarm={alarm} />
                           </div>
+                          {alarm.assignedToUserId && (
+                            <div className="text-[10px] text-vms-muted font-mono mt-0.5">
+                              assigned{alarm.assignedToUserId === currentUserId() ? ' to you' : ''}
+                            </div>
+                          )}
                           {alarm.description && (
                             <div className="text-[11px] text-vms-muted mt-0.5 line-clamp-1">
                               {alarm.description}
@@ -654,6 +725,28 @@ export const Events: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {alarm.state !== 'RESOLVED' && !__DEMO_MODE__ && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleAssign(alarm)}
+                                title={alarm.assignedToUserId === currentUserId() ? 'Release assignment' : 'Assign to me'}
+                                icon={<UserCheck className="w-3 h-3" />}
+                              >
+                                {alarm.assignedToUserId === currentUserId() ? 'Unassign' : 'Take'}
+                              </Button>
+                            )}
+                            {alarm.cameraId && !__DEMO_MODE__ && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleExport(alarm)}
+                                title="Export signed evidence package for this alarm"
+                                icon={<Download className="w-3 h-3" />}
+                              >
+                                Export
+                              </Button>
+                            )}
                             {alarm.state === 'ACTIVE' && (
                               <Button
                                 size="sm"

@@ -3,9 +3,20 @@ import { AlarmState, EventSeverity } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense } from '../middleware/license';
 import { authorize, Permission } from '../services/rbac/permissions';
+import path from 'path';
 import incidentOrchestrator from '../services/incident/orchestrator/incidentOrchestrator.service';
+import prisma from '../config/database';
+import { AlarmWorkflowService, WorkflowError, workflowConfigFromEnv } from '../services/incident/workflow/alarmWorkflow.service';
+import { EvidenceArchive } from '../services/evidence/archive';
+import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
+export const alarmWorkflow = new AlarmWorkflowService(prisma);
+const evidenceArchive = new EvidenceArchive(prisma);
+
+function fail(res: Response, err: any) {
+  return res.status(err instanceof WorkflowError ? err.statusCode : err.statusCode || 500).json({ error: err.message });
+}
 
 router.use(requireAuth);
 router.use(loadTenantLicense);
@@ -67,6 +78,127 @@ router.post('/:id/resolve', authorize(Permission.ALARM_MANAGE), async (req: Requ
     return res.json({ success: true, alarm });
   } catch (err: any) {
     return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * Assign (or unassign with userId null) an alarm to an operator. Audited.
+ */
+router.post('/:id/assign', authorize(Permission.ALARM_MANAGE), async (req: Request, res: Response) => {
+  const { userId } = req.body || {};
+  if (userId !== null && typeof userId !== 'string') return res.status(400).json({ error: 'userId (string or null) is required' });
+  try {
+    const alarm = await alarmWorkflow.assign(req.params.id, userId, { tenantId: req.user!.tenantId, actorUserId: req.user!.id, clientIp: req.ip });
+    return res.json({ success: true, alarm });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * Evidence holds applied automatically to this alarm (CRITICAL alarms on a camera).
+ */
+router.get('/:id/holds', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const alarm = await prisma.alarm.findUnique({ where: { id: req.params.id }, select: { tenantId: true } });
+    if (!alarm || alarm.tenantId !== req.user!.tenantId) return res.status(404).json({ error: 'Alarm not found' });
+    const holds = await prisma.incidentEvidenceHold.findMany({ where: { alarmId: req.params.id } });
+    return res.json({ holds });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * One-click evidence export for an alarm: the camera and window come from the alarm (the
+ * incident hold window when one exists), through the same signed Section 63 BSA package path as
+ * /evidence/export. Audited.
+ */
+router.post('/:id/export', authorize(Permission.EVIDENCE_EXPORT), async (req: Request, res: Response) => {
+  try {
+    const alarm = await prisma.alarm.findUnique({ where: { id: req.params.id } });
+    if (!alarm || alarm.tenantId !== req.user!.tenantId) return res.status(404).json({ error: 'Alarm not found' });
+    if (!alarm.cameraId) return res.status(409).json({ error: 'ALARM_HAS_NO_CAMERA: this alarm is not tied to a camera, so there is no video to export', code: 'ALARM_HAS_NO_CAMERA' });
+    const hold = await prisma.incidentEvidenceHold.findUnique({ where: { alarmId_cameraId: { alarmId: alarm.id, cameraId: alarm.cameraId } } });
+    const cfg = workflowConfigFromEnv();
+    const startTime = hold?.windowStart ?? new Date(alarm.triggeredAt.getTime() - cfg.holdPreSeconds * 1000);
+    const endTime = hold?.windowEnd ?? new Date(alarm.triggeredAt.getTime() + cfg.holdPostSeconds * 1000);
+    const zipPath = await evidenceArchive.processExport({
+      tenantId: alarm.tenantId,
+      cameraId: alarm.cameraId,
+      requestedById: req.user!.id,
+      startTime,
+      endTime,
+      exportMode: 'STREAM_COPY',
+    });
+    await AuditChainService.record(prisma, {
+      tenantId: alarm.tenantId,
+      userId: req.user!.id,
+      action: 'ALARM_EVIDENCE_EXPORT',
+      resourceType: 'Alarm',
+      resourceId: alarm.id,
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+      metadata: { cameraId: alarm.cameraId, startTime, endTime, holdId: hold?.id ?? null, zipFilename: path.basename(zipPath) },
+    });
+    return res.status(201).json({
+      downloadUrl: `/api/v1/evidence/download/${path.basename(zipPath)}`,
+      filename: path.basename(zipPath),
+      window: { startTime, endTime, source: hold ? 'INCIDENT_HOLD' : 'ALARM_DEFAULT' },
+    });
+  } catch (err: any) {
+    if (err.message?.includes('NO_RECORDING_SEGMENTS_FOUND')) return res.status(404).json({ error: err.message, code: 'NO_RECORDING_SEGMENTS_FOUND' });
+    return fail(res, err);
+  }
+});
+
+/**
+ * SLA policies: acknowledge / resolve deadlines per severity.
+ */
+router.get('/policies/sla', authorize(Permission.ALARM_MANAGE), async (req: Request, res: Response) => {
+  const policies = await prisma.alarmSlaPolicy.findMany({ where: { tenantId: req.user!.tenantId }, orderBy: { severity: 'asc' } });
+  return res.json({ policies });
+});
+
+router.put('/policies/sla', authorize(Permission.ALARM_POLICY_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const policy = await alarmWorkflow.upsertSlaPolicy(req.user!.tenantId, req.user!.id, req.body, req.ip);
+    return res.json({ policy });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * Escalation policies: who is notified, and when, while an alarm stays unacknowledged.
+ */
+router.get('/policies/escalation', authorize(Permission.ALARM_MANAGE), async (req: Request, res: Response) => {
+  const policies = await prisma.escalationPolicy.findMany({ where: { tenantId: req.user!.tenantId }, orderBy: { createdAt: 'desc' } });
+  return res.json({ policies });
+});
+
+router.post('/policies/escalation', authorize(Permission.ALARM_POLICY_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const policy = await alarmWorkflow.createEscalationPolicy(req.user!.tenantId, req.user!.id, req.body, req.ip);
+    return res.status(201).json({ policy });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+router.patch('/policies/escalation/:policyId', authorize(Permission.ALARM_POLICY_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const p = await prisma.escalationPolicy.findUnique({ where: { id: req.params.policyId } });
+    if (!p || p.tenantId !== req.user!.tenantId) return res.status(404).json({ error: 'Policy not found' });
+    if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) is required' });
+    const policy = await prisma.escalationPolicy.update({ where: { id: p.id }, data: { enabled: req.body.enabled } });
+    await AuditChainService.record(prisma, {
+      tenantId: p.tenantId, userId: req.user!.id, action: req.body.enabled ? 'ESCALATION_POLICY_ENABLE' : 'ESCALATION_POLICY_DISABLE',
+      resourceType: 'EscalationPolicy', resourceId: p.id, ipAddress: req.ip || '127.0.0.1', metadata: { name: p.name },
+    });
+    return res.json({ policy });
+  } catch (err: any) {
+    return fail(res, err);
   }
 });
 
