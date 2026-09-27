@@ -173,6 +173,8 @@ enum NotificationChannelType {
   WEBHOOK
   SLACK
   EMAIL
+  WHATSAPP
+  SMS
 }
 
 enum NotificationJobStatus {
@@ -191,6 +193,7 @@ enum NodeState {
 }
 
 enum RuleTriggerType {
+  CAMERA_ANALYTIC
   MOTION_ZONE
   ANPR_WATCHLIST
   PERSON_DETECTED
@@ -287,6 +290,10 @@ model Tenant {
   cameras               Camera[]
   auditEvents           AuditEvent[]
   canonicalEvents       CanonicalEvent[]
+  alarmSlaPolicies      AlarmSlaPolicy[]
+  escalationPolicies    EscalationPolicy[]
+  alarmFeedback         AlarmFeedback[]
+  cameraEventSources    CameraEventSource[]
   exports               EvidenceExport[]
   licenses              License[]
   eventRules            EventRule[]
@@ -451,6 +458,7 @@ model Camera {
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   spatialPlacement        CameraSpatialPlacement?
   incidents               Incident[]
+  eventSources            CameraEventSource[]
 
   @@index([tenantId, siteId])
   @@index([streamPath])
@@ -824,11 +832,22 @@ model Alarm {
   resolvedById     String?
   resolutionNotes  String?
 
+  // Phase 3 incident workflow (P3.4)
+  assignedToUserId     String?
+  assignedAt           DateTime?
+  ackDueAt             DateTime?
+  resolveDueAt         DateTime?
+  ackSlaBreachedAt     DateTime?
+  resolveSlaBreachedAt DateTime?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   notificationJobs NotificationJob[]
   notificationLogs NotificationLog[]
+  escalations      AlarmEscalation[]
+  feedback         AlarmFeedback?
+  evidenceHolds    IncidentEvidenceHold[]
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
@@ -1015,8 +1034,13 @@ model NotificationJob {
   payloadJson    Json
   createdAt      DateTime              @default(now())
   processedAt    DateTime?
+  /// Provider's id for the accepted message (SMTP queue id, WhatsApp wamid): the delivery receipt key.
+  providerMessageId String?
+  /// Escalation step that queued this job, if any (P3.4).
+  escalationStep Int?
 
   @@index([tenantId, status, nextRetryAt])
+  @@index([providerMessageId])
 }
 
 model NotificationLog {
@@ -1032,9 +1056,122 @@ model NotificationLog {
   latencyMs    Int?
   error        String?
   dispatchedAt DateTime            @default(now())
+  /// Delivery receipt (P3.3): SENT on provider acceptance, then DELIVERED / READ / FAILED from callbacks.
+  providerMessageId String?
+  deliveryStatus    String?
+  deliveryUpdatedAt DateTime?
 
   @@index([tenantId, dispatchedAt])
   @@index([channelId, status])
+  @@index([providerMessageId])
+}
+
+/// Acknowledge / resolve deadlines per severity (P3.4). No row = no SLA for that severity.
+model AlarmSlaPolicy {
+  id                   String        @id @default(uuid())
+  tenantId             String
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  severity             EventSeverity
+  ackWithinMinutes     Int
+  resolveWithinMinutes Int?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([tenantId, severity])
+}
+
+/// Who is told, and when, while an alarm stays unacknowledged (P3.4).
+/// stepsJson: [{ "afterMinutes": 0, "channelIds": ["..."] }, { "afterMinutes": 10, "channelIds": ["..."] }]
+model EscalationPolicy {
+  id          String            @id @default(uuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  minSeverity EventSeverity     @default(WARNING)
+  enabled     Boolean           @default(true)
+  stepsJson   Json
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  escalations AlarmEscalation[]
+
+  @@index([tenantId, enabled])
+}
+
+model AlarmEscalation {
+  id                  String           @id @default(uuid())
+  alarmId             String
+  alarm               Alarm            @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  policyId            String
+  policy              EscalationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  stepIndex           Int
+  channelIds          Json
+  notificationsQueued Int              @default(0)
+  firedAt             DateTime         @default(now())
+
+  @@unique([alarmId, policyId, stepIndex])
+}
+
+/// Operator verdict on an alarm (P3.7), kept for false-alarm statistics and model/rule tuning.
+model AlarmFeedback {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  alarmId          String   @unique
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  verdict          String   // FALSE_ALARM | TRUE_ALARM
+  reason           String?
+  userId           String
+  automationRuleId String?
+  cameraId         String?
+  modelSha256      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, verdict, createdAt])
+  @@index([automationRuleId])
+  @@index([modelSha256])
+}
+
+/// Evidence auto-pin for critical incidents (P3.4). Segments recorded inside the window are pinned
+/// as they appear (the window extends past the alarm), then the hold is COMPLETE.
+model IncidentEvidenceHold {
+  id             String    @id @default(uuid())
+  tenantId       String
+  alarmId        String
+  alarm          Alarm     @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  cameraId       String
+  windowStart    DateTime
+  windowEnd      DateTime
+  expiresAt      DateTime
+  status         String    @default("PENDING") // PENDING | COMPLETE | FAILED
+  segmentsPinned Int       @default(0)
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@unique([alarmId, cameraId])
+  @@index([status, windowEnd])
+}
+
+/// Camera-originated event feeds (P3.1/P3.2): ONVIF PullPoint, Hikvision ISAPI, Dahua event manager.
+model CameraEventSource {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId    String
+  camera      Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  protocol    String    // ONVIF_PULLPOINT | HIKVISION_ISAPI | DAHUA_EVENT_MANAGER
+  enabled     Boolean   @default(true)
+  status      String    @default("STOPPED") // STOPPED | CONNECTING | RUNNING | BACKOFF | FAILED
+  lastEventAt DateTime?
+  lastError   String?
+  /// Camera clock minus appliance clock at the last check (NTP drift, warned above 100 ms).
+  clockSkewMs Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([cameraId, protocol])
 }
 
 model AiRuntimeDiagnostic {

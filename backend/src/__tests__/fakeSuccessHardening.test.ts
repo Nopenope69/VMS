@@ -109,7 +109,7 @@ describe('Systemic Fake-Success Elimination & Adapter Hardening (C-013)', () => 
   });
 
   describe('NotificationAdapter Hardening', () => {
-    it('returns 501 SMTP_TRANSPORT_NOT_CONFIGURED for EMAIL notification channel', async () => {
+    it('fails closed (permanent CHANNEL_MISCONFIGURED) for an EMAIL channel without SMTP settings', async () => {
       const adapter = new NotificationAdapter(mockPrisma);
       const emailChannel = {
         id: 'chan_email_01',
@@ -120,8 +120,8 @@ describe('Systemic Fake-Success Elimination & Adapter Hardening (C-013)', () => 
       const result = await adapter.dispatchToAdapter(emailChannel, { text: 'Alert' });
 
       expect(result.success).toBe(false);
-      expect(result.statusCode).toBe(501);
-      expect(result.error).toContain('SMTP_TRANSPORT_NOT_CONFIGURED');
+      expect(result.permanent).toBe(true);
+      expect(result.error).toContain('CHANNEL_MISCONFIGURED');
     });
   });
 
