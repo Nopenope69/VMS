@@ -2,6 +2,8 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 import { NormalizedDetectionEvent, DiscoveredCamera } from './types';
+import type { ModelLockEntry } from './modelCatalog';
+import type { CameraActivity } from './motionGate';
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -15,6 +17,30 @@ export interface IngestionResponse {
   inferenceId: string;
 }
 
+/** ModelManifest as served by GET /internal/ai/models/deployed. */
+export interface DeployedModel {
+  id: string;
+  name: string;
+  version: string;
+  sha256: string;
+  codeLicense: string;
+  weightLicense: string;
+  runtimeConfigJson: any;
+  thresholdsJson?: any;
+  classesJson?: any;
+  modelSignatureJson?: any;
+  nmsConfigJson?: any;
+  evaluationJson?: any;
+  weightsSource?: string | null;
+  isActive: boolean;
+}
+
+export class InternalApiError extends Error {
+  constructor(public readonly statusCode: number | undefined, message: string) {
+    super(message);
+  }
+}
+
 export class AuthenticatedInternalApiClient {
   private baseUrl: string;
   private secret: string;
@@ -26,125 +52,119 @@ export class AuthenticatedInternalApiClient {
     this.timeoutMs = config.timeoutMs || 5000;
   }
 
-  /**
-   * Submits a normalized detection event to the VigilOne backend internal ingestion endpoint.
-   */
-  public async submitDetection(detection: NormalizedDetectionEvent): Promise<IngestionResponse> {
-    const endpoint = `${this.baseUrl}/detections`;
-    const targetUrl = new URL(endpoint);
-    const payload = JSON.stringify(detection);
+  /** JSON request to the backend internal API; non-2xx and unparseable bodies reject. */
+  private request<T>(method: 'GET' | 'POST', path: string, body?: unknown, query?: Record<string, string>): Promise<T> {
+    const targetUrl = new URL(`${this.baseUrl}${path}`);
+    for (const [k, v] of Object.entries(query || {})) targetUrl.searchParams.set(k, v);
+    const payload = body === undefined ? undefined : JSON.stringify(body);
 
     return new Promise((resolve, reject) => {
       const isHttps = targetUrl.protocol === 'https:';
       const transport = isHttps ? https : http;
-
-      const options: http.RequestOptions = {
-        hostname: targetUrl.hostname,
-        port: targetUrl.port || (isHttps ? 443 : 80),
-        path: targetUrl.pathname + targetUrl.search,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          Authorization: `Bearer ${this.secret}`,
+      const headers: Record<string, string | number> = { Authorization: `Bearer ${this.secret}` };
+      if (payload !== undefined) {
+        headers['Content-Type'] = 'application/json';
+        headers['Content-Length'] = Buffer.byteLength(payload);
+      }
+      const req = transport.request(
+        {
+          hostname: targetUrl.hostname,
+          port: targetUrl.port || (isHttps ? 443 : 80),
+          path: targetUrl.pathname + targetUrl.search,
+          method,
+          headers,
+          timeout: this.timeoutMs,
         },
-        timeout: this.timeoutMs,
-      };
-
-      const req = transport.request(options, (res) => {
-        let responseBody = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => (responseBody += chunk));
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseBody);
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(parsed as IngestionResponse);
-            } else {
-              reject(
-                new Error(
-                  `Ingestion endpoint returned status ${res.statusCode}: ${parsed.error || responseBody}`
-                )
-              );
+        (res) => {
+          let responseBody = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => (responseBody += chunk));
+          res.on('end', () => {
+            let parsed: any;
+            try {
+              parsed = JSON.parse(responseBody);
+            } catch {
+              return reject(new InternalApiError(res.statusCode, `Failed to parse backend response (HTTP ${res.statusCode}) for ${method} ${path}: ${responseBody.slice(0, 500)}`));
             }
-          } catch (err) {
-            reject(new Error(`Failed to parse backend response (HTTP ${res.statusCode}): ${responseBody}`));
-          }
-        });
-      });
-
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) return resolve(parsed as T);
+            reject(new InternalApiError(res.statusCode, `${method} ${path} returned status ${res.statusCode}: ${parsed.error || responseBody.slice(0, 500)}`));
+          });
+        }
+      );
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error(`API request timed out after ${this.timeoutMs}ms`));
+        reject(new InternalApiError(undefined, `${method} ${path} timed out after ${this.timeoutMs}ms`));
       });
-
       req.on('error', (err) => reject(err));
-
-      req.write(payload);
+      if (payload !== undefined) req.write(payload);
       req.end();
     });
+  }
+
+  /**
+   * Submits a normalized detection event (with provenance) to the VigilOne backend internal ingestion endpoint.
+   */
+  public submitDetection(detection: NormalizedDetectionEvent): Promise<IngestionResponse> {
+    return this.request<IngestionResponse>('POST', '/detections', detection);
   }
 
   /**
    * Fetches active camera loopback streams from the appliance backend.
    * Only safe metadata is returned (no credentials or external IPs).
    */
-  public async fetchActiveCameras(params?: {
-    tenantId?: string;
-    isOnline?: boolean;
-  }): Promise<DiscoveredCamera[]> {
-    const targetUrl = new URL(`${this.baseUrl}/cameras`);
-    if (params?.tenantId) {
-      targetUrl.searchParams.set('tenantId', params.tenantId);
-    }
-    if (params?.isOnline !== undefined) {
-      targetUrl.searchParams.set('isOnline', String(params.isOnline));
-    }
+  public async fetchActiveCameras(params?: { tenantId?: string; isOnline?: boolean }): Promise<DiscoveredCamera[]> {
+    const query: Record<string, string> = {};
+    if (params?.tenantId) query.tenantId = params.tenantId;
+    if (params?.isOnline !== undefined) query.isOnline = String(params.isOnline);
+    const res = await this.request<{ cameras: DiscoveredCamera[] }>('GET', '/cameras', undefined, query);
+    return res.cameras;
+  }
 
-    return new Promise((resolve, reject) => {
-      const isHttps = targetUrl.protocol === 'https:';
-      const transport = isHttps ? https : http;
-
-      const options: http.RequestOptions = {
-        hostname: targetUrl.hostname,
-        port: targetUrl.port || (isHttps ? 443 : 80),
-        path: targetUrl.pathname + targetUrl.search,
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.secret}`,
-        },
-        timeout: this.timeoutMs,
-      };
-
-      const req = transport.request(options, (res) => {
-        let responseBody = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => (responseBody += chunk));
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(responseBody);
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(parsed.cameras as DiscoveredCamera[]);
-            } else {
-              reject(
-                new Error(
-                  `Camera discovery returned status ${res.statusCode}: ${parsed.error || responseBody}`
-                )
-              );
-            }
-          } catch (err) {
-            reject(new Error(`Failed to parse camera discovery response (HTTP ${res.statusCode}): ${responseBody}`));
-          }
-        });
-      });
-
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error(`Camera discovery request timed out after ${this.timeoutMs}ms`));
-      });
-
-      req.on('error', (err) => reject(err));
-      req.end();
+  /** Registers a pinned model (idempotent; licences and immutability are validated by the backend). */
+  public async registerModelManifest(entry: ModelLockEntry): Promise<{ id: string }> {
+    const res = await this.request<{ manifest: { id: string } }>('POST', '/model-manifests', {
+      name: entry.name,
+      version: entry.version,
+      sha256: entry.sha256,
+      codeLicense: entry.codeLicense,
+      weightLicense: entry.weightLicense,
+      trainingData: entry.trainingData,
+      thresholds: entry.thresholds,
+      runtimeConfig: entry.runtimeConfig,
+      attributionRequired: entry.attributionRequired,
+      noticeRequired: entry.noticeRequired,
+      licenseNotes: entry.licenseNotes,
+      task: entry.task,
+      weightsSource: entry.weightsSource,
+      modelSignature: entry.modelSignature,
+      classes: entry.classes,
+      nmsConfig: entry.nmsConfig,
     });
+    return res.manifest;
+  }
+
+  /** First boot only: deploys the manifest if no model is deployed for its task. */
+  public bootstrapDeploy(modelManifestId: string, adapterId: string): Promise<{ deployed: boolean }> {
+    return this.request('POST', '/ai/models/bootstrap-deploy', { modelManifestId, adapterId });
+  }
+
+  public async getDeployedModel(task: string): Promise<DeployedModel | null> {
+    const res = await this.request<{ model: DeployedModel | null }>('GET', '/ai/models/deployed', undefined, { task });
+    return res.model;
+  }
+
+  /** Reports a load / refusal / unload to the backend, which writes it to the audit chain. */
+  public reportModelLifecycle(report: Record<string, unknown>): Promise<{ recorded: boolean }> {
+    return this.request('POST', '/ai/model-events', report);
+  }
+
+  /** Per-camera gating inputs: armed by AI rules, time of last classical motion (P2.5). */
+  public async fetchAiActivity(): Promise<Record<string, CameraActivity>> {
+    const res = await this.request<{ cameras: Array<{ cameraId: string; armed: boolean; lastMotionAt: string | null }> }>('GET', '/ai/activity');
+    const out: Record<string, CameraActivity> = {};
+    for (const c of res.cameras) {
+      out[c.cameraId] = { armed: c.armed, lastMotionAt: c.lastMotionAt ? Date.parse(c.lastMotionAt) : undefined };
+    }
+    return out;
   }
 }

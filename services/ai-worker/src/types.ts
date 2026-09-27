@@ -113,6 +113,23 @@ export interface NormalizedDetectionEvent {
   };
   attributesJson?: Record<string, any>;
   timestamp: string;
+  /** VigilOne v1 class (person, bicycle, motorcycle, car, bus, truck). */
+  objectClass?: string;
+  /** ai-adapter.v1 / events.v1 per-inference provenance (P2.6). */
+  provenance?: {
+    adapterId: string;
+    adapterVersion: string;
+    modelId: string;
+    modelName: string;
+    modelVersion: string;
+    modelSha256: string;
+    runtime: string;
+    executionProvider?: string;
+    inferenceId: string;
+    frameTimestampUtc: string;
+  };
+  /** When the tracker first saw this object (for minimum-dwell rules, P3.7). */
+  trackFirstSeenAt?: string;
 }
 
 export interface WorkerHealthStatus {

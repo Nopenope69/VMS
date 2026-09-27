@@ -125,9 +125,12 @@ export class FrameExtractor extends EventEmitter {
   }
 
   private failStart(err: Error): void {
+    // stop() may have run while the probe was in flight: a stopped extractor reports nothing.
+    if (!this.isRunning) return;
     this.isRunning = false;
     this.resetAccumulator();
-    this.emit('error', err);
+    // An 'error' event without listeners would throw and take the whole worker down.
+    if (this.listenerCount('error') > 0) this.emit('error', err);
   }
 
   private spawnDecoder(rtspUrl: string): void {

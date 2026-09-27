@@ -3,6 +3,8 @@ import { StreamManager } from './streamManager';
 import { ResourceGovernor } from './frameQueue';
 import { AuthenticatedInternalApiClient } from './apiClient';
 import { AiWorker } from './worker';
+import { MotionGate, MotionGateOptions } from './motionGate';
+import { MetricsRegistry } from './metrics';
 import {
   DiscoveredCamera,
   CameraStreamConfig,
@@ -17,6 +19,10 @@ export interface StreamSupervisorConfig {
   rtspPort?: number;
   syncIntervalMs?: number;
   defaultStreamConfig?: Partial<CameraStreamConfig>;
+  metrics?: MetricsRegistry;
+  /** P2.5 motion gating ('motion', default) or every sampled frame ('off'). */
+  gateMode?: 'motion' | 'off';
+  gateOptions?: MotionGateOptions;
 }
 
 /**
@@ -47,6 +53,8 @@ export class StreamSupervisor extends EventEmitter {
   private syncTimer: NodeJS.Timeout | null = null;
   private isProcessingFrame: Map<string, boolean> = new Map();
   private isRunning: boolean = false;
+  private readonly metrics: MetricsRegistry;
+  private readonly gate: MotionGate;
 
   constructor(config: StreamSupervisorConfig) {
     super();
@@ -56,6 +64,8 @@ export class StreamSupervisor extends EventEmitter {
     this.rtspPort = config.rtspPort;
     this.syncIntervalMs = config.syncIntervalMs || 30000;
     this.defaultStreamConfig = config.defaultStreamConfig || {};
+    this.metrics = config.metrics || new MetricsRegistry();
+    this.gate = new MotionGate({ ...(config.gateOptions || {}), mode: config.gateMode ?? config.gateOptions?.mode ?? 'motion' });
   }
 
   /**
@@ -83,6 +93,14 @@ export class StreamSupervisor extends EventEmitter {
    */
   public async syncCameras(): Promise<DiscoveredCamera[]> {
     const discovered = await this.apiClient.fetchActiveCameras();
+    // Which cameras are armed by AI rules / show recent motion (P2.5). Optional in older backends.
+    if (typeof (this.apiClient as any).fetchAiActivity === 'function') {
+      try {
+        this.gate.setActivity(await (this.apiClient as any).fetchAiActivity());
+      } catch (err: any) {
+        this.emit('warn', `AI activity poll failed (gating falls back to local motion): ${err.message}`);
+      }
+    }
     const discoveredMap = new Map<string, DiscoveredCamera>();
 
     for (const cam of discovered) {
@@ -137,12 +155,20 @@ export class StreamSupervisor extends EventEmitter {
       rtspPort: this.rtspPort,
     });
 
-    manager.on('frame', (frame: VideoFrame) => {
-      this.handleIncomingFrame(frame);
+    // StreamManager enqueues each decoded frame into the bounded per-camera queue and then emits
+    // 'frame'. The queue is the only source of work: consuming the emitted frame as well would
+    // infer the same frame twice.
+    manager.on('frame', () => {
+      this.metrics.inc('vigilone_ai_frames_sampled_total', 'Frames sampled from the loopback stream', { cameraId: camera.id });
+      this.pump(camera.id);
     });
 
     manager.on('error', (err: Error) => {
       this.emit('streamError', { cameraId: camera.id, error: err.message });
+    });
+
+    manager.getQueue().on('drop', () => {
+      this.metrics.inc('vigilone_ai_frames_dropped_total', 'Frames dropped before inference completed', { reason: 'queue_full' });
     });
 
     this.streams.set(camera.id, manager);
@@ -152,25 +178,47 @@ export class StreamSupervisor extends EventEmitter {
   }
 
   /**
-   * Dispatches a frame to the AI Worker and pulls from the queue.
+   * Takes the newest queued frame for a camera (older ones are stale), gates it, and infers.
+   * One inference per camera at a time; the shared adapter core bounds global concurrency.
+   */
+  private pump(cameraId: string): void {
+    if (this.isProcessingFrame.get(cameraId)) return;
+    const manager = this.streams.get(cameraId);
+    if (!manager) return;
+    const queue = manager.getQueue();
+    let frame = queue.dequeue();
+    if (!frame) return;
+    // Newest-frame preference: anything older than the latest queued frame is stale.
+    let next = queue.dequeue();
+    while (next) {
+      this.metrics.inc('vigilone_ai_frames_dropped_total', 'Frames dropped before inference completed', { reason: 'stale' });
+      frame = next;
+      next = queue.dequeue();
+    }
+
+    const hasTracks =
+      typeof (this.aiWorker as any).getTracker === 'function' &&
+      (this.aiWorker as any).getTracker(cameraId).getTracks().some((t: any) => t.state !== 'TERMINATED');
+    const decision = this.gate.decide(frame, !!hasTracks);
+    this.metrics.inc('vigilone_ai_gate_decisions_total', 'Motion gate decisions', { outcome: decision.run ? 'run' : 'skip', reason: decision.reason });
+    if (!decision.run) {
+      this.metrics.inc('vigilone_ai_frames_dropped_total', 'Frames dropped before inference completed', { reason: decision.reason });
+      return;
+    }
+    this.handleIncomingFrame(frame);
+  }
+
+  /**
+   * Dispatches a frame to the AI Worker, then pulls the next frame from the queue.
    */
   private async handleIncomingFrame(frame: VideoFrame): Promise<void> {
     const cameraId = frame.cameraId;
-
-    // Check if inference is already busy processing a frame for this camera
-    if (this.isProcessingFrame.get(cameraId)) {
-      // Busy: Frame sits in bounded queue or will be dropped if queue fills
-      return;
-    }
-
-    const manager = this.streams.get(cameraId);
-    if (!manager) return;
-
     this.isProcessingFrame.set(cameraId, true);
 
     try {
       // Process frame through decoupled AI worker interface
       await this.aiWorker.processFrame(frame);
+      this.metrics.inc('vigilone_ai_frames_inferred_total', 'Frames that went through inference', { cameraId });
 
       this.emit('frameProcessed', {
         cameraId: frame.cameraId,
@@ -178,6 +226,7 @@ export class StreamSupervisor extends EventEmitter {
       });
     } catch (err: any) {
       // INVARIANT: AI inference errors are caught and logged; NEVER crash media stream
+      this.metrics.inc('vigilone_ai_inference_errors_total', 'Inference errors in the stream pipeline', { cameraId });
       this.emit('inferenceError', {
         cameraId: frame.cameraId,
         sequenceNumber: frame.sequenceNumber,
@@ -185,13 +234,23 @@ export class StreamSupervisor extends EventEmitter {
       });
     } finally {
       this.isProcessingFrame.set(cameraId, false);
-
-      // Drain next frame if queued
-      const nextFrame = manager.getQueue().dequeue();
-      if (nextFrame) {
-        setImmediate(() => this.handleIncomingFrame(nextFrame));
-      }
+      if (this.streams.has(cameraId)) setImmediate(() => this.pump(cameraId));
     }
+  }
+
+  /** Prometheus text for per-camera pipeline state (appended to the adapter's /metrics). */
+  public renderMetrics(): string {
+    const lines: string[] = [
+      '# HELP vigilone_ai_stream_state Camera frame-acquisition state (1 for the current state)',
+      '# TYPE vigilone_ai_stream_state gauge',
+    ];
+    const q: string[] = ['# HELP vigilone_ai_queue_depth Frames waiting per camera', '# TYPE vigilone_ai_queue_depth gauge'];
+    for (const [cameraId, manager] of this.streams) {
+      const t = manager.getTelemetry();
+      lines.push(`vigilone_ai_stream_state{cameraId="${cameraId}",state="${t.state}"} 1`);
+      q.push(`vigilone_ai_queue_depth{cameraId="${cameraId}"} ${t.queueDepth}`);
+    }
+    return [...lines, ...q].join('\n') + '\n';
   }
 
   /**
@@ -202,6 +261,7 @@ export class StreamSupervisor extends EventEmitter {
     if (manager) {
       this.streams.delete(cameraId);
       this.governor.releaseStream(cameraId);
+      this.gate.forget(cameraId);
       await manager.stop();
     }
   }

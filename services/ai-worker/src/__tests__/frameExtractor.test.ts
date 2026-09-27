@@ -227,3 +227,23 @@ describe('FrameExtractor geometry against real ffmpeg output', () => {
     });
   }
 });
+
+describe('FrameExtractor probe failures never crash the process', () => {
+  it('stop() while the resolution probe is in flight: the late probe failure is swallowed', async () => {
+    const extractor = new FrameExtractor({ cameraId: 'c', tenantId: 't', streamPath: 'no_such_stream', rtspPort: 1, probeTimeoutMs: 3000 });
+    extractor.start(); // probes rtsp://127.0.0.1:1/..., which is refused
+    extractor.removeAllListeners(); // what StreamManager.stop() does
+    await extractor.stop();
+    await new Promise((r) => setTimeout(r, 500)); // the probe fails after stop; nothing may throw
+    expect(extractor.geometry).toBeNull();
+  });
+
+  it('a probe failure while running is reported as an error event', async () => {
+    const extractor = new FrameExtractor({ cameraId: 'c', tenantId: 't', streamPath: 'no_such_stream', rtspPort: 1, probeTimeoutMs: 3000 });
+    const err = await new Promise<Error>((resolve) => {
+      extractor.on('error', resolve);
+      extractor.start();
+    });
+    expect(err.message).toMatch(/ffprobe/);
+  });
+});
