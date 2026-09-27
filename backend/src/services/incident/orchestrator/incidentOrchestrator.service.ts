@@ -67,6 +67,10 @@ export class IncidentOrchestrator {
    * event id). Returns 'processed' when this id was already fully handled.
    */
   private async recordCanonicalEvent(event: VigilOneEvent): Promise<'new' | 'pending' | 'processed'> {
+    // Events persisted by their producer (spatial incidents write theirs in the incident
+    // transaction) already exist: look first, so the expected case is not logged as a DB error.
+    const known = await this.prisma.canonicalEvent.findUnique({ where: { id: event.id }, select: { processedAt: true } });
+    if (known) return known.processedAt ? 'processed' : 'pending';
     try {
       await this.prisma.canonicalEvent.create({ data: canonicalRow(event) });
       return 'new';

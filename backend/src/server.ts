@@ -33,8 +33,10 @@ export const server = app.listen(config.PORT, () => {
     recordingWatchdogService.start(30000);
     if (isFeatureEnabled(FeatureFlag.ANPR)) {
       aggregator.start();
+      // Legacy in-process ANPR runtime (no model of its own). Object detection runs in the
+      // ai-worker (Phase 2); this one only serves the flagged ANPR routes until P4.1 replaces it.
+      aiRuntime.start();
     }
-    aiRuntime.start();
     dispatcher.start();
     incidentOrchestrator.start();
 
