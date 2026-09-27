@@ -286,6 +286,7 @@ model Tenant {
   sites                 Site[]
   cameras               Camera[]
   auditEvents           AuditEvent[]
+  canonicalEvents       CanonicalEvent[]
   exports               EvidenceExport[]
   licenses              License[]
   eventRules            EventRule[]
@@ -803,6 +804,12 @@ model Alarm {
   event            Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
   ruleId           String?
   rule             EventRule?    @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  /// The canonical (orchestrator) event that raised this alarm, with its AI provenance.
+  canonicalEventId String?
+  canonicalEvent   CanonicalEvent? @relation(fields: [canonicalEventId], references: [id], onDelete: SetNull)
+  /// The automation rule (IncidentOrchestrator) whose TRIGGER_ALARM action raised this alarm.
+  automationRuleId String?
+  automationRule   AutomationRule? @relation(fields: [automationRuleId], references: [id], onDelete: SetNull)
   
   title            String
   description      String?
@@ -846,10 +853,43 @@ model DetectionEvent {
   attributesJson Json?          // Arbitrary classifier attributes (e.g. color, sub-category)
   snapshotPath   String?
   timestamp      DateTime       @default(now())
+  // Phase 2 (P2.6): per-inference provenance (events.v1 AiProvenanceV1) and the v1 object class
+  objectClass    String?
+  modelSha256    String?
+  provenanceJson Json?
 
   @@index([tenantId, type, timestamp])
   @@index([cameraId, timestamp])
   @@index([modelManifestId])
+  @@index([modelSha256])
+}
+
+/// Canonical events that entered the IncidentOrchestrator (P2.9 provenance, P3.6 correlation windows).
+/// id is the VigilOneEvent id, so re-ingesting the same event is idempotent.
+model CanonicalEvent {
+  id             String        @id
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId       String?
+  type           String
+  source         String
+  severity       EventSeverity @default(INFO)
+  timestampUtc   DateTime
+  correlationId  String
+  trackId        String?
+  payloadJson    Json
+  provenanceJson Json?
+  /// Set once the orchestrator has evaluated rules for this event; null rows are re-driven by the
+  /// inbox sweeper after a crash (transactional inbox).
+  processedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  alarms         Alarm[]
+
+  @@index([processedAt, createdAt])
+  @@index([tenantId, type, timestampUtc])
+  @@index([tenantId, cameraId, timestampUtc])
+  @@index([correlationId])
 }
 
 model ModelManifest {
@@ -866,6 +906,17 @@ model ModelManifest {
   noticeRequired      Boolean          @default(false)
   licenseNotes        String?
   isActive            Boolean          @default(true)
+  // Phase 2 (P2.3/P2.6): decoding contract, provenance and deployment state
+  task                String           @default("object_detection")
+  weightsSource       String?
+  modelSignatureJson  Json?
+  classesJson         Json?
+  nmsConfigJson       Json?
+  /// Published accuracy { dataset, metric, value, reportRef }; null = NOT EVALUATED.
+  evaluationJson      Json?
+  /// The model the ai-worker runs for its task. At most one per task (enforced in ModelRegistryService).
+  deployed            Boolean          @default(false)
+  deployedAt          DateTime?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -1060,6 +1111,7 @@ model AutomationRule {
   conditionsJson     Json
   actionsJson        Json
   executions         RuleExecutionRecord[]
+  alarms             Alarm[]
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
@@ -1135,7 +1187,7 @@ model Incident {
   tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cameraId       String
   camera         Camera                @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  ruleId         String
+  ruleId         String?
   rule           SpatialAnalyticsRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   trackId        String
   cooldownBucket BigInt
