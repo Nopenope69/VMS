@@ -34,6 +34,10 @@ export interface BsaCertificateOptions {
     concatTool?: string;
   };
   signingMode?: SigningMode | string;
+  /** P4.5: AI-derived annotations covered by the package (ai_provenance.json). */
+  aiProvenance?: { recordCount: number; unattributedCount: number; models: Array<{ name: string; version: string; sha256: string }> };
+  /** P4.5: set when the primary media is a derivative (e.g. redacted) of other evidence. */
+  derivation?: { type: string; parentEvidenceId: string; parentMasterEvidenceHash: string; description: string };
 }
 
 export interface Section63BsaCertificateRecord {
@@ -156,6 +160,26 @@ export class BsaCertificatePackageBuilder {
       for (const [k, v] of provItems) {
         doc.font('Helvetica-Bold').fontSize(9).text(`${k}: `, { continued: true, indent: 10 });
         doc.font('Helvetica').fontSize(9).text(v);
+      }
+
+      if (options.derivation) {
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(9).text(`DERIVATIVE RECORD (${options.derivation.type}): `, { continued: true, indent: 10 });
+        doc.font('Helvetica').fontSize(9).text(
+          `the primary media is derived from evidence ${options.derivation.parentEvidenceId} (master hash ${options.derivation.parentMasterEvidenceHash}). ${options.derivation.description} See derivation.json.`
+        );
+      }
+      if (options.aiProvenance) {
+        const a = options.aiProvenance;
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').fontSize(9).text('AI-derived annotations: ', { continued: true, indent: 10 });
+        doc.font('Helvetica').fontSize(9).text(
+          a.recordCount === 0 && a.unattributedCount === 0
+            ? 'none in this time window.'
+            : `${a.recordCount} record(s) produced by ${a.models.map((m) => `${m.name} ${m.version} (SHA-256 ${m.sha256.slice(0, 16)}...)`).join('; ') || 'no attributed model'}` +
+                `${a.unattributedCount ? `; ${a.unattributedCount} AI event(s) without model provenance` : ''}. ` +
+                'They are advisory metadata listed in ai_provenance.json with model, version, SHA-256, confidence, timestamp and camera; they do not alter the primary media.'
+        );
       }
 
       doc.moveDown(0.5);

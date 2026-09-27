@@ -6,6 +6,7 @@ import { authorize, Permission } from '../services/rbac/permissions';
 import { PrivacyPolicyService } from '../services/privacy/privacyPolicy.service';
 import { VideoRedactorService, RedactionError } from '../services/privacy/videoRedactor.service';
 import { RedactionQueue } from '../services/privacy/redactionQueue';
+import { buildRedactionPackage, RedactionPackageError } from '../services/evidence/archive/redactionPackage';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { z } from 'zod';
 import crypto from 'crypto';
@@ -204,6 +205,25 @@ router.get('/jobs/:id/download', authorize(Permission.REDACTION_EXECUTE), async 
   res.setHeader('Content-Disposition', `attachment; filename="redacted-${job.id}.mp4"`);
   res.setHeader('X-VigilOne-SHA256', job.outputSha256);
   fs.createReadStream(file).pipe(res);
+});
+
+/**
+ * Signed evidence package of a redacted derivative (P4.5): derivative video, derivation.json linking
+ * it to the parent evidence, AI provenance, custody ledger, certificate. Verify offline with
+ * tools/vigilone-verify.
+ */
+router.get('/jobs/:id/package', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
+  try {
+    const r = await buildRedactionPackage(prisma, req.user!.tenantId, req.params.id, req.user!.id);
+    await audit(req, 'REDACTION_PACKAGE_EXPORT', req.params.id, { packageSha256: r.packageSha256 });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(r.zipPath)}"`);
+    res.setHeader('X-VigilOne-Package-SHA256', r.packageSha256);
+    fs.createReadStream(r.zipPath).pipe(res);
+  } catch (err: any) {
+    if (err instanceof RedactionPackageError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 /**

@@ -9,7 +9,7 @@ export interface EvidenceArtifactRecord {
   mediaType: string;
   byteLength: number;
   sha256: string;
-  role: 'PRIMARY_MEDIA' | 'CUSTODY_LEDGER' | 'STATUTORY_CERTIFICATE' | 'TRUST_ANCHOR_PUBLIC_KEY' | 'METADATA';
+  role: 'PRIMARY_MEDIA' | 'CUSTODY_LEDGER' | 'STATUTORY_CERTIFICATE' | 'TRUST_ANCHOR_PUBLIC_KEY' | 'METADATA' | 'AI_PROVENANCE' | 'DERIVATION_RECORD';
 }
 
 export interface AssemblePackageOptions {
@@ -20,6 +20,8 @@ export interface AssemblePackageOptions {
   applianceSignature: string;
   certificatePdfPath?: string;
   custodyHistory?: any[];
+  /** Further files bound into the manifest's artifacts table (P4.5: ai_provenance.json, derivation.json). */
+  extraArtifacts?: Array<{ sourcePath: string; path: string; mediaType: string; role: EvidenceArtifactRecord['role'] }>;
 }
 
 export interface AssembledPackageResult {
@@ -113,6 +115,15 @@ export class PackageAssembler {
           sha256: custodySha256,
           role: 'CUSTODY_LEDGER',
         });
+      }
+
+      // 4b. Extra artifacts (AI provenance, derivation record)
+      for (const x of options.extraArtifacts || []) {
+        if (!fs.existsSync(x.sourcePath)) throw new Error(`Missing evidence artifact: ${x.sourcePath}`);
+        const dest = path.join(workDir, x.path);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(x.sourcePath, dest);
+        artifactEntries.push({ path: x.path, mediaType: x.mediaType, byteLength: fs.statSync(dest).size, sha256: await computeFileSha256(dest), role: x.role });
       }
 
       // 5. Build canonical manifest incorporating the complete artifacts table

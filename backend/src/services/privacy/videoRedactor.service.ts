@@ -104,8 +104,8 @@ function runFfmpeg(args: string[], timeoutMs = 30 * 60 * 1000): Promise<void> {
 export const ffmpegRenderer: Renderer = ({ sourcePath, filterScriptPath, outputPath }) =>
   runFfmpeg(['-v', 'error', '-nostdin', '-y', '-i', sourcePath, '-filter_script:v', filterScriptPath, '-map', '0:v:0', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath]);
 
-export async function ffmpegVersion(): Promise<string> {
-  return new Promise((resolve) => execFile('ffmpeg', ['-version'], (e, out) => resolve(e ? 'unknown' : out.split('\n')[0].trim())));
+export async function ffmpegVersion(): Promise<string | null> {
+  return FFmpegService.version();
 }
 
 async function sha256File(p: string): Promise<string> {

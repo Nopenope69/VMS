@@ -13,6 +13,17 @@ export interface VideoProbeResult {
 }
 
 export class FFmpegService {
+  /** First line of `ffmpeg -version` (the build that actually ran), or null if ffmpeg is missing. */
+  static version(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const p = spawn('ffmpeg', ['-version']);
+      let out = '';
+      p.stdout.on('data', (d) => (out += d.toString()));
+      p.on('error', () => resolve(null));
+      p.on('close', (code) => resolve(code === 0 ? out.split('\n')[0].trim() : null));
+    });
+  }
+
   /**
    * Probes video file metadata using ffprobe CLI.
    * Returns null if file is corrupt or unreadable.
