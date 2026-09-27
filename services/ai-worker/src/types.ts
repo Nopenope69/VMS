@@ -13,8 +13,14 @@ export interface RuntimeConfig {
     std?: number[];
   };
   letterbox?: boolean;
+  /** Where the letterbox padding goes. YOLOX's official preprocessing pads bottom/right ('top-left'). */
+  padPosition?: PadPosition;
+  /** Grey level (0..255) of letterbox padding. YOLOX trains with 114. Defaults to 0. */
+  padValue?: number;
   modelFormat: string;
 }
+
+export type PadPosition = 'center' | 'top-left';
 
 export interface ModelManifestRecord {
   id: string;
@@ -29,6 +35,8 @@ export interface ModelManifestRecord {
   modelSignatureJson?: ModelSignature;
   nmsConfigJson?: ModelNmsConfig;
   isActive: boolean;
+  /** Present when the manifest comes from the backend registry (P2.6 provenance). */
+  weightsSource?: string | null;
 }
 
 export interface RawDetection {
@@ -138,6 +146,11 @@ export interface FrameGeometry {
   scale: number;
   padX: number;
   padY: number;
+  /** Integer size of the source image inside the model canvas (after scaling, before padding). */
+  scaledWidth?: number;
+  scaledHeight?: number;
+  letterbox?: boolean;
+  padPosition?: PadPosition;
 }
 
 export interface VideoFrame {
@@ -176,7 +189,11 @@ export interface CameraStreamConfig {
   sourceWidth?: number;
   sourceHeight?: number;
   letterbox?: boolean;
+  padPosition?: PadPosition;
+  /** Grey level of letterbox padding (YOLOX: 114). */
+  padValue?: number;
   queueCapacity?: number;
+  probeTimeoutMs?: number;
 }
 
 export interface StreamTelemetry {
@@ -204,12 +221,27 @@ export interface ModelTensorSignature {
   format?: string;
 }
 
+/**
+ * How the raw output tensor(s) are turned into boxes.
+ * - 'generic': already-decoded boxes, one row per candidate (SignatureDecoder).
+ * - 'yolox': raw anchor-free grid outputs [1, N, 5 + C]; needs grid/stride decode, score = obj * cls.
+ * - 'rfdetr': set prediction; `dets` [1, Q, 4] normalized cxcywh and `labels` [1, Q, C] logits (sigmoid).
+ */
+export type ModelDecoderKind = 'generic' | 'yolox' | 'rfdetr';
+
 export interface ModelSignature {
   input: ModelTensorSignature;
   output: ModelTensorSignature;
   coordinateFormat: 'cxcywh' | 'xywh' | 'xyxy';
   hasObjectness: boolean;
   classCount: number;
+  decoder?: ModelDecoderKind;
+  /** YOLOX: feature-map strides, in output order. Default [8, 16, 32]. */
+  strides?: number[];
+  /** RF-DETR: name of the logits output (the boxes output is `output.name`). */
+  logitsOutputName?: string;
+  /** RF-DETR: exported class slot that is background (null = none). */
+  backgroundClassId?: number | null;
 }
 
 export interface ModelClassMapping {

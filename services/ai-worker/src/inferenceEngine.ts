@@ -10,6 +10,8 @@ import {
 } from './types';
 import { TensorBufferPool } from './tensorPool';
 import { SignatureDecoder } from './signatureDecoder';
+import { decodeModelOutputs } from './decoders';
+import { fillPlanarTensor } from './preprocess';
 
 export interface InferenceOptions {
   imageWidth?: number;
@@ -27,6 +29,14 @@ export interface IInferenceEngine {
   isLoaded(): boolean;
   getRuntimeName(): string;
   getMode(): 'native' | 'test-stub';
+  /** Runtime facts for per-inference provenance (events.v1 AiProvenanceV1). */
+  getRuntimeInfo?(): RuntimeInfo;
+}
+
+export interface RuntimeInfo {
+  runtime: 'onnxruntime' | 'openvino';
+  runtimeVersion: string | null;
+  executionProvider: string | null;
 }
 
 /**
@@ -49,7 +59,13 @@ export class OnnxInferenceEngine implements IInferenceEngine {
   private runtimeName: string = 'onnxruntime';
   private mode: 'native' | 'test-stub';
   private session: any = null;
+  private ort: any = null;
   private tensorPool: TensorBufferPool;
+  private poolCapacity: number;
+  private inputWidth = 640;
+  private inputHeight = 640;
+  private runtimeVersion: string | null = null;
+  private executionProvider: string | null = null;
 
   constructor(poolCapacity: number = 4) {
     const isProduction =
@@ -69,11 +85,20 @@ export class OnnxInferenceEngine implements IInferenceEngine {
     }
 
     this.mode = envMode === 'test-stub' ? 'test-stub' : 'native';
+    this.poolCapacity = poolCapacity;
     this.tensorPool = new TensorBufferPool({ capacity: poolCapacity });
   }
 
   public getMode(): 'native' | 'test-stub' {
     return this.mode;
+  }
+
+  public getRuntimeInfo(): RuntimeInfo {
+    return {
+      runtime: this.runtimeName.toLowerCase() === 'openvino' ? 'openvino' : 'onnxruntime',
+      runtimeVersion: this.runtimeVersion,
+      executionProvider: this.executionProvider,
+    };
   }
 
   public async load(
@@ -85,9 +110,28 @@ export class OnnxInferenceEngine implements IInferenceEngine {
       throw new Error('Cannot load inference engine with empty model artifact buffer');
     }
 
+    this.loaded = false;
     this.config = config;
     this.manifest = manifest;
     this.runtimeName = config.runtime || 'onnxruntime';
+
+    // Input size: the manifest signature is authoritative; runtime config is the fallback.
+    const sigShape = manifest?.modelSignatureJson?.input?.shape;
+    this.inputWidth = (sigShape && sigShape[3]) || config.inputWidth || 640;
+    this.inputHeight = (sigShape && sigShape[2]) || config.inputHeight || 640;
+    if (
+      manifest?.modelSignatureJson &&
+      (config.inputWidth !== this.inputWidth || config.inputHeight !== this.inputHeight)
+    ) {
+      throw new Error(
+        `Manifest inconsistency: runtimeConfig ${config.inputWidth}x${config.inputHeight} does not match signature input ${this.inputWidth}x${this.inputHeight}`
+      );
+    }
+    this.tensorPool = new TensorBufferPool({
+      capacity: this.poolCapacity,
+      width: this.inputWidth,
+      height: this.inputHeight,
+    });
 
     if (this.mode === 'native') {
       let ort: any;
@@ -98,18 +142,19 @@ export class OnnxInferenceEngine implements IInferenceEngine {
           `FATAL EXECUTION ERROR: Failed to load native onnxruntime-node execution engine: ${err.message}. Native inference requires onnxruntime-node binary bindings.`
         );
       }
+      this.ort = ort;
 
-      // Create session with execution provider options
-      const sessionOptions: any = {};
-      if (config.executionProvider) {
-        sessionOptions.executionProviders = [config.executionProvider];
-      }
+      // Execution provider: CPU unless the manifest names another one (OpenVINO, CUDA).
+      const ep = normalizeExecutionProvider(config.executionProvider);
+      const sessionOptions: any = { executionProviders: [ep] };
 
       try {
         this.session = await ort.InferenceSession.create(artifactBuffer, sessionOptions);
       } catch (err: any) {
         throw new Error(`Failed to create native ONNX session: ${err.message}`);
       }
+      this.runtimeVersion = ort.env?.versions?.node ?? ort.env?.versions?.common ?? null;
+      this.executionProvider = ep;
 
       // Verify ONNX graph signature against manifest contract
       if (manifest?.modelSignatureJson) {
@@ -119,22 +164,23 @@ export class OnnxInferenceEngine implements IInferenceEngine {
             `ONNX graph input mismatch: graph inputs [${this.session.inputNames.join(', ')}] does not include required input '${sig.input.name}'`
           );
         }
-        if (!this.session.outputNames.includes(sig.output.name)) {
-          throw new Error(
-            `ONNX graph output mismatch: graph outputs [${this.session.outputNames.join(', ')}] does not include required output '${sig.output.name}'`
-          );
+        const requiredOutputs = [sig.output.name, sig.logitsOutputName].filter(Boolean) as string[];
+        for (const name of requiredOutputs) {
+          if (!this.session.outputNames.includes(name)) {
+            throw new Error(
+              `ONNX graph output mismatch: graph outputs [${this.session.outputNames.join(', ')}] does not include required output '${name}'`
+            );
+          }
         }
       }
 
-      // One-time pre-loop warm-up inference pass
-      const modelWidth = config.inputWidth || 640;
-      const modelHeight = config.inputHeight || 640;
+      // One-time pre-loop warm-up inference pass at the real input size
       const warmUpTensor = this.tensorPool.acquire();
       warmUpTensor.fill(0);
 
       try {
         const inputName = manifest?.modelSignatureJson?.input.name || this.session.inputNames[0];
-        const tensor = new ort.Tensor('float32', warmUpTensor, [1, 3, modelHeight, modelWidth]);
+        const tensor = new ort.Tensor('float32', warmUpTensor, [1, 3, this.inputHeight, this.inputWidth]);
         await this.session.run({ [inputName]: tensor });
       } catch (err: any) {
         throw new Error(`ONNX warm-up execution failed: ${err.message}`);
@@ -144,6 +190,10 @@ export class OnnxInferenceEngine implements IInferenceEngine {
     }
 
     this.loaded = true;
+  }
+
+  public getInputSize(): { width: number; height: number } {
+    return { width: this.inputWidth, height: this.inputHeight };
   }
 
   public async infer(
@@ -159,8 +209,8 @@ export class OnnxInferenceEngine implements IInferenceEngine {
       throw new Error('Input frame buffer is empty');
     }
 
-    let width = this.config.inputWidth || 640;
-    let height = this.config.inputHeight || 640;
+    let width = this.inputWidth;
+    let height = this.inputHeight;
     let geometry: FrameGeometry | undefined;
 
     if (typeof options === 'number') {
@@ -172,73 +222,57 @@ export class OnnxInferenceEngine implements IInferenceEngine {
       geometry = options.geometry;
     }
 
+    if (this.mode === 'native' && (width !== this.inputWidth || height !== this.inputHeight)) {
+      throw new Error(
+        `INVALID_FRAME: frame is ${width}x${height} but the loaded model expects ${this.inputWidth}x${this.inputHeight}`
+      );
+    }
+
     // Acquire pre-allocated planar float32 buffer
     const planarBuffer = this.tensorPool.acquire();
 
     try {
-      // Preprocessing: Convert interleaved RGB24 buffer to normalized planar Float32Array
       if (input instanceof Float32Array) {
+        if (input.length !== planarBuffer.length) {
+          throw new Error(`INVALID_FRAME: tensor has ${input.length} elements, expected ${planarBuffer.length}`);
+        }
         planarBuffer.set(input);
       } else {
-        const pixelCount = width * height;
-        const normDiv = this.config.normalization?.value
-          ? (Array.isArray(this.config.normalization.value)
-              ? this.config.normalization.value[0]
-              : this.config.normalization.value)
-          : 255.0;
-
-        for (let i = 0; i < pixelCount; i++) {
-          planarBuffer[0 * pixelCount + i] = input[i * 3 + 0] / normDiv;
-          planarBuffer[1 * pixelCount + i] = input[i * 3 + 1] / normDiv;
-          planarBuffer[2 * pixelCount + i] = input[i * 3 + 2] / normDiv;
-        }
+        fillPlanarTensor(input, planarBuffer, width, height, this.config);
       }
 
-      // Execute inference
       if (this.mode === 'native') {
-        const ort = require('onnxruntime-node');
-        const inputName = this.manifest?.modelSignatureJson?.input.name || this.session.inputNames[0];
-        const outputName = this.manifest?.modelSignatureJson?.output.name || this.session.outputNames[0];
+        const ort = this.ort;
+        const sig = this.manifest?.modelSignatureJson;
+        const inputName = sig?.input.name || this.session.inputNames[0];
 
         const tensor = new ort.Tensor('float32', planarBuffer, [1, 3, height, width]);
         const results = await this.session.run({ [inputName]: tensor });
-        const outputTensor = results[outputName];
 
-        if (!outputTensor || !outputTensor.data) {
-          throw new Error(`Execution did not return expected output tensor '${outputName}'`);
+        const outputs: Record<string, Float32Array> = {};
+        for (const name of Object.keys(results)) {
+          const t = results[name];
+          if (t && t.type === 'float32' && ArrayBuffer.isView(t.data)) outputs[name] = t.data as Float32Array;
         }
-
-        const outputData = outputTensor.data as Float32Array;
-        return this.decodeDetections(outputData, geometry);
+        const signature = this.getEffectiveSignature();
+        if (!outputs[signature.output.name]) {
+          throw new Error(`Execution did not return expected output tensor '${signature.output.name}'`);
+        }
+        return decodeModelOutputs({
+          signature,
+          classMapping: this.getEffectiveClassMapping(),
+          thresholds: this.getEffectiveThresholds(),
+          nmsConfig: this.getEffectiveNmsConfig(),
+          geometry,
+          outputs,
+        });
       } else {
-        // Deterministic test-stub engine (CI/development only)
+        // Deterministic test-stub engine (NODE_ENV=test only, enforced in the constructor)
         return this.generateStubDetections(geometry);
       }
     } finally {
       this.tensorPool.release(planarBuffer);
     }
-  }
-
-  /**
-   * Decodes output tensor according to manifest signature and governance rules.
-   */
-  private decodeDetections(
-    outputData: Float32Array,
-    geometry?: FrameGeometry
-  ): RawDetection[] {
-    const signature = this.getEffectiveSignature();
-    const classMapping = this.getEffectiveClassMapping();
-    const thresholds = this.getEffectiveThresholds();
-    const nmsConfig = this.getEffectiveNmsConfig();
-
-    return SignatureDecoder.decode(
-      outputData,
-      signature,
-      classMapping,
-      thresholds,
-      nmsConfig,
-      geometry
-    );
   }
 
   /**
@@ -389,4 +423,14 @@ export class OnnxInferenceEngine implements IInferenceEngine {
   public getTensorPoolStats() {
     return this.tensorPool.getStats();
   }
+}
+
+/** Maps manifest spellings to onnxruntime-node execution provider names. CPU by default. */
+export function normalizeExecutionProvider(ep?: string): string {
+  const v = (ep || 'cpu').trim().toLowerCase().replace(/executionprovider$/, '');
+  if (v === '' || v === 'cpu') return 'cpu';
+  if (v === 'openvino') return 'openvino';
+  if (v === 'cuda') return 'cuda';
+  if (v === 'dml' || v === 'directml') return 'dml';
+  throw new Error(`UNSUPPORTED_EXECUTION_PROVIDER: '${ep}' (supported: cpu, openvino, cuda, dml)`);
 }
