@@ -105,6 +105,9 @@ export const REJECTED_COPYLEFT_LICENSES = [
   'COMMERCIAL-ONLY',
 ] as const;
 
+/** modelSignature.decoder values of multi-model pipelines whose components are candidate models. */
+const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline']);
+
 export class ModelManifestService {
   private prisma: PrismaClient;
 
@@ -312,11 +315,11 @@ export class ModelManifestService {
       }
     }
 
-    // 5b. Pipelines of candidate models (P4.1 ANPR): the training-data declaration comes from
-    // human approvals, so every component must have one for its exact SHA-256 in the approvals
-    // file this backend reads. The worker's claim alone is not enough.
+    // 5b. Pipelines of candidate models (P4.1 ANPR, P4.4 redaction regions): the training-data
+    // declaration comes from human approvals, so every component must have one for its exact
+    // SHA-256 in the approvals file this backend reads. The worker's claim alone is not enough.
     const sig: any = input.modelSignature;
-    if (sig && sig.decoder === 'anpr_pipeline') {
+    if (sig && (PIPELINE_DECODERS.has(sig.decoder) || Array.isArray(sig.components))) {
       const comps: any[] = Array.isArray(sig.components) ? sig.components : [];
       if (comps.length === 0) errors.push('pipeline manifests must list their components');
       const approvals = readModelLicenseApprovals();

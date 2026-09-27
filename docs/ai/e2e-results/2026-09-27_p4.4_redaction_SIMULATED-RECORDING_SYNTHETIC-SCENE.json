@@ -1,0 +1,117 @@
+{
+  "scenario": "P4.4 redaction end to end",
+  "labels": [
+    "SIMULATED-RECORDING",
+    "SYNTHETIC-SCENE",
+    "PUBLIC-DOMAIN-FACE (NASA portrait via scikit-image)",
+    "TEST-ONLY-LICENCE-APPROVALS"
+  ],
+  "result": "PASS",
+  "at": "2026-09-27T17:44:50.945Z",
+  "job": {
+    "id": "0fa2e38d-b553-4dc5-8fcc-0b902166f158",
+    "ms": 21943,
+    "outputSha256": "3b3c1d4a4f0ea122bff0acc5e9de20bc6db766a526c99f105ca9fd9f7be51951",
+    "outputBytes": 89153
+  },
+  "detector": {
+    "runtime": "onnxruntime@1.30.0",
+    "adapterId": "vigilone-redaction",
+    "modelName": "redaction-regions",
+    "components": [
+      {
+        "role": "face_detector",
+        "modelName": "yunet-face-detector",
+        "modelSha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+        "modelVersion": "2023mar"
+      },
+      {
+        "role": "text_detector",
+        "modelName": "pp-ocrv4-det-ch",
+        "modelSha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9",
+        "modelVersion": "rapidocr-1.4.4"
+      }
+    ],
+    "modelSha256": "42a767f548363545ca61761a2729c233494a0a28da1e1139be6c5f3ea01c8c53",
+    "modelVersion": "1.0.0",
+    "adapterVersion": "1.0.0-phase4"
+  },
+  "masks": {
+    "face": 1,
+    "style": "opaque_fill",
+    "total": 3,
+    "checks": [
+      {
+        "t": 4,
+        "kind": "FACE",
+        "meanLuma": 0
+      },
+      {
+        "t": 4,
+        "kind": "LICENSE_PLATE",
+        "meanLuma": 0
+      },
+      {
+        "t": 4,
+        "kind": "LICENSE_PLATE",
+        "meanLuma": 0
+      }
+    ],
+    "manual": 0,
+    "licensePlate": 2
+  },
+  "render": {
+    "tool": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+    "audio": "removed",
+    "video": "libx264 veryfast crf20 yuv420p",
+    "filterSha256": "8f87bd7ec3ac21769f460739101e817d0a98e49d4ebb775b9d31de1f4af1de62"
+  },
+  "samples": [
+    {
+      "t": 0.5,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    },
+    {
+      "t": 2,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    },
+    {
+      "t": 3.9,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    },
+    {
+      "t": 4.5,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    },
+    {
+      "t": 6,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    },
+    {
+      "t": 7.5,
+      "face": 0,
+      "plate": 0,
+      "background": 113
+    }
+  ],
+  "checks": {
+    "downloadShaMatchesRecord": true,
+    "outputNonEmpty": true,
+    "custodyLinksMasterToDerivative": true,
+    "detectorIsRegisteredPipeline": true,
+    "facesMasked": true,
+    "platesMasked": true,
+    "backgroundVisible": true,
+    "mastersUnchanged": true
+  }
+}

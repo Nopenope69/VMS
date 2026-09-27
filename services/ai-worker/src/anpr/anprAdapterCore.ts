@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { MetricsRegistry, LATENCY_BUCKETS_MS } from '../metrics';
-import { AdapterError, validateRequest, decodeJpeg } from '../adapter/adapterCore';
+import { AdapterError, validateRequest } from '../adapter/adapterCore';
+import { decodeRequestFrame } from '../adapter/frameDecode';
 import {
   AI_ADAPTER_CONTRACT,
   AdapterDescriptorV1,
@@ -15,6 +16,7 @@ import {
 import { LoadedAnprPipeline } from './anprService';
 import { PlateRead, AnprOptions } from './anprPipeline';
 import { Image3 } from './imageOps';
+import { ortRuntimeLabel } from '../runtimeInfo';
 
 /**
  * ai-adapter.v1 for task plate_recognition. Same HTTP surface, backpressure (OVERLOADED) and
@@ -92,7 +94,7 @@ export class AnprAdapterCore {
       modelName: l.definition.name,
       modelVersion: l.definition.version,
       modelSha256: l.definitionSha256,
-      runtime: 'onnxruntime@1.30.0',
+      runtime: ortRuntimeLabel(),
       executionProvider: 'cpu',
       inferenceId: crypto.randomUUID(),
       frameTimestampUtc,
@@ -134,23 +136,8 @@ export class AnprAdapterCore {
       if (req.task !== 'plate_recognition') throw new AdapterError('UNSUPPORTED_TASK', `task '${req.task}' is not served by this adapter (plate_recognition only)`);
       if (req.modelId !== this.modelId) throw new AdapterError('MODEL_NOT_LOADED', `model '${req.modelId}' is not loaded (loaded: ${this.modelId})`);
       const f = req.frame;
-      if (f.data.kind !== 'inline_base64') throw new AdapterError('INVALID_FRAME', 'shared_memory frames are not supported; send inline_base64');
-      const bytes = Buffer.from(f.data.value, 'base64');
-      let rgb: Buffer;
-      if (f.format === 'jpeg') rgb = await decodeJpeg(bytes, f.width, f.height);
-      else {
-        if (bytes.length !== f.width * f.height * 3) throw new AdapterError('INVALID_FRAME', `frame data is ${bytes.length} bytes, expected ${f.width * f.height * 3}`);
-        rgb = bytes;
-        if (f.format === 'bgr24') {
-          rgb = Buffer.from(bytes);
-          for (let i = 0; i < rgb.length; i += 3) {
-            const t = rgb[i];
-            rgb[i] = rgb[i + 2];
-            rgb[i + 2] = t;
-          }
-        }
-      }
-      const r = await this.recognize({ data: new Uint8Array(rgb.buffer, rgb.byteOffset, rgb.length), width: f.width, height: f.height }, f.timestampUtc, req.deadlineMs);
+      const img = await decodeRequestFrame(f as any);
+      const r = await this.recognize(img, f.timestampUtc, req.deadlineMs);
       const detections: DetectionV1[] = r.plates.map((p) => ({
         objectClass: 'license_plate',
         classId: 0,

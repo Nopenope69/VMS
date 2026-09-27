@@ -1537,10 +1537,22 @@ model RedactionJob {
   privacyPolicy       PrivacyPolicy?     @relation(fields: [privacyPolicyId], references: [id], onDelete: SetNull)
   status              RedactionJobStatus @default(QUEUED)
   redactionMode       RedactionMode      @default(FACE)
-  modelVersion        String             @default("1.0.0")
+  /// Set only from real detector provenance (never a default).
+  modelVersion        String?
   maskMetadataJson    Json?
+  /// Camera of the source manifest to redact (required when the manifest spans several cameras).
+  cameraId            String?
+  /// Region kinds detected automatically: FACE, LICENSE_PLATE (P4.4).
+  detectKinds         String[]           @default([])
+  sampleFps           Float              @default(4)
+  /// Detector provenance, source segment hashes, ffmpeg version and filter hash of the derivative.
+  provenanceJson      Json?
   outputObjectKey     String?
   outputSha256        String?
+  outputBytes         BigInt?
+  maskCount           Int?
+  errorCode           String?
+  startedAt           DateTime?
   createdByUserId     String
   createdByUser       User               @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
   createdAt           DateTime           @default(now())

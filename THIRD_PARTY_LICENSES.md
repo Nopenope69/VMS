@@ -110,6 +110,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
 | `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
 | DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |
+| NASA portrait of Eileen Collins (`skimage/data/astronaut.png` from scikit-image 0.26.0, BSD-3-Clause package) | **Public domain** ("No known copyright restrictions, released into the public domain", scikit-image docs) | The only real-world image in the redaction test fixture; pinned by SHA-256 in `tools/redaction/make_fixtures.py` |
 | ANPR fine-tuning stack (`tools/anpr/finetune/requirements-train.txt`): `fast-plate-ocr[train]` 1.1.0, TensorFlow 2.21, Keras 3.15, albumentations 2.0.8, tf2onnx, onnxslim, onnxruntime | **MIT / Apache-2.0** (top level); transitive `matplotlib` (Matplotlib licence) and `tqdm` (MPL-2.0 AND MIT) are not on the allowed list, see Licence questions | Workstation-only training; never installed in the appliance |
 | fast-plate-ocr base Keras weights `cct_s_v2_global.keras` + model config | **MIT** (github.com/ankandrew/cnn-ocr-lp) | Fine-tuning starting point, pinned in `tools/anpr/finetune/base-model.lock.json` |
 

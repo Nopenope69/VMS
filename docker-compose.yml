@@ -158,6 +158,7 @@ services:
       - VIGILONE_FEATURE_DIO_RELAY=${VIGILONE_FEATURE_DIO_RELAY:-false}
       - VIGILONE_FEATURE_ANPR=${VIGILONE_FEATURE_ANPR:-false}
       - VIGILONE_FEATURE_REDACTION=${VIGILONE_FEATURE_REDACTION:-false}
+      - REDACTION_ADAPTER_URL=http://127.0.0.1:7012
       - VIGILONE_FEATURE_SMART_SEARCH=${VIGILONE_FEATURE_SMART_SEARCH:-false}
       - VIGILONE_FEATURE_FLOORPLANS=${VIGILONE_FEATURE_FLOORPLANS:-false}
       - VIGILONE_FEATURE_CAMERA_EVENTS=${VIGILONE_FEATURE_CAMERA_EVENTS:-false}
@@ -245,6 +246,47 @@ services:
         limits:
           cpus: '2.00'
           memory: 1536M
+
+  redaction-worker:
+    # P4.4 redaction regions (YuNet faces + PP-OCRv4 plate regions) over ai-adapter.v1 for the
+    # backend's redaction jobs. Candidate models: refuses (FAILED health) without human approvals;
+    # redaction jobs then fail with REDACTION_DETECTOR_UNAVAILABLE. Enable with --profile privacy.
+    build:
+      context: .
+      dockerfile: services/ai-worker/Dockerfile
+    image: vigilone-ai-worker:latest
+    container_name: vigilone-redaction-worker
+    profiles: ["privacy"]
+    restart: unless-stopped
+    network_mode: "service:backend"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=production
+      - AI_WORKER_MODE=redaction
+      - BACKEND_INTERNAL_URL=http://127.0.0.1:4000/api/v1/internal
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - VIGILONE_MODELS_DIR=/models
+      - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
+      - AI_ADAPTER_HOST=127.0.0.1
+      - AI_ADAPTER_PORT=7012
+      - AI_EXIT_ON_REFUSAL=false
+    volumes:
+      - ${VIGILONE_MODELS_DIR:-./.cache/models}:/models:ro
+      - ./scripts/models/model-license-exceptions.json:/run/vigilone/model-license-exceptions.json:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1024M
 
   ai-worker:
     build:

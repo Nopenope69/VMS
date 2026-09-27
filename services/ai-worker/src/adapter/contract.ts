@@ -6,7 +6,7 @@
  */
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'embedding';
+export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'plate_detection_for_redaction' | 'embedding';
 
 export type AdapterErrorCode =
   | 'MODEL_NOT_LOADED'

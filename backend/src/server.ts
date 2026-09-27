@@ -2,6 +2,7 @@ import prisma from './config/database';
 import config from './config/env';
 import app from './app';
 import { aggregator, aiRuntime } from './routes/anpr.routes';
+import { redactionQueue } from './routes/privacy.routes';
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
 import { cameraEventManager } from './routes/cameraEvents.routes';
@@ -42,6 +43,10 @@ export const server = app.listen(config.PORT, () => {
     dispatcher.start();
     incidentOrchestrator.start();
     alarmWorkflow.start(15000);
+    redactionQueue
+      .recoverInterrupted()
+      .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
+      .catch((err) => console.error('[Redaction] recovery failed:', err.message));
     if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality

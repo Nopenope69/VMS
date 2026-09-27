@@ -52,20 +52,23 @@ export function resolvePipelinePath(name = 'anpr-india-v1'): string {
 
 const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 
-export async function loadAnprPipeline(
-  opts: { definitionPath?: string; evaluationOnly?: boolean; modelsDir?: string; plateOcrOverride?: { modelPath: string; configPath: string } } = {}
-): Promise<LoadedAnprPipeline> {
-  if (opts.plateOcrOverride && !opts.evaluationOnly) throw new AnprLoadError('INVALID_PIPELINE', 'plateOcrOverride is for evaluation only');
-  const defPath = opts.definitionPath ?? resolvePipelinePath();
-  if (!fs.existsSync(defPath)) throw new AnprLoadError('ARTIFACT_MISSING', `pipeline definition ${defPath} not found`);
-  const raw = fs.readFileSync(defPath);
-  const def = JSON.parse(raw.toString('utf8')) as PipelineDefinition;
-  if (def.task !== 'plate_recognition' || !Array.isArray(def.components)) throw new AnprLoadError('INVALID_PIPELINE', `${defPath} is not a plate_recognition pipeline`);
+
+export type VerifiedComponent = { role: string; entry: ModelLockEntry; approval: ModelLicenseApproval | null };
+
+/**
+ * Verifies each pipeline component: pinned in candidateModels with the same SHA-256, approved by a
+ * person for that hash (unless evaluationOnly), and present on disk with matching file hashes.
+ * Returns the verified bytes keyed by role (and `role:fileName` for extra files).
+ */
+export function verifyPipelineComponents(
+  components: Array<{ role: string; key: string; sha256: string }>,
+  opts: { evaluationOnly?: boolean; modelsDir?: string } = {}
+): { loaded: VerifiedComponent[]; buffers: Record<string, Buffer> } {
   const lock = readModelLock();
   const modelsDir = opts.modelsDir ?? resolveModelsDir();
-  const loaded: LoadedAnprPipeline['components'] = [];
+  const loaded: VerifiedComponent[] = [];
   const buffers: Record<string, Buffer> = {};
-  for (const c of def.components) {
+  for (const c of components) {
     const entry = findCandidateEntry(c.key, lock);
     if (entry.sha256 !== c.sha256) throw new AnprLoadError('INVALID_PIPELINE', `${c.key}: pipeline pins ${c.sha256}, lock file has ${entry.sha256}`);
     let approval: ModelLicenseApproval | null = null;
@@ -91,6 +94,19 @@ export async function loadAnprPipeline(
     buffers[c.role] = buf;
     loaded.push({ role: c.role, entry, approval });
   }
+  return { loaded, buffers };
+}
+
+export async function loadAnprPipeline(
+  opts: { definitionPath?: string; evaluationOnly?: boolean; modelsDir?: string; plateOcrOverride?: { modelPath: string; configPath: string } } = {}
+): Promise<LoadedAnprPipeline> {
+  if (opts.plateOcrOverride && !opts.evaluationOnly) throw new AnprLoadError('INVALID_PIPELINE', 'plateOcrOverride is for evaluation only');
+  const defPath = opts.definitionPath ?? resolvePipelinePath();
+  if (!fs.existsSync(defPath)) throw new AnprLoadError('ARTIFACT_MISSING', `pipeline definition ${defPath} not found`);
+  const raw = fs.readFileSync(defPath);
+  const def = JSON.parse(raw.toString('utf8')) as PipelineDefinition;
+  if (def.task !== 'plate_recognition' || !Array.isArray(def.components)) throw new AnprLoadError('INVALID_PIPELINE', `${defPath} is not a plate_recognition pipeline`);
+  const { loaded, buffers } = verifyPipelineComponents(def.components, opts);
   const detEntry = loaded.find((l) => l.role === 'text_detector');
   const ocrEntry = loaded.find((l) => l.role === 'plate_ocr');
   if (!detEntry || !ocrEntry) throw new AnprLoadError('INVALID_PIPELINE', 'a text_detector and a plate_ocr component are required');

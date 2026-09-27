@@ -6,6 +6,10 @@
  *    backend has deployed, pull frames from the MediaMTX loopback for every online camera, track,
  *    and post confirmed detections with provenance. Also serves ai-adapter.v1 over HTTP.
  *  - adapter-only: serve ai-adapter.v1 for the configured local model; no backend, no cameras.
+ *  - anpr / anpr-adapter-only: plate_recognition pipeline (P4.1), default port 7011.
+ *  - redaction / redaction-adapter-only: face and plate regions for redaction (P4.4), default
+ *    port 7012. 'redaction' registers the pipeline manifest with the backend; the backend's
+ *    redaction jobs call this adapter over HTTP. No cameras are read in this mode.
  *
  * Environment:
  *  AI_MODEL_KEY               lock-file key of the model to install/register (default: lock default)
@@ -35,16 +39,11 @@ import { ModelManifestRecord } from './types';
 import { loadAnprPipeline, LoadedAnprPipeline } from './anpr/anprService';
 import { AnprAdapterCore } from './anpr/anprAdapterCore';
 import { LprRunner } from './anpr/lprRunner';
+import { loadRedactionPipeline, LoadedRedactionPipeline } from './redaction/redactionPipeline';
+import { RedactionAdapterCore } from './redaction/redactionAdapterCore';
 import { AuthenticatedInternalApiClient as ApiClient } from './apiClient';
+import { ortRuntimeVersion } from './runtimeInfo';
 
-/** Version of the installed onnxruntime-node package (what actually runs the pipeline), or undefined. */
-function ortRuntimeVersion(): string | undefined {
-  try {
-    return require('onnxruntime-node/package.json').version;
-  } catch {
-    return undefined;
-  }
-}
 
 export const EXIT_MODEL_REFUSED = 78; // EX_CONFIG
 export const EXIT_TEMPFAIL = 75; // EX_TEMPFAIL
@@ -67,6 +66,7 @@ export interface BootResult {
 export async function boot(): Promise<BootResult> {
   const mode = env('AI_WORKER_MODE', 'pipeline');
   if (mode === 'anpr' || mode === 'anpr-adapter-only') return bootAnpr(mode);
+  if (mode === 'redaction' || mode === 'redaction-adapter-only') return bootRedaction(mode);
   const lock = readModelLock();
   const key = env('AI_MODEL_KEY', lock.default)!;
   const localEntry = findLockEntry(key, lock);
@@ -306,4 +306,66 @@ if (require.main === module) {
       if (refused && env('AI_EXIT_ON_REFUSAL', 'true') !== 'true') return; // keep serving health=FAILED
       process.exit(refused ? EXIT_MODEL_REFUSED : 1);
     });
+}
+
+/**
+ * Redaction regions service (P4.4). Like ANPR, its models are candidate models: without a human
+ * approval for each SHA-256 it refuses (LICENSE_REJECTED), serves FAILED health, and redaction jobs
+ * that need automatic masks fail with REDACTION_DETECTOR_UNAVAILABLE instead of exporting unmasked.
+ */
+async function bootRedaction(mode: 'redaction' | 'redaction-adapter-only'): Promise<BootResult> {
+  const adapterId = env('AI_ADAPTER_ID', 'vigilone-redaction')!;
+  let loaded: LoadedRedactionPipeline | null = null;
+  let failure: string | undefined;
+  try {
+    loaded = await loadRedactionPipeline();
+    log('info', 'redaction pipeline loaded', { pipeline: `${loaded.definition.name}@${loaded.definition.version}`, sha256: loaded.definitionSha256 });
+  } catch (e: any) {
+    failure = e.message;
+    log('error', 'redaction pipeline refused', { error: e.message });
+  }
+  const core = new RedactionAdapterCore(loaded, { adapterId, adapterVersion: '1.0.0-phase4', failure });
+  const server = createAdapterServer(core);
+  const host = env('AI_ADAPTER_HOST', '127.0.0.1')!;
+  const port = Number(env('AI_ADAPTER_PORT', '7012'));
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  const boundPort = (server.address() as any).port as number;
+  log('info', 'ai-adapter.v1 (redaction regions) listening', { host, port: boundPort, mode });
+  const close = async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  };
+  if (!loaded) {
+    if (env('AI_EXIT_ON_REFUSAL', 'true') === 'true') {
+      await close();
+      process.exit(EXIT_MODEL_REFUSED);
+    }
+    return { worker: null as any, close, port: boundPort };
+  }
+  if (mode === 'redaction-adapter-only') return { worker: null as any, close, port: boundPort };
+
+  if (!env('INTERNAL_API_SECRET')) throw new Error('INTERNAL_API_SECRET is required in redaction mode');
+  const api = new ApiClient({ baseUrl: env('BACKEND_INTERNAL_URL', 'http://127.0.0.1:4000/api/v1/internal')!, internalSecret: env('INTERNAL_API_SECRET')! });
+  const l = loaded;
+  const approvals = l.components.map((c) => c.approval!).filter(Boolean);
+  const registered = await api.registerPipelineManifest({
+    name: l.definition.name,
+    version: l.definition.version,
+    sha256: l.definitionSha256,
+    task: 'face_detection_for_redaction',
+    codeLicense: [...new Set(l.components.map((c) => c.entry.codeLicense))].join(' AND '),
+    weightLicense: [...new Set(l.components.map((c) => c.entry.weightLicense))].join(' AND '),
+    weightsSource: l.components.map((c) => `${c.role}: ${c.entry.weightsSource}`).join('; '),
+    trainingData: {
+      source: l.components.map((c) => `${c.role}: ${c.entry.trainingData.source}`).join('; '),
+      license: 'HUMAN-APPROVED EXCEPTION',
+      provenance: approvals.map((a) => `${a.key} approved by ${a.approvedBy} on ${a.approvedAt}: ${a.reason}`).join('; '),
+      commercialUse: true,
+    },
+    runtimeConfig: { runtime: 'onnxruntime', runtimeVersion: ortRuntimeVersion(), executionProvider: 'cpu', inputWidth: 640, inputHeight: 640, colorSpace: 'BGR', modelFormat: 'ONNX' },
+    modelSignature: { decoder: 'redaction_pipeline', components: l.definition.components },
+    classes: { '0': 'face', '1': 'license_plate' },
+  });
+  core.setModelId(registered.id);
+  log('info', 'redaction pipeline registered', { modelId: registered.id });
+  return { worker: null as any, close, port: boundPort };
 }

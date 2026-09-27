@@ -90,7 +90,7 @@ wait_http http://127.0.0.1:9997/v3/paths/list
 
 # 4. The backend (development mode, real Postgres).
 (cd backend && NODE_ENV=development PORT=4000 MEDIAMTX_API_URL=http://127.0.0.1:9997 \
-  EXPORTS_DIR="$E2E_DIR/exports" node dist/server.js > "$E2E_DIR/backend.log" 2>&1) & PIDS+=($!)
+  EXPORTS_DIR="$E2E_DIR/exports" exec node dist/server.js > "$E2E_DIR/backend.log" 2>&1) & PIDS+=($!)
 wait_http http://127.0.0.1:4000/api/v1/health || wait_http http://127.0.0.1:4000/api/v1/health/live
 
 # 5. Tenant, camera, rules; MediaMTX starts pulling from the camera and recording.
@@ -100,7 +100,7 @@ node scripts/e2e/ai-tripwire-scenario.mjs setup | tee "$E2E_DIR/setup.json"
 (AI_WORKER_MODE=pipeline BACKEND_INTERNAL_URL=http://127.0.0.1:4000/api/v1/internal \
   MEDIAMTX_READ_USER=internal MEDIAMTX_READ_PASSWORD="$INTERNAL_API_SECRET" \
   AI_ADAPTER_PORT=7011 AI_DETECT_FPS=5 AI_GATE_MODE=motion \
-  node services/ai-worker/dist/main.js > "$E2E_DIR/worker.log" 2>&1) & WORKER_PID=$!; PIDS+=($WORKER_PID)
+  exec node services/ai-worker/dist/main.js > "$E2E_DIR/worker.log" 2>&1) & WORKER_PID=$!; PIDS+=($WORKER_PID)
 
 # 7. Wait for the alarm through the operator API.
 log "waiting for the tripwire alarm..."

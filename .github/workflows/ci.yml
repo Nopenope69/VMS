@@ -154,7 +154,7 @@ jobs:
         run: |
           scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
           # ANPR candidate models (tests only; the product needs a human approval to run them)
-          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
 
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
@@ -232,6 +232,11 @@ jobs:
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
           scripts/e2e/anpr-lpr-scenario.sh /tmp/anpr-e2e-report.json
 
+      - name: Run redaction scenario (SIMULATED recording, real detectors, TEST-ONLY model approval)
+        run: |
+          scripts/models/fetch-model.sh yunet-2023mar
+          scripts/e2e/redaction-scenario.sh /tmp/redaction-e2e-report.json
+
       - name: Upload scenario report
         if: always()
         uses: actions/upload-artifact@v4
@@ -240,6 +245,7 @@ jobs:
           path: |
             /tmp/e2e-report.json
             /tmp/anpr-e2e-report.json
+            /tmp/redaction-e2e-report.json
           if-no-files-found: ignore
 
   governance-gates:

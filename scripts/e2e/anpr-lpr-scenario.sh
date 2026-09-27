@@ -91,14 +91,14 @@ EOC
 wait_http http://127.0.0.1:9997/v3/paths/list
 
 (cd backend && NODE_ENV=development PORT=4000 MEDIAMTX_API_URL=http://127.0.0.1:9997 \
-  node dist/server.js > "$E2E_DIR/backend.log" 2>&1) & PIDS+=($!)
+  exec node dist/server.js > "$E2E_DIR/backend.log" 2>&1) & PIDS+=($!)
 wait_http http://127.0.0.1:4000/api/v1/health || wait_http http://127.0.0.1:4000/api/v1/health/live
 
 node scripts/e2e/anpr-lpr-scenario.mjs setup | tee "$E2E_DIR/setup.json"
 
 (AI_WORKER_MODE=anpr BACKEND_INTERNAL_URL=http://127.0.0.1:4000/api/v1/internal \
   MEDIAMTX_READ_USER=internal MEDIAMTX_READ_PASSWORD="$INTERNAL_API_SECRET" AI_ADAPTER_PORT=7012 \
-  node services/ai-worker/dist/main.js > "$E2E_DIR/worker.log" 2>&1) & WORKER_PID=$!; PIDS+=($WORKER_PID)
+  exec node services/ai-worker/dist/main.js > "$E2E_DIR/worker.log" 2>&1) & WORKER_PID=$!; PIDS+=($WORKER_PID)
 
 log "waiting for the known-plate alarm..."
 node scripts/e2e/anpr-lpr-scenario.mjs wait
