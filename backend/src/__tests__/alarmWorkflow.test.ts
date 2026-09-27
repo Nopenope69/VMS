@@ -5,10 +5,20 @@ describe('AlarmService - Unified Event vs Alarm Lifecycle', () => {
   let service: AlarmService;
   let mockPrisma: any;
   let alarmsStore: any[] = [];
+  let auditStore: any[] = [];
 
   beforeEach(() => {
     alarmsStore = [];
+    auditStore = [];
     mockPrisma = {
+      // Alarm transitions and their audit entry are atomic (AlarmLifecycle); the audit table is part of the contract.
+      auditEvent: {
+        findFirst: jest.fn(async () => (auditStore.length ? auditStore[auditStore.length - 1] : null)),
+        create: jest.fn(async ({ data }: any) => {
+          auditStore.push(data);
+          return data;
+        }),
+      },
       eventRule: {
         findFirst: jest.fn(),
       },

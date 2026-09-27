@@ -49,6 +49,10 @@ export class AuditChainService {
    * with zero chain forks across concurrent requests or multi-process replicas.
    */
   static async record(prisma: PrismaClient | any, options: RecordAuditOptions): Promise<AuditEvent> {
+    // Hash exactly what the database will store. JSONB drops undefined values and stores Dates as
+    // ISO strings, while canonicalizeJson would hash them as `undefined` / `{}`; without this the
+    // stored entry can never re-verify and the chain reads as tampered.
+    const metadata = options.metadata === undefined || options.metadata === null ? null : JSON.parse(JSON.stringify(options.metadata));
     const handler = async (tx: any) => {
       // 1. Acquire two-key transactional advisory lock scoped to this tenant
       // Fail-closed invariant (C-012): never swallow database lock acquisition failures
@@ -78,7 +82,7 @@ export class AuditChainService {
         options.action,
         options.resourceType,
         options.resourceId || null,
-        options.metadata
+        metadata
       );
 
       return await tx.auditEvent.create({
@@ -92,7 +96,7 @@ export class AuditChainService {
           timestampUtc,
           ipAddress: options.ipAddress || '127.0.0.1',
           userAgent: options.userAgent || null,
-          metadataJson: options.metadata || undefined,
+          metadataJson: metadata ?? undefined,
           prevHash,
           eventHash,
         },
