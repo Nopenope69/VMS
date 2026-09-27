@@ -45,8 +45,23 @@ describe('contract events.v1', () => {
 
     it('has a mapping for every internal event type', () => {
       expect(Object.keys(VIGILONE_EVENT_TO_V1).sort()).toEqual(
-        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
+        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
       );
+    });
+
+    it('maps camera analytics to system.camera_analytic, never ai.*, and needs no provenance', () => {
+      const ev = createVigilOneEvent({
+        tenantId: t, cameraId: 'cam-1', source: 'CAMERA_ANALYTICS', type: 'CAMERA_ANALYTIC',
+        payload: { kind: 'CAMERA_ANALYTIC', protocol: 'ONVIF_PULLPOINT', analyticType: 'LINE_CROSSING', state: null, vendorTopic: 'tns1:RuleEngine/LineDetector/Crossed', ruleName: 'Gate' },
+      } as any);
+      const v1 = toEventV1(ev);
+      expect(v1.type).toBe('system.camera_analytic');
+      expect(v1.source.kind).toBe('camera');
+      expect(v1.provenance ?? null).toBeNull();
+      expect(v1.payload).toEqual({
+        code: 'CAMERA_LINE_CROSSING', message: 'Camera analytic LINE_CROSSING', subsystem: 'camera_analytics',
+        details: { protocol: 'ONVIF_PULLPOINT', analyticType: 'LINE_CROSSING', state: null, vendorTopic: 'tns1:RuleEngine/LineDetector/Crossed', ruleName: 'Gate' },
+      });
     });
 
     it('maps AI object events per class and uses the provenance the event carries', () => {

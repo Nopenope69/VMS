@@ -8,11 +8,13 @@ import incidentOrchestrator from '../services/incident/orchestrator/incidentOrch
 import prisma from '../config/database';
 import { AlarmWorkflowService, WorkflowError, workflowConfigFromEnv } from '../services/incident/workflow/alarmWorkflow.service';
 import { EvidenceArchive } from '../services/evidence/archive';
+import { AlarmFeedbackService } from '../services/incident/workflow/alarmFeedback.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
 export const alarmWorkflow = new AlarmWorkflowService(prisma);
 const evidenceArchive = new EvidenceArchive(prisma);
+const feedback = new AlarmFeedbackService(prisma);
 
 function fail(res: Response, err: any) {
   return res.status(err instanceof WorkflowError ? err.statusCode : err.statusCode || 500).json({ error: err.message });
@@ -148,6 +150,32 @@ router.post('/:id/export', authorize(Permission.EVIDENCE_EXPORT), async (req: Re
     });
   } catch (err: any) {
     if (err.message?.includes('NO_RECORDING_SEGMENTS_FOUND')) return res.status(404).json({ error: err.message, code: 'NO_RECORDING_SEGMENTS_FOUND' });
+    return fail(res, err);
+  }
+});
+
+/**
+ * Operator verdict on an alarm (false / true alarm). Changing a verdict is allowed and audited.
+ */
+router.post('/:id/feedback', authorize(Permission.ALARM_FEEDBACK), async (req: Request, res: Response) => {
+  try {
+    const row = await feedback.record(req.params.id, req.body, { tenantId: req.user!.tenantId, userId: req.user!.id, clientIp: req.ip });
+    return res.json({ feedback: row });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * False-alarm statistics by rule and by model (default: last 30 days).
+ */
+router.get('/feedback/stats', authorize(Permission.ALARM_FEEDBACK), async (req: Request, res: Response) => {
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date();
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date(to.getTime() - 30 * 86400_000);
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || from >= to) return res.status(400).json({ error: 'from and to must be ISO timestamps with from < to' });
+  try {
+    return res.json(await feedback.stats(req.user!.tenantId, from, to));
+  } catch (err: any) {
     return fail(res, err);
   }
 });

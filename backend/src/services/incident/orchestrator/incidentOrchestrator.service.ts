@@ -279,7 +279,7 @@ export function canonicalRow(event: VigilOneEvent) {
   };
 }
 
-function eventFromRow(r: any): VigilOneEvent {
+export function eventFromRow(r: any): VigilOneEvent {
   const p = r.payloadJson || {};
   return {
     id: r.id,

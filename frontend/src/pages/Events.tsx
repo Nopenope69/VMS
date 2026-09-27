@@ -95,6 +95,8 @@ export const Events: React.FC = () => {
   const [resolvingAlarm, setResolvingAlarm] = useState<AlarmItem | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [submittingResolve, setSubmittingResolve] = useState(false);
+  /** Operator verdict recorded with the resolution (P3.7); '' = not stated. */
+  const [verdict, setVerdict] = useState<'' | 'FALSE_ALARM' | 'TRUE_ALARM'>('');
   const [bulkTriaging, setBulkTriaging] = useState(false);
 
   const RESOLUTION_PRESETS = [
@@ -336,6 +338,14 @@ export const Events: React.FC = () => {
       await api.post(`/alarms/${resolvingAlarm.id}/resolve`, {
         notes: resolutionNotes.trim() || 'Resolved by security operator',
       });
+      if (verdict) {
+        try {
+          await api.post(`/alarms/${resolvingAlarm.id}/feedback`, { verdict, reason: resolutionNotes.trim().slice(0, 500) || undefined });
+        } catch (fbErr: any) {
+          setAlarmError(`Alarm resolved, but the verdict was not saved (${describeError(fbErr)})`);
+        }
+      }
+      setVerdict('');
       setResolvingAlarm(null);
       fetchAlarms();
     } catch (err: any) {
@@ -969,7 +979,10 @@ export const Events: React.FC = () => {
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => setResolutionNotes(preset)}
+                    onClick={() => {
+                      setResolutionNotes(preset);
+                      if (preset.startsWith('False Alarm')) setVerdict('FALSE_ALARM');
+                    }}
                     className="px-2 py-1 text-[11px] bg-vms-panel hover:bg-vms-surface border border-vms-border rounded text-vms-muted hover:text-vms-text transition text-left"
                   >
                     {preset}
@@ -984,6 +997,19 @@ export const Events: React.FC = () => {
                 onChange={(e) => setResolutionNotes(e.target.value)}
                 className="w-full bg-vms-bg border border-vms-border rounded p-2.5 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent font-sans resize-none"
               />
+              <label className="flex items-center gap-2 mt-2 text-xs text-vms-muted">
+                Verdict
+                <select
+                  value={verdict}
+                  onChange={(e) => setVerdict(e.target.value as typeof verdict)}
+                  className="bg-vms-bg border border-vms-border rounded px-2 py-1 text-xs text-vms-text font-mono"
+                >
+                  <option value="">not stated</option>
+                  <option value="TRUE_ALARM">true alarm</option>
+                  <option value="FALSE_ALARM">false alarm</option>
+                </select>
+                <span className="text-vms-dim">feeds false-alarm statistics per rule and model</span>
+              </label>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-vms-border">

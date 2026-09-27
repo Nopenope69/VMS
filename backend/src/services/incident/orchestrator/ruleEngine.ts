@@ -1,11 +1,11 @@
-import { PrismaClient, RuleTriggerType, RuleActionType, EventSeverity } from '@prisma/client';
+import { PrismaClient, RuleTriggerType } from '@prisma/client';
 import {
   VigilOneEvent,
   VigilOneEventType,
   RuleTriggerConfig,
-  RuleCondition,
   RuleActionConfig,
 } from './types';
+import { RuleConditionEvaluator } from '../../automation/ruleConditions';
 
 export const MAX_EVENT_ACTION_DEPTH = 5;
 export const MAX_ACTIONS_PER_CORRELATION = 25;
@@ -20,9 +20,11 @@ export interface RuleEvaluationResult {
 
 export class RuleEngine {
   private prisma: PrismaClient;
+  private conditions: RuleConditionEvaluator;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    this.conditions = new RuleConditionEvaluator(prisma);
   }
 
   /**
@@ -49,6 +51,8 @@ export class RuleEngine {
         return RuleTriggerType.CAMERA_OFFLINE;
       case 'SCENE_CHANGE':
         return RuleTriggerType.SCENE_CHANGE;
+      case 'CAMERA_ANALYTIC':
+        return RuleTriggerType.CAMERA_ANALYTIC;
       default:
         return null;
     }
@@ -165,8 +169,7 @@ export class RuleEngine {
       }
 
       // 6. Condition Evaluation
-      const conditions = (rule.conditionsJson as unknown as RuleCondition[]) || [];
-      if (!this.matchesConditions(conditions, event)) {
+      if (!(await this.conditions.matches(rule.conditionsJson, event))) {
         continue;
       }
 
@@ -263,6 +266,14 @@ export class RuleEngine {
       if (typeof conf === 'number' && conf < config.minConfidence) return false;
     }
 
+    if (event.payload.kind === 'CAMERA_ANALYTIC') {
+      const ca = event.payload;
+      if (config.analyticTypes && config.analyticTypes.length > 0 && !config.analyticTypes.includes(ca.analyticType)) return false;
+      if (config.protocols && config.protocols.length > 0 && !config.protocols.includes(ca.protocol)) return false;
+      // Camera analytics report start and stop; a rule fires on the start (or instantaneous event).
+      if (ca.state === false) return false;
+    }
+
     // Check ANPR watchlist category
     if (event.payload.kind === 'ANPR_MATCH') {
       const anpr = event.payload;
@@ -281,19 +292,10 @@ export class RuleEngine {
     return true;
   }
 
-  private matchesConditions(conditions: RuleCondition[], event: VigilOneEvent): boolean {
-    for (const cond of conditions) {
-      if (cond.type === 'SEVERITY_THRESHOLD') {
-        const severityRank: Record<EventSeverity, number> = {
-          INFO: 1,
-          WARNING: 2,
-          CRITICAL: 3,
-        };
-        const eventRank = severityRank[event.severity] || 1;
-        const requiredRank = severityRank[cond.value as EventSeverity] || 1;
-        if (eventRank < requiredRank) return false;
-      }
-    }
-    return true;
+  /** Stateless rule match (trigger config + conditions), shared with the rule preview. */
+  public async matchesRule(rule: { triggerConfigJson: any; conditionsJson: any }, event: VigilOneEvent): Promise<boolean> {
+    const triggerConfig = (rule.triggerConfigJson as unknown as RuleTriggerConfig) || {};
+    if (!this.matchesTriggerConfig(triggerConfig, event)) return false;
+    return this.conditions.matches(rule.conditionsJson, event);
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { RuleConditionsEditor, RuleDraft, emptyRuleDraft, buildRuleParts } from './RuleConditionsEditor';
 import {
   Trash2,
   Plus,
@@ -28,7 +29,8 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
 
   // Form state
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [draft, setDraft] = useState<RuleDraft>(emptyRuleDraft());
+  const [preview, setPreview] = useState<any | null>(null);
   const [triggerType, setTriggerType] = useState('TRIPWIRE_CROSS');
   const [cooldownSeconds, setCooldownSeconds] = useState(30);
   const [priority, setPriority] = useState(1);
@@ -86,21 +88,40 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
       setStatusNotice(null);
       await api.post('/automation/rules', {
         name,
-        description,
         triggerType,
         cooldownSeconds,
         priority,
-        triggerConfigJson: {},
-        conditionsJson: [],
-        actionsJson: actions,
+        ...buildRuleParts(triggerType, draft),
+        actions,
       });
       setName('');
-      setDescription('');
+      setDraft(emptyRuleDraft());
+      setPreview(null);
       setActiveTab('rules');
       setStatusNotice({ type: 'success', message: `Rule '${name}' created successfully.` });
       fetchRulesAndHistory();
     } catch (err: any) {
       setStatusNotice({ type: 'error', message: err.response?.data?.error || 'Failed to save automation rule' });
+    }
+  };
+
+  /** Replays the last 7 days of stored events through the draft; nothing is written. */
+  const handlePreview = async () => {
+    try {
+      setStatusNotice(null);
+      const to = new Date();
+      const from = new Date(to.getTime() - 7 * 86400_000);
+      const res = await api.post('/automation/rules/preview', {
+        triggerType,
+        cooldownSeconds,
+        ...buildRuleParts(triggerType, draft),
+        from: from.toISOString(),
+        to: to.toISOString(),
+      });
+      setPreview(res.data);
+    } catch (err: any) {
+      setPreview(null);
+      setStatusNotice({ type: 'error', message: err.response?.data?.error || 'Preview failed' });
     }
   };
 
@@ -119,7 +140,15 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
   const handleToggleRule = async (rule: any) => {
     try {
       setStatusNotice(null);
+      // PUT replaces the rule, so send it whole with only `enabled` flipped.
       await api.put(`/automation/rules/${rule.id}`, {
+        name: rule.name,
+        triggerType: rule.triggerType,
+        triggerConfig: rule.triggerConfigJson || {},
+        conditions: rule.conditionsJson || [],
+        actions: rule.actionsJson || [],
+        cooldownSeconds: rule.cooldownSeconds,
+        priority: rule.priority,
         enabled: !rule.enabled,
       });
       fetchRulesAndHistory();
@@ -317,6 +346,9 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                     onChange={(e) => setTriggerType(e.target.value)}
                     className="w-full bg-vms-surface border border-vms-border rounded p-2 text-vms-text font-mono text-xs focus:border-vms-accent focus:outline-none"
                   >
+                    <option value="PERSON_DETECTED">PERSON_DETECTED (AI object: person)</option>
+                    <option value="VEHICLE_DETECTED">VEHICLE_DETECTED (AI object: vehicle)</option>
+                    <option value="CAMERA_ANALYTIC">CAMERA_ANALYTIC (Analytics computed by the camera)</option>
                     <option value="TRIPWIRE_CROSS">TRIPWIRE_CROSS (Spatial Vector Line)</option>
                     <option value="LOITERING_DWELL">LOITERING_DWELL (Continuous Area Dwell)</option>
                     <option value="ANPR_WATCHLIST">ANPR_WATCHLIST (Hotlist Vehicle Match)</option>
@@ -328,17 +360,7 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-vms-muted mb-1 font-mono uppercase tracking-wider text-[10px]">
-                  Description / Notes
-                </label>
-                <Input
-                  placeholder="Automated dispatch, siren strobe and high-res recording trigger"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full text-xs"
-                />
-              </div>
+              <RuleConditionsEditor triggerType={triggerType} draft={draft} onChange={setDraft} />
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -463,6 +485,22 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                 </div>
               </div>
 
+              {preview && (
+                <div className="p-3 bg-vms-panel border border-vms-border rounded font-mono text-xs space-y-1" role="status">
+                  <div className="text-vms-accent uppercase tracking-wider text-[10px]">Preview: last 7 days of stored events (nothing was executed)</div>
+                  <div>
+                    scanned {preview.scanned}
+                    {preview.truncated ? ' (truncated)' : ''} • trigger matched {preview.triggerMatched} • conditions matched {preview.conditionsMatched} •{' '}
+                    <span className="text-vms-text font-semibold">would fire {preview.wouldFire}</span>
+                  </div>
+                  {preview.samples?.slice(0, 5).map((s: any) => (
+                    <div key={s.eventId} className="text-vms-muted">
+                      {s.timestampUtc.replace('T', ' ').slice(0, 19)} UTC {s.type} {s.objectClass || s.analyticType || ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex justify-end space-x-2 pt-4 border-t border-vms-border">
                 <Button
                   type="button"
@@ -471,6 +509,9 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                   onClick={() => setActiveTab('rules')}
                 >
                   Cancel
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={handlePreview}>
+                  Preview on recent events
                 </Button>
                 <Button
                   type="submit"

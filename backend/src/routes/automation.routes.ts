@@ -4,9 +4,34 @@ import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { EventActionMatrixService } from '../services/automation/eventActionMatrix.service';
+import { validateRuleInput, RuleValidationError } from '../services/automation/ruleSchema';
+import { RulePreviewService, PREVIEW_MAX_DAYS } from '../services/automation/rulePreview.service';
+import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
 const automationService = new EventActionMatrixService(prisma);
+const previewService = new RulePreviewService(prisma);
+
+function ruleError(res: Response, err: any): void {
+  if (err instanceof RuleValidationError) {
+    res.status(400).json({ error: err.message, code: 'RULE_INVALID' });
+    return;
+  }
+  res.status(500).json({ error: err.message });
+}
+
+/** Camera and spatial-rule references must belong to the caller's tenant. */
+async function assertRuleRefs(tenantId: string, cfg: Record<string, any>, conditions: any[]): Promise<void> {
+  const cams = [cfg.cameraId, ...conditions.map((c) => c?.value?.cameraId)].filter(Boolean);
+  if (cams.length) {
+    const n = await prisma.camera.count({ where: { id: { in: cams }, tenantId } });
+    if (n !== new Set(cams).size) throw new RuleValidationError('cameraId does not name a camera of this tenant');
+  }
+  if (cfg.spatialRuleId) {
+    const r = await prisma.spatialAnalyticsRule.findFirst({ where: { id: cfg.spatialRuleId, tenantId } });
+    if (!r) throw new RuleValidationError('spatialRuleId does not name a spatial rule of this tenant');
+  }
+}
 
 /**
  * GET /api/v1/automation/rules
@@ -41,40 +66,110 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId;
-      const {
-        name,
-        triggerType,
-        triggerConfig,
-        conditions,
-        actions,
-        cooldownSeconds,
-        priority,
-        enabled,
-      } = req.body;
+      const v = validateRuleInput(req.body);
+      await assertRuleRefs(tenantId, v.triggerConfig, v.conditions);
 
-      if (!name || !triggerType || !actions || !Array.isArray(actions)) {
-        res.status(400).json({ error: 'name, triggerType, and actions array are required' });
-        return;
-      }
-
-      markAutomationRulesChanged();
       const rule = await prisma.automationRule.create({
         data: {
           tenantId,
-          name,
-          triggerType,
-          triggerConfigJson: triggerConfig || {},
-          conditionsJson: conditions || [],
-          actionsJson: actions,
-          cooldownSeconds: cooldownSeconds !== undefined ? Number(cooldownSeconds) : 30,
-          priority: priority !== undefined ? Number(priority) : 1,
-          enabled: enabled !== undefined ? Boolean(enabled) : true,
+          name: v.name,
+          triggerType: v.triggerType,
+          triggerConfigJson: v.triggerConfig as any,
+          conditionsJson: v.conditions as any,
+          actionsJson: v.actions as any,
+          cooldownSeconds: v.cooldownSeconds,
+          priority: v.priority,
+          enabled: v.enabled,
         },
+      });
+      markAutomationRulesChanged();
+      await AuditChainService.record(prisma, {
+        tenantId, userId: req.user!.id, action: 'AUTOMATION_RULE_CREATE', resourceType: 'AutomationRule', resourceId: rule.id,
+        ipAddress: req.ip || '127.0.0.1', metadata: { name: v.name, triggerType: v.triggerType, triggerConfig: v.triggerConfig, conditions: v.conditions, actions: v.actions.map((a) => a.type) },
       });
 
       res.status(201).json({ rule });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      ruleError(res, err);
+    }
+  }
+);
+
+/**
+ * PUT /api/v1/automation/rules/:id
+ * Replace a rule (same validation as create). Audited.
+ */
+router.put(
+  '/rules/:id',
+  requireAuth,
+  authorize(Permission.AUTOMATION_MANAGE),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const existing = await prisma.automationRule.findFirst({ where: { id: req.params.id, tenantId } });
+      if (!existing) {
+        res.status(404).json({ error: 'Rule not found' });
+        return;
+      }
+      const v = validateRuleInput(req.body);
+      await assertRuleRefs(tenantId, v.triggerConfig, v.conditions);
+      const rule = await prisma.automationRule.update({
+        where: { id: existing.id },
+        data: {
+          name: v.name,
+          triggerType: v.triggerType,
+          triggerConfigJson: v.triggerConfig as any,
+          conditionsJson: v.conditions as any,
+          actionsJson: v.actions as any,
+          cooldownSeconds: v.cooldownSeconds,
+          priority: v.priority,
+          enabled: v.enabled,
+        },
+      });
+      markAutomationRulesChanged();
+      await AuditChainService.record(prisma, {
+        tenantId, userId: req.user!.id, action: 'AUTOMATION_RULE_UPDATE', resourceType: 'AutomationRule', resourceId: rule.id,
+        ipAddress: req.ip || '127.0.0.1',
+        metadata: {
+          before: { triggerType: existing.triggerType, triggerConfig: existing.triggerConfigJson, conditions: existing.conditionsJson, enabled: existing.enabled },
+          after: { triggerType: v.triggerType, triggerConfig: v.triggerConfig, conditions: v.conditions, enabled: v.enabled },
+        },
+      });
+      res.json({ rule });
+    } catch (err: any) {
+      ruleError(res, err);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/automation/rules/preview
+ * Replays stored events of a time window through a draft rule. Read-only.
+ */
+router.post(
+  '/rules/preview',
+  requireAuth,
+  authorize(Permission.AUTOMATION_MANAGE),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const { from, to, ...draft } = req.body || {};
+      const v = validateRuleInput({ name: draft.name || 'preview', actions: draft.actions || [{ id: 'preview', type: 'TRIGGER_ALARM', config: {} }], ...draft });
+      await assertRuleRefs(tenantId, v.triggerConfig, v.conditions);
+      const toD = to ? new Date(to) : new Date();
+      const fromD = from ? new Date(from) : new Date(toD.getTime() - 7 * 86400_000);
+      if (isNaN(fromD.getTime()) || isNaN(toD.getTime()) || fromD >= toD) {
+        res.status(400).json({ error: 'from and to must be ISO timestamps with from < to' });
+        return;
+      }
+      if (toD.getTime() - fromD.getTime() > PREVIEW_MAX_DAYS * 86400_000) {
+        res.status(400).json({ error: `preview window is limited to ${PREVIEW_MAX_DAYS} days` });
+        return;
+      }
+      const result = await previewService.preview(tenantId, v, fromD, toD);
+      res.json(result);
+    } catch (err: any) {
+      ruleError(res, err);
     }
   }
 );
@@ -90,9 +185,16 @@ router.delete(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId;
+      const existing = await prisma.automationRule.findFirst({ where: { id: req.params.id, tenantId } });
+      if (!existing) {
+        res.status(404).json({ error: 'Rule not found' });
+        return;
+      }
+      await prisma.automationRule.delete({ where: { id: existing.id } });
       markAutomationRulesChanged();
-      await prisma.automationRule.deleteMany({
-        where: { id: req.params.id, tenantId },
+      await AuditChainService.record(prisma, {
+        tenantId, userId: req.user!.id, action: 'AUTOMATION_RULE_DELETE', resourceType: 'AutomationRule', resourceId: existing.id,
+        ipAddress: req.ip || '127.0.0.1', metadata: { name: existing.name, triggerType: existing.triggerType },
       });
       res.json({ success: true });
     } catch (err: any) {

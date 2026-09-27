@@ -10,7 +10,8 @@ export type VigilOneEventType =
   | 'DI_TRIGGER'
   | 'SCENE_CHANGE'
   | 'SYSTEM_ALERT'
-  | 'AI_OBJECT_DETECTED';
+  | 'AI_OBJECT_DETECTED'
+  | 'CAMERA_ANALYTIC';
 
 export interface SpatialRef {
   zoneId?: string;
@@ -113,6 +114,25 @@ export interface AiObjectDetectedPayload {
   stageSeconds: number;
 }
 
+/**
+ * An analytic event computed by the camera itself (ONVIF / Hikvision ISAPI / Dahua), P3.1/P3.2.
+ * Kept separate from AI_OBJECT_DETECTED: VigilOne did not run the model and has no provenance
+ * for it, so camera analytics never appear as ai.* events.
+ */
+export interface CameraAnalyticPayload {
+  kind: 'CAMERA_ANALYTIC';
+  protocol: 'ONVIF_PULLPOINT' | 'HIKVISION_ISAPI' | 'DAHUA_EVENT_MANAGER';
+  /** Normalised type: LINE_CROSSING, INTRUSION, MOTION, TAMPER, FACE, OBJECT_LEFT, ... or VENDOR_OTHER. */
+  analyticType: string;
+  /** true = started / active, false = stopped; null for instantaneous events. */
+  state: boolean | null;
+  /** Vendor topic or event code as received, for traceability. */
+  vendorTopic: string;
+  ruleName?: string;
+  objectType?: string;
+  channel?: number;
+}
+
 /** Per-inference provenance (events.v1 AiProvenanceV1). Mandatory on AI-derived events. */
 export interface AiProvenance {
   adapterId: string;
@@ -137,7 +157,8 @@ export type VigilOneEventPayload =
   | DigitalIoPayload
   | SceneChangePayload
   | SystemAlertPayload
-  | AiObjectDetectedPayload;
+  | AiObjectDetectedPayload
+  | CameraAnalyticPayload;
 
 export type EventSource =
   | 'VISION_AI'
@@ -148,7 +169,8 @@ export type EventSource =
   | 'ALARM'
   | 'MANUAL'
   | 'SYSTEM'
-  | 'MOTION_DETECTOR';
+  | 'MOTION_DETECTOR'
+  | 'CAMERA_ANALYTICS';
 
 export interface VigilOneEvent<T extends VigilOneEventPayload = VigilOneEventPayload> {
   id: string;                      // Canonical deduplication ID
@@ -189,6 +211,9 @@ export interface RuleTriggerConfig {
   targetState?: string;
   watchlistCategories?: string[];
   minConfidence?: number;
+  /** CAMERA_ANALYTIC: only these normalised analytic types / protocols. */
+  analyticTypes?: string[];
+  protocols?: string[];
   /** AI_OBJECT_DETECTED: only these v1 classes (empty/absent = any). */
   objectClasses?: string[];
   /** AI_OBJECT_DETECTED: fire only once the object has been tracked this long (P3.7). */
@@ -197,9 +222,10 @@ export interface RuleTriggerConfig {
   spatialRuleId?: string;
 }
 
+/** Validated by services/automation/ruleSchema.ts; evaluated by ruleConditions.ts. */
 export interface RuleCondition {
-  type: 'TIME_SCHEDULE' | 'CAMERA_TAG' | 'SEVERITY_THRESHOLD';
-  operator: 'EQUALS' | 'IN' | 'BETWEEN';
+  type: 'TIME_SCHEDULE' | 'SEVERITY_THRESHOLD' | 'PRECEDED_BY' | 'NOT_PRECEDED_BY';
+  operator?: 'EQUALS' | 'GTE' | 'BETWEEN' | 'NOT_BETWEEN';
   value: any;
 }
 

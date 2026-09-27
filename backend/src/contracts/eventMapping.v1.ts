@@ -28,6 +28,8 @@ export const VIGILONE_EVENT_TO_V1: Record<VigilOneEvent['type'], string> = {
   SYSTEM_ALERT: 'system.alert',
   // Resolved per object class in toEventV1 (ai.person_detected / ai.vehicle_detected).
   AI_OBJECT_DETECTED: 'ai.object_detected',
+  // Analytics computed by the camera: VigilOne has no provenance for them, so never ai.*.
+  CAMERA_ANALYTIC: 'system.camera_analytic',
 };
 
 const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
@@ -40,6 +42,7 @@ const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
   MANUAL: 'operator',
   SYSTEM: 'system',
   MOTION_DETECTOR: 'motion',
+  CAMERA_ANALYTICS: 'camera',
 };
 
 export interface MappingContext {
@@ -105,6 +108,18 @@ function mapPayload(ev: VigilOneEvent): Record<string, unknown> {
       };
     case 'AI_OBJECT_DETECTED':
       return { objectClass: p.objectClass, confidence: p.confidence, bbox: p.bbox, trackId: p.trackId };
+    case 'CAMERA_ANALYTIC': {
+      const details: Record<string, unknown> = { protocol: p.protocol, analyticType: p.analyticType, state: p.state, vendorTopic: p.vendorTopic };
+      if (p.ruleName) details.ruleName = p.ruleName;
+      if (p.objectType) details.objectType = p.objectType;
+      if (p.channel !== undefined) details.channel = p.channel;
+      return {
+        code: `CAMERA_${p.analyticType}`,
+        message: `Camera analytic ${p.analyticType}${p.state === true ? ' started' : p.state === false ? ' stopped' : ''}`,
+        subsystem: 'camera_analytics',
+        details,
+      };
+    }
     case 'SYSTEM_ALERT':
       return {
         code: p.alertCode,
