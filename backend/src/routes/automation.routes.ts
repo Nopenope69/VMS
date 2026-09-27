@@ -1,3 +1,4 @@
+import { markAutomationRulesChanged } from '../services/automation/ruleCache';
 import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
@@ -56,6 +57,7 @@ router.post(
         return;
       }
 
+      markAutomationRulesChanged();
       const rule = await prisma.automationRule.create({
         data: {
           tenantId,
@@ -88,6 +90,7 @@ router.delete(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId;
+      markAutomationRulesChanged();
       await prisma.automationRule.deleteMany({
         where: { id: req.params.id, tenantId },
       });

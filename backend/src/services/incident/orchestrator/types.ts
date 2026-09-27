@@ -9,7 +9,8 @@ export type VigilOneEventType =
   | 'STREAM_DEGRADED'
   | 'DI_TRIGGER'
   | 'SCENE_CHANGE'
-  | 'SYSTEM_ALERT';
+  | 'SYSTEM_ALERT'
+  | 'AI_OBJECT_DETECTED';
 
 export interface SpatialRef {
   zoneId?: string;
@@ -96,6 +97,36 @@ export interface SystemAlertPayload {
   details?: Record<string, any>;
 }
 
+/**
+ * A tracked object of a v1 class (person, bicycle, motorcycle, car, bus, truck) reported by the
+ * AI worker. Emitted once per track when it is first confirmed (stage 'confirmed'), and once per
+ * minimum-dwell milestone used by an enabled rule (stage 'dwell', stageSeconds = the milestone).
+ */
+export interface AiObjectDetectedPayload {
+  kind: 'AI_OBJECT_DETECTED';
+  objectClass: string;
+  confidence: number;
+  bbox: { x: number; y: number; width: number; height: number };
+  trackId: string;
+  dwellSeconds: number;
+  stage: 'confirmed' | 'dwell';
+  stageSeconds: number;
+}
+
+/** Per-inference provenance (events.v1 AiProvenanceV1). Mandatory on AI-derived events. */
+export interface AiProvenance {
+  adapterId: string;
+  adapterVersion: string;
+  modelId: string;
+  modelName: string;
+  modelVersion: string;
+  modelSha256: string;
+  runtime: string;
+  executionProvider?: string;
+  inferenceId: string;
+  frameTimestampUtc: string;
+}
+
 export type VigilOneEventPayload =
   | MotionEventPayload
   | TripwireEventPayload
@@ -105,7 +136,8 @@ export type VigilOneEventPayload =
   | StreamDegradedPayload
   | DigitalIoPayload
   | SceneChangePayload
-  | SystemAlertPayload;
+  | SystemAlertPayload
+  | AiObjectDetectedPayload;
 
 export type EventSource =
   | 'VISION_AI'
@@ -115,7 +147,8 @@ export type EventSource =
   | 'HARDWARE_IO'
   | 'ALARM'
   | 'MANUAL'
-  | 'SYSTEM';
+  | 'SYSTEM'
+  | 'MOTION_DETECTOR';
 
 export interface VigilOneEvent<T extends VigilOneEventPayload = VigilOneEventPayload> {
   id: string;                      // Canonical deduplication ID
@@ -136,6 +169,8 @@ export interface VigilOneEvent<T extends VigilOneEventPayload = VigilOneEventPay
   title?: string;
   description?: string;
   payload: T;
+  /** Provenance of the inference behind an AI-derived event; never invented. */
+  provenance?: AiProvenance;
 }
 
 export interface CommandContext {
@@ -154,6 +189,12 @@ export interface RuleTriggerConfig {
   targetState?: string;
   watchlistCategories?: string[];
   minConfidence?: number;
+  /** AI_OBJECT_DETECTED: only these v1 classes (empty/absent = any). */
+  objectClasses?: string[];
+  /** AI_OBJECT_DETECTED: fire only once the object has been tracked this long (P3.7). */
+  minDwellSeconds?: number;
+  /** TRIPWIRE_CROSS / LOITERING_DWELL: only this spatial rule. */
+  spatialRuleId?: string;
 }
 
 export interface RuleCondition {
@@ -181,6 +222,8 @@ export interface IngestResult {
   cascadeTerminated?: boolean;
   alarmCreated?: boolean;
   alarmId?: string;
+  /** The event id had already been processed; nothing was evaluated again. */
+  duplicate?: boolean;
 }
 
 export interface AlarmFilter {

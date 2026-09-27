@@ -16,6 +16,8 @@ import {
   SpatialRef,
   EvidenceRef,
   EventSource,
+  AiProvenance,
+  AiObjectDetectedPayload,
 } from './types';
 
 export interface BaseEventParams {
@@ -32,6 +34,7 @@ export interface BaseEventParams {
   spatialRef?: SpatialRef;
   title?: string;
   description?: string;
+  provenance?: AiProvenance;
 }
 
 export function createVigilOneEvent<T extends VigilOneEventPayload>(
@@ -45,6 +48,7 @@ export function createVigilOneEvent<T extends VigilOneEventPayload>(
   return {
     id,
     tenantId: params.tenantId,
+    provenance: params.provenance,
     cameraId: params.cameraId,
     source: params.source || 'SYSTEM',
     type: params.type,
@@ -109,7 +113,8 @@ export function fromMotionEvent(
 ): VigilOneEvent<MotionEventPayload> {
   return createVigilOneEvent<MotionEventPayload>({
     ...params,
-    source: params.source || 'VISION_AI',
+    // Today's motion producer is the classical ffmpeg scene detector, not an AI model.
+    source: params.source || 'MOTION_DETECTOR',
     type: 'MOTION',
     title: params.title || `Motion Detected (${Math.round(params.score * 100)}%)`,
     payload: {
@@ -312,4 +317,50 @@ export function fromSystemAlert(
       details: params.details,
     },
   });
+}
+
+/**
+ * A confirmed track of a v1 class, from the AI worker. Deterministic id per camera, track and
+ * stage, so re-submitted detections never produce a second event for the same milestone.
+ */
+export function fromAiObjectDetection(params: {
+  tenantId: string;
+  cameraId: string;
+  objectClass: string;
+  confidence: number;
+  bbox: { x: number; y: number; width: number; height: number };
+  trackId: string;
+  dwellSeconds: number;
+  stage: 'confirmed' | 'dwell';
+  stageSeconds: number;
+  timestampUtc: Date;
+  provenance: AiProvenance;
+}): VigilOneEvent<AiObjectDetectedPayload> {
+  const id =
+    params.stage === 'confirmed'
+      ? `ev_aiobj_${params.cameraId}_${params.trackId}_confirmed`
+      : `ev_aiobj_${params.cameraId}_${params.trackId}_dwell${params.stageSeconds}`;
+  const ev = createVigilOneEvent<AiObjectDetectedPayload>({
+    id,
+    tenantId: params.tenantId,
+    cameraId: params.cameraId,
+    source: 'VISION_AI',
+    type: 'AI_OBJECT_DETECTED',
+    severity: EventSeverity.INFO,
+    trackId: params.trackId,
+    provenance: params.provenance,
+    title: `${params.objectClass} detected`,
+    payload: {
+      kind: 'AI_OBJECT_DETECTED',
+      objectClass: params.objectClass,
+      confidence: params.confidence,
+      bbox: params.bbox,
+      trackId: params.trackId,
+      dwellSeconds: params.dwellSeconds,
+      stage: params.stage,
+      stageSeconds: params.stageSeconds,
+    },
+  });
+  ev.timestampUtc = params.timestampUtc;
+  return ev;
 }

@@ -14,12 +14,6 @@
       "justification": "Only selects Prisma log verbosity and dev hot-reload singleton caching; no success value or data path depends on it."
     },
     {
-      "file": "backend/src/routes/internal.routes.ts",
-      "patternId": "SUCCESS_IN_CATCH",
-      "text": "return res.status(200).json({ success: true, detectionId: existing.id, inferenceId, duplicate: true });",
-      "justification": "Idempotent duplicate: success is returned only after re-reading the row that won the unique-constraint race; a conflict with no matching row returns 409 DETECTION_CONFLICT_UNRESOLVED (tested)."
-    },
-    {
       "file": "backend/src/scripts/soakHarness.ts",
       "patternId": "MOCK_OR_STUB_IDENTIFIER",
       "text": "mainRtspUri: `rtsp://mock-camera-feed:554/${cam.streamPath}`,",

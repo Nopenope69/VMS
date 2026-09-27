@@ -2,12 +2,13 @@
  * Maps the internal VigilOneEvent union (incident orchestrator) onto events.v1.
  * Table and rationale: docs/contracts/events.v1.md#mapping-from-vigiloneevent.
  *
- * The internal union carries no model provenance, so AI-derived events (tripwire, loitering,
- * ANPR) can only be mapped when the caller supplies the provenance of the inference that produced
- * them. Without it the mapping fails with AI_PROVENANCE_REQUIRED; it never invents a model.
+ * AI-derived events (tripwire, loitering, ANPR, AI objects) need the provenance of the inference
+ * that produced them: from the event itself (Phase 2: events from the AI worker carry it) or from
+ * the caller. Without it the mapping fails with AI_PROVENANCE_REQUIRED; it never invents a model.
  */
 import { VigilOneEvent, EventSource } from '../services/incident/orchestrator/types';
 import { AiProvenanceV1, EventEnvelopeV1, EVENTS_CONTRACT_VERSION } from './events.v1';
+import { DETECTION_CLASS_TO_EVENT_V1 } from './aiAdapter.v1';
 
 export class EventMappingError extends Error {
   constructor(public readonly code: 'AI_PROVENANCE_REQUIRED' | 'UNMAPPABLE_EVENT' | 'INVALID_ENVELOPE', message: string) {
@@ -25,6 +26,8 @@ export const VIGILONE_EVENT_TO_V1: Record<VigilOneEvent['type'], string> = {
   DI_TRIGGER: 'system.digital_input',
   SCENE_CHANGE: 'camera.degraded',
   SYSTEM_ALERT: 'system.alert',
+  // Resolved per object class in toEventV1 (ai.person_detected / ai.vehicle_detected).
+  AI_OBJECT_DETECTED: 'ai.object_detected',
 };
 
 const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
@@ -36,6 +39,7 @@ const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
   ALARM: 'alarm_panel',
   MANUAL: 'operator',
   SYSTEM: 'system',
+  MOTION_DETECTOR: 'motion',
 };
 
 export interface MappingContext {
@@ -99,6 +103,8 @@ function mapPayload(ev: VigilOneEvent): Record<string, unknown> {
         subsystem: 'io',
         details: { pinNumber: p.pinNumber, state: p.state, previousState: p.previousState ?? null },
       };
+    case 'AI_OBJECT_DETECTED':
+      return { objectClass: p.objectClass, confidence: p.confidence, bbox: p.bbox, trackId: p.trackId };
     case 'SYSTEM_ALERT':
       return {
         code: p.alertCode,
@@ -112,7 +118,15 @@ function mapPayload(ev: VigilOneEvent): Record<string, unknown> {
 }
 
 export function toEventV1(ev: VigilOneEvent, ctx: MappingContext = {}): EventEnvelopeV1 {
-  const type = VIGILONE_EVENT_TO_V1[ev.type];
+  let type = VIGILONE_EVENT_TO_V1[ev.type];
+  if (ev.payload.kind === 'AI_OBJECT_DETECTED') {
+    type = DETECTION_CLASS_TO_EVENT_V1[ev.payload.objectClass];
+    if (!type) {
+      throw new EventMappingError('UNMAPPABLE_EVENT', `object class '${ev.payload.objectClass}' has no events.v1 type`);
+    }
+  }
+  // Events that carry their own provenance (AI worker output) need no caller-supplied context.
+  if (!ctx.provenance && ev.provenance) ctx = { ...ctx, provenance: ev.provenance };
   if (!type) {
     throw new EventMappingError('UNMAPPABLE_EVENT', `no events.v1 mapping for '${ev.type}'`);
   }

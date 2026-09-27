@@ -38,6 +38,12 @@ export interface CreateModelManifestInput {
   noticeRequired?: boolean;
   licenseNotes?: string;
   isActive?: boolean;
+  /** Phase 2 fields: decoding contract and weights provenance (optional for legacy callers). */
+  task?: string;
+  weightsSource?: string;
+  modelSignature?: Record<string, unknown>;
+  classes?: Record<string, string>;
+  nmsConfig?: Record<string, unknown>;
 }
 
 export interface ManifestValidationResult {
@@ -338,7 +344,20 @@ export class ModelManifestService {
           `Model version immutability violation: Model '${input.name}' version '${input.version}' is already registered with sha256 '${existing.sha256}'. Model weights must not be mutated in place; register a new version instead.`
         );
       }
-      // Immutable artifact match: return existing registration
+      // Immutable artifact match. A registration made before the Phase 2 columns existed may lack
+      // the decoding contract; fill those once, never overwrite them.
+      if (!existing.modelSignatureJson && input.modelSignature) {
+        return this.prisma.modelManifest.update({
+          where: { id: existing.id },
+          data: {
+            task: input.task ?? existing.task,
+            weightsSource: existing.weightsSource ?? input.weightsSource,
+            modelSignatureJson: input.modelSignature as any,
+            classesJson: (input.classes as any) ?? undefined,
+            nmsConfigJson: (input.nmsConfig as any) ?? undefined,
+          },
+        });
+      }
       return existing;
     }
 
@@ -356,6 +375,11 @@ export class ModelManifestService {
         noticeRequired: input.noticeRequired ?? inferredObligations.noticeRequired,
         licenseNotes: input.licenseNotes ?? inferredObligations.licenseNotes,
         isActive: input.isActive ?? true,
+        task: input.task ?? 'object_detection',
+        weightsSource: input.weightsSource,
+        modelSignatureJson: (input.modelSignature as any) ?? undefined,
+        classesJson: (input.classes as any) ?? undefined,
+        nmsConfigJson: (input.nmsConfig as any) ?? undefined,
       },
     });
   }

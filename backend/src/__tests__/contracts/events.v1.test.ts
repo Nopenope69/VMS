@@ -10,6 +10,7 @@ import {
   fromMotionEvent,
   fromStreamDegraded,
   fromTripwireCrossing,
+  fromAiObjectDetection,
   createVigilOneEvent,
 } from '../../services/incident/orchestrator/events';
 
@@ -44,8 +45,34 @@ describe('contract events.v1', () => {
 
     it('has a mapping for every internal event type', () => {
       expect(Object.keys(VIGILONE_EVENT_TO_V1).sort()).toEqual(
-        ['ANPR_MATCH', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
+        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
       );
+    });
+
+    it('maps AI object events per class and uses the provenance the event carries', () => {
+      const provenance = {
+        adapterId: 'vigilone-ai-worker', adapterVersion: '2.0.0', modelId: 'm1', modelName: 'yolox-tiny-coco',
+        modelVersion: '0.1.1rc0', modelSha256: '4'.repeat(64), runtime: 'onnxruntime@1.30.0', executionProvider: 'cpu',
+        inferenceId: 'inf-1', frameTimestampUtc: '2026-09-27T10:00:00.000Z',
+      };
+      const mk = (objectClass: string) =>
+        fromAiObjectDetection({
+          tenantId: t, cameraId: 'cam-1', objectClass, confidence: 0.8, bbox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+          trackId: 'trk-1', dwellSeconds: 0, stage: 'confirmed', stageSeconds: 0,
+          timestampUtc: new Date('2026-09-27T10:00:00.000Z'), provenance,
+        });
+      const person = toEventV1(mk('person'));
+      expect(person.type).toBe('ai.person_detected');
+      expect(person.provenance).toEqual(provenance);
+      expect(person.payload).toEqual({ objectClass: 'person', confidence: 0.8, bbox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 }, trackId: 'trk-1' });
+      expect(toEventV1(mk('truck')).type).toBe('ai.vehicle_detected');
+      expect(() => toEventV1(mk('dining table'))).toThrow(/UNMAPPABLE_EVENT/);
+      // Deterministic ids: a re-submitted detection cannot create a second event for a milestone.
+      expect(mk('person').id).toBe('ev_aiobj_cam-1_trk-1_confirmed');
+    });
+
+    it('classical motion events are not attributed to AI', () => {
+      expect(toEventV1(fromMotionEvent({ tenantId: t, cameraId: 'cam-1', score: 0.4 })).source.kind).toBe('motion');
     });
 
     it('maps non-AI events without provenance', () => {

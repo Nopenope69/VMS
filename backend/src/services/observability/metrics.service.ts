@@ -30,6 +30,46 @@ export class MetricsService {
     return this.eventLoopDelay;
   }
 
+  // Labelled counters and gauges registered by subsystems (AI, notifications, incidents, ...).
+  // name -> { type, help, series: labelString -> value }
+  private static custom: Map<string, { type: 'counter' | 'gauge'; help: string; series: Map<string, number> }> =
+    new Map();
+
+  private static labelString(labels?: MetricLabelSet): string {
+    if (!labels) return '';
+    return Object.keys(labels)
+      .sort()
+      .map((k) => `${k}="${String(labels[k]).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')}"`)
+      .join(',');
+  }
+
+  private static series(name: string, type: 'counter' | 'gauge', help: string) {
+    let m = this.custom.get(name);
+    if (!m) {
+      m = { type, help, series: new Map() };
+      this.custom.set(name, m);
+    }
+    return m;
+  }
+
+  /** Increments a labelled counter (created on first use). */
+  public static incCounter(name: string, help: string, labels?: MetricLabelSet, by = 1): void {
+    const m = this.series(name, 'counter', help);
+    const k = this.labelString(labels);
+    m.series.set(k, (m.series.get(k) || 0) + by);
+  }
+
+  /** Sets a labelled gauge (created on first use). */
+  public static setGauge(name: string, help: string, labels: MetricLabelSet | undefined, value: number): void {
+    const m = this.series(name, 'gauge', help);
+    m.series.set(this.labelString(labels), value);
+  }
+
+  /** Current value of a series, for tests and health endpoints. */
+  public static getValue(name: string, labels?: MetricLabelSet): number | undefined {
+    return this.custom.get(name)?.series.get(this.labelString(labels));
+  }
+
   // Standard histogram latency buckets (seconds)
   public static readonly LATENCY_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
@@ -222,6 +262,15 @@ export class MetricsService {
       lines.push(`vigilone_http_request_duration_seconds_count{${baseKey}} ${this.httpRequestDurationCount.get(baseKey) || 0}`);
     }
 
+    // 5. Subsystem counters and gauges
+    for (const [name, m] of this.custom.entries()) {
+      lines.push(`# HELP ${name} ${m.help}`);
+      lines.push(`# TYPE ${name} ${m.type}`);
+      for (const [labels, value] of m.series.entries()) {
+        lines.push(labels ? `${name}{${labels}} ${value}` : `${name} ${value}`);
+      }
+    }
+
     return lines.join('\n') + '\n';
   }
 
@@ -229,6 +278,7 @@ export class MetricsService {
    * Resets in-memory counters (useful for unit testing).
    */
   public static resetMetrics() {
+    this.custom.clear();
     this.httpRequestsTotal.clear();
     this.httpRequestDurationBuckets.clear();
     this.httpRequestDurationSum.clear();

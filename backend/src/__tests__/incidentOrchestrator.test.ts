@@ -63,6 +63,26 @@ describe('Candidate 04: Authoritative IncidentOrchestrator Deep-Module', () => {
       }),
       $executeRaw: jest.fn().mockResolvedValue(1),
 
+      // Transactional inbox (CanonicalEvent): unique on id.
+      canonicalEvent: (() => {
+        const rows = new Map<string, any>();
+        return {
+          create: jest.fn(async ({ data }: any) => {
+            if (rows.has(data.id)) {
+              const err: any = new Error('Unique constraint failed on id');
+              err.code = 'P2002';
+              throw err;
+            }
+            const row = { ...data, processedAt: null, createdAt: new Date() };
+            rows.set(data.id, row);
+            return row;
+          }),
+          findUnique: jest.fn(async ({ where }: any) => rows.get(where.id) ?? null),
+          update: jest.fn(async ({ where, data }: any) => Object.assign(rows.get(where.id), data)),
+          findMany: jest.fn(async () => [...rows.values()].filter((r) => !r.processedAt)),
+        };
+      })(),
+
       automationRule: {
         findMany: jest.fn().mockImplementation(({ where }) => {
           return Promise.resolve(

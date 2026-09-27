@@ -41,6 +41,10 @@ export enum Permission {
   REDACTION_EXECUTE = 'REDACTION_EXECUTE',
   FLOORPLAN_MANAGE = 'FLOORPLAN_MANAGE',
   SPATIAL_RULE_MANAGE = 'SPATIAL_RULE_MANAGE',
+  /** Deploy / roll back AI models. Appliance-wide, so SUPER_ADMIN only. */
+  AI_MODEL_MANAGE = 'AI_MODEL_MANAGE',
+  /** Mark alarms as false/true alarms (P3.7) and read feedback statistics. */
+  ALARM_FEEDBACK = 'ALARM_FEEDBACK',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -84,6 +88,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REDACTION_EXECUTE,
     Permission.FLOORPLAN_MANAGE,
     Permission.SPATIAL_RULE_MANAGE,
+    Permission.AI_MODEL_MANAGE,
+    Permission.ALARM_FEEDBACK,
   ],
   TENANT_ADMIN: [
     Permission.CAMERA_VIEW,
@@ -125,6 +131,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REDACTION_EXECUTE,
     Permission.FLOORPLAN_MANAGE,
     Permission.SPATIAL_RULE_MANAGE,
+    Permission.ALARM_FEEDBACK,
   ],
   OPERATOR: [
     Permission.CAMERA_VIEW,
@@ -150,6 +157,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.REDACTION_EXECUTE,
     Permission.FLOORPLAN_MANAGE,
     Permission.SPATIAL_RULE_MANAGE,
+    Permission.ALARM_FEEDBACK,
   ],
   VIEWER: [
     Permission.CAMERA_VIEW,

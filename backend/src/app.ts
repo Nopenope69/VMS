@@ -42,6 +42,7 @@ import webrtcRoutes from './routes/webrtc.routes';
 import storageRoutes from './routes/storage.routes';
 import applianceRoutes from './routes/appliance.routes';
 import featureRoutes from './routes/feature.routes';
+import aiRoutes from './routes/ai.routes';
 import { FeatureFlag, requireFeatureFlag } from './config/featureFlags';
 import requestLogger from './middleware/requestLogger';
 
@@ -136,6 +137,7 @@ app.use('/api/v1/search', requireFeatureFlag(FeatureFlag.SMART_SEARCH), smartSea
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/system', systemRoutes);
 app.use('/api/v1/features', featureRoutes);
+app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/federation', requireFeatureFlag(FeatureFlag.FEDERATION), federationRoutes);
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/v1/spatial-rules', spatialAnalyticsRoutes);
