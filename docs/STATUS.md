@@ -6,6 +6,118 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 2 (2026-09-27): Phase 2 and Phase 3
+
+Branch `claude/gracious-galileo-vtpuvp`, stacked on `claude/admiring-wozniak-k4dzqm` (session 1,
+not yet merged). Environment: Node 22.22, PostgreSQL 16, ffmpeg 6.1.1, MediaMTX 1.9.3 and MailHog
+1.0.1 binaries (downloaded for tests, not committed), Python 3 venvs for reference
+implementations (onnxruntime, OpenCV, supervision 0.30.5, pycocotools; RF-DETR export). No GPU, no
+cameras. Docker image builds still fail here (apt mirrors return 403 inside build containers).
+
+### Final verification run (after the last code commit, `dddc58e`)
+
+| Command (from repo root) | Result |
+| --- | --- |
+| `cd backend && npm run build` | exit 0 |
+| `cd backend && MAILHOG_BIN=... VIGILONE_REQUIRE_MAILHOG=1 npm test` (real Postgres, ffmpeg, openssl, MailHog) | run 1: 110/111 suites, 750/751 tests (1 failure in `disasterRecoveryDrill`, see "Not verified"); run 2: **111/111 suites, 751/751 tests passed** |
+| `cd services/ai-worker && npm run build && VIGILONE_REQUIRE_MODEL_TESTS=1 npm test` | build exit 0; **18/18 suites, 141/141 tests** (golden YOLOX nano/tiny and the RF-DETR Nano export present) |
+| worker `AI_WORKER_MODE=adapter-only AI_MODEL_KEY=yolox-tiny` + `npm run conformance:ai-adapter -- --url http://127.0.0.1:7010` | "ai-adapter.v1 conformance: 19/19 checks passed" |
+| `MEDIAMTX_BIN=/tmp/mtx/mediamtx scripts/e2e/ai-tripwire-scenario.sh` | **PASS**, frame-to-alarm 74 ms (budget 5 000), all 9 checks true; report `docs/ai/e2e-results/2026-09-27_phase3-regression_SIMULATED-CAMERA.json` |
+| `node --test tools/eval/__tests__/*.test.mjs` | 3/3 (COCO metrics equal pycocotools to 1e-6 on the committed fixtures) |
+| `node --test scripts/lib/*.test.mjs scripts/soak/*.test.mjs` | 11/11 |
+| `cd frontend && npm run build && npm run check:no-demo` | build exit 0; "Production bundle clean: 3 files scanned, 15 demo strings absent" |
+| `cd backend && npm run check:hygiene / check:model-licenses / check:no-fake-success / check:feature-flag-docs / check:dependency-licenses` | all exit 0 ("No un-allowlisted fake-success patterns"; "Dependency licence gate passed") |
+| `cd backend && npm run check:status-docs` | "No CI-generated test status yet (PENDING_FIRST_CI_RUN)" |
+| `cd backend && npx ts-node src/scripts/auditSecrets.ts` | "All security hygiene checks passed" |
+| `bash scripts/__tests__/installer.test.sh` | "All packaging and installer tests passed successfully." |
+| `docker compose config -q` (dev and prod overlays) | exit 0 |
+
+## Phase 2: Real AI
+
+| Task | State | Commit | Verification |
+| --- | --- | --- | --- |
+| P2.1 AI adapter contract | DONE_VERIFIED | `77dd192` | Conformance kit 19/19 against the real worker (above); `adapterHttp.test.ts`, backend `contracts/aiAdapterConformance.test.ts`. OVERLOADED -> 429 + Retry-After; DEADLINE_EXCEEDED -> 504 (ORT runs synchronously, so late results are discarded; worker_thread in BACKLOG). |
+| P2.2 Worker container + compose `ai` profile | DONE_UNVERIFIED | `e2b2179` | Worker runs from `dist/main.js` in the e2e scenario; `docker compose config -q` exit 0. The image itself was **not built** (apt 403 in the sandbox). |
+| P2.3 Pinned models | DONE_VERIFIED | `35ddf2d` | `scripts/models/models.lock.json` with real SHA-256 of the YOLOX release files; `fetch-model.sh` verifies them; RF-DETR Nano exported for real with `export-rfdetr.sh` (sha `f744e454...`). Licence gate reads the lock file. |
+| P2.4 Decoders + preprocessing | DONE_VERIFIED | `4182849`, `694bdf4` | Golden tests equal the official YOLOX Python postprocess (`tools/reference/yolox_reference.py`) and upstream RF-DETR decoding; a mutation (dropping the BGR swap) fails them. |
+| P2.5 Motion gating | DONE_VERIFIED | `77dd192` | `motionGate.test.ts`; `streamSupervisor.test.ts` (queue-only pump, one inference per frame). |
+| P2.6 Provenance + audit | DONE_VERIFIED | `4d6a2c3`, `842a638` | `aiPipelineRealDb.test.ts` (21 tests, real DB): detections without valid provenance refused; model deploy/rollback audited in every tenant chain; chains re-verify (`auditChainRealDb.test.ts`, regression that fails on the old code). |
+| P2.7 Tracker validation | DONE_VERIFIED | `0bb083e` | `docs/ai/TRACKER_VALIDATION.md`: identity metrics equal supervision ByteTrack; ground-truth tripwire crossings exact (LineZone reports 24 spurious crossings on the same data). |
+| P2.8 Evaluation harness + model cards | DONE_VERIFIED (harness); model accuracy NOT EVALUATED | `0bb083e` | `tools/eval/coco-eval.mjs` equals pycocotools; model cards say NOT EVALUATED on site data (no annotated site footage). UI shows the experimental banner and provenance badge. |
+| P2.9 End-to-end scenario | DONE_VERIFIED on a SIMULATED camera | `a1e6fda` | PASS (61-83 ms in session runs, 74 ms in the final run); worker SIGKILL does not stop recording. |
+| P2.10 Real-site validation | BLOCKED_HUMAN | n/a | Needs cameras, footage and annotations from a pilot site. |
+
+## Phase 3: Events, notifications, incident workflow
+
+| Task | State | Commit | Verification |
+| --- | --- | --- | --- |
+| Phase 3 migration | DONE_VERIFIED | `78274fb` | `migrationPhase3.test.ts` 7/7 on the real DB (CHECK constraints, uniqueness, cascades); drift test (`migrationPhase2.test.ts`) confirms migrations == schema. |
+| P3.1 ONVIF PullPoint, Profile M, clock check | DONE_VERIFIED against test doubles; physical cameras BLOCKED_HUMAN | `0b90922`, `2118afe` | `cameraEventParsers.test.ts` 24/24 (RFC 7616 digest vectors, WS-Security vector from Python hashlib, fixtures), `cameraEventsIntegration.test.ts` 8/8 (ONVIF stub with a camera clock 5 s ahead enforcing the token window). Mutations caught: removing the skew correction, removing the transition filter. |
+| P3.2 Hikvision ISAPI, Dahua | DONE_VERIFIED against test doubles; physical cameras BLOCKED_HUMAN | `0b90922` | Digest-authenticated multipart stubs; manager on the real DB -> one CAMERA_ANALYTIC start and stop -> rule fired once; bad credentials -> FAILED, no retries until changed. Flag off -> 501. |
+| P3.3 Notifications | DONE_VERIFIED locally; real providers NOT VERIFIED | `78274fb` | `smtpClient.test.ts` 10/10 (STARTTLS with an openssl cert, MailHog interop), `notificationDeliveryRealDb.test.ts` 9/9 (secrets encrypted and redacted, SMTP receipt, WhatsApp test double, signed receipts, dead letter + retry, air-gapped block, audit chain verifies). |
+| P3.4 Incident workflow | DONE_VERIFIED | `40a24e9` | `alarmWorkflowRealDb.test.ts` 8/8 with real ffmpeg segments: assignment, SLA stamping/breach, escalation once per step and stopped by acknowledge, INCIDENT_HOLD pins, FAILED hold without footage, one-click signed export. Mutation-checked. |
+| P3.5 AI rule builder | DONE_VERIFIED (API); UI build-verified only | `a8b40b1` | `ruleConditions.test.ts` 15/15 (DST/overnight vectors cross-checked with Python zoneinfo), `ruleBuilderRealDb.test.ts` 9/9 (validation, audit, schedules in site time zone, preview without side effects). |
+| P3.6 Event correlation | DONE_VERIFIED | `a8b40b1` | PRECEDED_BY / NOT_PRECEDED_BY on real canonical events (tailgating case, same-camera scope, "after" does not count). Fail-closed on unevaluable conditions (mutation-checked). |
+| P3.7 False-alarm controls | DONE_VERIFIED | `a8b40b1` | Verdicts (changeable, audited), stats per rule and model equal hand-computed values; dwell and confidence filters from P2 in the rule builder. |
+
+### Defects found and fixed this session
+
+1. The Incident table had no migration: every database built with `prisma migrate deploy` lacked
+   it and spatial incident inserts failed (mocked tests hid it). `9fd8395`
+2. System alarms were silently rolled back (audit userId `SYSTEM` violated a foreign key and the
+   error was swallowed); audit entries with undefined values or Dates could never re-verify.
+   `842a638`
+3. Every frame was inferred twice in the worker; deadlines were not honoured; the worker's
+   MediaMTX reads had no credentials so every read was denied. `77dd192`, `e2b2179`
+4. The notification UI reported "succeeded" for failed test pings and read log fields the API
+   never returned; email always failed with a 501. `78274fb`
+5. The automation-rule UI posted fields the API does not read and toggled rules with a partial
+   PUT that did not exist, so creating or toggling rules from the UI failed. `a8b40b1`
+6. A stored condition the engine did not implement (`CAMERA_TAG`) was ignored, so the rule fired
+   as if it had no condition. Now fail-closed. `a8b40b1`
+7. Found by the new tests before commit: the SMTP client rejected `"Name <address>"` senders and
+   truncated MailHog's queue id; the multipart parser corrupted binary parts ending in CR/LF.
+
+### Not verified (and why)
+
+- **No physical camera, NVR, WhatsApp account, SMS gateway or production SMTP relay.** Camera
+  events ran against local test doubles and fixtures written from published formats (labelled in
+  `backend/src/__tests__/fixtures/camera-events/README.md`).
+- The camera clock check cannot confirm a 100 ms bound: ONVIF reports whole seconds, so VigilOne
+  reports DRIFT only when certain and UNDETERMINED otherwise (docs/operations/CAMERA_EVENTS.md).
+- Profile M: parser and archive only; nothing captures the RTSP metadata track yet.
+- Docker image builds (ai-worker, backend) did not run here; the new CI jobs (`ai-worker-checks`
+  with models, `ai-e2e-scenario`, MailHog, licence gate) have not run in GitHub Actions yet.
+- UI changes (notification channels, dead letters, rule builder, SLA badges, export, camera event
+  feeds) were verified by type-check, build and bundle checks, not in a browser.
+- `disasterRecoveryDrill.test.ts` failed once in the first full run (`orphansIndexed` 0, expected
+  2) and passed in the second full run and 10/10 isolated runs. Every dependency of that test is
+  mocked or per-test; I did not find the cause. Recorded in BACKLOG, not dismissed as a flake.
+- Model accuracy on real sites: NOT EVALUATED (P2.10).
+
+### Licence questions
+
+1. `sax` (BlueOak-1.0.0), reached through `onvif` -> `xml2js`, and the other entries in
+   `backend/scripts/ci/dependency-license-exceptions.json` (BlueOak x5, `tslib` 0BSD,
+   `pako` MIT AND Zlib, `png-js` undeclared) predate this session and need a decision. New
+   Phase 3 code avoids `xml2js` and uses `fast-xml-parser` (MIT throughout).
+2. The common Node mail libraries are MIT-0 (not on the allowlist); an in-house SMTP client was
+   written instead. If MIT-0 is acceptable, a maintained library could replace it.
+3. YOLOX and RF-DETR weights are Apache-2.0 but were trained on COCO, whose images carry
+   individual Flickr licences. Whether that affects commercial use of the weights is a legal
+   question for a human.
+
+### What I need from the human
+
+1. Review and merge session 1's PR, then this PR (stacked on it); watch the first run of the new
+   CI jobs.
+2. Decide the licence questions above.
+3. P2.10 / P1.6: a pilot site with cameras (ideally one Hikvision, one Dahua, one generic ONVIF
+   with analytics enabled) to capture event streams and footage; a WhatsApp Business test number
+   with an approved template; the site's SMTP relay details.
+
+---
+
 ## Session 1 (2026-09-26)
 
 Branch `claude/admiring-wozniak-k4dzqm`, base `master` at `f38adf5`.
