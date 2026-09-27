@@ -1,0 +1,92 @@
+{
+ "kind": "SYNTHETIC",
+ "generator": "tools/anpr/synth_plates.py",
+ "seed": 7,
+ "images": [
+  {
+   "file": "SYNTHETIC_private_hsrp.png",
+   "plateText": "MH12AB1234",
+   "lines": [
+    "MH 12 AB 1234"
+   ],
+   "plateBoxXYWH": [
+    335,
+    333,
+    292,
+    67
+   ],
+   "format": "private_hsrp"
+  },
+  {
+   "file": "SYNTHETIC_commercial.png",
+   "plateText": "KA05C7788",
+   "lines": [
+    "KA 05 C 7788"
+   ],
+   "plateBoxXYWH": [
+    319,
+    328,
+    312,
+    77
+   ],
+   "format": "commercial"
+  },
+  {
+   "file": "SYNTHETIC_ev_green.png",
+   "plateText": "DL3CAB4521",
+   "lines": [
+    "DL 3C AB 4521"
+   ],
+   "plateBoxXYWH": [
+    294,
+    323,
+    337,
+    88
+   ],
+   "format": "ev_green"
+  },
+  {
+   "file": "SYNTHETIC_bharat_series.png",
+   "plateText": "22BH4567AA",
+   "lines": [
+    "22 BH 4567 AA"
+   ],
+   "plateBoxXYWH": [
+    332,
+    334,
+    295,
+    65
+   ],
+   "format": "bharat_series"
+  },
+  {
+   "file": "SYNTHETIC_two_line_two_wheeler.png",
+   "plateText": "TN09BK3301",
+   "lines": [
+    "TN 09",
+    "BK 3301"
+   ],
+   "plateBoxXYWH": [
+    410,
+    322,
+    175,
+    89
+   ],
+   "format": "two_line_two_wheeler"
+  },
+  {
+   "file": "SYNTHETIC_mono_font.png",
+   "plateText": "GJ01KL0099",
+   "lines": [
+    "GJ 01 KL 0099"
+   ],
+   "plateBoxXYWH": [
+    314,
+    326,
+    323,
+    82
+   ],
+   "format": "mono_font"
+  }
+ ]
+}

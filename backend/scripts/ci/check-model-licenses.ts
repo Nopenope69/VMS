@@ -195,6 +195,41 @@ export async function runModelLicenseGate(): Promise<boolean> {
   }
 
   // -------------------------------------------------------------
+  // Test 3b: Candidate models (training-data licence pending human review)
+  // -------------------------------------------------------------
+  console.log('\n--- Step 3b: Auditing candidate models (not runnable without a human approval) ---');
+  const lock = JSON.parse(fs.readFileSync(MODEL_LOCK_PATH, 'utf8'));
+  const candidates: any[] = lock.candidateModels || [];
+  const exceptionsPath = path.join(path.dirname(MODEL_LOCK_PATH), 'model-license-exceptions.json');
+  const approvals: any[] = fs.existsSync(exceptionsPath) ? JSON.parse(fs.readFileSync(exceptionsPath, 'utf8')).approvals || [] : [];
+  for (const c of candidates) {
+    for (const [kind, lic] of [['code', c.codeLicense], ['weight', c.weightLicense]] as const) {
+      const ev = service.evaluateLicensePolicy(lic);
+      if (!ev.approved) {
+        console.error(`❌ candidate ${c.key}: ${kind} licence '${lic}' is not allowed (${ev.reason})`);
+        failed = true;
+      }
+    }
+    if (!/^[a-f0-9]{64}$/.test(c.sha256 || '') || !/^https:\/\//.test(c.url || '')) {
+      console.error(`❌ candidate ${c.key}: https URL and SHA-256 are required`);
+      failed = true;
+    }
+    if (c.governance?.status !== 'PENDING_HUMAN_REVIEW' || !c.governance?.question) {
+      console.error(`❌ candidate ${c.key}: governance.status PENDING_HUMAN_REVIEW and the open question are required`);
+      failed = true;
+    }
+    const approved = approvals.find((a) => a.key === c.key && a.sha256 === c.sha256);
+    console.log(`  ${approved ? '✓ APPROVED by ' + approved.approvedBy : '⏸ pending human review'}: ${c.key} (weights ${c.weightLicense}) - ${c.governance?.question}`);
+  }
+  for (const a of approvals) {
+    const c = candidates.find((x) => x.key === a.key);
+    if (!c || c.sha256 !== a.sha256 || !a.approvedBy || !a.approvedAt || !a.reason) {
+      console.error(`❌ model-license-exceptions.json: approval for '${a.key}' does not match a candidate model's SHA-256 or lacks approver/date/reason`);
+      failed = true;
+    }
+  }
+
+  // -------------------------------------------------------------
   // Test 4: Audit Database registered models if database is reachable
   // -------------------------------------------------------------
   try {

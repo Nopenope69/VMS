@@ -1,486 +1,703 @@
 {
-  "$comment": "Pinned model artefacts. Weights are never committed: scripts/models/fetch-model.sh downloads them and refuses any file whose SHA-256 differs. This file is the single source of truth for model manifests (backend seed catalog and the ai-worker read it).",
-  "models": [
-    {
-      "key": "yolox-nano",
-      "name": "yolox-nano-coco",
-      "version": "0.1.1rc0",
-      "sha256": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d",
-      "sizeBytes": 3659407,
-      "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx",
-      "task": "object_detection",
-      "codeLicense": "Apache-2.0",
-      "weightLicense": "Apache-2.0",
-      "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
-      "trainingData": {
-        "source": "COCO 2017 train",
-        "license": "CC-BY-4.0",
-        "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
-        "commercialUse": true
-      },
-      "thresholds": {
-        "person": 0.4,
-        "bicycle": 0.4,
-        "motorcycle": 0.4,
-        "car": 0.4,
-        "bus": 0.4,
-        "truck": 0.4,
-        "default": 0.5
-      },
-      "runtimeConfig": {
-        "runtime": "onnxruntime",
-        "runtimeVersion": "1.30.0",
-        "executionProvider": "cpu",
-        "inputWidth": 416,
-        "inputHeight": 416,
-        "colorSpace": "BGR",
-        "normalization": {
-          "type": "none"
-        },
-        "letterbox": true,
-        "padPosition": "top-left",
-        "padValue": 114,
-        "modelFormat": "ONNX"
-      },
-      "modelSignature": {
-        "input": {
-          "name": "images",
-          "shape": [
-            1,
-            3,
-            416,
-            416
-          ],
-          "dtype": "float32"
-        },
-        "output": {
-          "name": "output",
-          "shape": [
-            1,
-            3549,
-            85
-          ],
-          "dtype": "float32"
-        },
-        "coordinateFormat": "cxcywh",
-        "hasObjectness": true,
-        "classCount": 80,
-        "decoder": "yolox",
-        "strides": [
-          8,
-          16,
-          32
-        ]
-      },
-      "classes": {
-        "0": "person",
-        "1": "bicycle",
-        "2": "car",
-        "3": "motorcycle",
-        "4": "airplane",
-        "5": "bus",
-        "6": "train",
-        "7": "truck",
-        "8": "boat",
-        "9": "traffic light",
-        "10": "fire hydrant",
-        "11": "stop sign",
-        "12": "parking meter",
-        "13": "bench",
-        "14": "bird",
-        "15": "cat",
-        "16": "dog",
-        "17": "horse",
-        "18": "sheep",
-        "19": "cow",
-        "20": "elephant",
-        "21": "bear",
-        "22": "zebra",
-        "23": "giraffe",
-        "24": "backpack",
-        "25": "umbrella",
-        "26": "handbag",
-        "27": "tie",
-        "28": "suitcase",
-        "29": "frisbee",
-        "30": "skis",
-        "31": "snowboard",
-        "32": "sports ball",
-        "33": "kite",
-        "34": "baseball bat",
-        "35": "baseball glove",
-        "36": "skateboard",
-        "37": "surfboard",
-        "38": "tennis racket",
-        "39": "bottle",
-        "40": "wine glass",
-        "41": "cup",
-        "42": "fork",
-        "43": "knife",
-        "44": "spoon",
-        "45": "bowl",
-        "46": "banana",
-        "47": "apple",
-        "48": "sandwich",
-        "49": "orange",
-        "50": "broccoli",
-        "51": "carrot",
-        "52": "hot dog",
-        "53": "pizza",
-        "54": "donut",
-        "55": "cake",
-        "56": "chair",
-        "57": "couch",
-        "58": "potted plant",
-        "59": "bed",
-        "60": "dining table",
-        "61": "toilet",
-        "62": "tv",
-        "63": "laptop",
-        "64": "mouse",
-        "65": "remote",
-        "66": "keyboard",
-        "67": "cell phone",
-        "68": "microwave",
-        "69": "oven",
-        "70": "toaster",
-        "71": "sink",
-        "72": "refrigerator",
-        "73": "book",
-        "74": "clock",
-        "75": "vase",
-        "76": "scissors",
-        "77": "teddy bear",
-        "78": "hair drier",
-        "79": "toothbrush"
-      },
-      "nmsConfig": {
-        "iouThreshold": 0.45
-      },
-      "attributionRequired": true,
-      "noticeRequired": true,
-      "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+ "$comment": "Pinned model artefacts. Weights are never committed: scripts/models/fetch-model.sh downloads them and refuses any file whose SHA-256 differs. This file is the single source of truth for model manifests (backend seed catalog and the ai-worker read it).",
+ "models": [
+  {
+   "key": "yolox-nano",
+   "name": "yolox-nano-coco",
+   "version": "0.1.1rc0",
+   "sha256": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d",
+   "sizeBytes": 3659407,
+   "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx",
+   "task": "object_detection",
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
+   "trainingData": {
+    "source": "COCO 2017 train",
+    "license": "CC-BY-4.0",
+    "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
+    "commercialUse": true
+   },
+   "thresholds": {
+    "person": 0.4,
+    "bicycle": 0.4,
+    "motorcycle": 0.4,
+    "car": 0.4,
+    "bus": 0.4,
+    "truck": 0.4,
+    "default": 0.5
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "inputWidth": 416,
+    "inputHeight": 416,
+    "colorSpace": "BGR",
+    "normalization": {
+     "type": "none"
     },
-    {
-      "key": "yolox-tiny",
-      "name": "yolox-tiny-coco",
-      "version": "0.1.1rc0",
-      "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
-      "sizeBytes": 20219662,
-      "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.onnx",
-      "task": "object_detection",
-      "codeLicense": "Apache-2.0",
-      "weightLicense": "Apache-2.0",
-      "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
-      "trainingData": {
-        "source": "COCO 2017 train",
-        "license": "CC-BY-4.0",
-        "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
-        "commercialUse": true
-      },
-      "thresholds": {
-        "person": 0.4,
-        "bicycle": 0.4,
-        "motorcycle": 0.4,
-        "car": 0.4,
-        "bus": 0.4,
-        "truck": 0.4,
-        "default": 0.5
-      },
-      "runtimeConfig": {
-        "runtime": "onnxruntime",
-        "runtimeVersion": "1.30.0",
-        "executionProvider": "cpu",
-        "inputWidth": 416,
-        "inputHeight": 416,
-        "colorSpace": "BGR",
-        "normalization": {
-          "type": "none"
-        },
-        "letterbox": true,
-        "padPosition": "top-left",
-        "padValue": 114,
-        "modelFormat": "ONNX"
-      },
-      "modelSignature": {
-        "input": {
-          "name": "images",
-          "shape": [
-            1,
-            3,
-            416,
-            416
-          ],
-          "dtype": "float32"
-        },
-        "output": {
-          "name": "output",
-          "shape": [
-            1,
-            3549,
-            85
-          ],
-          "dtype": "float32"
-        },
-        "coordinateFormat": "cxcywh",
-        "hasObjectness": true,
-        "classCount": 80,
-        "decoder": "yolox",
-        "strides": [
-          8,
-          16,
-          32
-        ]
-      },
-      "classes": {
-        "0": "person",
-        "1": "bicycle",
-        "2": "car",
-        "3": "motorcycle",
-        "4": "airplane",
-        "5": "bus",
-        "6": "train",
-        "7": "truck",
-        "8": "boat",
-        "9": "traffic light",
-        "10": "fire hydrant",
-        "11": "stop sign",
-        "12": "parking meter",
-        "13": "bench",
-        "14": "bird",
-        "15": "cat",
-        "16": "dog",
-        "17": "horse",
-        "18": "sheep",
-        "19": "cow",
-        "20": "elephant",
-        "21": "bear",
-        "22": "zebra",
-        "23": "giraffe",
-        "24": "backpack",
-        "25": "umbrella",
-        "26": "handbag",
-        "27": "tie",
-        "28": "suitcase",
-        "29": "frisbee",
-        "30": "skis",
-        "31": "snowboard",
-        "32": "sports ball",
-        "33": "kite",
-        "34": "baseball bat",
-        "35": "baseball glove",
-        "36": "skateboard",
-        "37": "surfboard",
-        "38": "tennis racket",
-        "39": "bottle",
-        "40": "wine glass",
-        "41": "cup",
-        "42": "fork",
-        "43": "knife",
-        "44": "spoon",
-        "45": "bowl",
-        "46": "banana",
-        "47": "apple",
-        "48": "sandwich",
-        "49": "orange",
-        "50": "broccoli",
-        "51": "carrot",
-        "52": "hot dog",
-        "53": "pizza",
-        "54": "donut",
-        "55": "cake",
-        "56": "chair",
-        "57": "couch",
-        "58": "potted plant",
-        "59": "bed",
-        "60": "dining table",
-        "61": "toilet",
-        "62": "tv",
-        "63": "laptop",
-        "64": "mouse",
-        "65": "remote",
-        "66": "keyboard",
-        "67": "cell phone",
-        "68": "microwave",
-        "69": "oven",
-        "70": "toaster",
-        "71": "sink",
-        "72": "refrigerator",
-        "73": "book",
-        "74": "clock",
-        "75": "vase",
-        "76": "scissors",
-        "77": "teddy bear",
-        "78": "hair drier",
-        "79": "toothbrush"
-      },
-      "nmsConfig": {
-        "iouThreshold": 0.45
-      },
-      "attributionRequired": true,
-      "noticeRequired": true,
-      "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+    "letterbox": true,
+    "padPosition": "top-left",
+    "padValue": 114,
+    "modelFormat": "ONNX"
+   },
+   "modelSignature": {
+    "input": {
+     "name": "images",
+     "shape": [
+      1,
+      3,
+      416,
+      416
+     ],
+     "dtype": "float32"
     },
-    {
-      "key": "yolox-s",
-      "name": "yolox-s-coco",
-      "version": "0.1.1rc0",
-      "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063",
-      "sizeBytes": 35858002,
-      "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx",
-      "task": "object_detection",
-      "codeLicense": "Apache-2.0",
-      "weightLicense": "Apache-2.0",
-      "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
-      "trainingData": {
-        "source": "COCO 2017 train",
-        "license": "CC-BY-4.0",
-        "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
-        "commercialUse": true
-      },
-      "thresholds": {
-        "person": 0.4,
-        "bicycle": 0.4,
-        "motorcycle": 0.4,
-        "car": 0.4,
-        "bus": 0.4,
-        "truck": 0.4,
-        "default": 0.5
-      },
-      "runtimeConfig": {
-        "runtime": "onnxruntime",
-        "runtimeVersion": "1.30.0",
-        "executionProvider": "cpu",
-        "inputWidth": 640,
-        "inputHeight": 640,
-        "colorSpace": "BGR",
-        "normalization": {
-          "type": "none"
-        },
-        "letterbox": true,
-        "padPosition": "top-left",
-        "padValue": 114,
-        "modelFormat": "ONNX"
-      },
-      "modelSignature": {
-        "input": {
-          "name": "images",
-          "shape": [
-            1,
-            3,
-            640,
-            640
-          ],
-          "dtype": "float32"
-        },
-        "output": {
-          "name": "output",
-          "shape": [
-            1,
-            8400,
-            85
-          ],
-          "dtype": "float32"
-        },
-        "coordinateFormat": "cxcywh",
-        "hasObjectness": true,
-        "classCount": 80,
-        "decoder": "yolox",
-        "strides": [
-          8,
-          16,
-          32
-        ]
-      },
-      "classes": {
-        "0": "person",
-        "1": "bicycle",
-        "2": "car",
-        "3": "motorcycle",
-        "4": "airplane",
-        "5": "bus",
-        "6": "train",
-        "7": "truck",
-        "8": "boat",
-        "9": "traffic light",
-        "10": "fire hydrant",
-        "11": "stop sign",
-        "12": "parking meter",
-        "13": "bench",
-        "14": "bird",
-        "15": "cat",
-        "16": "dog",
-        "17": "horse",
-        "18": "sheep",
-        "19": "cow",
-        "20": "elephant",
-        "21": "bear",
-        "22": "zebra",
-        "23": "giraffe",
-        "24": "backpack",
-        "25": "umbrella",
-        "26": "handbag",
-        "27": "tie",
-        "28": "suitcase",
-        "29": "frisbee",
-        "30": "skis",
-        "31": "snowboard",
-        "32": "sports ball",
-        "33": "kite",
-        "34": "baseball bat",
-        "35": "baseball glove",
-        "36": "skateboard",
-        "37": "surfboard",
-        "38": "tennis racket",
-        "39": "bottle",
-        "40": "wine glass",
-        "41": "cup",
-        "42": "fork",
-        "43": "knife",
-        "44": "spoon",
-        "45": "bowl",
-        "46": "banana",
-        "47": "apple",
-        "48": "sandwich",
-        "49": "orange",
-        "50": "broccoli",
-        "51": "carrot",
-        "52": "hot dog",
-        "53": "pizza",
-        "54": "donut",
-        "55": "cake",
-        "56": "chair",
-        "57": "couch",
-        "58": "potted plant",
-        "59": "bed",
-        "60": "dining table",
-        "61": "toilet",
-        "62": "tv",
-        "63": "laptop",
-        "64": "mouse",
-        "65": "remote",
-        "66": "keyboard",
-        "67": "cell phone",
-        "68": "microwave",
-        "69": "oven",
-        "70": "toaster",
-        "71": "sink",
-        "72": "refrigerator",
-        "73": "book",
-        "74": "clock",
-        "75": "vase",
-        "76": "scissors",
-        "77": "teddy bear",
-        "78": "hair drier",
-        "79": "toothbrush"
-      },
-      "nmsConfig": {
-        "iouThreshold": 0.45
-      },
-      "attributionRequired": true,
-      "noticeRequired": true,
-      "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+    "output": {
+     "name": "output",
+     "shape": [
+      1,
+      3549,
+      85
+     ],
+     "dtype": "float32"
+    },
+    "coordinateFormat": "cxcywh",
+    "hasObjectness": true,
+    "classCount": 80,
+    "decoder": "yolox",
+    "strides": [
+     8,
+     16,
+     32
+    ]
+   },
+   "classes": {
+    "0": "person",
+    "1": "bicycle",
+    "2": "car",
+    "3": "motorcycle",
+    "4": "airplane",
+    "5": "bus",
+    "6": "train",
+    "7": "truck",
+    "8": "boat",
+    "9": "traffic light",
+    "10": "fire hydrant",
+    "11": "stop sign",
+    "12": "parking meter",
+    "13": "bench",
+    "14": "bird",
+    "15": "cat",
+    "16": "dog",
+    "17": "horse",
+    "18": "sheep",
+    "19": "cow",
+    "20": "elephant",
+    "21": "bear",
+    "22": "zebra",
+    "23": "giraffe",
+    "24": "backpack",
+    "25": "umbrella",
+    "26": "handbag",
+    "27": "tie",
+    "28": "suitcase",
+    "29": "frisbee",
+    "30": "skis",
+    "31": "snowboard",
+    "32": "sports ball",
+    "33": "kite",
+    "34": "baseball bat",
+    "35": "baseball glove",
+    "36": "skateboard",
+    "37": "surfboard",
+    "38": "tennis racket",
+    "39": "bottle",
+    "40": "wine glass",
+    "41": "cup",
+    "42": "fork",
+    "43": "knife",
+    "44": "spoon",
+    "45": "bowl",
+    "46": "banana",
+    "47": "apple",
+    "48": "sandwich",
+    "49": "orange",
+    "50": "broccoli",
+    "51": "carrot",
+    "52": "hot dog",
+    "53": "pizza",
+    "54": "donut",
+    "55": "cake",
+    "56": "chair",
+    "57": "couch",
+    "58": "potted plant",
+    "59": "bed",
+    "60": "dining table",
+    "61": "toilet",
+    "62": "tv",
+    "63": "laptop",
+    "64": "mouse",
+    "65": "remote",
+    "66": "keyboard",
+    "67": "cell phone",
+    "68": "microwave",
+    "69": "oven",
+    "70": "toaster",
+    "71": "sink",
+    "72": "refrigerator",
+    "73": "book",
+    "74": "clock",
+    "75": "vase",
+    "76": "scissors",
+    "77": "teddy bear",
+    "78": "hair drier",
+    "79": "toothbrush"
+   },
+   "nmsConfig": {
+    "iouThreshold": 0.45
+   },
+   "attributionRequired": true,
+   "noticeRequired": true,
+   "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+  },
+  {
+   "key": "yolox-tiny",
+   "name": "yolox-tiny-coco",
+   "version": "0.1.1rc0",
+   "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
+   "sizeBytes": 20219662,
+   "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.onnx",
+   "task": "object_detection",
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
+   "trainingData": {
+    "source": "COCO 2017 train",
+    "license": "CC-BY-4.0",
+    "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
+    "commercialUse": true
+   },
+   "thresholds": {
+    "person": 0.4,
+    "bicycle": 0.4,
+    "motorcycle": 0.4,
+    "car": 0.4,
+    "bus": 0.4,
+    "truck": 0.4,
+    "default": 0.5
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "inputWidth": 416,
+    "inputHeight": 416,
+    "colorSpace": "BGR",
+    "normalization": {
+     "type": "none"
+    },
+    "letterbox": true,
+    "padPosition": "top-left",
+    "padValue": 114,
+    "modelFormat": "ONNX"
+   },
+   "modelSignature": {
+    "input": {
+     "name": "images",
+     "shape": [
+      1,
+      3,
+      416,
+      416
+     ],
+     "dtype": "float32"
+    },
+    "output": {
+     "name": "output",
+     "shape": [
+      1,
+      3549,
+      85
+     ],
+     "dtype": "float32"
+    },
+    "coordinateFormat": "cxcywh",
+    "hasObjectness": true,
+    "classCount": 80,
+    "decoder": "yolox",
+    "strides": [
+     8,
+     16,
+     32
+    ]
+   },
+   "classes": {
+    "0": "person",
+    "1": "bicycle",
+    "2": "car",
+    "3": "motorcycle",
+    "4": "airplane",
+    "5": "bus",
+    "6": "train",
+    "7": "truck",
+    "8": "boat",
+    "9": "traffic light",
+    "10": "fire hydrant",
+    "11": "stop sign",
+    "12": "parking meter",
+    "13": "bench",
+    "14": "bird",
+    "15": "cat",
+    "16": "dog",
+    "17": "horse",
+    "18": "sheep",
+    "19": "cow",
+    "20": "elephant",
+    "21": "bear",
+    "22": "zebra",
+    "23": "giraffe",
+    "24": "backpack",
+    "25": "umbrella",
+    "26": "handbag",
+    "27": "tie",
+    "28": "suitcase",
+    "29": "frisbee",
+    "30": "skis",
+    "31": "snowboard",
+    "32": "sports ball",
+    "33": "kite",
+    "34": "baseball bat",
+    "35": "baseball glove",
+    "36": "skateboard",
+    "37": "surfboard",
+    "38": "tennis racket",
+    "39": "bottle",
+    "40": "wine glass",
+    "41": "cup",
+    "42": "fork",
+    "43": "knife",
+    "44": "spoon",
+    "45": "bowl",
+    "46": "banana",
+    "47": "apple",
+    "48": "sandwich",
+    "49": "orange",
+    "50": "broccoli",
+    "51": "carrot",
+    "52": "hot dog",
+    "53": "pizza",
+    "54": "donut",
+    "55": "cake",
+    "56": "chair",
+    "57": "couch",
+    "58": "potted plant",
+    "59": "bed",
+    "60": "dining table",
+    "61": "toilet",
+    "62": "tv",
+    "63": "laptop",
+    "64": "mouse",
+    "65": "remote",
+    "66": "keyboard",
+    "67": "cell phone",
+    "68": "microwave",
+    "69": "oven",
+    "70": "toaster",
+    "71": "sink",
+    "72": "refrigerator",
+    "73": "book",
+    "74": "clock",
+    "75": "vase",
+    "76": "scissors",
+    "77": "teddy bear",
+    "78": "hair drier",
+    "79": "toothbrush"
+   },
+   "nmsConfig": {
+    "iouThreshold": 0.45
+   },
+   "attributionRequired": true,
+   "noticeRequired": true,
+   "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+  },
+  {
+   "key": "yolox-s",
+   "name": "yolox-s-coco",
+   "version": "0.1.1rc0",
+   "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063",
+   "sizeBytes": 35858002,
+   "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx",
+   "task": "object_detection",
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "https://github.com/Megvii-BaseDetection/YOLOX/releases/tag/0.1.1rc0 (repository LICENSE: Apache-2.0; weights published by the project in its README model zoo)",
+   "trainingData": {
+    "source": "COCO 2017 train",
+    "license": "CC-BY-4.0",
+    "provenance": "public-dataset: COCO annotations are CC-BY-4.0; the underlying images carry individual Flickr licences (cocodataset.org/#termsofuse). Weights trained and released by Megvii under Apache-2.0.",
+    "commercialUse": true
+   },
+   "thresholds": {
+    "person": 0.4,
+    "bicycle": 0.4,
+    "motorcycle": 0.4,
+    "car": 0.4,
+    "bus": 0.4,
+    "truck": 0.4,
+    "default": 0.5
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "inputWidth": 640,
+    "inputHeight": 640,
+    "colorSpace": "BGR",
+    "normalization": {
+     "type": "none"
+    },
+    "letterbox": true,
+    "padPosition": "top-left",
+    "padValue": 114,
+    "modelFormat": "ONNX"
+   },
+   "modelSignature": {
+    "input": {
+     "name": "images",
+     "shape": [
+      1,
+      3,
+      640,
+      640
+     ],
+     "dtype": "float32"
+    },
+    "output": {
+     "name": "output",
+     "shape": [
+      1,
+      8400,
+      85
+     ],
+     "dtype": "float32"
+    },
+    "coordinateFormat": "cxcywh",
+    "hasObjectness": true,
+    "classCount": 80,
+    "decoder": "yolox",
+    "strides": [
+     8,
+     16,
+     32
+    ]
+   },
+   "classes": {
+    "0": "person",
+    "1": "bicycle",
+    "2": "car",
+    "3": "motorcycle",
+    "4": "airplane",
+    "5": "bus",
+    "6": "train",
+    "7": "truck",
+    "8": "boat",
+    "9": "traffic light",
+    "10": "fire hydrant",
+    "11": "stop sign",
+    "12": "parking meter",
+    "13": "bench",
+    "14": "bird",
+    "15": "cat",
+    "16": "dog",
+    "17": "horse",
+    "18": "sheep",
+    "19": "cow",
+    "20": "elephant",
+    "21": "bear",
+    "22": "zebra",
+    "23": "giraffe",
+    "24": "backpack",
+    "25": "umbrella",
+    "26": "handbag",
+    "27": "tie",
+    "28": "suitcase",
+    "29": "frisbee",
+    "30": "skis",
+    "31": "snowboard",
+    "32": "sports ball",
+    "33": "kite",
+    "34": "baseball bat",
+    "35": "baseball glove",
+    "36": "skateboard",
+    "37": "surfboard",
+    "38": "tennis racket",
+    "39": "bottle",
+    "40": "wine glass",
+    "41": "cup",
+    "42": "fork",
+    "43": "knife",
+    "44": "spoon",
+    "45": "bowl",
+    "46": "banana",
+    "47": "apple",
+    "48": "sandwich",
+    "49": "orange",
+    "50": "broccoli",
+    "51": "carrot",
+    "52": "hot dog",
+    "53": "pizza",
+    "54": "donut",
+    "55": "cake",
+    "56": "chair",
+    "57": "couch",
+    "58": "potted plant",
+    "59": "bed",
+    "60": "dining table",
+    "61": "toilet",
+    "62": "tv",
+    "63": "laptop",
+    "64": "mouse",
+    "65": "remote",
+    "66": "keyboard",
+    "67": "cell phone",
+    "68": "microwave",
+    "69": "oven",
+    "70": "toaster",
+    "71": "sink",
+    "72": "refrigerator",
+    "73": "book",
+    "74": "clock",
+    "75": "vase",
+    "76": "scissors",
+    "77": "teddy bear",
+    "78": "hair drier",
+    "79": "toothbrush"
+   },
+   "nmsConfig": {
+    "iouThreshold": 0.45
+   },
+   "attributionRequired": true,
+   "noticeRequired": true,
+   "licenseNotes": "Apache-2.0: preserve the YOLOX copyright notice and licence text in distributions (THIRD_PARTY_LICENSES.md)."
+  }
+ ],
+ "default": "yolox-tiny",
+ "$candidateComment": "candidateModels: weights under an allowed licence and pinned by SHA-256, but the training data's licence is unclear. They can be fetched for tests and evaluation; the product refuses to run them unless a human records an approval in scripts/models/model-license-exceptions.json (see docs/STATUS.md, Licence questions).",
+ "candidateModels": [
+  {
+   "key": "ppocrv4-det",
+   "name": "pp-ocrv4-det-ch",
+   "version": "rapidocr-1.4.4",
+   "task": "plate_recognition",
+   "role": "text_detector",
+   "url": "https://files.pythonhosted.org/packages/ba/12/1e5497183bdbe782dbb91bad1d0d2297dba4d2831b2652657f7517bfc6df/rapidocr_onnxruntime-1.4.4-py3-none-any.whl",
+   "archive": {
+    "format": "zip",
+    "sha256": "971d7d5f223a7a808662229df1ef69893809d8457d834e6373d3854bc1782cbf",
+    "member": "rapidocr_onnxruntime/models/ch_PP-OCRv4_det_infer.onnx",
+    "fileName": "ch_PP-OCRv4_det_infer.onnx"
+   },
+   "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9",
+   "sizeBytes": 4745517,
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "PaddleOCR PP-OCRv4 text detection (Apache-2.0), converted to ONNX and distributed by RapidOCR (rapidocr_onnxruntime 1.4.4 on PyPI, Apache-2.0)",
+   "trainingData": {
+    "source": "PaddleOCR PP-OCRv4 detection training mix (public text-detection datasets and synthetic data, per PaddleOCR documentation)",
+    "license": "MIXED/UNCLEAR",
+    "provenance": "Component dataset licences are not all stated; several public text-detection datasets are research-only.",
+    "commercialUse": null
+   },
+   "governance": {
+    "status": "PENDING_HUMAN_REVIEW",
+    "question": "Training-data licence of PP-OCRv4 detection weights (some component datasets are research-only)."
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "modelFormat": "ONNX",
+    "colorSpace": "BGR",
+    "normalization": {
+     "type": "meanstd",
+     "mean": [
+      0.5,
+      0.5,
+      0.5
+     ],
+     "std": [
+      0.5,
+      0.5,
+      0.5
+     ],
+     "scale": 0.00392156862745098
+    },
+    "resize": {
+     "limitType": "min",
+     "limitSideLen": 736,
+     "multipleOf": 32
     }
-  ],
-  "default": "yolox-tiny"
+   },
+   "modelSignature": {
+    "input": {
+     "name": "x",
+     "shape": [
+      1,
+      3,
+      -1,
+      -1
+     ],
+     "dtype": "float32"
+    },
+    "output": {
+     "name": "sigmoid_0.tmp_0",
+     "shape": [
+      1,
+      1,
+      -1,
+      -1
+     ],
+     "dtype": "float32"
+    },
+    "decoder": "db",
+    "postprocess": {
+     "thresh": 0.3,
+     "boxThresh": 0.5,
+     "unclipRatio": 1.6,
+     "useDilation": true,
+     "maxCandidates": 1000,
+     "minSize": 3
+    }
+   }
+  },
+  {
+   "key": "fast-plate-ocr-cct-s-v2",
+   "name": "fast-plate-ocr-cct-s-v2-global",
+   "version": "arg-plates",
+   "task": "plate_recognition",
+   "role": "plate_ocr",
+   "url": "https://github.com/ankandrew/cnn-ocr-lp/releases/download/arg-plates/cct_s_v2_global.onnx",
+   "sha256": "384bbbd2cea3ef54761d3df70822ef3a349ee1a112aeafddbe0e3ba06bc6e47b",
+   "sizeBytes": 5262230,
+   "extraFiles": [
+    {
+     "url": "https://github.com/ankandrew/cnn-ocr-lp/releases/download/arg-plates/cct_s_v2_global_plate_config.yaml",
+     "sha256": "0335c74a305173bb6f393efed0fde03cadeaa0b649ed8e19f431016d8232d0a6",
+     "fileName": "cct_s_v2_global_plate_config.yaml"
+    }
+   ],
+   "codeLicense": "MIT",
+   "weightLicense": "MIT",
+   "weightsSource": "github.com/ankandrew/cnn-ocr-lp release 'arg-plates' (repository LICENSE: MIT, 2024 ankandrew); used by fast-plate-ocr 1.1.0 (MIT)",
+   "trainingData": {
+    "source": "'global' licence-plate dataset of the author (65 regions listed in the model config; India is not among them)",
+    "license": "UNPUBLISHED",
+    "provenance": "The author does not publish the training data or its licence.",
+    "commercialUse": null
+   },
+   "governance": {
+    "status": "PENDING_HUMAN_REVIEW",
+    "question": "Training data of the fast-plate-ocr global model is unpublished; India is not a trained region."
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "modelFormat": "ONNX",
+    "inputWidth": 128,
+    "inputHeight": 64,
+    "colorSpace": "RGB",
+    "inputDtype": "uint8",
+    "layout": "NHWC",
+    "resize": {
+     "interpolation": "linear",
+     "keepAspectRatio": false
+    }
+   },
+   "modelSignature": {
+    "input": {
+     "name": "input",
+     "shape": [
+      -1,
+      64,
+      128,
+      3
+     ],
+     "dtype": "uint8"
+    },
+    "output": {
+     "name": "plate",
+     "shape": [
+      -1,
+      10,
+      37
+     ],
+     "dtype": "float32"
+    },
+    "decoder": "slot_argmax",
+    "alphabet": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_",
+    "padChar": "_",
+    "maxPlateSlots": 10
+   }
+  },
+  {
+   "key": "yunet-2023mar",
+   "name": "yunet-face-detector",
+   "version": "2023mar",
+   "task": "face_detection_for_redaction",
+   "role": "face_detector",
+   "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+   "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+   "sizeBytes": 232589,
+   "codeLicense": "MIT",
+   "weightLicense": "MIT",
+   "weightsSource": "github.com/opencv/opencv_zoo models/face_detection_yunet (LICENSE: MIT, 2020 Shiqi Yu)",
+   "trainingData": {
+    "source": "WIDER FACE",
+    "license": "WIDER FACE terms: non-commercial research only, including derived data (listed as CC-BY-NC-ND-4.0)",
+    "provenance": "public-dataset with non-commercial terms",
+    "commercialUse": false
+   },
+   "governance": {
+    "status": "PENDING_HUMAN_REVIEW",
+    "question": "YuNet weights are MIT but were trained on WIDER FACE, whose terms forbid commercial exploitation of derived data. The plan names YuNet for redaction; a human/legal decision is needed."
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "modelFormat": "ONNX",
+    "inputWidth": 640,
+    "inputHeight": 640,
+    "colorSpace": "BGR",
+    "normalization": {
+     "type": "none"
+    },
+    "letterbox": true,
+    "padPosition": "top-left",
+    "padValue": 0
+   },
+   "modelSignature": {
+    "input": {
+     "name": "input",
+     "shape": [
+      1,
+      3,
+      640,
+      640
+     ],
+     "dtype": "float32"
+    },
+    "decoder": "yunet",
+    "strides": [
+     8,
+     16,
+     32
+    ],
+    "scoreThreshold": 0.6,
+    "nmsIou": 0.3
+   }
+  }
+ ]
 }

@@ -28,23 +28,36 @@ command -v node >/dev/null || { echo "fetch-model: node is required to read $LOC
 command -v curl >/dev/null || { echo "fetch-model: curl is required" >&2; exit 1; }
 command -v sha256sum >/dev/null || { echo "fetch-model: sha256sum is required" >&2; exit 1; }
 
-# Prints "key url sha256 filename" lines for the requested key(s).
+# Prints "kind key url sha256 filename archiveSha member" lines for the requested key(s): the
+# model file (kind=model) and any extra files it needs (kind=extra, e.g. an OCR config).
+# Keys are looked up in "models" and in "candidateModels" (fetchable for tests and evaluation;
+# the product refuses to run a candidate unless model-license-exceptions.json approves it).
 ENTRIES="$(node -e '
   const lock = require(process.argv[1]);
   const want = process.argv[2] || lock.default;
-  const list = want === "all" ? lock.models : lock.models.filter((m) => m.key === want);
+  const all = [...lock.models, ...(lock.candidateModels || [])];
+  const list = want === "all" ? all : all.filter((m) => m.key === want);
   if (list.length === 0) { console.error("fetch-model: unknown model key: " + want); process.exit(1); }
-  for (const m of list) console.log([m.key, m.url, m.sha256, m.url.split("/").pop()].join(" "));
+  for (const m of list) {
+    const a = m.archive;
+    const file = a ? a.fileName : m.url.split("/").pop();
+    console.log(["model", m.key, m.url, m.sha256, file, a ? a.sha256 : "-", a ? a.member : "-"].join(" "));
+    for (const x of m.extraFiles || []) console.log(["extra", m.key, x.url, x.sha256, x.fileName, "-", "-"].join(" "));
+  }
 ' "$LOCK" "$KEY")"
 
 mkdir -p "$DEST"
 
-while read -r key url sha file; do
+extract_member() { # zip member -> stdout
+  if command -v unzip >/dev/null; then unzip -p "$1" "$2"; else python3 -c 'import sys,zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' "$1" "$2"; fi
+}
+
+while read -r kind key url sha file archsha member; do
   target="$DEST/$file"
   if [[ -f "$target" ]]; then
     have="$(sha256sum "$target" | cut -d' ' -f1)"
     if [[ "$have" == "$sha" ]]; then
-      echo "fetch-model: $key already present and verified ($target)"
+      echo "fetch-model: $key ($file) already present and verified ($target)"
       continue
     fi
     echo "fetch-model: $key at $target has SHA-256 $have, expected $sha; deleting it" >&2
@@ -52,19 +65,33 @@ while read -r key url sha file; do
   fi
 
   tmp="$(mktemp "$DEST/.${file}.XXXXXX")"
-  trap 'rm -f "$tmp"' EXIT
-  echo "fetch-model: downloading $key from $url"
-  if ! curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$url"; then
+  trap 'rm -f "$tmp" "${tmp}.archive"' EXIT
+  echo "fetch-model: downloading $key ($file) from $url"
+  dl="$tmp"
+  [[ "$archsha" != "-" ]] && dl="${tmp}.archive"
+  if ! curl -fsSL --retry 3 --retry-delay 2 -o "$dl" "$url"; then
     echo "fetch-model: download failed for $key ($url)" >&2
     exit 2
   fi
+  if [[ "$archsha" != "-" ]]; then
+    have="$(sha256sum "$dl" | cut -d' ' -f1)"
+    if [[ "$have" != "$archsha" ]]; then
+      echo "fetch-model: SHA-256 MISMATCH for the $key archive: got $have, expected $archsha. Refusing it." >&2
+      exit 3
+    fi
+    if ! extract_member "$dl" "$member" > "$tmp"; then
+      echo "fetch-model: $member not found in the $key archive" >&2
+      exit 2
+    fi
+    rm -f "$dl"
+  fi
   have="$(sha256sum "$tmp" | cut -d' ' -f1)"
   if [[ "$have" != "$sha" ]]; then
-    echo "fetch-model: SHA-256 MISMATCH for $key: got $have, expected $sha. Refusing the artefact." >&2
+    echo "fetch-model: SHA-256 MISMATCH for $key ($file): got $have, expected $sha. Refusing the artefact." >&2
     exit 3
   fi
   chmod 0644 "$tmp"
   mv "$tmp" "$target"
   trap - EXIT
-  echo "fetch-model: $key verified ($sha) -> $target"
+  echo "fetch-model: $key ($file) verified ($sha) -> $target"
 done <<< "$ENTRIES"

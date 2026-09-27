@@ -30,10 +30,17 @@ export interface ModelLockEntry {
   attributionRequired: boolean;
   noticeRequired: boolean;
   licenseNotes: string;
+  /** candidateModels only: file inside a downloaded archive (e.g. a wheel). */
+  archive?: { format: 'zip'; sha256: string; member: string; fileName: string };
+  extraFiles?: Array<{ url: string; sha256: string; fileName: string }>;
+  role?: string;
+  governance?: { status: string; question: string };
 }
 
 export interface ModelLockFile {
   models: ModelLockEntry[];
+  /** Weights under an allowed licence whose training data needs a human decision. */
+  candidateModels?: ModelLockEntry[];
   default: string;
 }
 
@@ -72,7 +79,50 @@ export function resolveModelsDir(): string {
 }
 
 export function artifactPathFor(entry: ModelLockEntry, modelsDir: string = resolveModelsDir()): string {
-  return path.join(modelsDir, entry.url.split('/').pop() as string);
+  return path.join(modelsDir, entry.archive ? entry.archive.fileName : (entry.url.split('/').pop() as string));
+}
+
+/** A candidate model (candidateModels) by key; never returned by findLockEntry. */
+export function findCandidateEntry(key: string, lock: ModelLockFile = readModelLock()): ModelLockEntry {
+  const e = (lock.candidateModels || []).find((m) => m.key === key || m.name === key);
+  if (!e) throw new Error(`Unknown candidate model '${key}'`);
+  return e;
+}
+
+export interface ModelLicenseApproval {
+  key: string;
+  sha256: string;
+  approvedBy: string;
+  approvedAt: string;
+  reason: string;
+}
+
+/** Human approvals for candidate models (scripts/models/model-license-exceptions.json). */
+export function readLicenseApprovals(file = process.env.VIGILONE_MODEL_EXCEPTIONS || path.join(path.dirname(resolveModelLockPath()), 'model-license-exceptions.json')): ModelLicenseApproval[] {
+  if (!fs.existsSync(file)) return [];
+  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+  return (Array.isArray(j.approvals) ? j.approvals : []).filter(
+    (a: any) => a && typeof a.key === 'string' && /^[a-f0-9]{64}$/.test(a.sha256) && a.approvedBy && a.approvedAt && a.reason
+  );
+}
+
+export class CandidateModelNotApproved extends Error {
+  readonly code = 'LICENSE_REJECTED';
+}
+
+/**
+ * The product may run a candidate model only with a human approval for that exact SHA-256.
+ * Tests and evaluation tools load candidates directly and never go through this check.
+ */
+export function assertCandidateApproved(entry: ModelLockEntry, approvals: ModelLicenseApproval[] = readLicenseApprovals()): ModelLicenseApproval {
+  const a = approvals.find((x) => x.key === entry.key && x.sha256 === entry.sha256);
+  if (!a) {
+    throw new CandidateModelNotApproved(
+      `LICENSE_REJECTED: ${entry.key} is a candidate model pending human review (${entry.governance?.question ?? 'training-data licence'}); ` +
+        `add an approval to model-license-exceptions.json to run it`
+    );
+  }
+  return a;
 }
 
 /** Builds the worker-side manifest record for a lock entry (id is the backend registry id). */
