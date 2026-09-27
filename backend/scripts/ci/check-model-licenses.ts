@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import {
   ModelManifestService,
@@ -6,84 +8,44 @@ import {
 } from '../../src/services/ai/modelManifest.service';
 
 interface ModelCatalogEntry extends CreateModelManifestInput {
-  description?: string;
+  key: string;
+  url: string;
 }
 
+/** scripts/models/models.lock.json: the pinned models an appliance may run (P2.3). */
+export const MODEL_LOCK_PATH = path.resolve(__dirname, '..', '..', '..', 'scripts', 'models', 'models.lock.json');
+
 /**
- * Baseline Seed Catalog of Governed Models for VigilOne Appliance.
- * Every model deployed to VigilOne must be declared and pre-approved here.
+ * Governed model catalog, read from the lock file (the single source of truth shared with
+ * scripts/models/fetch-model.sh and the ai-worker). Every hash here is the SHA-256 of a real,
+ * downloadable artefact; there are no placeholder models.
  */
-export const SEEDED_MODEL_CATALOG: ModelCatalogEntry[] = [
-  {
-    name: 'vigilone-person-vehicle-detector',
-    version: '1.0.0',
-    sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-    codeLicense: 'Apache-2.0',
-    weightLicense: 'Apache-2.0',
-    trainingData: {
-      source: 'CrowdHuman-COCO-Curated',
-      license: 'CC-BY-4.0',
-      provenance: 'public-curated-dataset',
-      commercialUse: true,
-    },
-    thresholds: {
-      personConfidence: 0.45,
-      vehicleConfidence: 0.5,
-    },
-    runtimeConfig: {
-      runtime: 'onnxruntime',
-      runtimeVersion: '1.17.0',
-      executionProvider: 'CPUExecutionProvider',
-      inputWidth: 640,
-      inputHeight: 640,
-      colorSpace: 'RGB',
-      normalization: {
-        type: 'scale',
-        value: 255.0,
-      },
-      letterbox: true,
-      modelFormat: 'ONNX',
-    },
-    attributionRequired: true,
-    noticeRequired: true,
-    licenseNotes: 'Apache-2.0 requires preservation of copyright and NOTICE file in binary distributions.',
+export function loadModelCatalog(lockPath: string = MODEL_LOCK_PATH): ModelCatalogEntry[] {
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  return (lock.models as any[]).map((m) => ({
+    key: m.key,
+    url: m.url,
+    name: m.name,
+    version: m.version,
+    sha256: m.sha256,
+    codeLicense: m.codeLicense,
+    weightLicense: m.weightLicense,
+    trainingData: m.trainingData,
+    thresholds: m.thresholds,
+    runtimeConfig: m.runtimeConfig,
+    attributionRequired: m.attributionRequired,
+    noticeRequired: m.noticeRequired,
+    licenseNotes: m.licenseNotes,
     isActive: true,
-  },
-  {
-    name: 'vigilone-spatial-intrusion-detector',
-    version: '1.0.0',
-    sha256: 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210',
-    codeLicense: 'MIT',
-    weightLicense: 'MIT',
-    trainingData: {
-      source: 'OpenImages-V7-Perimeter',
-      license: 'CC-BY-4.0',
-      provenance: 'public-dataset',
-      commercialUse: true,
-    },
-    thresholds: {
-      detectionConfidence: 0.4,
-    },
-    runtimeConfig: {
-      runtime: 'onnxruntime',
-      runtimeVersion: '1.17.0',
-      executionProvider: 'CPUExecutionProvider',
-      inputWidth: 640,
-      inputHeight: 640,
-      colorSpace: 'RGB',
-      normalization: {
-        type: 'scale',
-        value: 255.0,
-      },
-      letterbox: true,
-      modelFormat: 'ONNX',
-    },
-    attributionRequired: true,
-    noticeRequired: false,
-    licenseNotes: 'MIT license copyright notice must be included in documentation.',
-    isActive: true,
-  },
-];
+    task: m.task,
+    weightsSource: m.weightsSource,
+    modelSignature: m.modelSignature,
+    classes: m.classes,
+    nmsConfig: m.nmsConfig,
+  }));
+}
+
+export const SEEDED_MODEL_CATALOG: ModelCatalogEntry[] = loadModelCatalog();
 
 export async function runModelLicenseGate(): Promise<boolean> {
   console.log('🛡️  Running VigilOne Pre-Deployment Model License & Governance CI Gate...\n');
@@ -206,8 +168,20 @@ export async function runModelLicenseGate(): Promise<boolean> {
   // -------------------------------------------------------------
   // Test 3: Validate Seeded Model Catalog
   // -------------------------------------------------------------
-  console.log('--- Step 3: Auditing Seeded Model Catalog ---');
+  console.log('--- Step 3: Auditing Pinned Model Catalog (scripts/models/models.lock.json) ---');
+  if (SEEDED_MODEL_CATALOG.length === 0) {
+    console.error('❌ The model lock file lists no models.');
+    failed = true;
+  }
   for (const model of SEEDED_MODEL_CATALOG) {
+    if (!/^https:\/\//.test(model.url)) {
+      console.error(`❌ ${model.key}: artefact URL must be https (got '${model.url}')`);
+      failed = true;
+    }
+    if (!model.weightsSource || !model.modelSignature) {
+      console.error(`❌ ${model.key}: weightsSource and modelSignature are required for provenance and decoding`);
+      failed = true;
+    }
     const valResult = service.validateModelManifest(model);
     if (!valResult.valid) {
       console.error(`❌ Seeded model '${model.name}:${model.version}' failed validation:`);
