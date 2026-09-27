@@ -71,6 +71,7 @@ VigilOne v1.0.0 is strictly scoped as a self-contained, rock-solid **Edge NVR Ap
 | Video redaction | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_REDACTION=true` | FFmpeg filter generation is real; it needs face/plate masks from a detector that is not yet attached. |
 | Smart search | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_SMART_SEARCH=true` | Plain SQL over DetectionEvent rows; there is no embedding or semantic search yet. |
 | Floorplans | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_FLOORPLANS=true` | Floorplan CRUD and FOV projection exist; not validated on a real site. |
+| Camera-native events (ONVIF, Hikvision, Dahua) | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_CAMERA_EVENTS=true` | ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras. |
 <!-- FEATURE_FLAGS:END -->
 
 Also out of scope for v1 and not behind a flag: **email notifications** (SMTP dispatch answers 501; supported alert channels are HTTP webhooks and Slack).

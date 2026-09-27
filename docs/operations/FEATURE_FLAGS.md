@@ -33,6 +33,7 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `REDACTION` | `VIGILONE_FEATURE_REDACTION` | `/api/v1/privacy/jobs` (privacy policies stay available) |
 | `SMART_SEARCH` | `VIGILONE_FEATURE_SMART_SEARCH` | `/api/v1/search` |
 | `FLOORPLANS` | `VIGILONE_FEATURE_FLOORPLANS` | `/api/v1/floorplans` |
+| `CAMERA_EVENTS` | `VIGILONE_FEATURE_CAMERA_EVENTS` | `/api/v1/camera-events` (and the `cameraEventManager` worker; see `docs/operations/CAMERA_EVENTS.md`) |
 
 Note: the ANPR router also checks the licence entitlement (`requireFeature('ANPR')` in
 `middleware/license.ts`). The feature flag is an operational switch; the licence is a commercial

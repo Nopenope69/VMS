@@ -23,6 +23,7 @@ export enum FeatureFlag {
   REDACTION = 'REDACTION',
   SMART_SEARCH = 'SMART_SEARCH',
   FLOORPLANS = 'FLOORPLANS',
+  CAMERA_EVENTS = 'CAMERA_EVENTS',
 }
 
 export interface FeatureFlagDefinition {
@@ -104,6 +105,14 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/floorplans'],
     workers: [],
     status: 'Floorplan CRUD and FOV projection exist; not validated on a real site.',
+  },
+  [FeatureFlag.CAMERA_EVENTS]: {
+    flag: FeatureFlag.CAMERA_EVENTS,
+    envVar: envVarFor(FeatureFlag.CAMERA_EVENTS),
+    title: 'Camera-native events (ONVIF, Hikvision, Dahua)',
+    routePrefixes: ['/api/v1/camera-events'],
+    workers: ['cameraEventManager'],
+    status: 'ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras.',
   },
 });
 

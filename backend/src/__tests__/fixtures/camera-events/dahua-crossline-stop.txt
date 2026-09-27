@@ -1,0 +1,4 @@
+Code=CrossLineDetection;action=Stop;index=0;data={
+   "Name" : "Gate; north",
+   "Object" : { "ObjectType" : "Human", "ObjectID" : 12 }
+}

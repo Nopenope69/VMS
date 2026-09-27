@@ -131,6 +131,8 @@ export interface CameraAnalyticPayload {
   ruleName?: string;
   objectType?: string;
   channel?: number;
+  /** The camera's own timestamp, when it sent one (event time is the appliance receive time). */
+  cameraTimeUtc?: string;
 }
 
 /** Per-inference provenance (events.v1 AiProvenanceV1). Mandatory on AI-derived events. */
