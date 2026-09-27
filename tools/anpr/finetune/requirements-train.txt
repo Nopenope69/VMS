@@ -1,0 +1,10 @@
+# Training environment for tools/anpr/finetune (developer/ML workstation only; never shipped in the
+# appliance). Installed by finetune.sh into its own venv. Licences: see THIRD_PARTY_LICENSES.md 3.2c
+# and "Licence questions" in docs/STATUS.md (matplotlib and tqdm are not on the allowed list).
+fast-plate-ocr[train,onnx]==1.1.0
+tensorflow==2.21.0
+keras==3.15.1
+albumentations==2.0.8
+onnxruntime==1.23.2
+tf2onnx==1.17.0
+onnxslim==0.1.96

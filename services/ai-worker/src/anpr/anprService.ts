@@ -36,6 +36,8 @@ export interface LoadedAnprPipeline {
   definition: PipelineDefinition;
   definitionSha256: string;
   components: Array<{ role: string; entry: ModelLockEntry; approval: ModelLicenseApproval | null }>;
+  /** Evaluation only: an unpinned plate OCR (e.g. a fine-tune) replaced the pinned one. */
+  plateOcrOverride?: { modelPath: string; modelSha256: string; configPath: string; configSha256: string };
 }
 
 export class AnprLoadError extends Error {
@@ -50,7 +52,10 @@ export function resolvePipelinePath(name = 'anpr-india-v1'): string {
 
 const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 
-export async function loadAnprPipeline(opts: { definitionPath?: string; evaluationOnly?: boolean; modelsDir?: string } = {}): Promise<LoadedAnprPipeline> {
+export async function loadAnprPipeline(
+  opts: { definitionPath?: string; evaluationOnly?: boolean; modelsDir?: string; plateOcrOverride?: { modelPath: string; configPath: string } } = {}
+): Promise<LoadedAnprPipeline> {
+  if (opts.plateOcrOverride && !opts.evaluationOnly) throw new AnprLoadError('INVALID_PIPELINE', 'plateOcrOverride is for evaluation only');
   const defPath = opts.definitionPath ?? resolvePipelinePath();
   if (!fs.existsSync(defPath)) throw new AnprLoadError('ARTIFACT_MISSING', `pipeline definition ${defPath} not found`);
   const raw = fs.readFileSync(defPath);
@@ -92,6 +97,20 @@ export async function loadAnprPipeline(opts: { definitionPath?: string; evaluati
   const cfgName = ocrEntry.entry.extraFiles?.[0]?.fileName;
   if (!cfgName) throw new AnprLoadError('INVALID_PIPELINE', 'plate_ocr needs its config file');
   const detector = new TextDetector(await OrtSession.create(buffers.text_detector), def.textDetection);
+  if (opts.plateOcrOverride) {
+    const { modelPath, configPath } = opts.plateOcrOverride;
+    for (const f of [modelPath, configPath]) if (!fs.existsSync(f)) throw new AnprLoadError('ARTIFACT_MISSING', f);
+    const mb = fs.readFileSync(modelPath);
+    const cb = fs.readFileSync(configPath);
+    const ocr = new PlateOcr(await OrtSession.create(mb), parsePlateConfig(cb.toString('utf8')));
+    return {
+      pipeline: new AnprPipeline(detector, ocr),
+      definition: def,
+      definitionSha256: sha(raw),
+      components: loaded,
+      plateOcrOverride: { modelPath, modelSha256: sha(mb), configPath, configSha256: sha(cb) },
+    };
+  }
   const ocr = new PlateOcr(await OrtSession.create(buffers.plate_ocr), parsePlateConfig(buffers[`plate_ocr:${cfgName}`].toString('utf8')));
   return { pipeline: new AnprPipeline(detector, ocr), definition: def, definitionSha256: sha(raw), components: loaded };
 }

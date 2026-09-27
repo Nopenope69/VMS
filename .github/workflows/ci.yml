@@ -305,7 +305,7 @@ jobs:
         run: node --test tools/eval/__tests__/*.test.mjs
 
       - name: Shell syntax
-        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done
+        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh tools/anpr/finetune/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done && python3 -m py_compile tools/anpr/finetune/prepare_dataset.py tools/anpr/synth_plates.py
 
       - name: Compatibility matrix is generated from committed bench reports
         run: node scripts/bench/update-matrix.mjs --check

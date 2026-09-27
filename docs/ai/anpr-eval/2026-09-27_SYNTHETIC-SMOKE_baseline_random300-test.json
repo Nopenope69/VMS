@@ -1,0 +1,344 @@
+{
+  "tool": "vigilone-eval-plates",
+  "reportVersion": 1,
+  "kind": "SYNTHETIC",
+  "label": "SYNTHETIC: not a measurement of site accuracy",
+  "dataset": {
+    "name": "random synthetic plates (seed 7, n=300)",
+    "split": "test",
+    "samples": 60,
+    "contentSha256": "3f93beef73ae1865d709cd395ef8c83043425506c9050d9008ecf861545fe99e",
+    "declared": {
+      "kind": "SYNTHETIC",
+      "name": "random synthetic plates (seed 7, n=300)",
+      "generator": "tools/anpr/synth_plates.py --random",
+      "seed": 7
+    },
+    "leakageChecked": false
+  },
+  "pipeline": {
+    "name": "anpr-india",
+    "version": "1.0.0",
+    "definitionSha256": "6e54e73c7893c1357c51a00077ddb1b4ef9abe4ba7c87f170b4bd3cd174c354b",
+    "components": [
+      {
+        "role": "text_detector",
+        "key": "ppocrv4-det",
+        "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9"
+      },
+      {
+        "role": "plate_ocr",
+        "key": "fast-plate-ocr-cct-s-v2",
+        "sha256": "384bbbd2cea3ef54761d3df70822ef3a349ee1a112aeafddbe0e3ba06bc6e47b"
+      }
+    ],
+    "plateOcrOverride": null,
+    "options": {
+      "minConfidence": 0.5,
+      "requireValidFormat": true
+    }
+  },
+  "host": {
+    "node": "v22.22.2",
+    "platform": "linux-x64"
+  },
+  "generatedAt": "2026-09-27T17:22:42.085Z",
+  "metrics": {
+    "samples": 60,
+    "positives": 60,
+    "correct": 48,
+    "plateAccuracy": 0.8,
+    "plateAccuracyCi95": [
+      0.6821819419437211,
+      0.8817149467710251
+    ],
+    "misreadRate": 0.08333333333333333,
+    "noReadRate": 0.11666666666666667,
+    "characterErrorRate": 0.12564543889845095,
+    "negatives": 0,
+    "falseReads": 0,
+    "falseReadRate": null,
+    "latencyMs": {
+      "p50": 510.325402,
+      "p95": 596.67332,
+      "max": 610.452397
+    },
+    "byCamera": {
+      "synthetic": {
+        "positives": 60,
+        "correct": 48,
+        "plateAccuracy": 0.8,
+        "plateAccuracyCi95": [
+          0.6821819419437211,
+          0.8817149467710251
+        ],
+        "misreadRate": 0.08333333333333333,
+        "noReadRate": 0.11666666666666667
+      }
+    },
+    "byCondition": {
+      "commercial": {
+        "positives": 7,
+        "correct": 6,
+        "plateAccuracy": 0.8571428571428571,
+        "plateAccuracyCi95": [
+          0.4868721707256811,
+          0.9743203756552565
+        ],
+        "misreadRate": 0.14285714285714285,
+        "noReadRate": 0
+      },
+      "commercial-2line": {
+        "positives": 6,
+        "correct": 4,
+        "plateAccuracy": 0.6666666666666666,
+        "plateAccuracyCi95": [
+          0.299993315138392,
+          0.9032285888942195
+        ],
+        "misreadRate": 0.3333333333333333,
+        "noReadRate": 0
+      },
+      "ev": {
+        "positives": 9,
+        "correct": 8,
+        "plateAccuracy": 0.8888888888888888,
+        "plateAccuracyCi95": [
+          0.5650002944233439,
+          0.9801091123614551
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.1111111111111111
+      },
+      "ev-2line": {
+        "positives": 1,
+        "correct": 1,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.20654931437723745,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "mono": {
+        "positives": 8,
+        "correct": 7,
+        "plateAccuracy": 0.875,
+        "plateAccuracyCi95": [
+          0.5291118177871464,
+          0.9775825085499433
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.125
+      },
+      "mono-2line": {
+        "positives": 2,
+        "correct": 2,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.34238022750665303,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "private": {
+        "positives": 12,
+        "correct": 10,
+        "plateAccuracy": 0.8333333333333334,
+        "plateAccuracyCi95": [
+          0.5519691377470266,
+          0.9530348578161463
+        ],
+        "misreadRate": 0.08333333333333333,
+        "noReadRate": 0.08333333333333333
+      },
+      "private-2line": {
+        "positives": 2,
+        "correct": 2,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.34238022750665303,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "serif": {
+        "positives": 11,
+        "correct": 7,
+        "plateAccuracy": 0.6363636363636364,
+        "plateAccuracyCi95": [
+          0.35380117450784887,
+          0.8483352890463243
+        ],
+        "misreadRate": 0.09090909090909091,
+        "noReadRate": 0.2727272727272727
+      },
+      "serif-2line": {
+        "positives": 2,
+        "correct": 1,
+        "plateAccuracy": 0.5,
+        "plateAccuracyCi95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.5
+      }
+    },
+    "byExpectedLength": {
+      "9": {
+        "positives": 19,
+        "correct": 14,
+        "plateAccuracy": 0.7368421052631579,
+        "plateAccuracyCi95": [
+          0.5120844910218489,
+          0.8819358765321748
+        ],
+        "misreadRate": 0.05263157894736842,
+        "noReadRate": 0.21052631578947367
+      },
+      "10": {
+        "positives": 41,
+        "correct": 34,
+        "plateAccuracy": 0.8292682926829268,
+        "plateAccuracyCi95": [
+          0.6873738759959581,
+          0.91474748022405
+        ],
+        "misreadRate": 0.0975609756097561,
+        "noReadRate": 0.07317073170731707
+      }
+    }
+  },
+  "errors": [
+    {
+      "file": "SYNTHETIC_00065.png",
+      "outcome": "misread",
+      "expected": "LA07YJ7129",
+      "reads": [
+        "LA077129"
+      ],
+      "rawTexts": [
+        "LA077129"
+      ],
+      "lines": [
+        2
+      ]
+    },
+    {
+      "file": "SYNTHETIC_00075.png",
+      "outcome": "no_read",
+      "expected": "LD74E4801",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00100.png",
+      "outcome": "no_read",
+      "expected": "CH43J5238",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00170.png",
+      "outcome": "no_read",
+      "expected": "NL19GW2124",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00175.png",
+      "outcome": "misread",
+      "expected": "TR56W6182",
+      "reads": [
+        "TR56WG1822"
+      ],
+      "rawTexts": [
+        "TR56W61822"
+      ],
+      "lines": [
+        1
+      ]
+    },
+    {
+      "file": "SYNTHETIC_00225.png",
+      "outcome": "no_read",
+      "expected": "AP20XV5240",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00230.png",
+      "outcome": "no_read",
+      "expected": "MN09SF5313",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00240.png",
+      "outcome": "no_read",
+      "expected": "25BH5378J",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00270.png",
+      "outcome": "misread",
+      "expected": "MH57LQ7319",
+      "reads": [
+        "MH57LQ739"
+      ],
+      "rawTexts": [
+        "MH57LQ739"
+      ],
+      "lines": [
+        2
+      ]
+    },
+    {
+      "file": "SYNTHETIC_00280.png",
+      "outcome": "misread",
+      "expected": "GJ05KZ8520",
+      "reads": [
+        "GJ05KZ852"
+      ],
+      "rawTexts": [
+        "GJ05KZ852"
+      ],
+      "lines": [
+        1
+      ]
+    },
+    {
+      "file": "SYNTHETIC_00290.png",
+      "outcome": "no_read",
+      "expected": "JH66C0664",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00295.png",
+      "outcome": "misread",
+      "expected": "26BH6269MF",
+      "reads": [
+        "26BH6269ME"
+      ],
+      "rawTexts": [
+        "26BH6269ME"
+      ],
+      "lines": [
+        1
+      ]
+    }
+  ]
+}

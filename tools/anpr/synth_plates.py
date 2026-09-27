@@ -9,6 +9,11 @@ on a plain synthetic vehicle-like scene with mild rotation, blur and noise, and 
 a manifest with the ground-truth text.
 
     python3 tools/anpr/synth_plates.py --out DIR [--seed 7]
+    python3 tools/anpr/synth_plates.py --out DIR --random N [--seed 7]   # labelled dataset layout
+
+--random writes N random, format-valid plates as a dataset directory (dataset.json kind SYNTHETIC,
+labels.csv with image_path,plate_text,split,camera,condition,x,y,w,h). It exists to smoke-test the
+evaluation and fine-tuning tools; it says nothing about accuracy on real plates.
 
 Every output file name and the manifest carry SYNTHETIC. Real accuracy needs site data (P4.3).
 """
@@ -89,12 +94,63 @@ def scene(plate, rng):
     return img, [x, y, p.width, p.height]
 
 
+STATES = ["AP", "AR", "AS", "BR", "CG", "CH", "DD", "DL", "GA", "GJ", "HP", "HR", "JH", "JK", "KA", "KL", "LA", "LD",
+          "MH", "ML", "MN", "MP", "MZ", "NL", "OD", "PB", "PY", "RJ", "SK", "TG", "TN", "TR", "UK", "UP", "WB"]
+SERIES = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # never I or O
+STYLES = [  # (condition, background, foreground, hsrp, font)
+    ("private", (250, 250, 250), (15, 15, 15), True, "sans-bold"),
+    ("commercial", (245, 200, 30), (10, 10, 10), True, "sans-bold"),
+    ("ev", (20, 130, 60), (250, 250, 250), False, "sans-bold"),
+    ("mono", (250, 250, 250), (15, 15, 15), False, "sans-mono"),
+    ("serif", (250, 250, 250), (15, 15, 15), True, "serif"),
+]
+
+
+def random_plate(rng):
+    """Returns (display lines, normalised text) for a random, format-valid Indian plate."""
+    if rng.random() < 0.15:
+        yy, num = rng.randint(21, 26), rng.randint(1, 9999)
+        suf = "".join(rng.choice(SERIES) for _ in range(rng.choice([1, 2])))
+        text = f"{yy}BH{num:04d}{suf}"
+        return [f"{yy} BH {num:04d} {suf}"], text
+    st = rng.choice(STATES)
+    dist = rng.randint(1, 99)
+    ser = "".join(rng.choice(SERIES) for _ in range(rng.choice([1, 2, 2, 2])))
+    num = rng.randint(1, 9999)
+    text = f"{st}{dist:02d}{ser}{num:04d}"
+    if rng.random() < 0.2:
+        return [f"{st} {dist:02d}", f"{ser} {num:04d}"], text
+    return [f"{st} {dist:02d} {ser} {num:04d}"], text
+
+
+def random_dataset(out, n, rng, seed):
+    os.makedirs(out, exist_ok=True)
+    rows = ["image_path,plate_text,split,camera,condition,x,y,w,h"]
+    for i in range(n):
+        lines, text = random_plate(rng)
+        cond, bg, fg, hsrp, font = rng.choice(STYLES)
+        img, (x, y, w, h) = scene(render_plate(lines, bg, fg, hsrp, font), rng)
+        name = f"SYNTHETIC_{i:05d}.png"
+        img.save(os.path.join(out, name))
+        split = "test" if i % 5 == 0 else ("val" if i % 5 == 1 else "train")
+        rows.append(f"{name},{text},{split},synthetic,{cond}{'-2line' if len(lines) == 2 else ''},{x},{y},{w},{h}")
+    with open(os.path.join(out, "labels.csv"), "w") as f:
+        f.write("\n".join(rows) + "\n")
+    with open(os.path.join(out, "dataset.json"), "w") as f:
+        json.dump({"kind": "SYNTHETIC", "name": f"random synthetic plates (seed {seed}, n={n})",
+                   "generator": "tools/anpr/synth_plates.py --random", "seed": seed}, f, indent=1)
+    print(json.dumps({"written": n, "out": out}))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--random", type=int, default=0, help="write N random plates as a labelled dataset")
     a = ap.parse_args()
     rng = random.Random(a.seed)
+    if a.random:
+        return random_dataset(a.out, a.random, rng, a.seed)
     os.makedirs(a.out, exist_ok=True)
     manifest = {"kind": "SYNTHETIC", "generator": "tools/anpr/synth_plates.py", "seed": a.seed, "images": []}
     for pid, lines, bg, fg, hsrp, font in PLATES:
