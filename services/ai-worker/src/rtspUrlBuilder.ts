@@ -85,7 +85,11 @@ export function validateRtspPort(port: number): number {
  * @param customPort Optional port override (defaults to MEDIAMTX_RTSP_PORT env or 8554)
  * @returns Fully qualified loopback RTSP URL: rtsp://127.0.0.1:<port>/<sanitizedPath>
  */
-export function buildLoopbackRtspUrl(streamPath: string, customPort?: number): string {
+export function buildLoopbackRtspUrl(
+  streamPath: string,
+  customPort?: number,
+  credentials: RtspReadCredentials | null = readCredentialsFromEnv()
+): string {
   const sanitizedPath = sanitizeStreamPath(streamPath);
 
   let port = DEFAULT_MEDIAMTX_RTSP_PORT;
@@ -96,7 +100,10 @@ export function buildLoopbackRtspUrl(streamPath: string, customPort?: number): s
     port = validateRtspPort(parsed);
   }
 
-  const constructedUrl = `rtsp://${CANONICAL_LOOPBACK_HOST}:${port}/${sanitizedPath}`;
+  const userinfo = credentials
+    ? `${encodeURIComponent(credentials.user)}:${encodeURIComponent(credentials.password)}@`
+    : '';
+  const constructedUrl = `rtsp://${userinfo}${CANONICAL_LOOPBACK_HOST}:${port}/${sanitizedPath}`;
 
   // Final sanity assertion
   if (!validateLoopbackHost(constructedUrl)) {
@@ -104,4 +111,25 @@ export function buildLoopbackRtspUrl(streamPath: string, customPort?: number): s
   }
 
   return constructedUrl;
+}
+
+/**
+ * MediaMTX authorises every read through the backend (authMethod: http), which rejects
+ * unauthenticated reads. The worker reads as the internal service user, like the other internal
+ * consumers: MEDIAMTX_READ_USER / MEDIAMTX_READ_PASSWORD (the password is INTERNAL_API_SECRET).
+ */
+export interface RtspReadCredentials {
+  user: string;
+  password: string;
+}
+
+export function readCredentialsFromEnv(): RtspReadCredentials | null {
+  const password = process.env.MEDIAMTX_READ_PASSWORD;
+  if (!password) return null;
+  return { user: process.env.MEDIAMTX_READ_USER || 'internal', password };
+}
+
+/** The URL with any password replaced by '***', for logs and error messages. */
+export function redactRtspUrl(url: string): string {
+  return url.replace(/(rtsp:\/\/[^:@/]+):[^@/]*@/i, '$1:***@');
 }

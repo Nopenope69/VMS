@@ -187,6 +187,64 @@ services:
     networks:
       - vigilone-net
 
+  # AI worker (Phase 2). Opt-in: `docker compose --profile ai up -d`, after
+  # `scripts/models/fetch-model.sh --dest ${VIGILONE_MODELS_DIR}`. It joins MediaMTX's network
+  # namespace so rtsp://127.0.0.1:8554 IS MediaMTX (loopback + single-RTSP-stream invariants); it
+  # never connects to cameras. Recording and evidence do not depend on it: stopping, crashing or
+  # overloading it cannot affect them.
+  ai-worker:
+    build:
+      context: .
+      dockerfile: services/ai-worker/Dockerfile
+    image: vigilone-ai-worker:latest
+    container_name: vigilone-ai-worker
+    profiles: ["ai"]
+    restart: unless-stopped
+    network_mode: "service:mediamtx"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=production
+      - AI_WORKER_MODE=pipeline
+      - BACKEND_INTERNAL_URL=http://backend:4000/api/v1/internal
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      # Reads the loopback stream as the internal service user (MediaMTX authMethod: http)
+      - MEDIAMTX_READ_USER=internal
+      - MEDIAMTX_READ_PASSWORD=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - AI_MODEL_KEY=${AI_MODEL_KEY:-yolox-tiny}
+      - VIGILONE_MODELS_DIR=/models
+      - AI_ADAPTER_HOST=127.0.0.1
+      - AI_ADAPTER_PORT=7010
+      - AI_DETECT_FPS=${AI_DETECT_FPS:-2}
+      - AI_MAX_STREAMS=${AI_MAX_STREAMS:-16}
+      - AI_GATE_MODE=${AI_GATE_MODE:-motion}
+      # A refused model (bad SHA-256, disallowed licence) is audited once; the worker stays up with
+      # health FAILED instead of restart-looping.
+      - AI_EXIT_ON_REFUSAL=false
+    volumes:
+      - ${VIGILONE_MODELS_DIR:-./.cache/models}:/models:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      mediamtx:
+        condition: service_healthy
+        restart: true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1536M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Synthetic test camera - isolated under profile 'test' (never runs in production)
   synthetic-camera:
     image: bluenviron/mediamtx:1.9.3-ffmpeg

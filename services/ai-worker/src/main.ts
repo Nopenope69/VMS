@@ -20,6 +20,8 @@
  *  AI_INFERENCE_TIMEOUT_MS    per-frame deadline (default 1000)
  *  AI_GATE_MODE               motion gating: 'motion' (default) or 'off' (P2.5)
  *  AI_EXIT_ON_REFUSAL         exit with code 78 when the model is refused (default true)
+ *  AI_MAX_SYNC_FAILURES       consecutive camera-sync failures before exiting with 75 so the
+ *                             container restarts (default 10; ~5 min at the 30 s sync interval)
  */
 import fs from 'fs';
 import { AiWorker } from './worker';
@@ -32,6 +34,7 @@ import { MetricsRegistry } from './metrics';
 import { ModelManifestRecord } from './types';
 
 export const EXIT_MODEL_REFUSED = 78; // EX_CONFIG
+export const EXIT_TEMPFAIL = 75; // EX_TEMPFAIL
 
 function env(name: string, fallback?: string): string | undefined {
   const v = process.env[name];
@@ -133,6 +136,15 @@ export async function boot(): Promise<BootResult> {
     },
   });
   supervisor.on('warn', (m) => log('warn', String(m)));
+  // Watchdog: if the backend stays unreachable (e.g. MediaMTX, whose network namespace this
+  // container shares, was restarted), exit so the orchestrator restarts the worker cleanly.
+  const maxSyncFailures = Number(env('AI_MAX_SYNC_FAILURES', '10'));
+  supervisor.on('syncResult', ({ consecutiveFailures }: { consecutiveFailures: number }) => {
+    if (consecutiveFailures >= maxSyncFailures) {
+      log('error', 'backend unreachable for too long; exiting for a clean restart', { consecutiveFailures });
+      process.exit(EXIT_TEMPFAIL);
+    }
+  });
   supervisor.on('streamError', (e) => log('warn', 'stream error', e));
   supervisor.on('inferenceError', (e) => log('warn', 'inference error', e));
   await supervisor.start();

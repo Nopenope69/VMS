@@ -55,6 +55,7 @@ export class StreamSupervisor extends EventEmitter {
   private isRunning: boolean = false;
   private readonly metrics: MetricsRegistry;
   private readonly gate: MotionGate;
+  private consecutiveSyncFailures = 0;
 
   constructor(config: StreamSupervisorConfig) {
     super();
@@ -75,17 +76,22 @@ export class StreamSupervisor extends EventEmitter {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    // Initial sync
-    await this.syncCameras().catch((err) => {
-      this.emit('warn', `Initial camera discovery sync failed: ${err.message}`);
-    });
+    const tick = (label: string) =>
+      this.syncCameras().then(
+        () => {
+          this.consecutiveSyncFailures = 0;
+          this.emit('syncResult', { ok: true, consecutiveFailures: 0 });
+        },
+        (err) => {
+          this.consecutiveSyncFailures++;
+          this.metrics.inc('vigilone_ai_camera_sync_failures_total', 'Camera discovery syncs that failed');
+          this.emit('warn', `${label} camera discovery sync failed: ${err.message}`);
+          this.emit('syncResult', { ok: false, consecutiveFailures: this.consecutiveSyncFailures });
+        }
+      );
 
-    // Periodic discovery sync
-    this.syncTimer = setInterval(() => {
-      this.syncCameras().catch((err) => {
-        this.emit('warn', `Periodic camera discovery sync failed: ${err.message}`);
-      });
-    }, this.syncIntervalMs);
+    await tick('Initial');
+    this.syncTimer = setInterval(() => void tick('Periodic'), this.syncIntervalMs);
   }
 
   /**

@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import crypto from 'crypto';
-import { buildLoopbackRtspUrl } from './rtspUrlBuilder';
+import { buildLoopbackRtspUrl, redactRtspUrl } from './rtspUrlBuilder';
 import { VideoFrame, CameraStreamConfig, FrameGeometry } from './types';
 import { CoordinateTransformer } from './coordinateTransformer';
 
@@ -145,7 +145,7 @@ export class FrameExtractor extends EventEmitter {
     });
 
     this.process.stderr?.on('data', (chunk: Buffer) => {
-      const line = chunk.toString('utf8').trim();
+      const line = redactRtspUrl(chunk.toString('utf8').trim());
       if (line) {
         this.lastStderrLine = line;
       }
@@ -300,7 +300,7 @@ export function probeStreamResolution(
     let err = '';
     const timer = setTimeout(() => {
       proc.kill('SIGKILL');
-      reject(new Error(`ffprobe timed out after ${timeoutMs}ms probing ${rtspUrl}`));
+      reject(new Error(`ffprobe timed out after ${timeoutMs}ms probing ${redactRtspUrl(rtspUrl)}`));
     }, timeoutMs);
     proc.stdout.on('data', (c) => (out += c));
     proc.stderr.on('data', (c) => (err += c));
@@ -310,13 +310,13 @@ export function probeStreamResolution(
     });
     proc.on('exit', (code) => {
       clearTimeout(timer);
-      if (code !== 0) return reject(new Error(`ffprobe exited ${code} probing ${rtspUrl}: ${err.trim()}`));
+      if (code !== 0) return reject(new Error(`ffprobe exited ${code} probing ${redactRtspUrl(rtspUrl)}: ${redactRtspUrl(err.trim())}`));
       try {
         const s = JSON.parse(out).streams?.[0];
         if (!s?.width || !s?.height) throw new Error('no video stream');
         resolve({ width: s.width, height: s.height });
       } catch (e: any) {
-        reject(new Error(`ffprobe returned no video resolution for ${rtspUrl}: ${e.message}`));
+        reject(new Error(`ffprobe returned no video resolution for ${redactRtspUrl(rtspUrl)}: ${e.message}`));
       }
     });
   });
