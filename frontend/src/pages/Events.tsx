@@ -19,6 +19,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
+import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluationBanner';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
 const describeError = (err: any): string =>
@@ -42,6 +43,8 @@ interface AlarmItem {
   resolutionNotes?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Rule-raised alarms carry the canonical event and, for AI events, the model provenance. */
+  metadataJson?: { provenance?: { modelName?: string; modelVersion?: string } | null } | null;
 }
 
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
@@ -370,6 +373,7 @@ export const Events: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-vms-bg p-3 md:p-4 space-y-3">
+      <AiEvaluationBanner />
       {/* Top Header & Mode Navigation */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-vms-border pb-3">
         <div className="flex items-center gap-2.5">
@@ -615,6 +619,7 @@ export const Events: React.FC = () => {
                         <td className="px-4 py-3 max-w-sm">
                           <div className="font-semibold text-vms-text text-xs">
                             {alarm.title}
+                            <AiProvenanceBadge provenance={alarm.metadataJson?.provenance} />
                           </div>
                           {alarm.description && (
                             <div className="text-[11px] text-vms-muted mt-0.5 line-clamp-1">
