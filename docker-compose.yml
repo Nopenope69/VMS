@@ -93,7 +93,8 @@ services:
       - vigilone-net
 
   postgres:
-    image: postgres:16-alpine
+    # P5.1: pgvector image for semantic search embeddings
+    image: pgvector/pgvector:pg16
     container_name: vigilone-postgres
     restart: unless-stopped
     security_opt:
@@ -394,4 +395,3 @@ volumes:
   appliance_keys:
   caddy_data:
   caddy_config:
-
