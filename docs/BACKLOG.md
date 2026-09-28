@@ -40,7 +40,7 @@ found. Pick them up in the phase noted.
 - **Plate snapshots**: observations store no image crop yet; add crops with retention under P4.6 purge rules.
 - **ANPR on non-LPR cameras**: vehicle-crop → plate detection for overview cameras (needs a licence-clean vehicle/plate detector).
 - **Indian-data evaluation and fine-tune** (P4.3, HUMAN-REQUIRED): measure plate-level accuracy on held-out site footage.
-- **Test flake watch**: one parallel backend run had 1 failure in `anprRealDb.test.ts` and one ai-worker run had 2 failures; neither reproduced in 6 and 4 reruns respectively. Output was not captured; capture it if it recurs.
+- **Test flake watch**: one parallel backend run had 1 failure in `anprRealDb.test.ts` and ai-worker runs twice had 2 failures on the first run after heavy work; not reproduced in 6 and 11 reruns (incl. under CPU contention). Output was not captured; capture it if it recurs (CI keeps the logs).
 - **Redaction UI**: P4.4 ships the API only (create / execute / status / download). An evidence-view panel to start jobs, watch progress and download derivatives is not built.
 - **Redaction recall on site footage**: face/plate recall of the redaction pipeline is unmeasured; needs labelled site clips (HUMAN-REQUIRED).
 - **BYSTANDER redaction**: needs a person detector wired to the redaction adapter (the object-detection worker's model is not reused yet).

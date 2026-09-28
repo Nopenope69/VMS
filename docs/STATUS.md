@@ -6,6 +6,119 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 2, continued (2026-09-27/28): Phase 4, India ANPR and privacy
+
+Same branch (`claude/gracious-galileo-vtpuvp`), so Phase 4 extends the open PR for Phases 2–3
+rather than opening a new one. I was not permitted to push to another branch; split the PR if
+preferred. The environment is as below, plus candidate models fetched from PyPI and GitHub
+(Hugging Face is blocked here) and a TensorFlow CPU venv for the fine-tune smoke run.
+
+### Final verification run (after the last code commit, `8ce7964`)
+
+| Command (from repo root) | Result |
+| --- | --- |
+| `cd backend && npx tsc --noEmit && npx jest` (real Postgres, ffmpeg, python3) | **120/120 suites, 808/808 tests** |
+| `cd services/ai-worker && npm run build && npx jest` (candidate models present) | first run after the backend run: 173/175, 2 failures, output not captured (see "Not verified"); then **23/23 suites, 175/175** in 7 further runs, including 2 parallel runs under contention |
+| redaction adapter (`AI_WORKER_MODE=redaction-adapter-only`, TEST-ONLY approvals) + `npm run conformance:ai-adapter` | **19/19** (`docs/ai/e2e-results/2026-09-27_p4.4_redaction-adapter_conformance.json`) |
+| `MEDIAMTX_BIN=/tmp/mtx/mediamtx scripts/e2e/anpr-lpr-scenario.sh` | **PASS**: MH12AB1234 read exactly, known-plate alarm with provenance, recording continued after the worker was killed (`2026-09-28_p4-final_anpr_*.json`) |
+| `scripts/e2e/redaction-scenario.sh` (real YuNet + PP-OCRv4) | **PASS**: `sha256sum` of the downloaded derivative equals the recorded hash; faces and plates opaque in the decoded pixels; custody links master to derivative; masters unchanged (`2026-09-28_p4-final_redaction_*.json`) |
+| `cd frontend && npm run build && npm run check:no-demo` | build exit 0; bundle clean |
+| `check:model-licenses / check:no-fake-success / check:dependency-licenses / check:hygiene / check:feature-flag-docs` | all exit 0 (the feature-flag README table was regenerated) |
+| `node --test tools/eval/__tests__/*.test.mjs`; `node --test scripts/lib/*.test.mjs scripts/soak/*.test.mjs` | 3/3; 11/11 |
+| `docker compose config -q` (default, `--profile anpr --profile privacy`) | exit 0 |
+
+## Phase 4: India ANPR and privacy
+
+| Task | State | Commit | Verification |
+| --- | --- | --- | --- |
+| P4.1 ANPR adapter, LPR mode, known-plate lists | DONE_VERIFIED on SYNTHETIC plates; site accuracy BLOCKED_HUMAN | `3b4faa0`, `da3a7ab` | The TypeScript pipeline equals the Python reference (RapidOCR DB post-processing + fast-plate-ocr) on 6 SYNTHETIC plates, and mutations fail it. `anprAdapter.test.ts` 6/6, `anprRealDb.test.ts` 7/7, conformance 19/19, e2e PASS. `/anpr/detect` exists only with NODE_ENV=test and VIGILONE_ANPR_TEST_ENDPOINT=true. Weight licences are pinned; the training data needs a human decision (below). |
+| P4.2 Indian formats | DONE_VERIFIED | `3b4faa0` | `indianPlate.test.ts` 25/25: STANDARD for all state/UT codes incl. TG, BH, diplomatic, Delhi category letter, district 0 refused, series never I/O; two-line plates with per-line reading; the fixtures are licence-clean SYNTHETIC renders |
+| P4.3 Data and fine-tune | Tools DONE_VERIFIED; accuracy **BLOCKED_HUMAN** | `9854cc4` | `evalPlates` (Wilson CI, misread/no-read/false-read, CER, leakage refusal) 11/11 tests. The fine-tune flow (prepare → verified base weights → train → uint8 NHWC ONNX → eval) ran end to end on 300 SYNTHETIC plates: baseline 80.0% (68–88%), 2-epoch fine-tune 88.3% (78–94%), overlapping intervals. **This says nothing about Indian roads.** |
+| P4.4 Real redaction | DONE_VERIFIED (SIMULATED recording, real detectors); recall on site footage NOT MEASURED | `98bbc1c` | YuNet port equals OpenCV FaceDetectorYN, and mutations fail it. `redactionRealDb.test.ts` 7/7 (real ffmpeg: masks verified in decoded pixels; a job with no output file fails; masks ignored → REDACTION_MASK_NOT_APPLIED; detector down/unregistered, altered source → fail closed; the DB refuses COMPLETED without a hash). e2e with real models PASS. |
+| P4.5 AI provenance, derivatives, `vigilone-verify` | DONE_VERIFIED | `8c0a483` | `evidencePackageVerifyRealDb.test.ts` 3/3: a real export with ai_provenance.json and a redacted-derivative package both verify with the standalone CLI (separate process). Tampering is rejected: media byte, AI record, re-signed manifest, custody metadata, extra file, wrong parent. |
+| P4.6 DPDP controls | DONE_VERIFIED | `8ce7964` | `dpdpRealDb.test.ts` 7/7: purpose required and audited (who/why/filters/count); viewers refused; a disallowed purpose is refused; face switch off by default, needs acknowledgement, and gates face redaction and camera face analytics; the purge deletes expired reads and snapshot files and keeps held ones and files outside the roots. `migrationPhase4Dpdp.test.ts`. |
+
+**Acceptance (plan).**
+
+* "A redaction job produces a real file whose hash verifies": **met** (e2e, `sha256sum`).
+* "The verifier CLI validates a package including AI provenance": **met**.
+* "ANPR measured on human-supplied site data": **not met**, because it needs site data
+  (HUMAN-REQUIRED). The harness is ready; see `docs/ai/ANPR_EVALUATION.md`.
+
+### Defects found and fixed in Phase 4
+
+1. **Custody chain verification failed for most real events.** Payload hashes used
+   `JSON.stringify(metadata)` in insertion order, and PostgreSQL JSONB reorders keys, so
+   `verifyChain` reported "tamper detected" on genuine events. Hashes are now canonical, and a
+   legacy fallback verifies old rows whose order happened to survive. Shown with a real-DB
+   reproduction before the fix. `8c0a483`
+2. **Exports could invent a segment hash.** A segment without a recorded hash got a synthetic
+   "UNFINALIZED" leaf, and segments missing from disk were still listed in the manifest. Exports
+   now hash the bytes and refuse missing or altered segments. `8c0a483`
+3. **Hard-coded tool and runtime strings.** Export manifests recorded a fixed `ffmpeg-v6.1`, and
+   ANPR provenance recorded `onnxruntime@1.30.0` regardless of what ran. Both now record the real
+   version. `8c0a483`, `98bbc1c`
+4. **Fake redaction success.** `executeRedactionJob` never ran ffmpeg: it hashed whatever file
+   was at the output path. `modelVersion` defaulted to "1.0.0". `98bbc1c`
+5. **Redaction route gaps.** Jobs could reference another tenant's manifest, and `/jobs/:id/execute`
+   had no tenant check. `98bbc1c`
+6. **Viewers could read plate data**, and plate lists and plate search were not audited. `8ce7964`
+7. **ANPR console showed invented numbers.** It displayed 15 FPS and 24 ms latency when no data
+   existed; it now shows recorded facts only. `da3a7ab`
+8. **E2E cleanup.** The scripts killed the subshell and left `node` running, which is how a stale
+   backend answered a later run. They now `exec` node. `98bbc1c`
+9. **Found by new tests or tools before commit:**
+   * a NULL-unsafe CHECK constraint that let COMPLETED jobs without output through;
+   * a backpressure race in the redaction adapter (caught by the conformance burst);
+   * a wrong descriptor path in my own client, which my stub test mirrored and only the real-model
+     e2e exposed.
+
+### Not verified (and why)
+
+- **No Indian site footage.** No plate or redaction accuracy number exists for real conditions:
+  night IR, rain, motion blur, dirty or non-standard plates, profile faces.
+- **Docker images** were not built (apt 403). The CI jobs added for Phase 4 have not run in GitHub
+  Actions yet: redaction e2e, YuNet fetch, verifier syntax.
+- **UI changes** (ANPR console purpose selector, LPR toggles) were verified by type-check and
+  build only, not in a browser. There is no UI yet for redaction jobs or DPDP settings (BACKLOG).
+- **Candidate models ran only under TEST-ONLY approval files.** Production runs refuse them until
+  a person approves.
+- **Unexplained test failures, output not captured:**
+  * one backend parallel run had 1 failure in `anprRealDb` (session 2, not reproduced in 6 runs);
+  * the ai-worker suite twice had 2 failures on the first run after heavy work (not reproduced in
+    11 runs).
+  Recorded in BACKLOG; not dismissed as flakes.
+
+### Licence questions (Phase 4, added to the list below)
+
+4. **YuNet** (MIT) was trained on WIDER FACE, whose terms forbid commercial use of derived data.
+   The plan names YuNet for redaction. This needs a legal decision before approval.
+5. **fast-plate-ocr global model** (MIT): the training data is unpublished and India is not a
+   listed region.
+6. **PP-OCRv4 detection** (Apache-2.0): its training datasets are not fully published.
+7. Test and training tools only, never shipped:
+   * Pillow (HPND) and the DejaVu fonts (Bitstream Vera) are used for SYNTHETIC fixtures;
+   * matplotlib (Matplotlib licence) and tqdm (MPL-2.0 AND MIT) are pulled in by the fine-tune
+     stack.
+   None of these is on the allowlist.
+8. The NASA astronaut portrait (public domain, via scikit-image) is the only real face in the
+   fixtures. Confirm that is acceptable as a test asset.
+
+### What I need from the human (Phase 4)
+
+1. **Licence decisions** (4–8 above). For each model you approve, add an entry with its exact
+   SHA-256 to `scripts/models/model-license-exceptions.json`. The files are pinned in
+   `models.lock.json`.
+2. **ANPR data** (P4.3): labelled frames from each LPR camera, following the layout in
+   `docs/ai/ANPR_EVALUATION.md`. Include day, night-IR and two-line plates, and hold out whole
+   days for the test split.
+3. **Redaction review:** a few real clips from a site, to judge face and plate recall before
+   releasing any derivative.
+4. **DPDP:** decide the allowed purposes and retention periods per deployment, and whether face
+   processing (even for redaction) has a lawful basis at each site.
+
+---
+
 ## Session 2 (2026-09-27): Phase 2 and Phase 3
 
 Branch `claude/gracious-galileo-vtpuvp`, stacked on `claude/admiring-wozniak-k4dzqm` (session 1,
