@@ -1,0 +1,28 @@
+{
+  "info": {
+    "description": "VigilOne eval-harness smoke sample (P2.8). Coarse hand annotations made by the maintainers for testing the harness only; NOT an accuracy benchmark. Images: scikit-image data (astronaut: NASA, public domain; camera, coffee, chelsea: CC0).",
+    "annotationLicense": "CC0-1.0",
+    "imageDir": "services/ai-worker/src/__tests__/fixtures/golden/source"
+  },
+  "images": [
+    { "id": 1, "file_name": "astronaut.png", "width": 512, "height": 512 },
+    { "id": 2, "file_name": "camera.png", "width": 512, "height": 512 },
+    { "id": 3, "file_name": "coffee.png", "width": 600, "height": 400 },
+    { "id": 4, "file_name": "chelsea.png", "width": 451, "height": 300 }
+  ],
+  "categories": [
+    { "id": 1, "name": "person" },
+    { "id": 17, "name": "cat" },
+    { "id": 47, "name": "cup" },
+    { "id": 50, "name": "spoon" },
+    { "id": 67, "name": "dining table" }
+  ],
+  "annotations": [
+    { "id": 1, "image_id": 1, "category_id": 1, "bbox": [18, 14, 344, 498], "area": 171312, "iscrowd": 0 },
+    { "id": 2, "image_id": 2, "category_id": 1, "bbox": [0, 65, 332, 447], "area": 148404, "iscrowd": 0 },
+    { "id": 3, "image_id": 3, "category_id": 47, "bbox": [172, 18, 238, 290], "area": 69020, "iscrowd": 0 },
+    { "id": 4, "image_id": 3, "category_id": 50, "bbox": [325, 66, 100, 260], "area": 26000, "iscrowd": 0 },
+    { "id": 5, "image_id": 3, "category_id": 67, "bbox": [0, 0, 600, 400], "area": 240000, "iscrowd": 0 },
+    { "id": 6, "image_id": 4, "category_id": 17, "bbox": [0, 0, 400, 300], "area": 120000, "iscrowd": 0 }
+  ]
+}

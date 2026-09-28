@@ -1,4 +1,5 @@
-import { handleIngestDetection, requireInternalSecret } from '../routes/internal.routes';
+import { requireInternalSecret } from '../routes/internal.routes';
+import { DetectionIngestionService } from '../services/ai/detectionIngestion.service';
 import prisma from '../config/database';
 import config from '../config/env';
 
@@ -80,206 +81,28 @@ describe('Detection Ingestion Integration & Database-Native Idempotency', () => 
     });
   });
 
-  describe('2. Detection Ingestion Validation & Error Gating', () => {
-    it('rejects with 400 when required fields are missing', async () => {
-      const req: any = {
-        body: { tenantId: 'tenant-1' }, // missing cameraId, modelManifestId, etc.
-      };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-      expect(res.statusCode).toBe(400);
-      expect(res.body.error).toMatch(/Missing or invalid cameraId/);
-    });
-
-    it('returns 404 if camera does not exist or tenantId mismatches', async () => {
-      (prisma.camera.findFirst as jest.Mock).mockResolvedValue(null);
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-nonexistent',
-          modelManifestId: 'manifest-01',
-          inferenceId: 'inf-001',
-          type: 'PERSON_DETECTED',
-          confidence: 0.88,
-        },
-      };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-      expect(res.statusCode).toBe(404);
-      expect(res.body.error).toMatch(/Camera 'cam-nonexistent' not found/);
-    });
-
-    it('returns 400 if model manifest is inactive', async () => {
-      (prisma.camera.findFirst as jest.Mock).mockResolvedValue({
-        id: 'cam-01',
-        tenantId: 'tenant-1',
-      });
-      (prisma.modelManifest.findUnique as jest.Mock).mockResolvedValue({
-        id: 'manifest-inactive',
-        isActive: false,
-      });
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-01',
-          modelManifestId: 'manifest-inactive',
-          inferenceId: 'inf-002',
-          type: 'PERSON_DETECTED',
-          confidence: 0.88,
-        },
-      };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-      expect(res.statusCode).toBe(400);
-      expect(res.body.error).toMatch(/is inactive/);
-    });
-  });
-
-  describe('3. Successful Ingestion & Database-Native Idempotency', () => {
-    const mockCamera = { id: 'cam-01', tenantId: 'tenant-1' };
-    const mockManifest = { id: 'manifest-01', name: 'vigilone-person-vehicle-detector', isActive: true };
-
-    beforeEach(() => {
-      (prisma.camera.findFirst as jest.Mock).mockResolvedValue(mockCamera);
-      (prisma.modelManifest.findUnique as jest.Mock).mockResolvedValue(mockManifest);
-    });
-
-    it('ingests person and vehicle detection events with geometric bounding box', async () => {
-      (prisma.detectionEvent.upsert as jest.Mock).mockResolvedValue({
-        id: 'det-evt-001',
-        inferenceId: 'inf-unique-001',
-        type: 'PERSON_DETECTED',
-        confidence: 0.89,
-      });
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-01',
-          modelManifestId: 'manifest-01',
-          inferenceId: 'inf-unique-001',
-          type: 'PERSON_DETECTED',
-          confidence: 0.89,
-          boundingBox: { x: 0.15, y: 0.2, width: 0.25, height: 0.55 },
-          centroid: { x: 0.275, y: 0.475 },
-          timestamp: new Date().toISOString(),
-        },
-      };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.detectionId).toBe('det-evt-001');
-      expect(res.body.inferenceId).toBe('inf-unique-001');
-
-      expect(prisma.detectionEvent.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { inferenceId: 'inf-unique-001' },
-          update: {}, // Invariant: idempotent retry leaves record unmodified
-          create: expect.objectContaining({
-            tenantId: 'tenant-1',
-            cameraId: 'cam-01',
-            modelManifestId: 'manifest-01',
-            inferenceId: 'inf-unique-001',
-            type: 'PERSON_DETECTED',
-            confidence: 0.89,
-          }),
-        })
-      );
-    });
-
-    it('handles idempotent retries cleanly without mutating history or failing', async () => {
-      const existingRecord = {
-        id: 'det-evt-001',
-        inferenceId: 'inf-duplicate-001',
-        type: 'PERSON_DETECTED',
-        confidence: 0.89,
-      };
-
-      (prisma.detectionEvent.upsert as jest.Mock).mockResolvedValue(existingRecord);
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-01',
-          modelManifestId: 'manifest-01',
-          inferenceId: 'inf-duplicate-001',
-          type: 'PERSON_DETECTED',
-          confidence: 0.89,
-        },
-      };
-      const res = createMockRes();
-
-      // Submit duplicate detection with same inferenceId
-      await handleIngestDetection(req, res);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.detectionId).toBe('det-evt-001');
-      expect(res.body.inferenceId).toBe('inf-duplicate-001');
-    });
-
-    it('recovers gracefully from P2002 race condition on unique constraint', async () => {
-      const p2002Error: any = new Error('Unique constraint failed on the constraint: `DetectionEvent_inferenceId_key`');
-      p2002Error.code = 'P2002';
-
-      (prisma.detectionEvent.upsert as jest.Mock).mockRejectedValue(p2002Error);
-      (prisma.detectionEvent.findUnique as jest.Mock).mockResolvedValue({
-        id: 'det-evt-race-winner',
-        inferenceId: 'inf-race-001',
-      });
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-01',
-          modelManifestId: 'manifest-01',
-          inferenceId: 'inf-race-001',
-          type: 'VEHICLE_DETECTED',
-          confidence: 0.92,
-        },
-      };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.detectionId).toBe('det-evt-race-winner');
-      expect(res.body.inferenceId).toBe('inf-race-001');
-    });
-
+  // Ingestion validation, idempotency and provenance run against the real database in
+  // aiPipelineRealDb.test.ts. The one case a real database cannot produce on demand stays here.
+  describe('2. Unresolvable unique-constraint conflict', () => {
     it('does NOT report success when a P2002 conflict has no row for this inferenceId', async () => {
-      const p2002Error: any = new Error('Unique constraint failed on some other constraint');
-      p2002Error.code = 'P2002';
-
-      (prisma.detectionEvent.upsert as jest.Mock).mockRejectedValue(p2002Error);
-      (prisma.detectionEvent.findUnique as jest.Mock).mockResolvedValue(null);
-
-      const req: any = {
-        body: {
-          tenantId: 'tenant-1',
-          cameraId: 'cam-01',
-          modelManifestId: 'manifest-01',
-          inferenceId: 'inf-orphan-001',
-          type: 'VEHICLE_DETECTED',
-          confidence: 0.92,
-        },
+      const p2002: any = new Error('Unique constraint failed on some other constraint');
+      p2002.code = 'P2002';
+      const fakePrisma: any = {
+        camera: { findFirst: jest.fn().mockResolvedValue({ id: 'cam-01', tenantId: 'tenant-1' }) },
+        modelManifest: { findUnique: jest.fn().mockResolvedValue({ id: 'm-1', isActive: true, sha256: 'a'.repeat(64) }) },
+        detectionEvent: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockRejectedValue(p2002) },
       };
-      const res = createMockRes();
-
-      await handleIngestDetection(req, res);
-
-      expect(res.statusCode).toBe(409);
-      expect(res.body.success).toBeUndefined();
-      expect(res.body.code).toBe('DETECTION_CONFLICT_UNRESOLVED');
+      const svc = new DetectionIngestionService(fakePrisma, () => ({} as any), { ingestEvent: jest.fn() } as any);
+      await expect(
+        svc.ingest({
+          tenantId: 'tenant-1', cameraId: 'cam-01', modelManifestId: 'm-1', inferenceId: 'inf-orphan-001',
+          type: 'VEHICLE_DETECTED', confidence: 0.92,
+          provenance: {
+            adapterId: 'a', adapterVersion: '1', modelId: 'm-1', modelName: 'n', modelVersion: '1', modelSha256: 'a'.repeat(64),
+            runtime: 'onnxruntime', inferenceId: 'i', frameTimestampUtc: '2026-09-27T10:00:00.000Z',
+          },
+        })
+      ).rejects.toMatchObject({ statusCode: 409, code: 'DETECTION_CONFLICT_UNRESOLVED' });
     });
   });
 });

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { CrashRecoveryService } from '../services/reconciliation/crashRecovery.service';
+import { CrashRecoveryService, isWithinActiveWriteGrace } from '../services/reconciliation/crashRecovery.service';
 
 // Assigning undefined to process.env stores the string "undefined", which leaks into later test files.
 const restoreGrace = (saved: string | undefined) => {
@@ -99,5 +99,18 @@ describe('RecordingCatalog orphan admission control leaves actively written file
     expect(fs.existsSync(fresh)).toBe(true);
     expect(fs.existsSync(stale)).toBe(false);
     expect(fs.existsSync(path.join(root, 'unregistered_cam', '.quarantine', path.basename(stale)))).toBe(true);
+  });
+});
+
+describe('isWithinActiveWriteGrace', () => {
+  it('grace 0 turns the check off, even for a file written in the same millisecond as the scan', () => {
+    // mtime has sub-millisecond precision and can be a fraction ahead of Date.now() (CI run 36396607639)
+    expect(isWithinActiveWriteGrace(1000.14, 0, 1000)).toBe(false);
+    expect(isWithinActiveWriteGrace(1000, 0, 1000)).toBe(false);
+  });
+  it('with a grace period, recent and slightly-future files count as active, older ones do not', () => {
+    expect(isWithinActiveWriteGrace(1000.14, 120000, 1000)).toBe(true);
+    expect(isWithinActiveWriteGrace(1000, 120000, 1000 + 119999)).toBe(true);
+    expect(isWithinActiveWriteGrace(1000, 120000, 1000 + 120000)).toBe(false);
   });
 });

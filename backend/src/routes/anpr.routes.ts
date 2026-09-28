@@ -7,10 +7,30 @@ import { authorize, assertTenantBoundary, Permission } from '../services/rbac/pe
 import { AuditChainService } from '../services/audit/auditChain.service';
 import PlateTrackAggregatorService from '../services/anpr/plateTrackAggregator.service';
 import EdgeAiRuntimeService from '../services/ai/edgeAiRuntime.service';
+import { incidentOrchestrator } from '../services/incident/orchestrator/incidentOrchestrator.service';
+import { compilePattern, MatchType, WatchlistPatternError } from '../services/anpr/watchlistMatcher';
+import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v1';
+import { z } from 'zod';
+import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 
 const router = Router();
 const aggregator = new PlateTrackAggregatorService(prisma);
 const aiRuntime = new EdgeAiRuntimeService(prisma);
+
+// Plate reads become ANPR_MATCH events in the orchestrator (rules: ANPR_WATCHLIST); list entries
+// with alertOnMatch raise an audited alarm linked to that event.
+aggregator.setEventSink((ev) => incidentOrchestrator.ingestEvent(ev));
+aggregator.setAlarmSink((ev, wl) =>
+  incidentOrchestrator.elevateAlarm({
+    tenantId: ev.tenantId,
+    cameraId: ev.cameraId,
+    canonicalEventId: ev.id,
+    title: `Known plate ${ev.payload.plateText} (${wl.category})`,
+    description: wl.notes || undefined,
+    severity: wl.severity,
+    metadataJson: { plateText: ev.payload.plateText, watchlistId: wl.id, watchlistCategory: wl.category, provenance: ev.provenance ?? null },
+  })
+);
 
 // Background services managed by server lifecycle (server.ts)
 
@@ -21,7 +41,7 @@ router.use(requireFeature('ANPR'));
 /**
  * List paginated vehicle observation sessions with privacy, rate-limiting & tenant isolation
  */
-router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request, res: Response) => {
+router.get('/observations', authorize(Permission.ANPR_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const page = Math.max(1, Number(req.query.page || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
@@ -57,6 +77,12 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request
       prisma.vehicleObservation.count({ where }),
     ]);
 
+    // DPDP (P4.6): every plate query is attributable: who, why, what filters, how many rows.
+    await recordSensitiveQuery(prisma, req, 'ANPR_OBSERVATIONS_QUERY', {
+      filters: { cameraId: cameraId ?? null, stateCode: stateCode ?? null, category: category ?? null, watchlistCategory: watchlistCategory ?? null, plateQuery: plateQuery ?? null, page, limit },
+      resultCount: observations.length,
+    });
+
     return res.json({
       observations,
       pagination: {
@@ -74,7 +100,7 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request
 /**
  * List vehicle watchlists
  */
-router.get('/watchlist', authorize(Permission.ANPR_VIEW), async (req: Request, res: Response) => {
+router.get('/watchlist', authorize(Permission.ANPR_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const { category, active } = req.query;
 
@@ -87,6 +113,7 @@ router.get('/watchlist', authorize(Permission.ANPR_VIEW), async (req: Request, r
       },
       orderBy: { createdAt: 'desc' },
     });
+    await recordSensitiveQuery(prisma, req, 'ANPR_WATCHLIST_QUERY', { filters: { category: category ?? null, active: active ?? null }, resultCount: watchlist.length });
 
     return res.json({ watchlist });
   } catch (err: any) {
@@ -101,6 +128,7 @@ router.post('/watchlist', authorize(Permission.ANPR_MANAGE), async (req: Request
   const tenantId = req.user!.tenantId;
   const {
     plateNumber,
+    matchType = 'EXACT',
     category = WatchlistCategory.BLACKLIST,
     ownerName,
     notes,
@@ -111,8 +139,24 @@ router.post('/watchlist', authorize(Permission.ANPR_MANAGE), async (req: Request
   if (!plateNumber) {
     return res.status(400).json({ error: 'Plate number is required' });
   }
-
-  const { normalizedPlate } = PlateTrackAggregatorService.normalizeIndianPlate(plateNumber);
+  if (!['EXACT', 'WILDCARD', 'REGEX'].includes(matchType)) {
+    return res.status(400).json({ error: 'matchType must be EXACT, WILDCARD or REGEX' });
+  }
+  let normalizedPlate: string;
+  try {
+    if (matchType === 'EXACT') {
+      const n = normalizeIndianPlate(plateNumber);
+      // A list entry is typed by a person: store what they typed (cleaned) unless it is a valid
+      // plate, in which case store the canonical form reads are compared against.
+      normalizedPlate = n.valid ? n.normalized : cleanPlateText(plateNumber);
+    } else {
+      normalizedPlate = String(plateNumber).toUpperCase().replace(/\s+/g, '');
+      compilePattern(matchType as MatchType, normalizedPlate);
+    }
+  } catch (e: any) {
+    if (e instanceof WatchlistPatternError) return res.status(400).json({ error: e.message });
+    throw e;
+  }
 
   try {
     const entry = await prisma.vehicleWatchlist.upsert({
@@ -124,8 +168,9 @@ router.post('/watchlist', authorize(Permission.ANPR_MANAGE), async (req: Request
       },
       create: {
         tenantId,
-        plateNumber: plateNumber.trim().toUpperCase(),
+        plateNumber: String(plateNumber).trim().toUpperCase(),
         normalizedPlate,
+        matchType,
         category,
         ownerName,
         notes,
@@ -150,7 +195,7 @@ router.post('/watchlist', authorize(Permission.ANPR_MANAGE), async (req: Request
       resourceType: 'VehicleWatchlist',
       resourceId: entry.id,
       ipAddress: req.ip || '127.0.0.1',
-      metadata: { plateNumber, normalizedPlate, category },
+      metadata: { plateNumber, normalizedPlate, matchType, category },
     });
 
     return res.json({ success: true, entry });
@@ -192,9 +237,38 @@ router.delete('/watchlist/:id', authorize(Permission.ANPR_MANAGE), async (req: R
 });
 
 /**
- * Direct detection ingestion / testing endpoint for camera feeds
+ * LPR camera mode (P4.1): which cameras ANPR runs on, at what rate, inside which region.
  */
-router.post('/detect', authorize(Permission.ANPR_MANAGE), async (req: Request, res: Response) => {
+const LprConfig = z
+  .object({
+    lprMode: z.boolean(),
+    fps: z.number().min(0.5).max(5).default(2),
+    roi: z.array(z.number().min(0).max(1)).length(4).refine((r) => r[2] > r[0] && r[3] > r[1], 'roi is [x1, y1, x2, y2] normalised, x2 > x1, y2 > y1').optional(),
+    maxWidth: z.number().int().min(320).max(3840).default(1280),
+    minConfidence: z.number().min(0).max(1).default(0.5),
+  })
+  .strict();
+
+router.put('/cameras/:id/lpr', authorize(Permission.ANPR_MANAGE), async (req: Request, res: Response) => {
+  const p = LprConfig.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.')}: ${p.error.issues[0].message}` });
+  const camera = await prisma.camera.findUnique({ where: { id: req.params.id } });
+  if (!camera || camera.tenantId !== req.user!.tenantId) return res.status(404).json({ error: 'Camera not found' });
+  const { lprMode, ...cfg } = p.data;
+  const updated = await prisma.camera.update({ where: { id: camera.id }, data: { lprMode, lprConfigJson: cfg as any }, select: { id: true, name: true, lprMode: true, lprConfigJson: true } });
+  await AuditChainService.record(prisma, {
+    tenantId: camera.tenantId, userId: req.user!.id, action: lprMode ? 'ANPR_LPR_MODE_ENABLE' : 'ANPR_LPR_MODE_DISABLE', resourceType: 'Camera',
+    resourceId: camera.id, ipAddress: req.ip || '127.0.0.1', metadata: { ...cfg, previous: { lprMode: camera.lprMode, config: camera.lprConfigJson } },
+  });
+  return res.json({ camera: updated });
+});
+
+/**
+ * Synthetic plate-text ingestion. Test builds only (NODE_ENV=test and
+ * VIGILONE_ANPR_TEST_ENDPOINT=true): production plate reads come only from the ANPR adapter
+ * with provenance (POST /internal/anpr/observations).
+ */
+if (process.env.NODE_ENV === 'test' && process.env.VIGILONE_ANPR_TEST_ENDPOINT === 'true') router.post('/detect', authorize(Permission.ANPR_MANAGE), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const { cameraId, plateText, confidence = 0.85, vehicleCategory, trackId, snapshotPath } = req.body;
 
@@ -224,12 +298,33 @@ router.post('/detect', authorize(Permission.ANPR_MANAGE), async (req: Request, r
 });
 
 /**
- * Get real-time Edge AI inference telemetry
+ * ANPR status from recorded facts only: the registered plate_recognition pipeline, the cameras in
+ * LPR mode and the reads stored in the last hour. No FPS or latency is reported here; those come
+ * from the anpr-worker's own /metrics (vigilone_anpr_*).
  */
 router.get('/health', authorize(Permission.ANPR_VIEW), async (req: Request, res: Response) => {
+  const tenantId = req.user!.tenantId;
   try {
-    const telemetry = aiRuntime.getTelemetry(req.user!.tenantId);
-    return res.json({ telemetry });
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const [pipelines, lprCameras, readsLastHour, lastRead] = await Promise.all([
+      prisma.modelManifest.findMany({
+        where: { task: 'plate_recognition', isActive: true },
+        select: { name: true, version: true, sha256: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.camera.findMany({ where: { tenantId, lprMode: true }, select: { id: true, name: true, isOnline: true, lprConfigJson: true } }),
+      prisma.vehicleObservation.count({ where: { tenantId, lastSeenAt: { gte: since } } }),
+      prisma.vehicleObservation.findFirst({ where: { tenantId }, orderBy: { lastSeenAt: 'desc' }, select: { lastSeenAt: true } }),
+    ]);
+    return res.json({
+      status: {
+        pipelines,
+        lprCameras,
+        readsLastHour,
+        lastReadAt: lastRead?.lastSeenAt ?? null,
+        checkedAt: new Date(),
+      },
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

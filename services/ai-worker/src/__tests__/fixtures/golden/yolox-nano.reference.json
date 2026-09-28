@@ -1,0 +1,69 @@
+{
+  "generator": "tools/reference/yolox_reference.py",
+  "reference": "official YOLOX demo_postprocess + multiclass_nms_class_aware (Apache-2.0)",
+  "modelKey": "yolox-nano",
+  "modelSha256": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d",
+  "onnxruntimePython": "1.30.0",
+  "scoreThreshold": 0.3,
+  "nmsThreshold": 0.45,
+  "detections": {
+    "astronaut_416.png": [
+      {
+        "classId": 0,
+        "confidence": 0.92509,
+        "box": {
+          "x": 0.02172,
+          "y": 0.03895,
+          "width": 0.69788,
+          "height": 0.95179
+        }
+      }
+    ],
+    "camera_416.png": [
+      {
+        "classId": 0,
+        "confidence": 0.93171,
+        "box": {
+          "x": 0.00877,
+          "y": 0.12514,
+          "width": 0.58139,
+          "height": 0.85566
+        }
+      }
+    ],
+    "chelsea_416.png": [
+      {
+        "classId": 15,
+        "confidence": 0.63517,
+        "box": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.9986,
+          "height": 1.0
+        }
+      }
+    ],
+    "coffee_416.png": [
+      {
+        "classId": 41,
+        "confidence": 0.89945,
+        "box": {
+          "x": 0.27013,
+          "y": 0.03868,
+          "width": 0.43329,
+          "height": 0.69425
+        }
+      },
+      {
+        "classId": 60,
+        "confidence": 0.73052,
+        "box": {
+          "x": 0.00018,
+          "y": 0.00076,
+          "width": 0.99673,
+          "height": 0.99553
+        }
+      }
+    ]
+  }
+}

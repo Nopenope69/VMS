@@ -1,0 +1,10 @@
+{
+  "name": "vigilone-verify",
+  "version": "1.0.0",
+  "description": "Offline verifier for VigilOne evidence packages (signature, artifacts, Merkle root, custody chain, AI provenance, derivations). No dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "vigilone-verify": "vigilone-verify.mjs" },
+  "engines": { "node": ">=18" },
+  "dependencies": {}
+}

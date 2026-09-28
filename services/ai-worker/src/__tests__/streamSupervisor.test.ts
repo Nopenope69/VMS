@@ -172,7 +172,8 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
         errorCaptured = err;
       });
 
-      // Emit a frame from manager
+      // What StreamManager does for a decoded frame: enqueue it, then emit 'frame'
+      manager.getQueue().enqueue(testFrame);
       manager.emit('frame', testFrame);
 
       // Wait a tick for async dispatch
@@ -187,5 +188,33 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
 
       await supervisor.stopAll();
     });
+  });
+});
+
+describe('StreamSupervisor: each sampled frame is inferred at most once', () => {
+  function frame(cameraId: string, seq: number): VideoFrame {
+    return {
+      cameraId, tenantId: 't', streamPath: 'p', streamSessionId: 's', sequenceNumber: seq,
+      sampledAt: new Date(), receivedAt: new Date(), width: 8, height: 8, channels: 3,
+      data: Buffer.alloc(8 * 8 * 3, seq * 10),
+      geometry: { sourceWidth: 8, sourceHeight: 8, modelWidth: 8, modelHeight: 8, scale: 1, padX: 0, padY: 0 },
+    };
+  }
+
+  it('processes every frame exactly once when inference keeps up (no re-processing of the queued copy)', async () => {
+    const seen: number[] = [];
+    const worker = { processFrame: jest.fn(async (f: VideoFrame) => { seen.push(f.sequenceNumber); return []; }) };
+    const api = { fetchActiveCameras: jest.fn().mockResolvedValue([]) };
+    const supervisor = new StreamSupervisor({ apiClient: api as any, aiWorker: worker as any, gateMode: 'off' } as any);
+    const manager = supervisor.startCameraStream({ id: 'cam-x', tenantId: 't', name: 'x', streamPath: 'x', isOnline: true }, { sourceWidth: 8, sourceHeight: 8 });
+    // Simulate what StreamManager does for each decoded frame: enqueue, then emit.
+    for (let i = 1; i <= 3; i++) {
+      manager.getQueue().enqueue(frame('cam-x', i));
+      manager.emit('frame', frame('cam-x', i));
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await new Promise((r) => setTimeout(r, 50));
+    await supervisor.stopAll();
+    expect(seen).toEqual([1, 2, 3]);
   });
 });

@@ -89,3 +89,30 @@ describe('Safe Loopback RTSP URL Construction & Sanitization', () => {
     });
   });
 });
+
+describe('loopback read credentials (MediaMTX authMethod: http)', () => {
+  const { buildLoopbackRtspUrl, redactRtspUrl, validateLoopbackHost } = require('../rtspUrlBuilder');
+
+  it('embeds URL-encoded credentials and still targets only 127.0.0.1', () => {
+    const url = buildLoopbackRtspUrl('cam_1', 8554, { user: 'internal', password: 'p@ss/w:rd' });
+    expect(url).toBe('rtsp://internal:p%40ss%2Fw%3Ard@127.0.0.1:8554/cam_1');
+    expect(validateLoopbackHost(url)).toBe(true);
+  });
+
+  it('reads credentials from MEDIAMTX_READ_PASSWORD when not given explicitly', () => {
+    const prev = process.env.MEDIAMTX_READ_PASSWORD;
+    process.env.MEDIAMTX_READ_PASSWORD = 'secret123';
+    try {
+      expect(buildLoopbackRtspUrl('cam_2', 8554)).toBe('rtsp://internal:secret123@127.0.0.1:8554/cam_2');
+    } finally {
+      if (prev === undefined) delete process.env.MEDIAMTX_READ_PASSWORD;
+      else process.env.MEDIAMTX_READ_PASSWORD = prev;
+    }
+  });
+
+  it('never leaks the password into logs or errors', () => {
+    expect(redactRtspUrl('failed: rtsp://internal:secret123@127.0.0.1:8554/cam_2: 401')).toBe(
+      'failed: rtsp://internal:***@127.0.0.1:8554/cam_2: 401'
+    );
+  });
+});

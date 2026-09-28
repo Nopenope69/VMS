@@ -45,26 +45,41 @@ describe('OnnxInferenceEngine', () => {
   });
 
   describe('2. Native Mode Fail-Fast', () => {
+    const runtimeConfig = {
+      runtime: 'onnxruntime',
+      inputWidth: 640,
+      inputHeight: 640,
+      colorSpace: 'RGB',
+      modelFormat: 'ONNX',
+    };
+
     it('fails fast with fatal error when native bindings cannot be loaded', async () => {
       delete process.env.NODE_ENV;
       delete process.env.AI_ENV;
       process.env.AI_INFERENCE_MODE = 'native';
 
+      await jest.isolateModulesAsync(async () => {
+        jest.doMock('onnxruntime-node', () => {
+          throw new Error('Cannot find module onnxruntime-node (simulated missing native binding)');
+        });
+        const { OnnxInferenceEngine: Engine } = require('../inferenceEngine');
+        const engine = new Engine();
+        expect(engine.getMode()).toBe('native');
+        await expect(engine.load(Buffer.from('fake-onnx-bytes'), runtimeConfig)).rejects.toThrow(
+          /FATAL EXECUTION ERROR: Failed to load native onnxruntime-node execution engine/
+        );
+        expect(engine.isLoaded()).toBe(false);
+      });
+      jest.dontMock('onnxruntime-node');
+    });
+
+    it('refuses corrupt model bytes with the real runtime instead of loading anything', async () => {
+      delete process.env.NODE_ENV;
+      delete process.env.AI_ENV;
+      process.env.AI_INFERENCE_MODE = 'native';
       const engine = new OnnxInferenceEngine();
-      expect(engine.getMode()).toBe('native');
-
-      const dummyBuffer = Buffer.from('fake-onnx-bytes');
-      const runtimeConfig = {
-        runtime: 'onnxruntime',
-        inputWidth: 640,
-        inputHeight: 640,
-        colorSpace: 'RGB',
-        modelFormat: 'ONNX',
-      };
-
-      // In this test environment, onnxruntime-node is not installed
-      await expect(engine.load(dummyBuffer, runtimeConfig)).rejects.toThrow(
-        /FATAL EXECUTION ERROR: Failed to load native onnxruntime-node execution engine/
+      await expect(engine.load(Buffer.from('fake-onnx-bytes'), runtimeConfig)).rejects.toThrow(
+        /Failed to create native ONNX session/
       );
       expect(engine.isLoaded()).toBe(false);
     });

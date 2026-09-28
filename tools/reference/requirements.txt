@@ -1,0 +1,5 @@
+numpy==2.4.6
+onnxruntime==1.30.0
+opencv-python-headless==5.0.0
+supervision==0.30.5
+pycocotools

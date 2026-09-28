@@ -14,7 +14,8 @@ export type FeatureFlagName =
   | 'ANPR'
   | 'REDACTION'
   | 'SMART_SEARCH'
-  | 'FLOORPLANS';
+  | 'FLOORPLANS'
+  | 'CAMERA_EVENTS';
 
 export type FeatureFlagStates = Record<FeatureFlagName, boolean>;
 
@@ -27,6 +28,7 @@ export const ALL_FEATURES_OFF: FeatureFlagStates = Object.freeze({
   REDACTION: false,
   SMART_SEARCH: false,
   FLOORPLANS: false,
+  CAMERA_EVENTS: false,
 });
 
 export async function fetchFeatureFlags(): Promise<FeatureFlagStates> {

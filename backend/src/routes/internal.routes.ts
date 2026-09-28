@@ -4,12 +4,12 @@ import prisma from '../config/database';
 import { EventType, JobStatus } from '@prisma/client';
 import config from '../config/env';
 import { ModelManifestService } from '../services/ai/modelManifest.service';
-import {
-  spatialEngine,
-  Point2D,
-  TripwireRuleInput,
-  LoiteringRuleInput,
-} from '../services/spatial/engine';
+import { ModelRegistryService, ModelRegistryError } from '../services/ai/modelRegistry.service';
+import { DetectionIngestionService, DetectionIngestionError } from '../services/ai/detectionIngestion.service';
+import { spatialEngine } from '../services/spatial/engine';
+import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
+import { aggregator as anprAggregator } from './anpr.routes';
+import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 
 let currentSpatialEngine = spatialEngine;
 
@@ -121,269 +121,113 @@ export async function handleRegisterModelManifest(req: Request, res: Response) {
   }
 }
 
-// Governed Detection Event Ingestion Handler
+// Governed Detection Event Ingestion Handler (Phase 2: provenance required, orchestrator-fed)
 export async function handleIngestDetection(req: Request, res: Response) {
-  const {
-    tenantId,
-    cameraId,
-    modelManifestId,
-    inferenceId,
-    type,
-    confidence,
-    boundingBox,
-    centroid,
-    trackId,
-    trackState,
-    velocity,
-    attributesJson,
-    timestamp,
-    snapshotPath,
-  } = req.body;
-
-  // 1. Mandatory identity & relation validation
-  if (!tenantId || typeof tenantId !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid tenantId' });
-  }
-  if (!cameraId || typeof cameraId !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid cameraId' });
-  }
-  if (!modelManifestId || typeof modelManifestId !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid modelManifestId' });
-  }
-  if (!inferenceId || typeof inferenceId !== 'string') {
-    return res.status(400).json({ error: 'Missing or invalid unique inferenceId' });
-  }
-
-  // 2. Detection class / event type validation
-  if (!type || !Object.values(EventType).includes(type as EventType)) {
-    return res.status(400).json({ error: `Invalid detection type: '${type}'. Must be a valid EventType.` });
-  }
-
-  // 3. Confidence score validation (0.0 to 1.0)
-  if (typeof confidence !== 'number' || confidence < 0 || confidence > 1.0 || isNaN(confidence)) {
-    return res.status(400).json({ error: 'Confidence must be a float between 0.0 and 1.0' });
-  }
-
-  // 4. Bounding box validation if present
-  if (boundingBox) {
-    if (
-      typeof boundingBox.x !== 'number' ||
-      typeof boundingBox.y !== 'number' ||
-      typeof boundingBox.width !== 'number' ||
-      typeof boundingBox.height !== 'number' ||
-      boundingBox.x < 0 ||
-      boundingBox.y < 0 ||
-      boundingBox.width <= 0 ||
-      boundingBox.height <= 0
-    ) {
-      return res.status(400).json({ error: 'boundingBox coordinates must be valid normalized numbers' });
-    }
-  }
-
   try {
-    // 5. Verify camera belongs to tenant
-    const camera = await prisma.camera.findFirst({
-      where: {
-        OR: [{ id: cameraId }, { streamPath: cameraId }],
-        tenantId,
-      },
-      select: { id: true, tenantId: true },
+    const out = await getDetectionIngestion().ingest(req.body);
+    return res.status(200).json({
+      success: true,
+      detectionId: out.detectionId,
+      inferenceId: out.inferenceId,
+      ...(out.duplicate ? { duplicate: true } : {}),
+      incidentsCreated: out.incidentsCreated,
+      aiEventsEmitted: out.aiEventsEmitted,
     });
-    if (!camera) {
-      return res.status(404).json({ error: `Camera '${cameraId}' not found for tenant '${tenantId}'` });
-    }
-
-    // 6. Verify model manifest exists and is active
-    const manifest = await prisma.modelManifest.findUnique({
-      where: { id: modelManifestId },
-    });
-    if (!manifest) {
-      return res.status(404).json({ error: `ModelManifest '${modelManifestId}' not found` });
-    }
-    if (!manifest.isActive) {
-      return res.status(400).json({ error: `ModelManifest '${modelManifestId}' is inactive` });
-    }
-
-    // 7. Database-native idempotency on inferenceId
-    const eventTime = timestamp ? new Date(timestamp) : new Date();
-
-    const effectiveCentroid =
-      centroid && typeof centroid.x === 'number' && typeof centroid.y === 'number'
-        ? { x: centroid.x, y: centroid.y }
-        : boundingBox
-        ? {
-            x: +(boundingBox.x + boundingBox.width / 2).toFixed(4),
-            y: +(boundingBox.y + boundingBox.height / 2).toFixed(4),
-          }
-        : undefined;
-
-    const detection = await prisma.detectionEvent.upsert({
-      where: { inferenceId },
-      update: {}, // Idempotent: duplicate submission leaves original record unmodified
-      create: {
-        tenantId,
-        cameraId: camera.id,
-        modelManifestId: manifest.id,
-        inferenceId,
-        type: type as EventType,
-        confidence,
-        boundingBox: boundingBox ?? undefined,
-        centroid: effectiveCentroid ?? undefined,
-        trackId: trackId ?? undefined,
-        attributesJson: attributesJson ?? undefined,
-        snapshotPath: snapshotPath ?? undefined,
-        timestamp: eventTime,
-      },
-    });
-
-    // 8. Spatial Analytics Rule Evaluation (Only for CONFIRMED tracks with valid trackId & centroid)
-    if (
-      trackId &&
-      trackState === 'CONFIRMED' &&
-      effectiveCentroid &&
-      typeof effectiveCentroid.x === 'number' &&
-      typeof effectiveCentroid.y === 'number'
-    ) {
-      try {
-        const activeRules = await prisma.spatialAnalyticsRule.findMany({
-          where: {
-            cameraId: camera.id,
-            enabled: true,
-          },
-        });
-
-        const currentTimeMs = eventTime.getTime();
-
-        for (const rule of activeRules) {
-          if (rule.type === 'TRIPWIRE' && rule.lineCoordinatesJson) {
-            const lineCoordinates = rule.lineCoordinatesJson as unknown as [Point2D, Point2D];
-            const tripwireRule: TripwireRuleInput = {
-              id: rule.id,
-              name: rule.name,
-              direction: rule.direction,
-              lineCoordinates,
-              cooldownSeconds: rule.cooldownSeconds,
-            };
-
-            const result = currentSpatialEngine.evaluateTripwire(
-              tripwireRule,
-              {
-                trackId,
-                centroid: effectiveCentroid,
-                timestamp: eventTime,
-                cameraId: camera.id,
-              },
-              currentTimeMs
-            );
-
-            if (result) {
-              const cooldownSec = rule.cooldownSeconds || 10;
-              const cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSec * 1000)));
-
-              try {
-                await prisma.incident.create({
-                  data: {
-                    tenantId,
-                    cameraId: camera.id,
-                    ruleId: rule.id,
-                    trackId,
-                    cooldownBucket,
-                    ruleType: 'TRIPWIRE',
-                    title: `Tripwire Breach: ${rule.name}`,
-                    description: `Track ${trackId} crossed tripwire ${rule.name} (${result.directionCrossed})`,
-                    metadataJson: {
-                      directionCrossed: result.directionCrossed,
-                      ruleName: rule.name,
-                      centroid: effectiveCentroid,
-                      inferenceId,
-                    },
-                    timestamp: eventTime,
-                  },
-                });
-              } catch (dbErr: any) {
-                // Database-level uniqueness on (cameraId, ruleId, trackId, cooldownBucket)
-                if (dbErr.code !== 'P2002') {
-                  console.error('Error creating tripwire incident:', dbErr);
-                }
-              }
-            }
-          } else if (rule.type === 'LOITERING' && rule.polygonCoordinatesJson) {
-            const polygon = rule.polygonCoordinatesJson as unknown as Point2D[];
-            const loiteringRule: LoiteringRuleInput = {
-              id: rule.id,
-              name: rule.name,
-              polygon,
-              dwellThresholdSeconds: rule.dwellThresholdSeconds ?? 30,
-              cooldownSeconds: rule.cooldownSeconds,
-            };
-
-            const result = currentSpatialEngine.evaluateLoitering(
-              loiteringRule,
-              {
-                trackId,
-                centroid: effectiveCentroid,
-                timestamp: eventTime,
-                cameraId: camera.id,
-              },
-              currentTimeMs
-            );
-
-            if (result) {
-              const cooldownSec = rule.cooldownSeconds || 30;
-              const cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSec * 1000)));
-
-              try {
-                await prisma.incident.create({
-                  data: {
-                    tenantId,
-                    cameraId: camera.id,
-                    ruleId: rule.id,
-                    trackId,
-                    cooldownBucket,
-                    ruleType: 'LOITERING',
-                    title: `Loitering Detected: ${rule.name}`,
-                    description: `Track ${trackId} loitered in ${rule.name} for ${result.dwellDurationSeconds}s`,
-                    metadataJson: {
-                      dwellDurationSeconds: result.dwellDurationSeconds,
-                      ruleName: rule.name,
-                      centroid: effectiveCentroid,
-                      inferenceId,
-                    },
-                    timestamp: eventTime,
-                  },
-                });
-              } catch (dbErr: any) {
-                // Database-level uniqueness on (cameraId, ruleId, trackId, cooldownBucket)
-                if (dbErr.code !== 'P2002') {
-                  console.error('Error creating loitering incident:', dbErr);
-                }
-              }
-            }
-          }
-        }
-      } catch (spatialErr: any) {
-        console.error('Error evaluating spatial rules:', spatialErr);
-      }
-    }
-
-    return res.status(200).json({ success: true, detectionId: detection.id, inferenceId });
   } catch (err: any) {
-    // Handle concurrent retry race condition on unique constraint
-    if (err.code === 'P2002') {
-      const existing = await prisma.detectionEvent.findUnique({ where: { inferenceId } });
-      if (!existing) {
-        // The unique violation was not on inferenceId: nothing was stored, so do not report success.
-        console.error('Detection ingest unique-constraint conflict without a matching inferenceId row:', err.meta);
-        return res.status(409).json({
-          error: 'Detection conflicts with an existing record but no row matches this inferenceId',
-          code: 'DETECTION_CONFLICT_UNRESOLVED',
-          inferenceId,
-        });
-      }
-      return res.status(200).json({ success: true, detectionId: existing.id, inferenceId, duplicate: true });
+    if (err instanceof DetectionIngestionError) {
+      return res.status(err.statusCode).json({ error: err.message, code: err.code, inferenceId: req.body?.inferenceId });
     }
     console.error('Error ingesting detection:', err);
     return res.status(500).json({ error: 'Failed to ingest detection event' });
+  }
+}
+
+let detectionIngestion: DetectionIngestionService | null = null;
+function getDetectionIngestion(): DetectionIngestionService {
+  if (!detectionIngestion) detectionIngestion = new DetectionIngestionService(prisma, () => currentSpatialEngine);
+  return detectionIngestion;
+}
+/** Test hook: replace the ingestion service (e.g. with an injected orchestrator). */
+export function setDetectionIngestionService(svc: DetectionIngestionService | null) {
+  detectionIngestion = svc;
+}
+
+// --- Model registry for the AI worker (P2.6) ---
+
+const registry = () => new ModelRegistryService(prisma);
+
+export async function handleGetDeployedModel(req: Request, res: Response) {
+  const task = typeof req.query.task === 'string' && req.query.task ? req.query.task : 'object_detection';
+  try {
+    return res.status(200).json({ model: await registry().getDeployed(task) });
+  } catch (err: any) {
+    console.error('Error reading deployed model:', err);
+    return res.status(500).json({ error: 'Failed to read the deployed model' });
+  }
+}
+
+export async function handleBootstrapDeploy(req: Request, res: Response) {
+  const { modelManifestId, adapterId } = req.body || {};
+  if (typeof modelManifestId !== 'string' || !modelManifestId || typeof adapterId !== 'string' || !adapterId) {
+    return res.status(400).json({ error: 'modelManifestId and adapterId are required' });
+  }
+  try {
+    const r = await registry().deployIfNoneDeployed(modelManifestId, adapterId);
+    return res.status(200).json({ deployed: r.deployed, model: r.manifest });
+  } catch (err: any) {
+    if (err instanceof ModelRegistryError) return res.status(err.statusCode).json({ error: err.message, code: err.code });
+    console.error('Error in bootstrap deploy:', err);
+    return res.status(500).json({ error: 'Failed to deploy model' });
+  }
+}
+
+export async function handleModelLifecycleEvent(req: Request, res: Response) {
+  try {
+    await registry().recordWorkerReport(req.body || {});
+    return res.status(201).json({ recorded: true });
+  } catch (err: any) {
+    if (err instanceof ModelRegistryError) return res.status(err.statusCode).json({ error: err.message, code: err.code });
+    console.error('Error recording model lifecycle event:', err);
+    return res.status(500).json({ error: 'Failed to record model lifecycle event' });
+  }
+}
+
+/**
+ * Motion-gating inputs for the worker (P2.5): a camera is ARMED when an enabled spatial rule or an
+ * AI-trigger automation rule applies to it; lastMotionAt is the latest classical motion episode.
+ */
+export async function handleGetAiActivity(_req: Request, res: Response) {
+  try {
+    const cameras = await prisma.camera.findMany({ select: { id: true, tenantId: true } });
+    const spatial = await prisma.spatialAnalyticsRule.findMany({ where: { enabled: true }, select: { cameraId: true } });
+    const aiRules = await prisma.automationRule.findMany({
+      where: { enabled: true, triggerType: { in: ['PERSON_DETECTED', 'VEHICLE_DETECTED', 'TRIPWIRE_CROSS', 'LOITERING_DWELL'] } },
+      select: { tenantId: true, triggerConfigJson: true },
+    });
+    const since = new Date(Date.now() - 10 * 60 * 1000);
+    const motion = await prisma.event.groupBy({
+      by: ['cameraId'],
+      where: { type: EventType.MOTION, lastDetectedAt: { gte: since } },
+      _max: { lastDetectedAt: true },
+    });
+    const armedCams = new Set(spatial.map((r) => r.cameraId));
+    const armedTenants = new Set<string>();
+    for (const r of aiRules) {
+      const camId = (r.triggerConfigJson as any)?.cameraId;
+      if (camId) armedCams.add(camId);
+      else armedTenants.add(r.tenantId);
+    }
+    const lastMotion = new Map(motion.map((m) => [m.cameraId, m._max.lastDetectedAt]));
+    return res.status(200).json({
+      cameras: cameras.map((c) => ({
+        cameraId: c.id,
+        armed: armedCams.has(c.id) || armedTenants.has(c.tenantId),
+        lastMotionAt: lastMotion.get(c.id)?.toISOString() ?? null,
+      })),
+    });
+  } catch (err: any) {
+    console.error('Error computing AI activity:', err);
+    return res.status(500).json({ error: 'Failed to compute AI activity' });
   }
 }
 
@@ -422,5 +266,36 @@ router.get('/cameras', handleGetInternalCameras);
 router.post('/segment-complete', handleSegmentComplete);
 router.post('/model-manifests', handleRegisterModelManifest);
 router.post('/detections', handleIngestDetection);
+router.get('/ai/models/deployed', handleGetDeployedModel);
+router.post('/ai/models/bootstrap-deploy', handleBootstrapDeploy);
+router.post('/ai/model-events', handleModelLifecycleEvent);
+router.get('/ai/activity', handleGetAiActivity);
+
+/** ANPR adapter endpoints (P4.1). Off with the ANPR flag, like the public ANPR API. */
+function anprEnabled(res: Response): boolean {
+  if (isFeatureEnabled(FeatureFlag.ANPR)) return true;
+  res.status(501).json({ error: 'ANPR is disabled on this appliance', code: 'FEATURE_DISABLED' });
+  return false;
+}
+
+router.get('/anpr/cameras', async (_req: Request, res: Response) => {
+  if (!anprEnabled(res)) return;
+  const cameras = await prisma.camera.findMany({
+    where: { lprMode: true },
+    select: { id: true, tenantId: true, streamPath: true, lprConfigJson: true },
+  });
+  return res.json({ cameras: cameras.map((c) => ({ cameraId: c.id, tenantId: c.tenantId, streamPath: c.streamPath, lpr: c.lprConfigJson ?? {} })) });
+});
+
+router.post('/anpr/observations', async (req: Request, res: Response) => {
+  if (!anprEnabled(res)) return;
+  try {
+    const results = await new AnprIngestionService(prisma, anprAggregator).ingest(req.body);
+    return res.json({ accepted: results.length, observations: results.map((r) => ({ id: r.observationId, plate: r.normalizedPlate, isNew: r.isNewObservation, watchlist: r.matchedWatchlist.map((m) => m.id) })) });
+  } catch (err: any) {
+    if (err instanceof AnprIngestionError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

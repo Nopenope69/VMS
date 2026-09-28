@@ -10,6 +10,14 @@ export class AlarmLifecycle {
     this.prisma = prisma;
   }
 
+  /**
+   * AuditEvent.userId references User. The SYSTEM actor has no user row, so it is recorded in the
+   * metadata, never as userId (a foreign-key violation aborts the whole transaction).
+   */
+  private static auditUserId(actorUserId?: string): string | null {
+    return actorUserId || null;
+  }
+
   private async executeTransaction<T>(action: (tx: any) => Promise<T>): Promise<T> {
     if (typeof (this.prisma as any).$transaction === 'function') {
       return await this.prisma.$transaction(action);
@@ -85,24 +93,23 @@ export class AlarmLifecycle {
         },
       });
 
-      if (tx.auditEvent) {
-        try {
-          await AuditChainService.record(tx, {
-            tenantId: context.tenantId,
-            userId,
-            action: 'ALARM_ACKNOWLEDGE',
-            resourceType: 'Alarm',
-            resourceId: alarmId,
-            ipAddress: context.clientIp || '127.0.0.1',
-            userAgent: context.userAgent || null,
-            metadata: {
-              previousState: existing.state,
-              newState: AlarmState.ACKNOWLEDGED,
-              correlationId: context.correlationId,
-            },
-          });
-        } catch {}
-      }
+      // Alarm state and its audit entry commit together or not at all. A swallowed audit error
+      // would leave Postgres with an aborted transaction whose COMMIT silently rolls back.
+      await AuditChainService.record(tx, {
+        tenantId: context.tenantId,
+        userId: AlarmLifecycle.auditUserId(context.actorUserId),
+        action: 'ALARM_ACKNOWLEDGE',
+        resourceType: 'Alarm',
+        resourceId: alarmId,
+        ipAddress: context.clientIp || '127.0.0.1',
+        userAgent: context.userAgent || null,
+        metadata: {
+          previousState: existing.state,
+          newState: AlarmState.ACKNOWLEDGED,
+          correlationId: context.correlationId,
+          actor: context.actorUserId || 'SYSTEM',
+        },
+      });
 
       return updated;
     });
@@ -136,25 +143,22 @@ export class AlarmLifecycle {
         },
       });
 
-      if (tx.auditEvent) {
-        try {
-          await AuditChainService.record(tx, {
-            tenantId: context.tenantId,
-            userId,
-            action: 'ALARM_RESOLVE',
-            resourceType: 'Alarm',
-            resourceId: alarmId,
-            ipAddress: context.clientIp || '127.0.0.1',
-            userAgent: context.userAgent || null,
-            metadata: {
-              previousState: existing.state,
-              newState: AlarmState.RESOLVED,
-              notes,
-              correlationId: context.correlationId,
-            },
-          });
-        } catch {}
-      }
+      await AuditChainService.record(tx, {
+        tenantId: context.tenantId,
+        userId: AlarmLifecycle.auditUserId(context.actorUserId),
+        action: 'ALARM_RESOLVE',
+        resourceType: 'Alarm',
+        resourceId: alarmId,
+        ipAddress: context.clientIp || '127.0.0.1',
+        userAgent: context.userAgent || null,
+        metadata: {
+          previousState: existing.state,
+          newState: AlarmState.RESOLVED,
+          notes,
+          correlationId: context.correlationId,
+          actor: context.actorUserId || 'SYSTEM',
+        },
+      });
 
       return updated;
     });
@@ -169,6 +173,8 @@ export class AlarmLifecycle {
       cameraId?: string;
       eventId?: string;
       ruleId?: string;
+      canonicalEventId?: string;
+      automationRuleId?: string;
       title: string;
       description?: string;
       severity?: EventSeverity;
@@ -177,7 +183,6 @@ export class AlarmLifecycle {
     context?: CommandContext
   ): Promise<Alarm> {
     const tenantId = context?.tenantId || data.tenantId;
-    const userId = context?.actorUserId || 'SYSTEM';
 
     return await this.executeTransaction(async (tx) => {
       const alarm = await tx.alarm.create({
@@ -186,6 +191,8 @@ export class AlarmLifecycle {
           cameraId: data.cameraId,
           eventId: data.eventId,
           ruleId: data.ruleId,
+          canonicalEventId: data.canonicalEventId,
+          automationRuleId: data.automationRuleId,
           title: data.title,
           description: data.description,
           severity: data.severity || EventSeverity.WARNING,
@@ -194,26 +201,25 @@ export class AlarmLifecycle {
         },
       });
 
-      if (tx.auditEvent) {
-        try {
-          await AuditChainService.record(tx, {
-            tenantId,
-            userId,
-            action: 'ALARM_CREATE',
-            resourceType: 'Alarm',
-            resourceId: alarm.id,
-            ipAddress: context?.clientIp || '127.0.0.1',
-            userAgent: context?.userAgent || null,
-            metadata: {
-              title: data.title,
-              severity: data.severity || EventSeverity.WARNING,
-              eventId: data.eventId,
-              ruleId: data.ruleId,
-              correlationId: context?.correlationId,
-            },
-          });
-        } catch {}
-      }
+      await AuditChainService.record(tx, {
+        tenantId,
+        userId: AlarmLifecycle.auditUserId(context?.actorUserId),
+        action: 'ALARM_CREATE',
+        resourceType: 'Alarm',
+        resourceId: alarm.id,
+        ipAddress: context?.clientIp || '127.0.0.1',
+        userAgent: context?.userAgent || null,
+        metadata: {
+          title: data.title,
+          severity: data.severity || EventSeverity.WARNING,
+          eventId: data.eventId,
+          ruleId: data.ruleId,
+          canonicalEventId: data.canonicalEventId,
+          automationRuleId: data.automationRuleId,
+          correlationId: context?.correlationId,
+          actor: context?.actorUserId || 'SYSTEM',
+        },
+      });
 
       return alarm;
     });

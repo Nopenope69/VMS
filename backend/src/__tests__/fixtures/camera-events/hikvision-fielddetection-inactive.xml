@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EventNotificationAlert version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+<ipAddress>192.168.1.64</ipAddress>
+<portNo>80</portNo>
+<protocol>HTTP</protocol>
+<macAddress>44:19:b6:00:00:01</macAddress>
+<channelID>1</channelID>
+<dateTime>2026-09-27T15:30:12+05:30</dateTime>
+<activePostCount>0</activePostCount>
+<eventType>fielddetection</eventType>
+<eventState>inactive</eventState>
+<eventDescription>fielddetection alarm</eventDescription>
+<DetectionRegionList>
+<DetectionRegionEntry>
+<regionID>2</regionID>
+<sensitivityLevel>50</sensitivityLevel>
+<RegionCoordinatesList>
+<RegionCoordinates><positionX>100</positionX><positionY>200</positionY></RegionCoordinates>
+</RegionCoordinatesList>
+<detectionTarget>human</detectionTarget>
+</DetectionRegionEntry>
+</DetectionRegionList>
+</EventNotificationAlert>

@@ -1,0 +1,12 @@
+{
+  "$comment": "ANPR pipeline definition. Its SHA-256 is the pipeline's model hash in provenance; each component is a model from models.lock.json with its own artefact hash. Changing any value here changes the pipeline hash.",
+  "name": "anpr-india",
+  "version": "1.0.0",
+  "task": "plate_recognition",
+  "components": [
+    { "role": "text_detector", "key": "ppocrv4-det", "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9" },
+    { "role": "plate_ocr", "key": "fast-plate-ocr-cct-s-v2", "sha256": "384bbbd2cea3ef54761d3df70822ef3a349ee1a112aeafddbe0e3ba06bc6e47b" }
+  ],
+  "textDetection": { "limitSideLen": 736, "limitType": "min", "thresh": 0.3, "boxThresh": 0.5, "unclipRatio": 1.6, "maxCandidates": 1000, "minSize": 3 },
+  "recognition": { "minConfidence": 0.5, "requireValidFormat": true, "formatRules": "backend/src/contracts/indianPlate.v1.ts" }
+}

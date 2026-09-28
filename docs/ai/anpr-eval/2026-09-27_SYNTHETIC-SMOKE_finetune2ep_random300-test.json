@@ -1,0 +1,291 @@
+{
+  "tool": "vigilone-eval-plates",
+  "reportVersion": 1,
+  "kind": "SYNTHETIC",
+  "label": "SYNTHETIC: not a measurement of site accuracy",
+  "dataset": {
+    "name": "random synthetic plates (seed 7, n=300)",
+    "split": "test",
+    "samples": 60,
+    "contentSha256": "3f93beef73ae1865d709cd395ef8c83043425506c9050d9008ecf861545fe99e",
+    "declared": {
+      "kind": "SYNTHETIC",
+      "name": "random synthetic plates (seed 7, n=300)",
+      "generator": "tools/anpr/synth_plates.py --random",
+      "seed": 7
+    },
+    "leakageChecked": true
+  },
+  "pipeline": {
+    "name": "anpr-india",
+    "version": "1.0.0",
+    "definitionSha256": "6e54e73c7893c1357c51a00077ddb1b4ef9abe4ba7c87f170b4bd3cd174c354b",
+    "components": [
+      {
+        "role": "text_detector",
+        "key": "ppocrv4-det",
+        "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9"
+      },
+      {
+        "role": "plate_ocr",
+        "key": "fast-plate-ocr-cct-s-v2",
+        "sha256": "384bbbd2cea3ef54761d3df70822ef3a349ee1a112aeafddbe0e3ba06bc6e47b"
+      }
+    ],
+    "plateOcrOverride": {
+      "modelPath": "/tmp/claude-0/ft/last.onnx",
+      "modelSha256": "7e260e7ea5fdfcec305991a7840ead31689550ea5c584414ec93ea172d7e04c1",
+      "configPath": "/tmp/claude-0/ft/plate_config.yaml",
+      "configSha256": "0335c74a305173bb6f393efed0fde03cadeaa0b649ed8e19f431016d8232d0a6"
+    },
+    "options": {
+      "minConfidence": 0.5,
+      "requireValidFormat": true
+    }
+  },
+  "host": {
+    "node": "v22.22.2",
+    "platform": "linux-x64"
+  },
+  "generatedAt": "2026-09-27T17:27:05.200Z",
+  "metrics": {
+    "samples": 60,
+    "positives": 60,
+    "correct": 53,
+    "plateAccuracy": 0.8833333333333333,
+    "plateAccuracyCi95": [
+      0.7782121197582914,
+      0.9423227935994396
+    ],
+    "misreadRate": 0.03333333333333333,
+    "noReadRate": 0.08333333333333333,
+    "characterErrorRate": 0.08950086058519793,
+    "negatives": 0,
+    "falseReads": 0,
+    "falseReadRate": null,
+    "latencyMs": {
+      "p50": 570.78322,
+      "p95": 704.505027,
+      "max": 831.979364
+    },
+    "byCamera": {
+      "synthetic": {
+        "positives": 60,
+        "correct": 53,
+        "plateAccuracy": 0.8833333333333333,
+        "plateAccuracyCi95": [
+          0.7782121197582914,
+          0.9423227935994396
+        ],
+        "misreadRate": 0.03333333333333333,
+        "noReadRate": 0.08333333333333333
+      }
+    },
+    "byCondition": {
+      "commercial": {
+        "positives": 7,
+        "correct": 6,
+        "plateAccuracy": 0.8571428571428571,
+        "plateAccuracyCi95": [
+          0.4868721707256811,
+          0.9743203756552565
+        ],
+        "misreadRate": 0.14285714285714285,
+        "noReadRate": 0
+      },
+      "commercial-2line": {
+        "positives": 6,
+        "correct": 6,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.6096657120978346,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "ev": {
+        "positives": 9,
+        "correct": 8,
+        "plateAccuracy": 0.8888888888888888,
+        "plateAccuracyCi95": [
+          0.5650002944233439,
+          0.9801091123614551
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.1111111111111111
+      },
+      "ev-2line": {
+        "positives": 1,
+        "correct": 1,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.20654931437723745,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "mono": {
+        "positives": 8,
+        "correct": 7,
+        "plateAccuracy": 0.875,
+        "plateAccuracyCi95": [
+          0.5291118177871464,
+          0.9775825085499433
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.125
+      },
+      "mono-2line": {
+        "positives": 2,
+        "correct": 2,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.34238022750665303,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "private": {
+        "positives": 12,
+        "correct": 12,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.7575059933447592,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "private-2line": {
+        "positives": 2,
+        "correct": 2,
+        "plateAccuracy": 1,
+        "plateAccuracyCi95": [
+          0.34238022750665303,
+          1
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0
+      },
+      "serif": {
+        "positives": 11,
+        "correct": 8,
+        "plateAccuracy": 0.7272727272727273,
+        "plateAccuracyCi95": [
+          0.43435469882387084,
+          0.902539407099751
+        ],
+        "misreadRate": 0.09090909090909091,
+        "noReadRate": 0.18181818181818182
+      },
+      "serif-2line": {
+        "positives": 2,
+        "correct": 1,
+        "plateAccuracy": 0.5,
+        "plateAccuracyCi95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "misreadRate": 0,
+        "noReadRate": 0.5
+      }
+    },
+    "byExpectedLength": {
+      "9": {
+        "positives": 19,
+        "correct": 16,
+        "plateAccuracy": 0.8421052631578947,
+        "plateAccuracyCi95": [
+          0.6243452472967093,
+          0.9447952836146585
+        ],
+        "misreadRate": 0.05263157894736842,
+        "noReadRate": 0.10526315789473684
+      },
+      "10": {
+        "positives": 41,
+        "correct": 37,
+        "plateAccuracy": 0.9024390243902439,
+        "plateAccuracyCi95": [
+          0.7745231869447662,
+          0.9614029151019106
+        ],
+        "misreadRate": 0.024390243902439025,
+        "noReadRate": 0.07317073170731707
+      }
+    }
+  },
+  "errors": [
+    {
+      "file": "SYNTHETIC_00075.png",
+      "outcome": "no_read",
+      "expected": "LD74E4801",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00170.png",
+      "outcome": "no_read",
+      "expected": "NL19GW2124",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00175.png",
+      "outcome": "misread",
+      "expected": "TR56W6182",
+      "reads": [
+        "TR56VG6882"
+      ],
+      "rawTexts": [
+        "TR56V66882"
+      ],
+      "lines": [
+        1
+      ]
+    },
+    {
+      "file": "SYNTHETIC_00225.png",
+      "outcome": "no_read",
+      "expected": "AP20XV5240",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00230.png",
+      "outcome": "no_read",
+      "expected": "MN09SF5313",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00290.png",
+      "outcome": "no_read",
+      "expected": "JH66C0664",
+      "reads": [],
+      "rawTexts": [],
+      "lines": []
+    },
+    {
+      "file": "SYNTHETIC_00295.png",
+      "outcome": "misread",
+      "expected": "26BH6269MF",
+      "reads": [
+        "26BH6269ME"
+      ],
+      "rawTexts": [
+        "26BH6269ME"
+      ],
+      "lines": [
+        1
+      ]
+    }
+  ]
+}

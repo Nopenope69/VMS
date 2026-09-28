@@ -3,8 +3,8 @@ name: VigilOne Commercial CI
 on:
   push:
     branches: [ master, main ]
+  # Every PR, including PRs stacked on another feature branch (they otherwise get no CI at all).
   pull_request:
-    branches: [ master, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -79,6 +79,11 @@ jobs:
       - name: Install ffmpeg (real fMP4 ingestion tests spawn ffmpeg)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg && ffmpeg -version | head -1
 
+      - name: Install MailHog 1.0.1 (MIT; SMTP interop tests)
+        run: |
+          curl -fsSL -o /tmp/MailHog https://github.com/mailhog/MailHog/releases/download/v1.0.1/MailHog_linux_amd64
+          chmod +x /tmp/MailHog
+
       - name: Install backend dependencies
         working-directory: ./backend
         run: npm ci
@@ -112,6 +117,8 @@ jobs:
           JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
           INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
+          MAILHOG_BIN: /tmp/MailHog
+          VIGILONE_REQUIRE_MAILHOG: '1'
         run: npm test
 
   ai-worker-checks:
@@ -134,13 +141,112 @@ jobs:
         working-directory: ./backend
         run: npm ci
 
+      - name: Install ffmpeg (frame extraction tests)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg && ffmpeg -version | head -1
+
+      - name: Install AI worker dependencies (onnxruntime-node, CPU binaries bundled)
+        working-directory: ./services/ai-worker
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+        run: npm ci
+
+      - name: Fetch pinned models (SHA-256 verified against scripts/models/models.lock.json)
+        run: |
+          scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
+          # ANPR candidate models (tests only; the product needs a human approval to run them)
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
+
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
         run: npm run build
 
-      - name: AI Worker Tests
+      - name: AI Worker Tests (golden-model tests required, never skipped)
         working-directory: ./services/ai-worker
+        env:
+          VIGILONE_REQUIRE_MODEL_TESTS: '1'
         run: npm test
+
+      - name: ai-adapter.v1 conformance against the real worker
+        run: |
+          AI_WORKER_MODE=adapter-only AI_MODEL_KEY=yolox-tiny AI_ADAPTER_PORT=7010 node services/ai-worker/dist/main.js > /tmp/adapter.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:7010/v1/health >/dev/null 2>&1 && break; sleep 1; done
+          cd backend && npm run conformance:ai-adapter -- --url http://127.0.0.1:7010 --json /tmp/ai-adapter-conformance.json || { cat /tmp/adapter.log; exit 1; }
+
+  ai-e2e-scenario:
+    name: AI end-to-end scenario (SIMULATED camera, real model, MediaMTX, backend, worker)
+    needs: [ai-worker-checks]
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vigilone
+          POSTGRES_PASSWORD: vigilone_ci_secret_password_2026!
+          POSTGRES_DB: vigilone_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vigilone -d vigilone_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
+      CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install ffmpeg and MediaMTX 1.9.3 (same version as docker-compose.yml)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          curl -fsSL https://github.com/bluenviron/mediamtx/releases/download/v1.9.3/mediamtx_v1.9.3_linux_amd64.tar.gz | tar -xz -C /tmp mediamtx
+
+      - name: Install dependencies and build
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+        run: |
+          (cd backend && npm ci && npx prisma generate && npm run build && npx prisma migrate deploy)
+          (cd services/ai-worker && npm ci && npm run build)
+          scripts/models/fetch-model.sh yolox-tiny
+
+      - name: Run scenario
+        env:
+          MEDIAMTX_BIN: /tmp/mediamtx
+        run: scripts/e2e/ai-tripwire-scenario.sh /tmp/e2e-report.json
+
+      - name: Run ANPR LPR scenario (SYNTHETIC plate, TEST-ONLY model approval)
+        env:
+          MEDIAMTX_BIN: /tmp/mediamtx
+        run: |
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
+          scripts/e2e/anpr-lpr-scenario.sh /tmp/anpr-e2e-report.json
+
+      - name: Run redaction scenario (SIMULATED recording, real detectors, TEST-ONLY model approval)
+        run: |
+          scripts/models/fetch-model.sh yunet-2023mar
+          scripts/e2e/redaction-scenario.sh /tmp/redaction-e2e-report.json
+
+      - name: Upload scenario report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-e2e-report
+          path: |
+            /tmp/e2e-report.json
+            /tmp/anpr-e2e-report.json
+            /tmp/redaction-e2e-report.json
+          if-no-files-found: ignore
 
   governance-gates:
     name: Hygiene, Model Licence & Fail-Loud Gates
@@ -181,6 +287,10 @@ jobs:
         working-directory: ./backend
         run: npm run check:feature-flag-docs
 
+      - name: Dependency licence gate (backend, frontend, ai-worker lockfiles)
+        working-directory: ./backend
+        run: npm run check:dependency-licenses
+
   field-tooling-checks:
     name: Field Validation Tooling (bench, fault, soak, acceptance)
     runs-on: ubuntu-latest
@@ -197,8 +307,14 @@ jobs:
       - name: Unit tests (node --test)
         run: node --test scripts/lib/*.test.mjs scripts/soak/*.test.mjs
 
+      - name: Evaluation harness tests (COCO metrics equal pycocotools on committed fixtures)
+        run: node --test tools/eval/__tests__/*.test.mjs
+
+      - name: Offline verifier syntax
+        run: node --check tools/vigilone-verify/vigilone-verify.mjs
+
       - name: Shell syntax
-        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done
+        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh tools/anpr/finetune/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done && python3 -m py_compile tools/anpr/finetune/prepare_dataset.py tools/anpr/synth_plates.py
 
       - name: Compatibility matrix is generated from committed bench reports
         run: node scripts/bench/update-matrix.mjs --check

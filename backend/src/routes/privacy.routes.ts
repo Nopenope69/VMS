@@ -4,11 +4,28 @@ import { RedactionMode, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { PrivacyPolicyService } from '../services/privacy/privacyPolicy.service';
-import { VideoRedactorService } from '../services/privacy/videoRedactor.service';
+import { VideoRedactorService, RedactionError } from '../services/privacy/videoRedactor.service';
+import { RedactionQueue } from '../services/privacy/redactionQueue';
+import { buildRedactionPackage, RedactionPackageError } from '../services/evidence/archive/redactionPackage';
+import { AuditChainService } from '../services/audit/auditChain.service';
+import {
+  DATA_PURPOSES,
+  PURPOSES_NEEDING_REFERENCE,
+  DataProtectionError,
+  SettingsPatch,
+  getDataProtection,
+  purgeTenant,
+  updateDataProtection,
+} from '../services/privacy/dataProtection.service';
+import { z } from 'zod';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 const privacyService = new PrivacyPolicyService(prisma);
 const videoRedactor = new VideoRedactorService(prisma);
+export const redactionQueue = new RedactionQueue(prisma, videoRedactor);
 
 router.use(requireAuth);
 
@@ -104,29 +121,49 @@ router.delete('/policies/:id', authorize(Permission.PRIVACY_POLICY_MANAGE), asyn
   }
 });
 
+const CreateJobBody = z
+  .object({
+    sourceManifestId: z.string().min(1),
+    privacyPolicyId: z.string().min(1).optional(),
+    redactionMode: z.nativeEnum(RedactionMode),
+    cameraId: z.string().min(1).optional(),
+    detectKinds: z.array(z.enum(['FACE', 'LICENSE_PLATE'])).max(2).optional(),
+    sampleFps: z.number().min(0.5).max(10).optional(),
+    masks: z.array(z.any()).max(500).optional(),
+  })
+  .strict();
+
+const audit = (req: Request, action: string, resourceId: string, metadata: Record<string, unknown>) =>
+  AuditChainService.record(prisma, { tenantId: req.user!.tenantId, userId: req.user!.id, action, resourceType: 'RedactionJob', resourceId, ipAddress: req.ip || '127.0.0.1', metadata });
+
+const fail = (res: Response, err: any) => {
+  if (err instanceof RedactionError) return res.status(err.status).json({ error: err.message, code: err.code });
+  if (err instanceof z.ZodError) return res.status(400).json({ error: `${err.issues[0].path.join('.')}: ${err.issues[0].message}`, code: 'INVALID_MASK' });
+  return res.status(500).json({ error: err.message });
+};
+
 /**
- * Create a video redaction job
+ * Create a video redaction job (P4.4). It stays QUEUED until POST /jobs/:id/execute.
  */
 router.post('/jobs', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
-  const { sourceManifestId, privacyPolicyId, redactionMode, modelVersion, masks } = req.body;
-  if (!sourceManifestId || !redactionMode) {
-    return res.status(400).json({ error: 'sourceManifestId and redactionMode are required' });
-  }
-
+  const p = CreateJobBody.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.')}: ${p.error.issues[0].message}` });
   try {
-    const job = await videoRedactor.createRedactionJob({
-      tenantId: req.user!.tenantId,
-      createdByUserId: req.user!.id,
-      sourceManifestId,
-      privacyPolicyId,
-      redactionMode: redactionMode as RedactionMode,
-      modelVersion,
-      masks,
-    });
+    const job = await videoRedactor.createRedactionJob({ tenantId: req.user!.tenantId, createdByUserId: req.user!.id, ...p.data });
+    await audit(req, 'REDACTION_JOB_CREATE', job.id, { sourceManifestId: job.sourceManifestId, mode: job.redactionMode, cameraId: job.cameraId, detectKinds: job.detectKinds, manualMasks: (p.data.masks || []).length });
     return res.status(201).json(job);
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return fail(res, err);
   }
+});
+
+router.get('/jobs', async (req: Request, res: Response) => {
+  const jobs = await prisma.redactionJob.findMany({
+    where: { tenantId: req.user!.tenantId, ...(typeof req.query.sourceManifestId === 'string' ? { sourceManifestId: req.query.sourceManifestId } : {}) },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+  return res.json({ jobs: jobs.map((j) => ({ ...j, outputBytes: j.outputBytes === null ? null : Number(j.outputBytes) })) });
 });
 
 /**
@@ -142,22 +179,95 @@ router.get('/jobs/:id', async (req: Request, res: Response) => {
       },
     });
     if (!job) return res.status(404).json({ error: 'Redaction job not found' });
-    return res.json(job);
+    return res.json({ ...job, outputBytes: job.outputBytes === null ? null : Number(job.outputBytes) });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
 /**
- * Execute a redaction job (asynchronously generates derivative)
+ * Start a QUEUED job. Jobs run one at a time in the background; poll GET /jobs/:id.
+ * The outcome is COMPLETED with a verified, hashed derivative, or FAILED with an error code.
  */
 router.post('/jobs/:id/execute', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
+  const job = await prisma.redactionJob.findFirst({ where: { id: req.params.id, tenantId: req.user!.tenantId } });
+  if (!job) return res.status(404).json({ error: 'Redaction job not found' });
+  if (job.status !== 'QUEUED') return res.status(409).json({ error: `job is ${job.status}`, code: 'REDACTION_INVALID_STATE' });
+  await audit(req, 'REDACTION_JOB_EXECUTE', job.id, { sourceManifestId: job.sourceManifestId });
+  redactionQueue.enqueue(job.id);
+  return res.status(202).json({ jobId: job.id, status: 'QUEUED', poll: `/api/v1/privacy/jobs/${job.id}` });
+});
+
+/**
+ * Download the redacted derivative. The file's SHA-256 is re-checked before it is served.
+ */
+router.get('/jobs/:id/download', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
+  const job = await prisma.redactionJob.findFirst({ where: { id: req.params.id, tenantId: req.user!.tenantId } });
+  if (!job || job.status !== 'COMPLETED' || !job.outputObjectKey || !job.outputSha256) return res.status(404).json({ error: 'No completed derivative for this job' });
+  const file = path.join(process.env.EXPORTS_DIR || '/recordings/exports', job.outputObjectKey);
+  if (!fs.existsSync(file)) return res.status(410).json({ error: 'The derivative file is no longer on disk', code: 'REDACTION_OUTPUT_MISSING' });
+  const h = crypto.createHash('sha256');
+  await new Promise<void>((resolve, reject) => fs.createReadStream(file).on('data', (c) => h.update(c)).on('end', () => resolve()).on('error', reject));
+  if (h.digest('hex') !== job.outputSha256) return res.status(409).json({ error: 'The derivative on disk does not match its recorded SHA-256', code: 'REDACTION_OUTPUT_TAMPERED' });
+  await audit(req, 'REDACTION_DERIVATIVE_DOWNLOAD', job.id, { outputSha256: job.outputSha256 });
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Disposition', `attachment; filename="redacted-${job.id}.mp4"`);
+  res.setHeader('X-VigilOne-SHA256', job.outputSha256);
+  fs.createReadStream(file).pipe(res);
+});
+
+/**
+ * Signed evidence package of a redacted derivative (P4.5): derivative video, derivation.json linking
+ * it to the parent evidence, AI provenance, custody ledger, certificate. Verify offline with
+ * tools/vigilone-verify.
+ */
+router.get('/jobs/:id/package', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
   try {
-    const completedJob = await videoRedactor.executeRedactionJob(req.params.id);
-    return res.json({
-      message: 'Redaction job completed successfully; derivative evidence hash recorded',
-      job: completedJob,
+    const r = await buildRedactionPackage(prisma, req.user!.tenantId, req.params.id, req.user!.id);
+    await audit(req, 'REDACTION_PACKAGE_EXPORT', req.params.id, { packageSha256: r.packageSha256 });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(r.zipPath)}"`);
+    res.setHeader('X-VigilOne-Package-SHA256', r.packageSha256);
+    fs.createReadStream(r.zipPath).pipe(res);
+  } catch (err: any) {
+    if (err instanceof RedactionPackageError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// --- DPDP controls (P4.6) ---
+
+router.get('/dpdp/purposes', (_req: Request, res: Response) => {
+  res.json({ purposes: DATA_PURPOSES, needReference: PURPOSES_NEEDING_REFERENCE });
+});
+
+router.get('/dpdp/settings', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  const s = await getDataProtection(prisma, req.user!.tenantId);
+  return res.json({ settings: s, purposes: DATA_PURPOSES, needReference: PURPOSES_NEEDING_REFERENCE });
+});
+
+router.put('/dpdp/settings', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  const p = SettingsPatch.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.')}: ${p.error.issues[0].message}` });
+  try {
+    const { before, after } = await updateDataProtection(prisma, req.user!.tenantId, req.user!.id, p.data);
+    const pick = (x: any) => ({ faceProcessingEnabled: x.faceProcessingEnabled, plateRetentionDays: x.plateRetentionDays, detectionSnapshotRetentionDays: x.detectionSnapshotRetentionDays, allowedPurposes: x.allowedPurposes });
+    await AuditChainService.record(prisma, {
+      tenantId: req.user!.tenantId, userId: req.user!.id, action: 'DPDP_SETTINGS_UPDATE', resourceType: 'DataProtection', ipAddress: req.ip || '127.0.0.1',
+      metadata: { before: pick(before), after: pick(after), biometricAcknowledged: p.data.acknowledgeBiometricProcessing === true },
     });
+    return res.json({ settings: after });
+  } catch (err: any) {
+    if (err instanceof DataProtectionError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/** Runs the retention purge for this tenant now (it also runs hourly). */
+router.post('/dpdp/purge', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const result = await purgeTenant(prisma, req.user!.tenantId, new Date(), req.user!.id);
+    return res.json({ result });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { canonicalizeJson } from './canonicalJson';
 import { ChainOfCustodyLog, PrismaClient } from '@prisma/client';
 
 export interface LogCustodyEventInput {
@@ -38,9 +39,21 @@ export class CustodyLedger {
     resultHash?: string | null,
     metadata?: any
   ): string {
-    const canonicalMeta = metadata ? JSON.stringify(metadata) : '{}';
+    // Canonical (key-sorted) metadata: PostgreSQL JSONB does not keep key order, so hashing
+    // JSON.stringify(metadata) made events unverifiable once read back from the database.
+    const canonicalMeta = metadata ? canonicalizeJson(metadata) : '{}';
     const payload = `${sourceHash}:${resultHash || ''}:${canonicalMeta}`;
     return crypto.createHash('sha256').update(payload).digest('hex');
+  }
+
+  /**
+   * Payload hash as computed before canonicalisation (JSON.stringify in insertion order). Used only
+   * to verify events written by older versions, and only succeeds if the stored key order happens
+   * to equal the original insertion order.
+   */
+  public static computeLegacyPayloadHash(sourceHash: string, resultHash?: string | null, metadata?: any): string {
+    const legacyMeta = metadata ? JSON.stringify(metadata) : '{}';
+    return crypto.createHash('sha256').update(`${sourceHash}:${resultHash || ''}:${legacyMeta}`).digest('hex');
   }
 
   /**
@@ -218,21 +231,21 @@ export class CustodyLedger {
       }
 
       // Verify recomputed block hash
-      const payloadHash = CustodyLedger.computePayloadHash(
-        entry.sourceHash,
-        entry.resultHash,
-        entry.metadata
-      );
-      const recomputedEventHash = CustodyLedger.computeEventHash({
-        previousEventHash: entry.previousEventHash || expectedPrevHash,
-        eventId: entry.eventId,
-        action: entry.action,
-        actorUserId: entry.actorUserId,
-        timestampUtcIso: entry.timestampUtc.toISOString(),
-        payloadHash,
-      });
+      const blockHash = (payloadHash: string) =>
+        CustodyLedger.computeEventHash({
+          previousEventHash: entry.previousEventHash || expectedPrevHash,
+          eventId: entry.eventId,
+          action: entry.action,
+          actorUserId: entry.actorUserId,
+          timestampUtcIso: entry.timestampUtc.toISOString(),
+          payloadHash,
+        });
+      const recomputedEventHash = blockHash(CustodyLedger.computePayloadHash(entry.sourceHash, entry.resultHash, entry.metadata));
+      const legacyMatch =
+        entry.eventHash !== recomputedEventHash &&
+        entry.eventHash === blockHash(CustodyLedger.computeLegacyPayloadHash(entry.sourceHash, entry.resultHash, entry.metadata));
 
-      if (entry.eventHash !== recomputedEventHash) {
+      if (entry.eventHash !== recomputedEventHash && !legacyMatch) {
         return {
           valid: false,
           entriesCount: history.length,

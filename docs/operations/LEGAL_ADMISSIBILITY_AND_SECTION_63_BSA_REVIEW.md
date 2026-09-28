@@ -124,6 +124,19 @@ When a designated technical expert or forensic examiner testifies regarding a Vi
 
 ---
 
+### 4.1 AI provenance, derivatives and offline verification (P4.5)
+
+* Every package carries `ai_provenance.json`. It lists every AI-derived record for the camera and
+  window with model name, version and SHA-256, confidence, frame timestamp and camera, and it is
+  summarised in the signed manifest. AI output is advisory metadata: it does not alter the primary
+  media.
+* A redacted derivative is packaged with `derivation.json`, which links it to the parent evidence
+  (master hash, source segment hashes, redaction job, detector models) and to the custody event
+  EVIDENCE_REDACTED.
+* `tools/vigilone-verify` checks a package offline with no dependencies. See
+  `docs/operations/EVIDENCE_VERIFICATION.md`.
+* Admissibility is still a matter for the court. The verifier shows integrity and provenance only.
+
 ## 5. Engineering Invariants & Boundaries
 
 1. **Internal Technical Scope Only:** This specification is an engineering blueprint. It does not replace, simulate, or imply legal counsel sign-off.

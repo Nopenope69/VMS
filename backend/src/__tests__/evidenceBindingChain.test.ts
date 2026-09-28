@@ -64,6 +64,9 @@ describe('Stage 5: Full Evidence Manifest Cryptographic Binding Chain (Section 3
           role: 'COMPLIANCE_OPERATOR',
         }),
       },
+      detectionEvent: { findMany: jest.fn().mockResolvedValue([]) },
+      vehicleObservation: { findMany: jest.fn().mockResolvedValue([]) },
+      modelManifest: { findMany: jest.fn().mockResolvedValue([]) },
       evidenceExport: {
         create: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({ id: 'EXP_STAGE5_BINDING_001', ...data })
@@ -219,7 +222,10 @@ describe('Stage 5: Full Evidence Manifest Cryptographic Binding Chain (Section 3
 
     // Verify Assembly Specification
     expect(manifestJson.assemblySpecification.derivationMode).toBe('STREAM_COPY');
-    expect(manifestJson.assemblySpecification.concatTool).toBe('ffmpeg-v6.1');
+    // The tool that actually ran (first line of `ffmpeg -version`), never a hard-coded name.
+    expect(manifestJson.assemblySpecification.concatTool).toMatch(/^ffmpeg version /);
+    expect(manifestJson.aiProvenance).toMatchObject({ artifact: 'ai_provenance.json', recordCount: 0, unattributedCount: 0, models: [] });
+    expect(manifestJson.artifacts.find((a: any) => a.path === 'ai_provenance.json')?.role).toBe('AI_PROVENANCE');
     expect(manifestJson.assemblySpecification.derivationDescription).toContain('Byte-preserving');
 
     // 7. Invariant 4: Package-Wide Artifacts Table Commitments (Every artifact hashed and bound)

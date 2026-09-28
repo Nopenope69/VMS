@@ -1,11 +1,11 @@
-import { PrismaClient, RuleTriggerType, RuleActionType, EventSeverity } from '@prisma/client';
+import { PrismaClient, RuleTriggerType } from '@prisma/client';
 import {
   VigilOneEvent,
   VigilOneEventType,
   RuleTriggerConfig,
-  RuleCondition,
   RuleActionConfig,
 } from './types';
+import { RuleConditionEvaluator } from '../../automation/ruleConditions';
 
 export const MAX_EVENT_ACTION_DEPTH = 5;
 export const MAX_ACTIONS_PER_CORRELATION = 25;
@@ -20,16 +20,23 @@ export interface RuleEvaluationResult {
 
 export class RuleEngine {
   private prisma: PrismaClient;
+  private conditions: RuleConditionEvaluator;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    this.conditions = new RuleConditionEvaluator(prisma);
   }
 
   /**
    * Maps canonical VigilOneEventType to legacy RuleTriggerType enum when needed
    */
-  public static mapEventTypeToTriggerType(eventType: VigilOneEventType): RuleTriggerType | null {
+  public static mapEventTypeToTriggerType(eventType: VigilOneEventType, payload?: VigilOneEvent['payload']): RuleTriggerType | null {
     switch (eventType) {
+      case 'AI_OBJECT_DETECTED': {
+        const cls = payload && payload.kind === 'AI_OBJECT_DETECTED' ? payload.objectClass : undefined;
+        if (!cls) return null;
+        return cls === 'person' ? RuleTriggerType.PERSON_DETECTED : RuleTriggerType.VEHICLE_DETECTED;
+      }
       case 'MOTION':
         return RuleTriggerType.MOTION_ZONE;
       case 'TRIPWIRE_CROSS':
@@ -44,17 +51,19 @@ export class RuleEngine {
         return RuleTriggerType.CAMERA_OFFLINE;
       case 'SCENE_CHANGE':
         return RuleTriggerType.SCENE_CHANGE;
+      case 'CAMERA_ANALYTIC':
+        return RuleTriggerType.CAMERA_ANALYTIC;
       default:
         return null;
     }
   }
 
   /** Enum-valid trigger types that can match this event type (raw name if it is one, plus the mapping). */
-  public static candidateTriggerTypes(eventType: VigilOneEventType): RuleTriggerType[] {
+  public static candidateTriggerTypes(eventType: VigilOneEventType, payload?: VigilOneEvent['payload']): RuleTriggerType[] {
     const valid = new Set<string>(Object.values(RuleTriggerType));
     const out = new Set<RuleTriggerType>();
     if (valid.has(eventType)) out.add(eventType as unknown as RuleTriggerType);
-    const mapped = RuleEngine.mapEventTypeToTriggerType(eventType);
+    const mapped = RuleEngine.mapEventTypeToTriggerType(eventType, payload);
     if (mapped) out.add(mapped);
     return [...out];
   }
@@ -128,7 +137,7 @@ export class RuleEngine {
     // Only RuleTriggerType enum values may reach the query. Passing the raw event type (e.g.
     // 'MOTION', 'SYSTEM_ALERT') made Prisma reject the whole query, so no rule could fire for
     // those events.
-    const triggerTypes = RuleEngine.candidateTriggerTypes(event.type);
+    const triggerTypes = RuleEngine.candidateTriggerTypes(event.type, event.payload);
     if (triggerTypes.length === 0) {
       return { results: [], cascadeTerminated: false };
     }
@@ -160,8 +169,7 @@ export class RuleEngine {
       }
 
       // 6. Condition Evaluation
-      const conditions = (rule.conditionsJson as unknown as RuleCondition[]) || [];
-      if (!this.matchesConditions(conditions, event)) {
+      if (!(await this.conditions.matches(rule.conditionsJson, event))) {
         continue;
       }
 
@@ -232,6 +240,40 @@ export class RuleEngine {
       if (config.targetState && config.targetState !== di.state) return false;
     }
 
+    // AI objects: class, confidence floor and minimum dwell (P3.5 / P3.7). A rule without a
+    // minimum dwell fires on the track's 'confirmed' event; a rule with minDwellSeconds = N only
+    // on the 'dwell' event for milestone N. Either way, at most once per track.
+    if (event.payload.kind === 'AI_OBJECT_DETECTED') {
+      const ai = event.payload;
+      if (config.objectClasses && config.objectClasses.length > 0 && !config.objectClasses.includes(ai.objectClass)) {
+        return false;
+      }
+      if (config.minConfidence !== undefined && ai.confidence < config.minConfidence) return false;
+      const minDwell = config.minDwellSeconds && config.minDwellSeconds > 0 ? config.minDwellSeconds : 0;
+      if (minDwell === 0 ? ai.stage !== 'confirmed' : ai.stage !== 'dwell' || ai.stageSeconds !== minDwell) {
+        return false;
+      }
+    }
+
+    // Spatial rule scoping for tripwire / loitering events
+    if (config.spatialRuleId) {
+      const p: any = event.payload;
+      const ruleRef = p.kind === 'TRIPWIRE_CROSS' ? p.tripwireId : p.kind === 'LOITERING_DWELL' ? p.zoneId : undefined;
+      if (ruleRef !== config.spatialRuleId) return false;
+    }
+    if (config.minConfidence !== undefined && event.payload.kind !== 'ANPR_MATCH' && event.payload.kind !== 'AI_OBJECT_DETECTED') {
+      const conf = (event.payload as any).confidence;
+      if (typeof conf === 'number' && conf < config.minConfidence) return false;
+    }
+
+    if (event.payload.kind === 'CAMERA_ANALYTIC') {
+      const ca = event.payload;
+      if (config.analyticTypes && config.analyticTypes.length > 0 && !config.analyticTypes.includes(ca.analyticType)) return false;
+      if (config.protocols && config.protocols.length > 0 && !config.protocols.includes(ca.protocol)) return false;
+      // Camera analytics report start and stop; a rule fires on the start (or instantaneous event).
+      if (ca.state === false) return false;
+    }
+
     // Check ANPR watchlist category
     if (event.payload.kind === 'ANPR_MATCH') {
       const anpr = event.payload;
@@ -250,19 +292,10 @@ export class RuleEngine {
     return true;
   }
 
-  private matchesConditions(conditions: RuleCondition[], event: VigilOneEvent): boolean {
-    for (const cond of conditions) {
-      if (cond.type === 'SEVERITY_THRESHOLD') {
-        const severityRank: Record<EventSeverity, number> = {
-          INFO: 1,
-          WARNING: 2,
-          CRITICAL: 3,
-        };
-        const eventRank = severityRank[event.severity] || 1;
-        const requiredRank = severityRank[cond.value as EventSeverity] || 1;
-        if (eventRank < requiredRank) return false;
-      }
-    }
-    return true;
+  /** Stateless rule match (trigger config + conditions), shared with the rule preview. */
+  public async matchesRule(rule: { triggerConfigJson: any; conditionsJson: any }, event: VigilOneEvent): Promise<boolean> {
+    const triggerConfig = (rule.triggerConfigJson as unknown as RuleTriggerConfig) || {};
+    if (!this.matchesTriggerConfig(triggerConfig, event)) return false;
+    return this.conditions.matches(rule.conditionsJson, event);
   }
 }

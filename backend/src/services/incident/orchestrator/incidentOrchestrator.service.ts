@@ -43,12 +43,58 @@ export class IncidentOrchestrator {
     });
   }
 
+  private inboxTimer: NodeJS.Timeout | null = null;
+
   public start(): void {
     this.actionOutbox.start();
+    if (!this.inboxTimer) {
+      this.inboxTimer = setInterval(() => {
+        this.redriveInbox().catch((err) => console.error('[IncidentOrchestrator] inbox re-drive failed:', err));
+      }, 10000);
+    }
   }
 
   public stop(): void {
     this.actionOutbox.stop();
+    if (this.inboxTimer) {
+      clearInterval(this.inboxTimer);
+      this.inboxTimer = null;
+    }
+  }
+
+  /**
+   * Transactional inbox: every canonical event is persisted before rules run (idempotent on the
+   * event id). Returns 'processed' when this id was already fully handled.
+   */
+  private async recordCanonicalEvent(event: VigilOneEvent): Promise<'new' | 'pending' | 'processed'> {
+    // Events persisted by their producer (spatial incidents write theirs in the incident
+    // transaction) already exist: look first, so the expected case is not logged as a DB error.
+    const known = await this.prisma.canonicalEvent.findUnique({ where: { id: event.id }, select: { processedAt: true } });
+    if (known) return known.processedAt ? 'processed' : 'pending';
+    try {
+      await this.prisma.canonicalEvent.create({ data: canonicalRow(event) });
+      return 'new';
+    } catch (err: any) {
+      if (err?.code !== 'P2002') throw err;
+      const existing = await this.prisma.canonicalEvent.findUnique({ where: { id: event.id }, select: { processedAt: true } });
+      return existing?.processedAt ? 'processed' : 'pending';
+    }
+  }
+
+  /**
+   * Crash recovery: events persisted but never marked processed (process died between the insert
+   * and rule evaluation) are evaluated again. Rule and action idempotency keys prevent doubles.
+   */
+  public async redriveInbox(olderThanMs = 5000, batch = 50): Promise<number> {
+    const rows = await this.prisma.canonicalEvent.findMany({
+      where: { processedAt: null, createdAt: { lt: new Date(Date.now() - olderThanMs) } },
+      orderBy: { createdAt: 'asc' },
+      take: batch,
+    });
+    for (const r of rows) {
+      await this.ingestEvent(eventFromRow(r));
+    }
+    return rows.length;
   }
 
   public setHardwareDriver(driver: HardwareDriver): void {
@@ -75,10 +121,25 @@ export class IncidentOrchestrator {
       assertTenantBoundary(event.tenantId, context.tenantId);
     }
 
+    // 0. Persist the canonical event (transactional inbox); a fully processed duplicate stops here.
+    const inbox = await this.recordCanonicalEvent(event);
+    if (inbox === 'processed') {
+      return {
+        eventId: event.id,
+        correlationId: event.correlationId,
+        rulesEvaluated: 0,
+        rulesTriggered: 0,
+        actionsQueued: 0,
+        ruleExecutionIds: [],
+        duplicate: true,
+      };
+    }
+
     // 1. Evaluate event against automation rules with cascade depth guard
     const { results, cascadeTerminated } = await this.ruleEngine.evaluateEvent(event);
 
     if (cascadeTerminated) {
+      await this.markProcessed(event.id);
       return {
         eventId: event.id,
         correlationId: event.correlationId,
@@ -100,11 +161,11 @@ export class IncidentOrchestrator {
         {
           tenantId: event.tenantId,
           cameraId: event.cameraId,
-          eventId: event.id,
+          canonicalEventId: event.id,
           title: event.title || `Critical System Alarm: ${event.type}`,
           description: event.description || `Automatic alarm generated for critical ${event.type} event`,
           severity: EventSeverity.CRITICAL,
-          metadataJson: event.payload as any,
+          metadataJson: { eventType: event.type, payload: event.payload, provenance: event.provenance ?? null } as any,
         },
         context
       );
@@ -114,6 +175,8 @@ export class IncidentOrchestrator {
 
     // 3. Drain pending actions in the outbox
     const totalQueued = results.reduce((sum, r) => sum + r.actionsQueued, 0);
+    // Rules evaluated and actions durably queued: the event is processed. Actions run from the outbox.
+    await this.markProcessed(event.id);
     if (totalQueued > 0) {
       await this.actionOutbox.drainOutbox();
     }
@@ -129,6 +192,10 @@ export class IncidentOrchestrator {
       alarmCreated,
       alarmId,
     };
+  }
+
+  private async markProcessed(eventId: string): Promise<void> {
+    await this.prisma.canonicalEvent.update({ where: { id: eventId }, data: { processedAt: new Date() } });
   }
 
   // --- Alarm Lifecycle Public API ---
@@ -155,6 +222,8 @@ export class IncidentOrchestrator {
       cameraId?: string;
       eventId?: string;
       ruleId?: string;
+      canonicalEventId?: string;
+      automationRuleId?: string;
       title: string;
       description?: string;
       severity?: EventSeverity;
@@ -184,3 +253,51 @@ export class IncidentOrchestrator {
 
 export const incidentOrchestrator = new IncidentOrchestrator(prisma);
 export default incidentOrchestrator;
+
+/** Row persisted in CanonicalEvent for an orchestrator event (transactional inbox). */
+export function canonicalRow(event: VigilOneEvent) {
+  return {
+    id: event.id,
+    tenantId: event.tenantId,
+    cameraId: event.cameraId ?? null,
+    type: event.type,
+    source: event.source,
+    severity: event.severity,
+    timestampUtc: event.timestampUtc instanceof Date ? event.timestampUtc : new Date(event.timestampUtc),
+    correlationId: event.correlationId,
+    trackId: event.trackId ?? null,
+    payloadJson: {
+      payload: event.payload,
+      title: event.title ?? null,
+      description: event.description ?? null,
+      rootEventId: event.rootEventId ?? null,
+      depth: event.depth ?? 0,
+      spatialRef: event.spatialRef ?? null,
+      evidenceRef: event.evidenceRef ?? null,
+    } as any,
+    provenanceJson: (event.provenance as any) ?? undefined,
+  };
+}
+
+export function eventFromRow(r: any): VigilOneEvent {
+  const p = r.payloadJson || {};
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    cameraId: r.cameraId ?? undefined,
+    source: r.source,
+    type: r.type,
+    timestampUtc: r.timestampUtc,
+    severity: r.severity,
+    correlationId: r.correlationId,
+    rootEventId: p.rootEventId ?? undefined,
+    depth: p.depth ?? 0,
+    trackId: r.trackId ?? undefined,
+    spatialRef: p.spatialRef ?? undefined,
+    evidenceRef: p.evidenceRef ?? undefined,
+    title: p.title ?? undefined,
+    description: p.description ?? undefined,
+    payload: p.payload,
+    provenance: r.provenanceJson ?? undefined,
+  };
+}

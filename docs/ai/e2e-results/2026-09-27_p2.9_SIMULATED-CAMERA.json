@@ -1,0 +1,37 @@
+{
+  "scenario": "P2.9 SIMULATED-CAMERA person crossing a tripwire",
+  "simulated": "SIMULATED-CAMERA: public-domain photo composited onto a plain background, looped through a second MediaMTX acting as the IP camera",
+  "at": "2026-09-27T07:23:44.347Z",
+  "model": {
+    "name": "yolox-tiny-coco",
+    "version": "0.1.1rc0",
+    "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
+    "runtime": "onnxruntime@1.30.0",
+    "executionProvider": "cpu"
+  },
+  "measured": {
+    "latencyFrameToAlarmMs": 61,
+    "latencyBudgetMs": 5000,
+    "detectionsStored": 9,
+    "firstIncidentAt": "2026-09-27T07:23:31.316Z",
+    "alarmTriggeredAt": "2026-09-27T07:23:31.338Z",
+    "segmentsBeforeWorkerKill": 1,
+    "segmentsAfterWorkerKill": 4,
+    "segmentFilesAtEnd": 4
+  },
+  "audit": [
+    "MODEL_LOADED"
+  ],
+  "checks": {
+    "alarmRaised": true,
+    "alarmLinkedToCanonicalTripwireEvent": true,
+    "incidentCreated": true,
+    "allDetectionsCarryProvenance": true,
+    "alarmCarriesModelProvenance": true,
+    "detectedClassesArePersonOnly": true,
+    "modelLifecycleAudited": true,
+    "recordingContinuedWhileWorkerKilled": true,
+    "latencyWithinBudget": true
+  },
+  "result": "PASS"
+}

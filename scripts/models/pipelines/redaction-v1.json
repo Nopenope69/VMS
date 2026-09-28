@@ -1,0 +1,39 @@
+{
+  "$comment": "Redaction regions (P4.4): YuNet faces and PP-OCRv4 text groups (plate-like), no OCR. Components are candidate models; the worker refuses to run without a human approval for each SHA-256.",
+  "name": "redaction-regions",
+  "version": "1.0.0",
+  "tasks": [
+    "face_detection_for_redaction",
+    "plate_detection_for_redaction"
+  ],
+  "components": [
+    {
+      "role": "face_detector",
+      "key": "yunet-2023mar",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+    },
+    {
+      "role": "text_detector",
+      "key": "ppocrv4-det",
+      "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9"
+    }
+  ],
+  "faceDetection": {
+    "scoreThreshold": 0.5,
+    "nmsThreshold": 0.3,
+    "topK": 5000
+  },
+  "textDetection": {
+    "limitSideLen": 736,
+    "limitType": "min",
+    "thresh": 0.3,
+    "boxThresh": 0.5,
+    "unclipRatio": 1.6,
+    "maxCandidates": 1000,
+    "minSize": 3
+  },
+  "plateRegions": {
+    "minHeightPx": 8,
+    "padFraction": 0.25
+  }
+}

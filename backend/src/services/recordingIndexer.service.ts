@@ -5,7 +5,7 @@ import config from '../config/env';
 import { FFmpegService } from './ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../utils/segmentPath';
-import { activeWriteGraceMs } from './reconciliation/crashRecovery.service';
+import { isWithinActiveWriteGrace } from './reconciliation/crashRecovery.service';
 
 export class RecordingIndexerService {
   private prisma: PrismaClient;
@@ -98,14 +98,13 @@ export class RecordingIndexerService {
 
           // Check if file is still currently being written (e.g. mtime within last 2 seconds and not yet finalized)
           const stats = fs.statSync(filePath);
-          const ageMs = Date.now() - stats.mtimeMs;
 
           // Probe file with ffprobe to determine integrity
           const probe = await FFmpegService.probe(filePath);
 
           if (!probe || probe.durationSeconds <= 0) {
             // A file modified within the active-write grace period may still be open in the recorder.
-            if (ageMs < activeWriteGraceMs()) {
+            if (isWithinActiveWriteGrace(stats.mtimeMs)) {
               continue;
             }
 

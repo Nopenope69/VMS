@@ -1,0 +1,13 @@
+{
+  "$comment": "Production npm dependencies whose licence is not one of MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC. Each entry needs a justification and a review status. 'pending-human-review' entries pre-date the gate and are listed in docs/STATUS.md under 'Licence questions'; they must not be copied as precedent for new dependencies.",
+  "exceptions": [
+    { "package": "jackspeak", "license": "BlueOak-1.0.0", "project": "backend", "status": "pending-human-review", "justification": "Transitive (glob via archiver/jest tooling chain). BlueOak Model License 1.0.0 is a permissive licence (OSI-approved), not on the policy's five-licence list." },
+    { "package": "minipass", "license": "BlueOak-1.0.0", "project": "backend", "status": "pending-human-review", "justification": "Transitive (glob/path-scurry). Permissive, OSI-approved; not on the five-licence list." },
+    { "package": "package-json-from-dist", "license": "BlueOak-1.0.0", "project": "backend", "status": "pending-human-review", "justification": "Transitive (glob). Permissive, OSI-approved; not on the five-licence list." },
+    { "package": "path-scurry", "license": "BlueOak-1.0.0", "project": "backend", "status": "pending-human-review", "justification": "Transitive (glob). Permissive, OSI-approved; not on the five-licence list." },
+    { "package": "sax", "license": "BlueOak-1.0.0", "project": "backend", "status": "pending-human-review", "justification": "Transitive (xml2js via onvif). sax 1.6 moved from ISC to BlueOak-1.0.0." },
+    { "package": "tslib", "license": "0BSD", "project": "backend", "status": "pending-human-review", "justification": "Transitive (TypeScript runtime helpers). 0BSD is public-domain-equivalent, more permissive than MIT." },
+    { "package": "pako", "license": "(MIT AND Zlib)", "project": "backend", "status": "pending-human-review", "justification": "Transitive (pdfkit). Zlib licence is permissive (attribution in source only)." },
+    { "package": "png-js", "license": "UNDECLARED", "project": "backend", "status": "pending-human-review", "justification": "Transitive (pdfkit). package.json declares no licence; the shipped LICENSE file is the MIT text (checked 2026-09-27). Needs confirmation by a human." }
+  ]
+}

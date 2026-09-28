@@ -1,4 +1,4 @@
-import { FrameGeometry } from './types';
+import { FrameGeometry, PadPosition } from './types';
 
 /**
  * Coordinate Transformer for Letterboxed and Rescaled Video Feeds.
@@ -7,17 +7,26 @@ import { FrameGeometry } from './types';
  * Guarantees that bounding boxes generated in model-space (e.g. 640x640 letterboxed)
  * are accurately reversed (unpadded and unscaled) to map onto the native unpadded
  * camera aspect ratio and dimensions (e.g. 1920x1080) in the evidence plane.
+ *
+ * Geometry is integer-exact: the scaled image size and pad offsets computed here are passed to
+ * ffmpeg verbatim (see FrameExtractor.buildVideoFilter), so the reverse transform never relies on
+ * ffmpeg's own rounding.
  */
 export class CoordinateTransformer {
   /**
    * Computes authoritative FrameGeometry from source and model dimensions.
+   *
+   * letterbox=true: aspect-preserving scale plus padding (YOLO-family models).
+   * letterbox=false: stretch to the model size (DETR-family models); per-axis scale, no padding.
+   * padPosition: 'center' (default) or 'top-left' (the layout the official YOLOX preprocessing uses).
    */
   public static computeGeometry(
     sourceWidth: number,
     sourceHeight: number,
     modelWidth: number,
     modelHeight: number,
-    letterbox: boolean = true
+    letterbox: boolean = true,
+    padPosition: PadPosition = 'center'
   ): FrameGeometry {
     if (!sourceWidth || sourceWidth <= 0 || !sourceHeight || sourceHeight <= 0) {
       throw new Error(`Invalid source dimensions: ${sourceWidth}x${sourceHeight}`);
@@ -35,14 +44,18 @@ export class CoordinateTransformer {
         scale: 1.0,
         padX: 0,
         padY: 0,
+        scaledWidth: modelWidth,
+        scaledHeight: modelHeight,
+        letterbox: false,
+        padPosition,
       };
     }
 
     const scale = Math.min(modelWidth / sourceWidth, modelHeight / sourceHeight);
-    const scaledW = Math.round(sourceWidth * scale);
-    const scaledH = Math.round(sourceHeight * scale);
-    const padX = (modelWidth - scaledW) / 2;
-    const padY = (modelHeight - scaledH) / 2;
+    const scaledWidth = Math.max(1, Math.min(modelWidth, Math.round(sourceWidth * scale)));
+    const scaledHeight = Math.max(1, Math.min(modelHeight, Math.round(sourceHeight * scale)));
+    const padX = padPosition === 'top-left' ? 0 : Math.floor((modelWidth - scaledWidth) / 2);
+    const padY = padPosition === 'top-left' ? 0 : Math.floor((modelHeight - scaledHeight) / 2);
 
     return {
       sourceWidth,
@@ -52,12 +65,17 @@ export class CoordinateTransformer {
       scale,
       padX,
       padY,
+      scaledWidth,
+      scaledHeight,
+      letterbox: true,
+      padPosition,
     };
   }
 
   /**
    * Reverses letterbox padding and scaling, projecting normalized model-space coordinates
-   * back to normalized source-space coordinates [0..1].
+   * back to normalized source-space coordinates [0..1]. Boxes are clipped to the active
+   * (non-padding) image area before scaling back.
    */
   public static reverseTransformBox(
     modelBox: { x: number; y: number; width: number; height: number },
@@ -67,32 +85,25 @@ export class CoordinateTransformer {
       throw new Error('Mandatory FrameGeometry is missing or inconsistent. Cannot reverse coordinates.');
     }
 
-    // 1. Convert normalized model coordinates to absolute model canvas pixels
-    const mX = modelBox.x * geometry.modelWidth;
-    const mY = modelBox.y * geometry.modelHeight;
-    const mW = modelBox.width * geometry.modelWidth;
-    const mH = modelBox.height * geometry.modelHeight;
+    // Size of the real image inside the model canvas. Older geometry objects (without the
+    // explicit fields) were always centred letterboxes, so derive it from the padding.
+    const activeW = geometry.scaledWidth ?? geometry.modelWidth - geometry.padX * 2;
+    const activeH = geometry.scaledHeight ?? geometry.modelHeight - geometry.padY * 2;
+    if (activeW <= 0 || activeH <= 0) {
+      throw new Error('Mandatory FrameGeometry is missing or inconsistent. Cannot reverse coordinates.');
+    }
 
-    // 2. Undo padding offset
-    const activeCanvasW = geometry.modelWidth - geometry.padX * 2;
-    const activeCanvasH = geometry.modelHeight - geometry.padY * 2;
+    // 1. Model-canvas pixels, then remove the pad offset and clip to the active image.
+    const x1 = clamp(modelBox.x * geometry.modelWidth - geometry.padX, 0, activeW);
+    const y1 = clamp(modelBox.y * geometry.modelHeight - geometry.padY, 0, activeH);
+    const x2 = clamp((modelBox.x + modelBox.width) * geometry.modelWidth - geometry.padX, 0, activeW);
+    const y2 = clamp((modelBox.y + modelBox.height) * geometry.modelHeight - geometry.padY, 0, activeH);
 
-    const unpadX = Math.max(0, Math.min(activeCanvasW, mX - geometry.padX));
-    const unpadY = Math.max(0, Math.min(activeCanvasH, mY - geometry.padY));
-    const unpadW = Math.max(0, Math.min(activeCanvasW - unpadX, mW));
-    const unpadH = Math.max(0, Math.min(activeCanvasH - unpadY, mH));
-
-    // 3. Undo scale factor to recover source camera pixels
-    const srcX = unpadX / geometry.scale;
-    const srcY = unpadY / geometry.scale;
-    const srcW = unpadW / geometry.scale;
-    const srcH = unpadH / geometry.scale;
-
-    // 4. Normalize to native camera frame [0.0..1.0]
-    const normX = Math.max(0, Math.min(1, srcX / geometry.sourceWidth));
-    const normY = Math.max(0, Math.min(1, srcY / geometry.sourceHeight));
-    const normW = Math.max(0, Math.min(1 - normX, srcW / geometry.sourceWidth));
-    const normH = Math.max(0, Math.min(1 - normY, srcH / geometry.sourceHeight));
+    // 2. Active-image pixels to normalized source coordinates (per axis, so stretch works too).
+    const normX = x1 / activeW;
+    const normY = y1 / activeH;
+    const normW = Math.max(0, Math.min(1 - normX, (x2 - x1) / activeW));
+    const normH = Math.max(0, Math.min(1 - normY, (y2 - y1) / activeH));
 
     return {
       x: Math.round(normX * 10000) / 10000,
@@ -101,4 +112,8 @@ export class CoordinateTransformer {
       height: Math.round(normH * 10000) / 10000,
     };
   }
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }

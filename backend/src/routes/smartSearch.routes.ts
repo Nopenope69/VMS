@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
 import SmartSearchService from '../services/search/smartSearch.service';
+import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 
 const router = Router();
 const searchService = new SmartSearchService(prisma);
@@ -48,7 +49,7 @@ router.post('/spatial-motion', authorize(Permission.SEARCH_VIEW), async (req: Re
 /**
  * Forensic Plate Search: Fast wildcard querying over VehicleObservations with direct timeline links
  */
-router.get('/plates', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
+router.get('/plates', authorize(Permission.SEARCH_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const {
     cameraId,
@@ -74,6 +75,10 @@ router.get('/plates', authorize(Permission.SEARCH_VIEW), async (req: Request, re
       endTime: endTime ? new Date(String(endTime)) : undefined,
       limit: Number(limit),
       offset: Number(offset),
+    });
+    await recordSensitiveQuery(prisma, req, 'PLATE_SEARCH_QUERY', {
+      filters: { cameraId: cameraId ?? null, plateQuery: plateQuery ?? null, stateCode: stateCode ?? null, category: category ?? null, watchlistCategory: watchlistCategory ?? null, startTime: startTime ?? null, endTime: endTime ?? null },
+      resultCount: Array.isArray((result as any)?.results) ? (result as any).results.length : Array.isArray(result) ? (result as any).length : null,
     });
 
     return res.json({ result });

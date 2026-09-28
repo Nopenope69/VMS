@@ -1,5 +1,5 @@
 import { PrismaClient, EventSeverity } from '@prisma/client';
-import { NotificationAdapter, DispatchNotificationRequest } from '../incident/orchestrator/adapters/notificationAdapter';
+import { NotificationAdapter, DispatchNotificationRequest, DispatchResult } from '../incident/orchestrator/adapters/notificationAdapter';
 
 export { DispatchNotificationRequest };
 
@@ -45,10 +45,7 @@ export class NotificationDispatcherService {
     await this.adapter.processQueue();
   }
 
-  public async dispatchToAdapter(
-    channel: any,
-    payload: any
-  ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+  public async dispatchToAdapter(channel: any, payload: any): Promise<DispatchResult> {
     return this.adapter.dispatchToAdapter(channel, payload);
   }
 }

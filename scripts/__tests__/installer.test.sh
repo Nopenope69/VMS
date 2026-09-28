@@ -31,7 +31,10 @@ assert_contains() {
   local test_name="$1"
   local needle="$2"
   local haystack="$3"
-  if echo "$haystack" | grep -F -q -- "$needle"; then
+  # Here-string, not `echo | grep -q`: under `set -o pipefail`, grep -q exits at the first match,
+  # echo gets SIGPIPE writing a large haystack, and the pipeline reports a real match as a failure
+  # (CI run 36275778892: "echo: write error: Broken pipe" on 2 of 39 checks).
+  if grep -F -q -- "$needle" <<< "$haystack"; then
     echo "  ✓ $test_name"
   else
     echo "  ✗ $test_name (Expected to find '$needle' in output)"
@@ -111,7 +114,7 @@ MIGRATION_FILE="${ROOT_DIR}/backend/prisma/migrations/20260901000000_init/migrat
 CI_FILE="${ROOT_DIR}/.github/workflows/ci.yml"
 
 # Verify frontend_dist named volume is completely eliminated (C-008)
-if echo "$COMPOSE_CONTENT" | grep -q "frontend_dist"; then
+if grep -q "frontend_dist" <<< "$COMPOSE_CONTENT"; then
   assert_eq "docker-compose.yml eliminates frontend_dist named volume (C-008)" "absent" "present"
 else
   assert_eq "docker-compose.yml eliminates frontend_dist named volume (C-008)" "absent" "absent"

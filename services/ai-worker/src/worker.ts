@@ -1,4 +1,4 @@
-import { ModelLoader, LoadedModelArtifact } from './modelLoader';
+import { ModelLoader, LoadedModelArtifact, ModelRefusalError } from './modelLoader';
 import { OnnxInferenceEngine, IInferenceEngine } from './inferenceEngine';
 import { DetectionNormalizer } from './detectionNormalizer';
 import { AuthenticatedInternalApiClient } from './apiClient';
@@ -10,6 +10,10 @@ import {
   InferenceSchedulerOptions,
 } from './inferenceScheduler';
 import { MultiObjectTracker, MultiObjectTrackerConfig } from './tracker';
+import { AiAdapterCore, AdapterError } from './adapter/adapterCore';
+import { ModelCardV1 } from './adapter/contract';
+import { eventTypeForClass } from './classMap';
+import { MetricsRegistry } from './metrics';
 import {
   ModelManifestRecord,
   NormalizedDetectionEvent,
@@ -22,9 +26,17 @@ export interface AiWorkerConfig {
   backendBaseUrl: string;
   internalSecret: string;
   workerId?: string;
+  /** ai-adapter.v1 identity of this worker (provenance). */
+  adapterId?: string;
+  adapterVersion?: string;
   schedulerOptions?: InferenceSchedulerOptions;
   trackerConfig?: MultiObjectTrackerConfig;
+  /** Concurrency limits of the shared adapter core (stream pipeline + /v1/infer). */
+  maxInFlight?: number;
+  maxQueued?: number;
 }
+
+export const AI_WORKER_ADAPTER_VERSION = '2.0.0-phase2';
 
 export class AiWorker {
   private config: AiWorkerConfig;
@@ -34,8 +46,9 @@ export class AiWorker {
   private scheduler: InferenceScheduler;
   private loadedModel?: LoadedModelArtifact;
   private trackers: Map<string, MultiObjectTracker> = new Map();
+  public readonly core: AiAdapterCore;
 
-  constructor(config: AiWorkerConfig, engine?: IInferenceEngine) {
+  constructor(config: AiWorkerConfig, engine?: IInferenceEngine, metrics: MetricsRegistry = new MetricsRegistry()) {
     this.config = config;
     this.engine = engine || new OnnxInferenceEngine();
     this.apiClient = new AuthenticatedInternalApiClient({
@@ -44,6 +57,20 @@ export class AiWorker {
     });
     this.healthMonitor = new WorkerHealthMonitor(config.workerId);
     this.scheduler = new InferenceScheduler(config.schedulerOptions || { maxConcurrency: 2, timeoutMs: 1000 });
+    this.core = new AiAdapterCore(
+      this.engine,
+      {
+        adapterId: config.adapterId || config.workerId || 'vigilone-ai-worker',
+        adapterVersion: config.adapterVersion || AI_WORKER_ADAPTER_VERSION,
+        maxInFlight: config.maxInFlight ?? config.schedulerOptions?.maxConcurrency ?? 2,
+        maxQueued: config.maxQueued ?? 4,
+      },
+      metrics
+    );
+  }
+
+  public getApiClient(): AuthenticatedInternalApiClient {
+    return this.apiClient;
   }
 
   /**
@@ -59,20 +86,23 @@ export class AiWorker {
   }
 
   /**
-   * Initializes worker by loading model artifact, verifying SHA-256 and runtime config.
+   * Initializes worker by loading model artifact, verifying licence, SHA-256 and runtime config.
+   * Any refusal leaves the adapter FAILED (no inference) and is rethrown for reporting.
    */
-  public async initializeModel(manifest: ModelManifestRecord, artifactPath: string): Promise<void> {
+  public async initializeModel(
+    manifest: ModelManifestRecord,
+    artifactPath: string,
+    evaluation: ModelCardV1['evaluation'] = null
+  ): Promise<void> {
     try {
-      // 1. Model loader with authentic SHA-256 and runtime config verification
       const loaded = await ModelLoader.loadAndVerify(manifest, artifactPath);
-      this.loadedModel = loaded;
-
-      // 2. Load weights and verify signature / execution provider into inference engine
       await this.engine.load(loaded.buffer, manifest.runtimeConfigJson, manifest);
-
-      // 3. Update health status
+      this.loadedModel = loaded;
+      this.core.setModel({ manifest, evaluation });
       this.healthMonitor.recordModelLoaded(manifest, loaded.verified);
     } catch (err: any) {
+      this.loadedModel = undefined;
+      this.core.fail(err instanceof ModelRefusalError ? `${err.code}: ${err.message}` : err.message);
       this.healthMonitor.recordError(err.message);
       throw err;
     }
@@ -83,9 +113,10 @@ export class AiWorker {
    *
    * STRICT INVARIANTS:
    * 1. Mandatory FrameGeometry: Rejects frames without geometry without guessing.
-   * 2. Bounded Concurrency & Deadline: Scheduled via InferenceScheduler (max 2 concurrent, 1000ms deadline).
-   * 3. Newest-Frame Preference: Stale frames are superseded cleanly.
-   * 4. Idempotent Ingestion: Sends normalized events to backend POST /internal/detections.
+   * 2. Newest-frame preference per camera (InferenceScheduler) and bounded concurrency with
+   *    deadlines in the shared adapter core.
+   * 3. Every detection carries per-inference provenance; only v1 classes are tracked.
+   * 4. Idempotent Ingestion: Sends CONFIRMED tracks to backend POST /internal/detections.
    */
   public async processFrame(
     frameOrData: VideoFrame | Buffer | Float32Array,
@@ -97,7 +128,7 @@ export class AiWorker {
       geometry?: FrameGeometry;
     }
   ): Promise<NormalizedDetectionEvent[]> {
-    if (!this.loadedModel || !this.engine.isLoaded()) {
+    if (!this.loadedModel || !this.engine.isLoaded() || !this.core.getModel()) {
       throw new Error('Worker cannot process frame: Model not loaded or verified');
     }
 
@@ -105,10 +136,9 @@ export class AiWorker {
     let cameraId: string;
     let tenantId: string;
     let sequenceNumber: number;
-    let frameTimestamp: Date | undefined;
+    let frameTimestamp: Date;
     let geometry: FrameGeometry | undefined;
 
-    // Detect if input is a structured VideoFrame
     if ('data' in (frameOrData as any) && 'geometry' in (frameOrData as any)) {
       const vf = frameOrData as VideoFrame;
       frameData = vf.data;
@@ -119,55 +149,78 @@ export class AiWorker {
       geometry = vf.geometry;
     } else {
       frameData = frameOrData as Buffer | Float32Array;
-      cameraId = context?.cameraId || 'unknown-cam';
-      tenantId = context?.tenantId || 'unknown-tenant';
-      sequenceNumber = context?.sequenceNumber || 1;
-      frameTimestamp = context?.frameTimestamp;
-      geometry = context?.geometry;
+      if (!context?.cameraId || !context?.tenantId) {
+        throw new Error('Worker cannot process frame: cameraId and tenantId are required');
+      }
+      cameraId = context.cameraId;
+      tenantId = context.tenantId;
+      sequenceNumber = context.sequenceNumber || 1;
+      frameTimestamp = context.frameTimestamp || new Date();
+      geometry = context.geometry;
     }
 
     // MANDATORY GEOMETRY CHECK: Never guess coordinates
     if (!geometry) {
       throw new Error('Worker cannot process frame: Mandatory FrameGeometry is missing or inconsistent.');
     }
+    if (!(frameData instanceof Buffer)) {
+      throw new Error('Worker cannot process frame: the stream pipeline delivers RGB24 buffers');
+    }
 
     try {
       return await this.scheduler.schedule(cameraId, sequenceNumber, async () => {
-        // Run inference with coordinate reversal
-        const rawDetections = await this.engine.infer(frameData, {
-          imageWidth: this.loadedModel!.manifest.runtimeConfigJson.inputWidth,
-          imageHeight: this.loadedModel!.manifest.runtimeConfigJson.inputHeight,
-          geometry,
-        });
-
+        const result = await this.core.detect(
+          frameData as Buffer,
+          geometry!,
+          frameTimestamp.toISOString(),
+          this.scheduler.timeoutMs
+        );
         this.healthMonitor.incrementInference();
 
-        // Normalize each detection
-        const normalizedEvents: NormalizedDetectionEvent[] = rawDetections.map((raw) =>
-          DetectionNormalizer.normalize(raw, {
+        const normalizedEvents: NormalizedDetectionEvent[] = result.detections.map((raw) => {
+          const ev = DetectionNormalizer.normalize(raw, {
             tenantId,
             cameraId,
             modelManifestId: this.loadedModel!.manifest.id,
             frameTimestamp,
-          })
-        );
+          });
+          const cls = raw.objectClass as any;
+          ev.type = eventTypeForClass(cls);
+          ev.objectClass = cls;
+          // One inference, many detections: each row gets its own id (DB idempotency key) while
+          // provenance keeps the id of the inference that produced it.
+          ev.provenance = { ...result.provenance };
+          ev.attributesJson = { ...(ev.attributesJson || {}), inferenceLatencyMs: result.latencyMs };
+          return ev;
+        });
 
-        // Update camera-isolated MultiObjectTracker
         const tracker = this.getTracker(cameraId);
-        tracker.trackDetections(normalizedEvents, frameTimestamp || new Date());
+        tracker.trackDetections(normalizedEvents, frameTimestamp);
+        const firstSeen = new Map(tracker.getTracks().map((t) => [t.trackId, t.firstSeenAt]));
 
         // Transmit ONLY CONFIRMED tracks to backend internal API
         for (const event of normalizedEvents) {
+          if (event.trackId && firstSeen.has(event.trackId)) {
+            event.trackFirstSeenAt = firstSeen.get(event.trackId)!.toISOString();
+          }
           if (event.trackState === 'CONFIRMED') {
             await this.apiClient.submitDetection(event);
+            this.core.metrics.inc('vigilone_ai_detections_submitted_total', 'Confirmed-track detections sent to the backend', { objectClass: event.objectClass || 'unknown' });
           }
         }
 
         return normalizedEvents;
       });
     } catch (err: any) {
-      if (err instanceof InferenceTimeoutError || err instanceof StaleFrameDroppedError) {
-        // Handled cleanly by scheduler; frame is dropped without crashing or corrupting evidence plane
+      if (
+        err instanceof InferenceTimeoutError ||
+        err instanceof StaleFrameDroppedError ||
+        (err instanceof AdapterError && (err.code === 'DEADLINE_EXCEEDED' || err.code === 'OVERLOADED'))
+      ) {
+        // Frame dropped cleanly (counted in metrics); the evidence plane is untouched.
+        this.core.metrics.inc('vigilone_ai_frames_dropped_total', 'Frames dropped before inference completed', {
+          reason: err instanceof StaleFrameDroppedError ? 'stale' : err instanceof AdapterError ? err.code.toLowerCase() : 'timeout',
+        });
         return [];
       }
       throw err;

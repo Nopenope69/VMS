@@ -64,13 +64,56 @@ When shipping an edge appliance image containing an FFmpeg binary compiled with 
 | `zod` | **MIT** | Environment & schema validation |
 | `jsonwebtoken` | **MIT** | JWT authentication & short-lived media tokens |
 | `bcryptjs` | **MIT** | Password hashing for operator credentials |
-| `@2bad/onvif` | **MIT** | ONVIF SOAP client, WS-Discovery, PTZ commands |
+| `onvif` | **MIT** | ONVIF SOAP client, WS-Discovery, PTZ commands (pulls in `xml2js` -> `sax`, BlueOak-1.0.0: pending licence review, see docs/STATUS.md) |
 | `axios` | **MIT** | HTTP client for MediaMTX Control API |
 | `pdfkit` | **MIT** | Generates Section 63 BSA Part A & Part B PDFs |
 | `archiver` | **MIT** | Assembles evidentiary zip packages |
 | `check-disk-space` | **MIT** | Storage sentinel disk space monitoring |
 | `cors` | **MIT** | Cross-origin resource sharing middleware |
 | `helmet` | **MIT** | HTTP security headers |
+| `fast-xml-parser` (+ `strnum`, `is-unsafe`, `xml-naming`, `fast-xml-builder`, `path-expression-matcher`, `@nodable/entities`) | **MIT** | Camera event protocols: ONVIF SOAP, Hikvision ISAPI, Profile M metadata (Phase 3) |
+
+SMTP delivery uses an in-house client (`backend/src/services/notification/smtp/smtpClient.ts`)
+because the common Node mail libraries are MIT-0, which is not on the allowlist.
+
+### 3.2a AI worker runtime dependencies (`services/ai-worker/package.json`)
+| Package | License | Purpose |
+| :--- | :--- | :--- |
+| `onnxruntime-node` / `onnxruntime-common` 1.30.0 | **MIT** | ONNX inference (CPU binaries bundled in the package) |
+| `adm-zip`, `globalthis`, `matcher`, `serialize-error`, `define-properties`, `gopd`, `escape-string-regexp`, `define-data-property`, `has-property-descriptors`, `object-keys`, `es-define-property`, `es-errors` | **MIT** | onnxruntime-node install/runtime helpers |
+| `global-agent` | **BSD-3-Clause** | onnxruntime-node proxy support |
+| `semver` | **ISC** | onnxruntime-node |
+| `type-fest` | **MIT OR CC0-1.0** (used under MIT) | type definitions |
+
+### 3.2b AI models (weights are fetched by `scripts/models/fetch-model.sh`, pinned by SHA-256 in `scripts/models/models.lock.json`; not committed)
+| Model | License | Notes |
+| :--- | :--- | :--- |
+| YOLOX nano / tiny / s (Megvii) | **Apache-2.0** | Default detectors. Trained on COCO (see licence questions in docs/STATUS.md). |
+| RF-DETR Nano (Roboflow) | **Apache-2.0** | Exported locally with `scripts/models/export-rfdetr.sh`; optional. |
+
+**Candidate models** (`candidateModels` in the lock file). Their code and weight licences are permissive, but their training data needs a human decision, so the product refuses to run them (`LICENSE_REJECTED`) until `scripts/models/model-license-exceptions.json` holds an approval naming the exact SHA-256. See "Licence questions" in docs/STATUS.md.
+
+| Model | License | Source | Open question |
+| :--- | :--- | :--- | :--- |
+| PP-OCRv4 text detection (`ppocrv4-det`) | **Apache-2.0** | PaddleOCR, ONNX from the `rapidocr_onnxruntime` 1.4.4 wheel (Apache-2.0) | Training datasets not fully published; some public text datasets are research-only |
+| fast-plate-ocr `cct_s_v2_global` (`fast-plate-ocr-cct-s-v2`) | **MIT** | github.com/ankandrew/cnn-ocr-lp release `arg-plates` | Training data unpublished; India is not a listed region |
+| YuNet 2023mar (`yunet-2023mar`) | **MIT** | opencv/opencv_zoo | Trained on WIDER FACE, whose terms forbid commercial use of derived data |
+
+### 3.2c Test and evaluation tools (never shipped in the appliance)
+| Tool | License | Use |
+| :--- | :--- | :--- |
+| `supervision` (Roboflow) | **MIT** | Reference ByteTrack / LineZone for tracker validation |
+| `pycocotools` | **BSD-2-Clause** (FreeBSD) | Reference COCO evaluation |
+| `onnxruntime` (Python), `opencv-python-headless`, `numpy` | **MIT**, **Apache-2.0 / MIT**, **BSD-3-Clause** | Python reference decoders |
+| MailHog 1.0.1 | **MIT** | SMTP interop test server (binary, CI only) |
+| `rapidocr_onnxruntime` 1.4.4 (Python) | **Apache-2.0** | Reference DB text-detection post-processing for the ANPR golden tests |
+| `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
+| `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
+| DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |
+| NASA portrait of Eileen Collins (`skimage/data/astronaut.png` from scikit-image 0.26.0, BSD-3-Clause package) | **Public domain** ("No known copyright restrictions, released into the public domain", scikit-image docs) | The only real-world image in the redaction test fixture; pinned by SHA-256 in `tools/redaction/make_fixtures.py` |
+| ANPR fine-tuning stack (`tools/anpr/finetune/requirements-train.txt`): `fast-plate-ocr[train]` 1.1.0, TensorFlow 2.21, Keras 3.15, albumentations 2.0.8, tf2onnx, onnxslim, onnxruntime | **MIT / Apache-2.0** (top level); transitive `matplotlib` (Matplotlib licence) and `tqdm` (MPL-2.0 AND MIT) are not on the allowed list, see Licence questions | Workstation-only training; never installed in the appliance |
+| fast-plate-ocr base Keras weights `cct_s_v2_global.keras` + model config | **MIT** (github.com/ankandrew/cnn-ocr-lp) | Fine-tuning starting point, pinned in `tools/anpr/finetune/base-model.lock.json` |
+
 
 ### 3.3 Frontend Runtime Dependencies (`frontend/package.json`)
 | Package | License | Purpose |

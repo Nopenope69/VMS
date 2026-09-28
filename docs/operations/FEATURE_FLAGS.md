@@ -29,10 +29,11 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` |
 | `OIDC_SSO` | `VIGILONE_FEATURE_OIDC_SSO` | `/api/v1/sso` |
 | `DIO_RELAY` | `VIGILONE_FEATURE_DIO_RELAY` | `/api/v1/relays` |
-| `ANPR` | `VIGILONE_FEATURE_ANPR` | `/api/v1/anpr` |
+| `ANPR` | `VIGILONE_FEATURE_ANPR` | `/api/v1/anpr`, `/api/v1/internal/anpr/*` (501 `FEATURE_DISABLED`); see ANPR.md |
 | `REDACTION` | `VIGILONE_FEATURE_REDACTION` | `/api/v1/privacy/jobs` (privacy policies stay available) |
 | `SMART_SEARCH` | `VIGILONE_FEATURE_SMART_SEARCH` | `/api/v1/search` |
 | `FLOORPLANS` | `VIGILONE_FEATURE_FLOORPLANS` | `/api/v1/floorplans` |
+| `CAMERA_EVENTS` | `VIGILONE_FEATURE_CAMERA_EVENTS` | `/api/v1/camera-events` (and the `cameraEventManager` worker; see `docs/operations/CAMERA_EVENTS.md`) |
 
 Note: the ANPR router also checks the licence entitlement (`requireFeature('ANPR')` in
 `middleware/license.ts`). The feature flag is an operational switch; the licence is a commercial

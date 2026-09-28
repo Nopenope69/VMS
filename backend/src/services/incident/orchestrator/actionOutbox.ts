@@ -84,6 +84,14 @@ export class ActionOutbox {
       return 0;
     }
 
+    // Within one rule execution, run actions in the order the rule lists them (e.g. TRIGGER_ALARM
+    // before DISPATCH_NOTIFICATION, which notifies about that alarm).
+    const indexOf = (a: any) =>
+      ((a.ruleExecution?.rule?.actionsJson as any[]) || []).findIndex((x: any) => x.id === a.actionId);
+    pendingActions.sort((a: any, b: any) =>
+      a.ruleExecutionId === b.ruleExecutionId ? indexOf(a) - indexOf(b) : 0
+    );
+
     let processedCount = 0;
 
     for (const actionRecord of pendingActions) {
@@ -119,6 +127,8 @@ export class ActionOutbox {
 
         const context = {
           tenantId: actionRecord.ruleExecution.tenantId,
+          ruleId: actionRecord.ruleExecution.ruleId,
+          ruleName: rule?.name,
           ruleExecutionId: actionRecord.ruleExecutionId,
           correlationId: actionRecord.ruleExecution.correlationId,
           triggerEventId: actionRecord.ruleExecution.triggerEventId,
@@ -179,26 +189,46 @@ export class ActionOutbox {
       }
 
       case RuleActionType.DISPATCH_NOTIFICATION: {
-        return await this.notificationAdapter.enqueueAlarmNotifications({
-          tenantId: context.tenantId,
-          alarmId: actionConfig.config.alarmId || context.triggerEventId || 'alarm_auto',
-          title: actionConfig.config.title || 'Automated Notification',
-          description: actionConfig.config.description,
-          severity: actionConfig.config.severity || 'WARNING',
-          cameraName: actionConfig.config.cameraName,
+        // Notifications are about an alarm: the one this rule raised for this event.
+        const alarm = await this.prisma.alarm.findFirst({
+          where: { tenantId: context.tenantId, canonicalEventId: context.triggerEventId, automationRuleId: context.ruleId },
+          include: { camera: { select: { name: true } } },
+          orderBy: { triggeredAt: 'desc' },
         });
+        if (!alarm) {
+          throw new Error(
+            'NOTIFICATION_REQUIRES_ALARM: DISPATCH_NOTIFICATION needs a TRIGGER_ALARM action earlier in the same rule'
+          );
+        }
+        const queued = await this.notificationAdapter.enqueueAlarmNotifications({
+          tenantId: context.tenantId,
+          alarmId: alarm.id,
+          title: actionConfig.config.title || alarm.title,
+          description: actionConfig.config.description ?? alarm.description,
+          severity: actionConfig.config.severity || alarm.severity,
+          cameraName: alarm.camera?.name,
+          metadataJson: alarm.metadataJson,
+        });
+        return { alarmId: alarm.id, notificationsQueued: queued };
       }
 
       case RuleActionType.TRIGGER_ALARM: {
+        const canonical = await this.prisma.canonicalEvent.findUnique({ where: { id: context.triggerEventId } });
         return await this.alarmLifecycle.elevateAlarm(
           {
             tenantId: context.tenantId,
-            cameraId: actionConfig.config.cameraId,
-            eventId: context.triggerEventId,
-            ruleId: actionConfig.id,
-            title: actionConfig.config.title || 'Rule Triggered Alarm',
+            cameraId: actionConfig.config.cameraId ?? canonical?.cameraId ?? undefined,
+            canonicalEventId: canonical?.id,
+            automationRuleId: context.ruleId,
+            title: actionConfig.config.title || (context.ruleName ? `Rule: ${context.ruleName}` : 'Rule Triggered Alarm'),
             description: actionConfig.config.description,
             severity: actionConfig.config.severity,
+            metadataJson: {
+              triggerEventId: context.triggerEventId,
+              eventType: canonical?.type ?? null,
+              event: (canonical?.payloadJson as any)?.payload ?? null,
+              provenance: canonical?.provenanceJson ?? null,
+            },
           },
           { tenantId: context.tenantId, correlationId: context.correlationId }
         );

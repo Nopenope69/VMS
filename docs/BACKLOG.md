@@ -20,3 +20,29 @@ found. Pick them up in the phase noted.
 | Soak rehearsal did not register the simulated cameras in the database, so the backend was idle during it. A realistic software soak needs registered cameras with MediaMTX pulling from the simulated sources (the appliance's real topology). | P1.3 | Phase 1 follow-up |
 | `tc netem` is unavailable in the agent sandbox; `network-fault.sh` has only been exercised to its NOT_VERIFIED path. | P1.2 | P1.6 (human run) |
 | Docker image builds could not run in the agent sandbox (build containers cannot use the session proxy), so compose-target drills (`postgres-kill.sh`, compose variants of the others) have not been executed. | P1.2/P1.5 | P1.5/P1.6 (human run) |
+| Run ONNX inference in a `worker_thread` (or a process pool): today it runs synchronously on the ai-worker event loop, so a slow model delays HTTP answers and late results are discarded as `DEADLINE_EXCEEDED`. | P2.1 | Phase 4 |
+| The ai-worker reads MediaMTX with an operator-level credential; add a least-privilege read-only MediaMTX user for the worker. | P2.2 | Phase 4 hardening |
+| Retire the legacy in-process `EdgeAiRuntime` (only started with the ANPR flag) once ANPR runs through the ai-adapter. | P2.2 | P4.1 |
+| `supervision.ByteTrack` is deprecated upstream in favour of the `trackers` package; re-run tracker validation against the successor when it stabilises. | P2.7 | Phase 4 |
+| Rule preview replays stored events only; a clip-based preview (run the model over recorded video for a window) would show what lower thresholds would catch. | P3.5 | Phase 4 |
+| ONVIF Profile M: capture the RTSP metadata track live (the parser and JSONL archive exist; nothing feeds them yet). | P3.1 | Phase 4 |
+| Camera clock check has 1 s resolution (ONVIF `GetSystemDateAndTime`), so a 100 ms bound cannot be confirmed; measure with RTCP sender reports (NTP timestamps) from the RTSP session. | P3.1 | Phase 4 |
+| NVR channel mapping for camera events: a Hikvision/Dahua NVR stream carries events for many channels; map `channel` to the right VigilOne camera (today one source = one camera, channel kept in the payload). | P3.2 | Phase 4 |
+| Camera events have been exercised only against test doubles and fixtures written from published formats; capture (redacted) real device streams for Hikvision, Dahua, Axis and Hanwha and add them as fixtures. | P3.1/P3.2 | P2.10 / field validation (HUMAN-REQUIRED) |
+| Correlation (`PRECEDED_BY` / `NOT_PRECEDED_BY`) sees only events already stored; a preceding event that arrives late (slow camera, backlog) is missed. Consider a short evaluation delay for rules with correlation. | P3.6 | Phase 4 |
+| `sax` (BlueOak-1.0.0, via `onvif` -> `xml2js`) and the other pending licence exceptions need a human decision; if BlueOak is rejected, replace the `onvif` package (camera events already use fast-xml-parser). | P3.1 | Human decision |
+| `EvidenceArchive` writes `concatTool: 'ffmpeg-v6.1'` into manifests as a constant instead of the version of the ffmpeg binary that ran. | P3.4 | Phase 4 (fail-loud) |
+| Webhook and Slack channels are blocked in air-gapped mode because the SSRF guard only allows public addresses; a LAN webhook target for air-gapped sites needs an explicit, audited allowlist. | P3.3 | Phase 4 |
+| ~~`disasterRecoveryDrill.test.ts` Scenario B failed once in a parallel run~~ **Resolved:** same-millisecond mtime race in the active-write grace check (negative file age counted as "being written" even with grace 0); fixed with `isWithinActiveWriteGrace`, reproduced under `--maxWorkers=2` before the fix and 810/810 twice after. | Session 2 verification | Done |
+
+## Phase 4 (ANPR) follow-ups
+
+- **Plate snapshots**: observations store no image crop yet; add crops with retention under P4.6 purge rules.
+- **ANPR on non-LPR cameras**: vehicle-crop → plate detection for overview cameras (needs a licence-clean vehicle/plate detector).
+- **Indian-data evaluation and fine-tune** (P4.3, HUMAN-REQUIRED): measure plate-level accuracy on held-out site footage.
+- **Test flake watch**: one parallel backend run had 1 failure in `anprRealDb.test.ts` and ai-worker runs twice had 2 failures on the first run after heavy work; not reproduced in 6 and 11 reruns (incl. under CPU contention). Output was not captured; capture it if it recurs (CI keeps the logs).
+- **Redaction UI**: P4.4 ships the API only (create / execute / status / download). An evidence-view panel to start jobs, watch progress and download derivatives is not built.
+- **Redaction recall on site footage**: face/plate recall of the redaction pipeline is unmeasured; needs labelled site clips (HUMAN-REQUIRED).
+- **BYSTANDER redaction**: needs a person detector wired to the redaction adapter (the object-detection worker's model is not reused yet).
+- **DPDP settings UI**: the P4.6 settings (face switch, retention, allowed purposes) and the purge are API-only; an admin page is not built.
+- **Data-principal requests**: access/erasure request workflow (DPDP s.11–13) is not implemented beyond retention purge and audit.

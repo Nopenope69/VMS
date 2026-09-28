@@ -26,6 +26,8 @@ import DetectionZoneModal from '../components/DetectionZoneModal';
 import PtzControlModal from '../components/PtzControlModal';
 import StreamDiagnosticModal from '../components/StreamDiagnosticModal';
 import TripwireModal from '../components/TripwireModal';
+import CameraEventSourcesModal from '../components/CameraEventSourcesModal';
+import { useFeatureFlags } from '../services/features';
 
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Devices: React.FC = () => {
@@ -39,11 +41,12 @@ export const Devices: React.FC = () => {
   // Surveillance Operation Modals State
   const [selectedCameraForModal, setSelectedCameraForModal] = useState<any | null>(null);
   const [activeModalType, setActiveModalType] = useState<
-    'SCHEDULE' | 'ZONES' | 'PTZ' | 'DIAGNOSTIC' | 'TRIPWIRE' | null
+    'SCHEDULE' | 'ZONES' | 'PTZ' | 'DIAGNOSTIC' | 'TRIPWIRE' | 'EVENTS' | null
   >(null);
 
   // Context Menu State
   const [openMenuCameraId, setOpenMenuCameraId] = useState<string | null>(null);
+  const featureFlags = useFeatureFlags();
 
   // Form State
   const [name, setName] = useState('');
@@ -463,6 +466,19 @@ export const Devices: React.FC = () => {
                                 <Crosshair className="w-3.5 h-3.5 text-status-warn" />
                                 <span>Vector Tripwire Analytics</span>
                               </button>
+                              {featureFlags.CAMERA_EVENTS && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCameraForModal(c);
+                                    setActiveModalType('EVENTS');
+                                    setOpenMenuCameraId(null);
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-vms-hover flex items-center gap-2 text-vms-text"
+                                >
+                                  <Radio className="w-3.5 h-3.5 text-vms-accent" />
+                                  <span>Camera Event Feeds</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -703,6 +719,15 @@ export const Devices: React.FC = () => {
           isOpen={true}
           cameraId={selectedCameraForModal.id}
           cameraName={selectedCameraForModal.name}
+          onClose={() => {
+            setSelectedCameraForModal(null);
+            setActiveModalType(null);
+          }}
+        />
+      )}
+      {selectedCameraForModal && activeModalType === 'EVENTS' && (
+        <CameraEventSourcesModal
+          camera={selectedCameraForModal}
           onClose={() => {
             setSelectedCameraForModal(null);
             setActiveModalType(null);

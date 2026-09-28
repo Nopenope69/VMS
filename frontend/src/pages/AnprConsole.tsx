@@ -6,19 +6,44 @@ import {
   Search,
   RefreshCw,
   Clock,
-  CheckCircle2,
   Cpu,
   X,
-  Radio,
+  Video,
 } from 'lucide-react';
 import api from '../services/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
+const PURPOSES: Array<{ id: string; label: string; needsReference: boolean }> = [
+  { id: 'SECURITY_INCIDENT_INVESTIGATION', label: 'Security incident investigation', needsReference: false },
+  { id: 'LAW_ENFORCEMENT_REQUEST', label: 'Law-enforcement request', needsReference: true },
+  { id: 'ACCESS_CONTROL', label: 'Access control', needsReference: false },
+  { id: 'SAFETY_EMERGENCY', label: 'Safety emergency', needsReference: false },
+  { id: 'LEGAL_CLAIM', label: 'Legal claim', needsReference: true },
+  { id: 'AUDIT_REVIEW', label: 'Audit review', needsReference: false },
+];
+
+const readSession = (k: string) => {
+  try {
+    return sessionStorage.getItem(k) || '';
+  } catch {
+    return '';
+  }
+};
+
 export const AnprConsole: React.FC = () => {
+  // DPDP (P4.6): plate data is shown only for a declared purpose, which the backend audits.
+  const [purpose, setPurpose] = useState<string>(() => readSession('vigilone.anpr.purpose'));
+  const [purposeRef, setPurposeRef] = useState<string>(() => readSession('vigilone.anpr.purposeRef'));
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const purposeDef = PURPOSES.find((p) => p.id === purpose);
+  const purposeReady = Boolean(purposeDef) && (!purposeDef!.needsReference || purposeRef.trim().length > 0);
+  const purposeHeaders = () => ({ 'X-VigilOne-Purpose': purpose, ...(purposeRef.trim() ? { 'X-VigilOne-Purpose-Reference': purposeRef.trim() } : {}) });
   const [observations, setObservations] = useState<any[]>([]);
   const [watchlists, setWatchlists] = useState<any[]>([]);
-  const [runtimeTelemetry, setRuntimeTelemetry] = useState<any | null>(null);
+  const [anprStatus, setAnprStatus] = useState<any | null>(null);
+  const [cameras, setCameras] = useState<any[]>([]);
+  const [lprError, setLprError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<string>('');
@@ -30,7 +55,8 @@ export const AnprConsole: React.FC = () => {
 
   // Add Watchlist Form
   const [newPlate, setNewPlate] = useState<string>('');
-  const [newCategory, setNewCategory] = useState<string>('SUSPICIOUS');
+  const [newCategory, setNewCategory] = useState<string>('SUSPECT');
+  const [newMatchType, setNewMatchType] = useState<'EXACT' | 'WILDCARD' | 'REGEX'>('EXACT');
   const [newOwner, setNewOwner] = useState<string>('');
   const [newNotes, setNewNotes] = useState<string>('');
   const [newSeverity, setNewSeverity] = useState<string>('WARNING');
@@ -39,15 +65,23 @@ export const AnprConsole: React.FC = () => {
   const fetchAnprData = async () => {
     try {
       setLoading(true);
-      const [obsRes, wlRes, diagRes] = await Promise.all([
-        api.get('/anpr/observations', { params: { limit: 50 } }),
-        api.get('/anpr/watchlist'),
-        api.get('/anpr/health'),
+      const statusRes = await api.get('/anpr/health');
+      setAnprStatus(statusRes.data.status || null);
+      if (!purposeReady) return;
+      const [obsRes, wlRes] = await Promise.all([
+        api.get('/anpr/observations', { params: { limit: 50 }, headers: purposeHeaders() }),
+        api.get('/anpr/watchlist', { headers: purposeHeaders() }),
       ]);
       setObservations(obsRes.data.observations || []);
       setWatchlists(wlRes.data.watchlist || []);
-      setRuntimeTelemetry(diagRes.data.telemetry || null);
-    } catch (err) {
+      setAccessError(null);
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (err?.response?.status === 403 || (code && String(code).startsWith('PURPOSE_'))) {
+        setAccessError(err.response.data.error || 'Access to plate data was refused');
+        setObservations([]);
+        setWatchlists([]);
+      }
       console.error('Failed to load ANPR console data:', err);
     } finally {
       setLoading(false);
@@ -55,10 +89,21 @@ export const AnprConsole: React.FC = () => {
   };
 
   useEffect(() => {
+    try {
+      sessionStorage.setItem('vigilone.anpr.purpose', purpose);
+      sessionStorage.setItem('vigilone.anpr.purposeRef', purposeRef);
+    } catch {
+      // per-tab convenience only
+    }
+    if (!purposeReady) {
+      setObservations([]);
+      setWatchlists([]);
+    }
     fetchAnprData();
     const interval = setInterval(fetchAnprData, 8000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purpose, purposeRef]);
 
   const handleAddWatchlist = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +111,7 @@ export const AnprConsole: React.FC = () => {
     try {
       await api.post('/anpr/watchlist', {
         plateNumber: newPlate.trim(),
+        matchType: newMatchType,
         category: newCategory,
         ownerName: newOwner.trim() || undefined,
         notes: newNotes.trim() || undefined,
@@ -75,7 +121,7 @@ export const AnprConsole: React.FC = () => {
       setNewPlate('');
       setNewOwner('');
       setNewNotes('');
-      const wlRes = await api.get('/anpr/watchlist');
+      const wlRes = await api.get('/anpr/watchlist', { headers: purposeHeaders() });
       setWatchlists(wlRes.data.watchlist || []);
     } catch (err: any) {
       setWatchlistError(err.response?.data?.error || 'Failed to add watchlist entry.');
@@ -86,19 +132,44 @@ export const AnprConsole: React.FC = () => {
     try {
       await api.delete(`/anpr/watchlist/${id}`);
       setPlateToDelete(null);
-      const wlRes = await api.get('/anpr/watchlist');
+      const wlRes = await api.get('/anpr/watchlist', { headers: purposeHeaders() });
       setWatchlists(wlRes.data.watchlist || []);
     } catch (err: any) {
       setWatchlistError(err.response?.data?.error || 'Failed to delete watchlist entry.');
     }
   };
 
+  const openStatusDrawer = async () => {
+    setShowTelemetryDrawer(true);
+    setLprError(null);
+    try {
+      const res = await api.get('/cameras');
+      setCameras(res.data.cameras || []);
+    } catch (err: any) {
+      setLprError(err?.response?.data?.error || 'Failed to load cameras');
+    }
+  };
+
+  const setLprMode = async (camera: any, lprMode: boolean) => {
+    setLprError(null);
+    try {
+      const existing = (anprStatus?.lprCameras || []).find((c: any) => c.id === camera.id)?.lprConfigJson || {};
+      await api.put(`/anpr/cameras/${camera.id}/lpr`, { ...existing, lprMode });
+      await Promise.all([openStatusDrawer(), fetchAnprData()]);
+    } catch (err: any) {
+      setLprError(err?.response?.data?.error || 'Failed to change LPR mode');
+    }
+  };
+
+  const lprCameraIds = new Set((anprStatus?.lprCameras || []).map((c: any) => c.id));
+  const activePipeline = anprStatus?.pipelines?.[0] ?? null;
+
   const filteredObservations = observations.filter((obs) => {
     const matchesQuery =
       obs.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      obs.normalizedPlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (obs.stateName && obs.stateName.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCat = !filterCategory || obs.category === filterCategory;
+      obs.normalizedPlate.toLowerCase().includes(searchTerm.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+      (obs.stateCode && obs.stateCode.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCat = !filterCategory || obs.vehicleCategory === filterCategory;
     return matchesQuery && matchesCat;
   });
 
@@ -116,11 +187,11 @@ export const AnprConsole: React.FC = () => {
                 Indian ANPR & Fleet Forensics
               </h1>
               <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-400 border border-sky-400 font-mono">
-                36 States/UTs + BH Series
+                Indian formats: State/UT, BH, diplomatic
               </span>
             </div>
             <p className="text-xs text-vms-muted font-mono mt-0.5">
-              Multi-Frame Track Voting ($N \ge 3$) • OCR Ambiguity Normalization • MediaMTX Localhost Relay
+              Multi-frame voting per plate session • positional letter/digit correction • LPR cameras via MediaMTX loopback
             </p>
           </div>
         </div>
@@ -130,12 +201,9 @@ export const AnprConsole: React.FC = () => {
             variant="secondary"
             size="sm"
             icon={Cpu}
-            onClick={() => setShowTelemetryDrawer(true)}
+            onClick={openStatusDrawer}
           >
-            <span>AI Telemetry</span>
-            {runtimeTelemetry && (
-              <span className="ml-1 text-[10px] font-mono text-sky-400">{runtimeTelemetry.currentFps} FPS</span>
-            )}
+            <span>Pipeline & LPR cameras</span>
           </Button>
 
           <Button
@@ -158,6 +226,36 @@ export const AnprConsole: React.FC = () => {
         </div>
       </div>
 
+      {/* Purpose of access (DPDP): required before any plate data is loaded; every query is audited */}
+      <div className="bg-vms-panel p-3 rounded border border-vms-border flex flex-wrap items-center gap-3 text-xs">
+        <span className="font-mono uppercase tracking-wider text-vms-muted">Purpose of access</span>
+        <select
+          value={purpose}
+          onChange={(e) => setPurpose(e.target.value)}
+          className="bg-vms-surface border border-vms-border rounded px-2 py-1 text-vms-text"
+        >
+          <option value="">Select a purpose…</option>
+          {PURPOSES.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        {purposeDef?.needsReference && (
+          <input
+            value={purposeRef}
+            onChange={(e) => setPurposeRef(e.target.value)}
+            placeholder="Case / request reference (required)"
+            maxLength={200}
+            className="bg-vms-surface border border-vms-border rounded px-2 py-1 text-vms-text w-64"
+          />
+        )}
+        <span className="text-vms-dim">
+          {purposeReady ? 'Plate queries are logged with this purpose.' : 'Plate reads and known-plate lists stay hidden until a purpose is declared.'}
+        </span>
+        {accessError && <span className="text-rose-400">{accessError}</span>}
+      </div>
+
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-vms-panel border border-vms-border rounded p-3">
@@ -169,28 +267,28 @@ export const AnprConsole: React.FC = () => {
         <div className="bg-vms-panel border border-vms-border rounded p-3">
           <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Watchlist Hits</div>
           <div className="text-xl font-bold font-mono text-rose-400 mt-1">
-            {observations.filter((o) => o.isWatchlistMatch).length}
+            {observations.filter((o) => o.matchedWatchlist).length}
           </div>
           <div className="text-[10px] text-vms-dim font-mono mt-0.5">Hotlist / Stolen / Blocked</div>
         </div>
 
         <div className="bg-vms-panel border border-vms-border rounded p-3">
-          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Inference Throughput</div>
-          <div className="text-xl font-bold font-mono text-sky-400 mt-1">
-            {runtimeTelemetry?.currentFps ?? '15.0'} <span className="text-xs font-normal">FPS</span>
-          </div>
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Reads (last hour)</div>
+          <div className="text-xl font-bold font-mono text-sky-400 mt-1">{anprStatus ? anprStatus.readsLastHour : '—'}</div>
           <div className="text-[10px] text-vms-dim font-mono mt-0.5">
-            Avg Latency: {Math.round(runtimeTelemetry?.avgLatencyMs ?? 24)} ms
+            Last read: {anprStatus?.lastReadAt ? new Date(anprStatus.lastReadAt).toLocaleString() : 'none recorded'}
           </div>
         </div>
 
         <div className="bg-vms-panel border border-vms-border rounded p-3">
-          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Media Relay Protocol</div>
-          <div className="text-xl font-bold font-mono text-vms-accent mt-1 flex items-center space-x-1.5">
-            <Radio className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm">MediaMTX Relay</span>
+          <div className="text-[10px] font-mono text-vms-muted uppercase tracking-wider">Recognition pipeline</div>
+          <div className="text-sm font-bold font-mono mt-1 flex items-center space-x-1.5">
+            <Video className="w-4 h-4 text-vms-accent" />
+            <span className={activePipeline ? 'text-vms-accent' : 'text-amber-400'}>
+              {activePipeline ? `${activePipeline.name} ${activePipeline.version}` : 'Not registered'}
+            </span>
           </div>
-          <div className="text-[10px] text-vms-dim font-mono mt-0.5">127.0.0.1:8554 (Zero Duplicate RTSP)</div>
+          <div className="text-[10px] text-vms-dim font-mono mt-0.5">{anprStatus ? `${lprCameraIds.size} LPR camera(s)` : '—'}</div>
         </div>
       </div>
 
@@ -214,12 +312,11 @@ export const AnprConsole: React.FC = () => {
             className="bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 font-mono text-xs text-vms-muted focus:border-vms-accent focus:outline-none"
           >
             <option value="">All Vehicle Categories</option>
-            <option value="CAR">Car / SUV</option>
-            <option value="MOTORCYCLE">Two-Wheeler</option>
-            <option value="BUS">Bus</option>
-            <option value="TRUCK">Heavy Commercial Truck</option>
-            <option value="AUTO_RICKSHAW">Auto Rickshaw (3W)</option>
-            <option value="VAN">Light Commercial Van</option>
+            <option value="TWO_WHEELER">Two-wheeler</option>
+            <option value="FOUR_WHEELER">Four-wheeler</option>
+            <option value="HEAVY_COMMERCIAL">Heavy commercial</option>
+            <option value="EMERGENCY">Emergency</option>
+            <option value="UNKNOWN">Unknown</option>
           </select>
         </div>
 
@@ -239,7 +336,7 @@ export const AnprConsole: React.FC = () => {
             <div
               key={obs.id}
               className={`bg-vms-panel border rounded p-4 transition-colors space-y-3 flex flex-col justify-between ${
-                obs.isWatchlistMatch
+                obs.matchedWatchlist
                   ? 'border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
                   : 'border-vms-border hover:border-vms-accent/40'
               }`}
@@ -259,11 +356,11 @@ export const AnprConsole: React.FC = () => {
 
                 <div className="flex flex-col items-end space-y-1">
                   <span className="text-[10px] px-2 py-0.5 rounded bg-vms-surface text-vms-text border border-vms-border font-mono font-semibold uppercase">
-                    {obs.category || 'CAR'}
+                    {obs.vehicleCategory || 'UNKNOWN'}
                   </span>
-                  {obs.isWatchlistMatch && (
+                  {obs.matchedWatchlist && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500 text-white font-bold tracking-wider uppercase animate-pulse font-mono">
-                      WATCHLIST HIT
+                      {obs.matchedWatchlist.category} LIST
                     </span>
                   )}
                 </div>
@@ -274,7 +371,7 @@ export const AnprConsole: React.FC = () => {
                 <div className="flex justify-between items-center text-vms-text">
                   <span className="text-vms-dim text-[10px] uppercase">Jurisdiction:</span>
                   <span className="text-sky-400 font-semibold">
-                    {obs.stateName ? `${obs.stateName} (${obs.stateCode})` : 'Standard Indian Registration'}
+                    {obs.plateFormat === 'BH' ? 'Bharat series (BH)' : obs.plateFormat === 'DIPLOMATIC' ? 'Diplomatic' : obs.stateCode || 'Format not recognised'}
                   </span>
                 </div>
 
@@ -296,7 +393,7 @@ export const AnprConsole: React.FC = () => {
                 <div className="flex justify-between items-center text-vms-text">
                   <span className="text-vms-dim text-[10px] uppercase">Multi-Frame Votes:</span>
                   <span className="text-vms-text text-[11px] font-bold">
-                    {obs.observationCount} samples (Track #{obs.trackId?.slice(0, 8) || '01'})
+                    {obs.observationCount} read{obs.observationCount === 1 ? '' : 's'}{obs.lines === 2 ? ' (two-line plate)' : ''}
                   </span>
                 </div>
 
@@ -305,16 +402,15 @@ export const AnprConsole: React.FC = () => {
                     <Clock className="w-3 h-3 text-vms-dim" />
                     <span>Last Seen:</span>
                   </span>
-                  <span className="text-vms-text">{new Date(obs.lastSeen).toLocaleTimeString()}</span>
+                  <span className="text-vms-text">{new Date(obs.lastSeenAt).toLocaleString()}</span>
                 </div>
+                {obs.provenanceJson && (
+                  <div className="text-[10px] text-vms-dim truncate" title={JSON.stringify(obs.provenanceJson.components || [])}>
+                    read by {obs.provenanceJson.modelName} {obs.provenanceJson.modelVersion} ({String(obs.provenanceJson.modelSha256).slice(0, 12)})
+                  </div>
+                )}
               </div>
 
-              {/* Snapshot Preview if available */}
-              {obs.bestSnapshot && (
-                <div className="relative rounded overflow-hidden border border-vms-border aspect-video bg-black flex items-center justify-center">
-                  <img src={obs.bestSnapshot} alt="Vehicle Crop" className="object-cover w-full h-full" />
-                </div>
-              )}
             </div>
           ))
         )}
@@ -351,12 +447,20 @@ export const AnprConsole: React.FC = () => {
               )}
 
               <div>
+                <div className="flex gap-2 mb-1">
+                  {(['EXACT', 'WILDCARD', 'REGEX'] as const).map((m) => (
+                    <label key={m} className="flex items-center gap-1 text-[10px] font-mono text-vms-muted">
+                      <input type="radio" checked={newMatchType === m} onChange={() => setNewMatchType(m)} />
+                      {m === 'EXACT' ? 'Exact plate' : m === 'WILDCARD' ? 'Wildcard (* ?)' : 'Pattern (regex)'}
+                    </label>
+                  ))}
+                </div>
                 <label className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">
-                  Plate Number (Normalized live)
+                  {newMatchType === 'EXACT' ? 'Plate number' : 'Pattern'}
                 </label>
                 <Input
                   required
-                  placeholder="e.g. DL 01 AB 1234 or MH12DE1428"
+                  placeholder={newMatchType === 'EXACT' ? 'e.g. DL 01 AB 1234 or 22 BH 4567 AA' : newMatchType === 'WILDCARD' ? 'e.g. MH12* or KA05?7788' : 'e.g. [0-9]{2}BH[0-9]{4}[A-Z]{1,2}'}
                   value={newPlate}
                   onChange={(e) => setNewPlate(e.target.value.toUpperCase())}
                   className="w-full uppercase font-mono text-xs"
@@ -371,11 +475,10 @@ export const AnprConsole: React.FC = () => {
                     onChange={(e) => setNewCategory(e.target.value)}
                     className="w-full bg-vms-surface border border-vms-border rounded px-2.5 py-1.5 font-mono text-[11px] text-vms-text focus:border-vms-accent focus:outline-none"
                   >
-                    <option value="HOTLIST_STOLEN">Hotlist / Stolen</option>
-                    <option value="SECURITY_BLOCKED">Security Blocked</option>
-                    <option value="VIP_EXEMPT">VIP / Whitelist</option>
-                    <option value="VISITOR">Visitor</option>
-                    <option value="SUSPICIOUS">Suspicious</option>
+                    <option value="BLACKLIST">Blacklist</option>
+                    <option value="SUSPECT">Suspect</option>
+                    <option value="VIP">VIP</option>
+                    <option value="WHITELIST">Whitelist</option>
                   </select>
                 </div>
 
@@ -429,6 +532,9 @@ export const AnprConsole: React.FC = () => {
                       <span className="text-[9px] px-1.5 py-[2px] rounded bg-vms-surface text-vms-muted font-mono border border-vms-border">
                         {wl.category}
                       </span>
+                      {wl.matchType && wl.matchType !== 'EXACT' && (
+                        <span className="text-[9px] px-1.5 py-[2px] rounded bg-sky-900/40 text-sky-300 font-mono border border-sky-800">{wl.matchType}</span>
+                      )}
                     </div>
                     {wl.ownerName && <div className="text-[11px] text-vms-dim">{wl.ownerName}</div>}
                   </div>
@@ -472,7 +578,7 @@ export const AnprConsole: React.FC = () => {
             <div className="flex items-center justify-between pb-4 border-b border-vms-border">
               <div className="flex items-center space-x-2">
                 <Cpu className="w-5 h-5 text-sky-400" />
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono">Edge AI Runtime Supervisor</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono">ANPR pipeline & LPR cameras</h2>
               </div>
               <button
                 type="button"
@@ -484,57 +590,46 @@ export const AnprConsole: React.FC = () => {
             </div>
 
             <div className="py-4 space-y-4 text-xs font-mono">
-              {/* Telemetry Stats */}
               <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
                 <div className="text-[11px] font-bold text-sky-400 uppercase tracking-wider pb-1 border-b border-vms-border">
-                  Real-time Inference Telemetry
+                  Registered plate_recognition pipelines
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-vms-muted">Processing FPS:</span>
-                  <span className="text-vms-text font-bold">{runtimeTelemetry?.currentFps ?? '15.0'} FPS</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-vms-muted">Average Latency:</span>
-                  <span className="text-vms-text font-bold">
-                    {Math.round(runtimeTelemetry?.avgLatencyMs ?? 24)} ms
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-vms-muted">Admission Queue:</span>
-                  <span className="text-vms-text font-bold">
-                    {runtimeTelemetry?.queueSize ?? 0} / {runtimeTelemetry?.maxQueueSize ?? 100} frames
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-vms-muted">Active Pipelines:</span>
-                  <span className="text-vms-text font-bold">
-                    {runtimeTelemetry?.activePipelinesCount ?? 1} Cameras
-                  </span>
-                </div>
+                {(anprStatus?.pipelines || []).length === 0 && (
+                  <p className="text-amber-400 font-sans text-[11px]">
+                    No ANPR pipeline is registered. The anpr-worker registers one at start-up once its candidate models
+                    have a recorded licence approval.
+                  </p>
+                )}
+                {(anprStatus?.pipelines || []).map((p: any) => (
+                  <div key={p.sha256} className="space-y-0.5">
+                    <div className="text-vms-text font-bold">{p.name} {p.version}</div>
+                    <div className="text-[10px] text-vms-dim break-all">sha256 {p.sha256}</div>
+                  </div>
+                ))}
+                <p className="text-[10px] text-vms-dim font-sans">
+                  Throughput and latency are exported by the anpr-worker at /metrics (vigilone_anpr_*).
+                </p>
               </div>
 
-              {/* Single RTSP Relay Architecture Guarantee */}
               <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
                 <div className="text-[11px] font-bold text-vms-accent uppercase tracking-wider pb-1 border-b border-vms-border">
-                  Appliance Invariant Check
-                </div>
-                <div className="text-[11px] leading-relaxed text-vms-muted font-sans">
-                  In compliance with Edge Appliance Hardening Invariant #2, AI frame sampling connects strictly to
-                  MediaMTX localhost loopback (<code className="text-vms-accent font-mono">rtsp://127.0.0.1:8554/...</code>).
-                  Direct RTSP connections to cameras are strictly forbidden, preventing hardware session saturation.
-                </div>
-              </div>
-
-              {/* AI SBOM & License Validation */}
-              <div className="bg-vms-panel p-3 rounded border border-vms-border space-y-2">
-                <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider pb-1 border-b border-vms-border flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>AI SBOM & Permissive Licensing</span>
+                  LPR cameras
                 </div>
                 <p className="text-[11px] text-vms-muted font-sans">
-                  All models & weights run locally via ONNX Runtime under Apache-2.0 and MIT permissive licenses.
-                  GPL/AGPL copyleft dependencies are strictly excluded from the appliance runtime.
+                  Plates are read only on cameras in LPR mode. Frames come from the MediaMTX loopback, so no second
+                  RTSP session is opened to the camera. Every change is audited.
                 </p>
+                {lprError && <p className="text-rose-400 text-[11px]">{lprError}</p>}
+                {cameras.map((c: any) => (
+                  <label key={c.id} className="flex items-center justify-between py-1 border-b border-vms-border/40">
+                    <span className="text-vms-text">{c.name}</span>
+                    <input
+                      type="checkbox"
+                      checked={lprCameraIds.has(c.id)}
+                      onChange={(e) => setLprMode(c, e.target.checked)}
+                    />
+                  </label>
+                ))}
               </div>
             </div>
           </div>

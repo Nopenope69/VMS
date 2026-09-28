@@ -2,7 +2,13 @@ import prisma from './config/database';
 import config from './config/env';
 import app from './app';
 import { aggregator, aiRuntime } from './routes/anpr.routes';
+import { redactionQueue } from './routes/privacy.routes';
+import { RetentionPurger } from './services/privacy/dataProtection.service';
+
+const retentionPurger = new RetentionPurger(prisma);
 import { dispatcher } from './routes/notification.routes';
+import { alarmWorkflow } from './routes/alarm.routes';
+import { cameraEventManager } from './routes/cameraEvents.routes';
 import { FeatureFlag, isFeatureEnabled } from './config/featureFlags';
 import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { StorageSentinelService } from './services/storageSentinel.service';
@@ -33,10 +39,19 @@ export const server = app.listen(config.PORT, () => {
     recordingWatchdogService.start(30000);
     if (isFeatureEnabled(FeatureFlag.ANPR)) {
       aggregator.start();
+      // Legacy in-process ANPR runtime (no model of its own). Object detection runs in the
+      // ai-worker (Phase 2); this one only serves the flagged ANPR routes until P4.1 replaces it.
+      aiRuntime.start();
     }
-    aiRuntime.start();
     dispatcher.start();
     incidentOrchestrator.start();
+    alarmWorkflow.start(15000);
+    retentionPurger.start(Number(process.env.DPDP_PURGE_INTERVAL_MS || 3_600_000));
+    redactionQueue
+      .recoverInterrupted()
+      .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
+      .catch((err) => console.error('[Redaction] recovery failed:', err.message));
+    if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -58,6 +73,9 @@ process.on('SIGTERM', async () => {
   aiRuntime.stop();
   dispatcher.stop();
   incidentOrchestrator.stop();
+  alarmWorkflow.stop();
+  retentionPurger.stop();
+  await cameraEventManager.stop();
   server.close(() => {
     prisma.$disconnect();
     process.exit(0);
