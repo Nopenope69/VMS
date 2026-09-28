@@ -14,7 +14,31 @@ import api from '../services/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
+const PURPOSES: Array<{ id: string; label: string; needsReference: boolean }> = [
+  { id: 'SECURITY_INCIDENT_INVESTIGATION', label: 'Security incident investigation', needsReference: false },
+  { id: 'LAW_ENFORCEMENT_REQUEST', label: 'Law-enforcement request', needsReference: true },
+  { id: 'ACCESS_CONTROL', label: 'Access control', needsReference: false },
+  { id: 'SAFETY_EMERGENCY', label: 'Safety emergency', needsReference: false },
+  { id: 'LEGAL_CLAIM', label: 'Legal claim', needsReference: true },
+  { id: 'AUDIT_REVIEW', label: 'Audit review', needsReference: false },
+];
+
+const readSession = (k: string) => {
+  try {
+    return sessionStorage.getItem(k) || '';
+  } catch {
+    return '';
+  }
+};
+
 export const AnprConsole: React.FC = () => {
+  // DPDP (P4.6): plate data is shown only for a declared purpose, which the backend audits.
+  const [purpose, setPurpose] = useState<string>(() => readSession('vigilone.anpr.purpose'));
+  const [purposeRef, setPurposeRef] = useState<string>(() => readSession('vigilone.anpr.purposeRef'));
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const purposeDef = PURPOSES.find((p) => p.id === purpose);
+  const purposeReady = Boolean(purposeDef) && (!purposeDef!.needsReference || purposeRef.trim().length > 0);
+  const purposeHeaders = () => ({ 'X-VigilOne-Purpose': purpose, ...(purposeRef.trim() ? { 'X-VigilOne-Purpose-Reference': purposeRef.trim() } : {}) });
   const [observations, setObservations] = useState<any[]>([]);
   const [watchlists, setWatchlists] = useState<any[]>([]);
   const [anprStatus, setAnprStatus] = useState<any | null>(null);
@@ -41,15 +65,23 @@ export const AnprConsole: React.FC = () => {
   const fetchAnprData = async () => {
     try {
       setLoading(true);
-      const [obsRes, wlRes, statusRes] = await Promise.all([
-        api.get('/anpr/observations', { params: { limit: 50 } }),
-        api.get('/anpr/watchlist'),
-        api.get('/anpr/health'),
+      const statusRes = await api.get('/anpr/health');
+      setAnprStatus(statusRes.data.status || null);
+      if (!purposeReady) return;
+      const [obsRes, wlRes] = await Promise.all([
+        api.get('/anpr/observations', { params: { limit: 50 }, headers: purposeHeaders() }),
+        api.get('/anpr/watchlist', { headers: purposeHeaders() }),
       ]);
       setObservations(obsRes.data.observations || []);
       setWatchlists(wlRes.data.watchlist || []);
-      setAnprStatus(statusRes.data.status || null);
-    } catch (err) {
+      setAccessError(null);
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (err?.response?.status === 403 || (code && String(code).startsWith('PURPOSE_'))) {
+        setAccessError(err.response.data.error || 'Access to plate data was refused');
+        setObservations([]);
+        setWatchlists([]);
+      }
       console.error('Failed to load ANPR console data:', err);
     } finally {
       setLoading(false);
@@ -57,10 +89,21 @@ export const AnprConsole: React.FC = () => {
   };
 
   useEffect(() => {
+    try {
+      sessionStorage.setItem('vigilone.anpr.purpose', purpose);
+      sessionStorage.setItem('vigilone.anpr.purposeRef', purposeRef);
+    } catch {
+      // per-tab convenience only
+    }
+    if (!purposeReady) {
+      setObservations([]);
+      setWatchlists([]);
+    }
     fetchAnprData();
     const interval = setInterval(fetchAnprData, 8000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purpose, purposeRef]);
 
   const handleAddWatchlist = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +121,7 @@ export const AnprConsole: React.FC = () => {
       setNewPlate('');
       setNewOwner('');
       setNewNotes('');
-      const wlRes = await api.get('/anpr/watchlist');
+      const wlRes = await api.get('/anpr/watchlist', { headers: purposeHeaders() });
       setWatchlists(wlRes.data.watchlist || []);
     } catch (err: any) {
       setWatchlistError(err.response?.data?.error || 'Failed to add watchlist entry.');
@@ -89,7 +132,7 @@ export const AnprConsole: React.FC = () => {
     try {
       await api.delete(`/anpr/watchlist/${id}`);
       setPlateToDelete(null);
-      const wlRes = await api.get('/anpr/watchlist');
+      const wlRes = await api.get('/anpr/watchlist', { headers: purposeHeaders() });
       setWatchlists(wlRes.data.watchlist || []);
     } catch (err: any) {
       setWatchlistError(err.response?.data?.error || 'Failed to delete watchlist entry.');
@@ -181,6 +224,36 @@ export const AnprConsole: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-vms-accent' : ''}`} />
           </button>
         </div>
+      </div>
+
+      {/* Purpose of access (DPDP): required before any plate data is loaded; every query is audited */}
+      <div className="bg-vms-panel p-3 rounded border border-vms-border flex flex-wrap items-center gap-3 text-xs">
+        <span className="font-mono uppercase tracking-wider text-vms-muted">Purpose of access</span>
+        <select
+          value={purpose}
+          onChange={(e) => setPurpose(e.target.value)}
+          className="bg-vms-surface border border-vms-border rounded px-2 py-1 text-vms-text"
+        >
+          <option value="">Select a purpose…</option>
+          {PURPOSES.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        {purposeDef?.needsReference && (
+          <input
+            value={purposeRef}
+            onChange={(e) => setPurposeRef(e.target.value)}
+            placeholder="Case / request reference (required)"
+            maxLength={200}
+            className="bg-vms-surface border border-vms-border rounded px-2 py-1 text-vms-text w-64"
+          />
+        )}
+        <span className="text-vms-dim">
+          {purposeReady ? 'Plate queries are logged with this purpose.' : 'Plate reads and known-plate lists stay hidden until a purpose is declared.'}
+        </span>
+        {accessError && <span className="text-rose-400">{accessError}</span>}
       </div>
 
       {/* KPI Stats Strip */}

@@ -28,6 +28,7 @@ async function setup() {
   const tenant = await prisma.tenant.create({ data: { name: `Redaction E2E ${suffix}`, slug: `redaction-e2e-${suffix}` } });
   const site = await prisma.site.create({ data: { tenantId: tenant.id, name: 'E2E site', timezone: 'Asia/Kolkata' } });
   const camera = await prisma.camera.create({ data: { tenantId: tenant.id, siteId: site.id, name: 'E2E camera (SIMULATED recording)', streamPath: `redact_${suffix}`, ipAddress: '127.0.0.1', mainRtspUri: 'rtsp://127.0.0.1:8554/none' } });
+  await prisma.dataProtectionSettings.create({ data: { tenantId: tenant.id, faceProcessingEnabled: true } }); // DPDP face switch (default off)
   const user = await prisma.user.create({ data: { tenantId: tenant.id, email: `e2e-${suffix}@test.invalid`, passwordHash: 'x', name: 'E2E admin', role: 'TENANT_ADMIN' } });
   const t0 = Date.UTC(2026, 8, 27, 10, 0, 0);
   const leaves = [];

@@ -44,3 +44,5 @@ found. Pick them up in the phase noted.
 - **Redaction UI**: P4.4 ships the API only (create / execute / status / download). An evidence-view panel to start jobs, watch progress and download derivatives is not built.
 - **Redaction recall on site footage**: face/plate recall of the redaction pipeline is unmeasured; needs labelled site clips (HUMAN-REQUIRED).
 - **BYSTANDER redaction**: needs a person detector wired to the redaction adapter (the object-detection worker's model is not reused yet).
+- **DPDP settings UI**: the P4.6 settings (face switch, retention, allowed purposes) and the purge are API-only; an admin page is not built.
+- **Data-principal requests**: access/erasure request workflow (DPDP s.11–13) is not implemented beyond retention purge and audit.

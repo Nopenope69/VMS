@@ -196,11 +196,11 @@ describe('LPR mode and ingestion', () => {
   });
 
   it('plate queries are audited (DPDP) and the synthetic detect endpoint does not exist', async () => {
-    const q = await api('GET', '/anpr/observations?plateQuery=MH12');
+    const q = await api('GET', '/anpr/observations?plateQuery=MH12&purpose=SECURITY_INCIDENT_INVESTIGATION');
     expect(q.status).toBe(200);
     expect(q.json.observations.map((o: any) => o.normalizedPlate)).toEqual(['MH12AB1234']);
     const audit = await prisma.auditEvent.findFirstOrThrow({ where: { tenantId, action: 'ANPR_OBSERVATIONS_QUERY' }, orderBy: { sequenceNumber: 'desc' } });
-    expect((audit.metadataJson as any).plateQuery).toBe('MH12');
+    expect(audit.metadataJson).toMatchObject({ purpose: 'SECURITY_INCIDENT_INVESTIGATION', category: 'PLATE', filters: { plateQuery: 'MH12' } });
     expect((await api('POST', '/anpr/detect', { cameraId, plateText: 'MH12AB1234' })).status).toBe(404);
   });
 

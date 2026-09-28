@@ -25,6 +25,7 @@ import { FFmpegService } from '../ffmpeg/ffmpeg.service';
 import { MetricsService } from '../observability/metrics.service';
 import { buildMaskFilter, planMasks, PlannedMask, SampledDetection } from './maskPlanner';
 import { RedactionError } from './redactionErrors';
+import { isFaceProcessingEnabled } from './dataProtection.service';
 import { DetectorProvenance, RedactionRegionClient, RegionTask } from './redactionRegionClient';
 
 export { RedactionError } from './redactionErrors';
@@ -159,6 +160,9 @@ export class VideoRedactorService {
     const modeKinds = MODE_KINDS[input.redactionMode];
     if (modeKinds === null) throw new RedactionError('REDACTION_MODE_UNSUPPORTED', `${input.redactionMode} redaction needs a person detector, which is not available`, 400);
     const detectKinds = [...new Set([...modeKinds, ...(input.detectKinds || [])])];
+    if (detectKinds.includes('FACE') && !(await isFaceProcessingEnabled(this.prisma, input.tenantId))) {
+      throw new RedactionError('REDACTION_FACE_PROCESSING_DISABLED', 'face processing is switched off for this tenant (DPDP settings); use manual masks or enable it', 403);
+    }
     const masks = (input.masks || []).map((m) => TemporalMaskSchema.parse(m));
     if (detectKinds.length === 0 && masks.length === 0) {
       throw new RedactionError('REDACTION_MODE_UNSUPPORTED', 'nothing to redact: give masks or detection kinds', 400);
@@ -212,6 +216,10 @@ export class VideoRedactorService {
 
       // 2. Detection
       const kinds = (job.detectKinds || []) as ('FACE' | 'LICENSE_PLATE')[];
+      // Re-checked at run time: the switch may have been turned off after the job was queued.
+      if (kinds.includes('FACE') && !(await isFaceProcessingEnabled(this.prisma, job.tenantId))) {
+        throw new RedactionError('REDACTION_FACE_PROCESSING_DISABLED', 'face processing was switched off for this tenant after the job was queued', 403);
+      }
       const dets: SampledDetection[] = [];
       let detector: DetectorProvenance | null = null;
       let framesAnalysed = 0;

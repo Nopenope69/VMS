@@ -50,6 +50,8 @@ function unzip(zip: string): string {
 beforeAll(async () => {
   ({ tenantId, cameraId } = await createTenantWithCamera(prisma, 'evpkg'));
   ({ userId } = await createUserWithToken(prisma, tenantId, 'TENANT_ADMIN'));
+  // Face redaction needs the tenant's DPDP face switch (default off, P4.6).
+  await prisma.dataProtectionSettings.create({ data: { tenantId, faceProcessingEnabled: true } });
   for (let i = 0; i < 2; i++) {
     const f = path.join(process.env.RECORDINGS_DIR!, `seg${i}.mp4`);
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-loop', '1', '-i', SCENE, '-t', '3', '-r', '10', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '10', f]);

@@ -8,6 +8,15 @@ import { VideoRedactorService, RedactionError } from '../services/privacy/videoR
 import { RedactionQueue } from '../services/privacy/redactionQueue';
 import { buildRedactionPackage, RedactionPackageError } from '../services/evidence/archive/redactionPackage';
 import { AuditChainService } from '../services/audit/auditChain.service';
+import {
+  DATA_PURPOSES,
+  PURPOSES_NEEDING_REFERENCE,
+  DataProtectionError,
+  SettingsPatch,
+  getDataProtection,
+  purgeTenant,
+  updateDataProtection,
+} from '../services/privacy/dataProtection.service';
 import { z } from 'zod';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -222,6 +231,44 @@ router.get('/jobs/:id/package', authorize(Permission.REDACTION_EXECUTE), async (
     fs.createReadStream(r.zipPath).pipe(res);
   } catch (err: any) {
     if (err instanceof RedactionPackageError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// --- DPDP controls (P4.6) ---
+
+router.get('/dpdp/purposes', (_req: Request, res: Response) => {
+  res.json({ purposes: DATA_PURPOSES, needReference: PURPOSES_NEEDING_REFERENCE });
+});
+
+router.get('/dpdp/settings', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  const s = await getDataProtection(prisma, req.user!.tenantId);
+  return res.json({ settings: s, purposes: DATA_PURPOSES, needReference: PURPOSES_NEEDING_REFERENCE });
+});
+
+router.put('/dpdp/settings', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  const p = SettingsPatch.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.')}: ${p.error.issues[0].message}` });
+  try {
+    const { before, after } = await updateDataProtection(prisma, req.user!.tenantId, req.user!.id, p.data);
+    const pick = (x: any) => ({ faceProcessingEnabled: x.faceProcessingEnabled, plateRetentionDays: x.plateRetentionDays, detectionSnapshotRetentionDays: x.detectionSnapshotRetentionDays, allowedPurposes: x.allowedPurposes });
+    await AuditChainService.record(prisma, {
+      tenantId: req.user!.tenantId, userId: req.user!.id, action: 'DPDP_SETTINGS_UPDATE', resourceType: 'DataProtection', ipAddress: req.ip || '127.0.0.1',
+      metadata: { before: pick(before), after: pick(after), biometricAcknowledged: p.data.acknowledgeBiometricProcessing === true },
+    });
+    return res.json({ settings: after });
+  } catch (err: any) {
+    if (err instanceof DataProtectionError) return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/** Runs the retention purge for this tenant now (it also runs hourly). */
+router.post('/dpdp/purge', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
+  try {
+    const result = await purgeTenant(prisma, req.user!.tenantId, new Date(), req.user!.id);
+    return res.json({ result });
+  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });

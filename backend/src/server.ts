@@ -3,6 +3,9 @@ import config from './config/env';
 import app from './app';
 import { aggregator, aiRuntime } from './routes/anpr.routes';
 import { redactionQueue } from './routes/privacy.routes';
+import { RetentionPurger } from './services/privacy/dataProtection.service';
+
+const retentionPurger = new RetentionPurger(prisma);
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
 import { cameraEventManager } from './routes/cameraEvents.routes';
@@ -43,6 +46,7 @@ export const server = app.listen(config.PORT, () => {
     dispatcher.start();
     incidentOrchestrator.start();
     alarmWorkflow.start(15000);
+    retentionPurger.start(Number(process.env.DPDP_PURGE_INTERVAL_MS || 3_600_000));
     redactionQueue
       .recoverInterrupted()
       .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
@@ -70,6 +74,7 @@ process.on('SIGTERM', async () => {
   dispatcher.stop();
   incidentOrchestrator.stop();
   alarmWorkflow.stop();
+  retentionPurger.stop();
   await cameraEventManager.stop();
   server.close(() => {
     prisma.$disconnect();

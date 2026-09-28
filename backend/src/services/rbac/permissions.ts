@@ -47,6 +47,8 @@ export enum Permission {
   ALARM_FEEDBACK = 'ALARM_FEEDBACK',
   /** Alarm SLA and escalation policies (P3.4). */
   ALARM_POLICY_MANAGE = 'ALARM_POLICY_MANAGE',
+  /** P4.6: read plate data (plate reads, known-plate lists, plate search). Always with a declared purpose. */
+  PLATE_DATA_QUERY = 'PLATE_DATA_QUERY',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -93,6 +95,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.AI_MODEL_MANAGE,
     Permission.ALARM_FEEDBACK,
     Permission.ALARM_POLICY_MANAGE,
+    Permission.PLATE_DATA_QUERY,
   ],
   TENANT_ADMIN: [
     Permission.CAMERA_VIEW,
@@ -136,6 +139,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SPATIAL_RULE_MANAGE,
     Permission.ALARM_FEEDBACK,
     Permission.ALARM_POLICY_MANAGE,
+    Permission.PLATE_DATA_QUERY,
   ],
   OPERATOR: [
     Permission.CAMERA_VIEW,
@@ -162,6 +166,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.FLOORPLAN_MANAGE,
     Permission.SPATIAL_RULE_MANAGE,
     Permission.ALARM_FEEDBACK,
+    Permission.PLATE_DATA_QUERY,
   ],
   VIEWER: [
     Permission.CAMERA_VIEW,

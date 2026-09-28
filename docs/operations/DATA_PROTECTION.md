@@ -1,0 +1,58 @@
+# Data protection controls (DPDP Act, P4.6)
+
+These are technical controls that support a DPDP compliance programme. They do not replace one:
+the lawful basis, notices, consent where it applies, and grievance handling are for the Data
+Fiduciary to decide and document.
+
+## Per-tenant settings (`/api/v1/privacy/dpdp/settings`; permission PRIVACY_POLICY_MANAGE)
+
+| Setting | Default | Effect |
+| :--- | :--- | :--- |
+| `faceProcessingEnabled` | **false** | When false, face-related processing is refused or dropped. Face redaction jobs fail with `REDACTION_FACE_PROCESSING_DISABLED`; this is checked when a job is created and again when it runs. Camera face analytics (Hikvision `faceDetection`, Dahua `FaceDetection`) are dropped and counted in `vigilone_camera_events_dropped_total{reason="face_processing_disabled"}`. Switching it on requires `acknowledgeBiometricProcessing: true` |
+| `plateRetentionDays` | 30 | Plate reads (and their snapshot files) whose last sighting is older than this are purged |
+| `detectionSnapshotRetentionDays` | 30 | AI detection snapshot images older than this are deleted. The event record (time, class, box, provenance) stays |
+| `allowedPurposes` | all six | Purposes operators may declare for plate queries |
+
+Every change is audited as `DPDP_SETTINGS_UPDATE` with the before and after values.
+
+## Purpose limitation and audit on plate queries
+
+`GET /anpr/observations`, `GET /anpr/watchlist` and `GET /search/plates` require all of the
+following:
+
+* the `PLATE_DATA_QUERY` permission. Tenant admins and operators have it; **viewers do not**.
+* a purpose, sent as `X-VigilOne-Purpose` or `?purpose=`. The allowed values are
+  SECURITY_INCIDENT_INVESTIGATION, LAW_ENFORCEMENT_REQUEST, ACCESS_CONTROL, SAFETY_EMERGENCY,
+  LEGAL_CLAIM and AUDIT_REVIEW.
+* for LAW_ENFORCEMENT_REQUEST and LEGAL_CLAIM, a reference (`X-VigilOne-Purpose-Reference`),
+  such as an FIR or notice number.
+
+Errors: `PURPOSE_REQUIRED` / `PURPOSE_UNKNOWN` / `PURPOSE_REFERENCE_REQUIRED` (400),
+`PURPOSE_NOT_PERMITTED` (403).
+
+Each answered query is recorded in the tamper-evident audit chain (`ANPR_OBSERVATIONS_QUERY`,
+`ANPR_WATCHLIST_QUERY`, `PLATE_SEARCH_QUERY`). The record holds the user, purpose, reference,
+filters and number of results, and the query is counted in
+`vigilone_dpdp_sensitive_queries_total{category,purpose}`. The ANPR console asks for the purpose
+before it loads any plate data.
+
+No biometric query endpoints exist: VigilOne does no face recognition, stores no face images and
+keeps no embeddings. The `BIOMETRIC` category exists in `requirePurpose` for any future feature,
+which must use it and add its data to the purge.
+
+## Retention purge
+
+The purge runs hourly (`DPDP_PURGE_INTERVAL_MS`) for every tenant, and on demand with
+`POST /privacy/dpdp/purge`. It does the following:
+
+* deletes plate reads past retention, together with their snapshot files;
+* deletes detection snapshot files past retention and clears their path on the event;
+* **keeps** anything on the same camera that overlaps an active incident evidence hold or a
+  legal-hold evidence manifest;
+* deletes files only under `RECORDINGS_DIR` or `SNAPSHOTS_DIR`. A path outside those roots is
+  counted as `snapshotFilesOutsideRoots` and left alone.
+
+Each run is audited as `DPDP_RETENTION_PURGE` with its counts, stored in `lastPurgeJson`, and
+counted in `vigilone_dpdp_purged_total{kind}` (failures in `vigilone_dpdp_purge_failures_total`).
+
+Recorded video follows the recording retention policies, not these settings.

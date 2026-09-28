@@ -39,6 +39,9 @@ describe('Bucket 6: Privacy Policy Enforcement & Video Redaction', () => {
       evidenceManifest: {
         findUnique: jest.fn(),
       },
+      dataProtectionSettings: {
+        findUnique: jest.fn().mockResolvedValue({ tenantId: 'tenant-1', faceProcessingEnabled: true, plateRetentionDays: 30, detectionSnapshotRetentionDays: 30, allowedPurposes: [] }),
+      },
       redactionJob: {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'job-1', ...data })),
         findUnique: jest.fn(),

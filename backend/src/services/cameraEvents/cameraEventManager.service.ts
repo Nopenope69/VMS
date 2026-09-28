@@ -11,6 +11,7 @@ import { OnvifPullPointClient } from './onvif/pullPoint';
 import { OnvifFault } from './onvif/soap';
 import type { SkewResult } from './onvif/clockSkew';
 import { CameraEventProtocol, NormalizedCameraEvent } from './types';
+import { isFaceProcessingEnabled } from '../privacy/dataProtection.service';
 
 /**
  * Supervises camera-native event feeds (P3.1/P3.2), one runner per enabled CameraEventSource:
@@ -188,6 +189,11 @@ export class CameraEventManager {
 
   /** Transition filter + orchestrator ingestion. Exposed for tests. */
   async handle(r: Runner | { lastState: Map<string, { state: boolean | null; at: number }> }, tenantId: string, cameraId: string, e: NormalizedCameraEvent): Promise<boolean> {
+    // DPDP (P4.6): camera face analytics are dropped unless the tenant switched face processing on.
+    if (e.analyticType === 'FACE' && !(await isFaceProcessingEnabled(this.prisma, tenantId))) {
+      MetricsService.incCounter('vigilone_camera_events_dropped_total', 'Camera analytic events dropped by policy', { reason: 'face_processing_disabled' });
+      return false;
+    }
     const now = Date.now();
     const key = [e.protocol, e.analyticType, e.vendorTopic, e.channel ?? '', e.ruleName ?? ''].join('|');
     const prev = r.lastState.get(key);

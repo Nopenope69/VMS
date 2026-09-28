@@ -11,6 +11,7 @@ import { incidentOrchestrator } from '../services/incident/orchestrator/incident
 import { compilePattern, MatchType, WatchlistPatternError } from '../services/anpr/watchlistMatcher';
 import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v1';
 import { z } from 'zod';
+import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 
 const router = Router();
 const aggregator = new PlateTrackAggregatorService(prisma);
@@ -40,7 +41,7 @@ router.use(requireFeature('ANPR'));
 /**
  * List paginated vehicle observation sessions with privacy, rate-limiting & tenant isolation
  */
-router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request, res: Response) => {
+router.get('/observations', authorize(Permission.ANPR_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const page = Math.max(1, Number(req.query.page || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
@@ -62,16 +63,6 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request
       where.normalizedPlate = { contains: clean };
     }
 
-    // DPDP: every plate query is attributable (who searched for what).
-    await AuditChainService.record(prisma, {
-      tenantId,
-      userId: req.user!.id,
-      action: 'ANPR_OBSERVATIONS_QUERY',
-      resourceType: 'VehicleObservation',
-      ipAddress: req.ip || '127.0.0.1',
-      metadata: { cameraId: cameraId ?? null, stateCode: stateCode ?? null, category: category ?? null, watchlistCategory: watchlistCategory ?? null, plateQuery: plateQuery ?? null, page, limit },
-    });
-
     const [observations, total] = await Promise.all([
       prisma.vehicleObservation.findMany({
         where,
@@ -85,6 +76,12 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request
       }),
       prisma.vehicleObservation.count({ where }),
     ]);
+
+    // DPDP (P4.6): every plate query is attributable: who, why, what filters, how many rows.
+    await recordSensitiveQuery(prisma, req, 'ANPR_OBSERVATIONS_QUERY', {
+      filters: { cameraId: cameraId ?? null, stateCode: stateCode ?? null, category: category ?? null, watchlistCategory: watchlistCategory ?? null, plateQuery: plateQuery ?? null, page, limit },
+      resultCount: observations.length,
+    });
 
     return res.json({
       observations,
@@ -103,7 +100,7 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), async (req: Request
 /**
  * List vehicle watchlists
  */
-router.get('/watchlist', authorize(Permission.ANPR_VIEW), async (req: Request, res: Response) => {
+router.get('/watchlist', authorize(Permission.ANPR_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const { category, active } = req.query;
 
@@ -116,6 +113,7 @@ router.get('/watchlist', authorize(Permission.ANPR_VIEW), async (req: Request, r
       },
       orderBy: { createdAt: 'desc' },
     });
+    await recordSensitiveQuery(prisma, req, 'ANPR_WATCHLIST_QUERY', { filters: { category: category ?? null, active: active ?? null }, resultCount: watchlist.length });
 
     return res.json({ watchlist });
   } catch (err: any) {

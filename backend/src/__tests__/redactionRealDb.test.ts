@@ -110,6 +110,8 @@ beforeAll(async () => {
   process.env.EXPORTS_DIR = exportsDir;
   ({ tenantId, cameraId } = await createTenantWithCamera(prisma, 'redact'));
   ({ userId, token } = await createUserWithToken(prisma, tenantId, 'TENANT_ADMIN'));
+  // Face redaction needs the tenant's DPDP face switch (default off, P4.6).
+  await prisma.dataProtectionSettings.create({ data: { tenantId, faceProcessingEnabled: true } });
   pipelineSha = sha(Buffer.from(`redaction-pipeline-${tenantId}`));
   pipelineVersion = `0.0.0-test.${tenantId.slice(0, 8)}`;
   await prisma.modelManifest.create({

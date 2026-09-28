@@ -300,6 +300,7 @@ model Tenant {
   layouts               Layout[]
   alarms                Alarm[]
   retentionPolicies     RetentionPolicy[]
+  dataProtection        DataProtectionSettings?
   detectionEvents       DetectionEvent[]
   vehicleObservations   VehicleObservation[]
   vehicleWatchlists     VehicleWatchlist[]
@@ -1682,3 +1683,22 @@ model ApplianceState {
   updatedAt             DateTime  @updatedAt
 }
 
+
+/// P4.6 DPDP controls, one row per tenant (absent row = defaults: face processing off, 30-day
+/// retention, every purpose allowed).
+model DataProtectionSettings {
+  tenantId                       String   @id
+  tenant                         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Anything face-related (face detection for redaction, camera face analytics). Default off.
+  faceProcessingEnabled          Boolean  @default(false)
+  /// Plate reads (VehicleObservation rows and their snapshots) older than this are purged.
+  plateRetentionDays             Int      @default(30)
+  /// AI detection snapshots (image files) older than this are deleted; the event row stays.
+  detectionSnapshotRetentionDays Int      @default(30)
+  /// Purposes operators may declare for plate/biometric queries.
+  allowedPurposes                String[] @default(["SECURITY_INCIDENT_INVESTIGATION", "LAW_ENFORCEMENT_REQUEST", "ACCESS_CONTROL", "SAFETY_EMERGENCY", "LEGAL_CLAIM", "AUDIT_REVIEW"])
+  lastPurgeAt                    DateTime?
+  lastPurgeJson                  Json?
+  updatedAt                      DateTime @updatedAt
+  updatedByUserId                String?
+}
