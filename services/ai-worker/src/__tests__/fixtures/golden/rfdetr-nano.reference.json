@@ -1,0 +1,52 @@
+{
+  "generator": "tools/reference/rfdetr_reference.py",
+  "rfdetrVersion": "unknown",
+  "modelSha256": "f744e454b784e9ac0b0cbe4d384d954a3525621c9a3ec459eef4db13dc1b4571",
+  "threshold": 0.5,
+  "detections": {
+    "astronaut_384_stretch.png": [
+      {
+        "classId": 1,
+        "confidence": 0.97349,
+        "box": {
+          "x": 0.03183,
+          "y": 0.02988,
+          "width": 0.68013,
+          "height": 0.9688
+        }
+      }
+    ],
+    "coffee_384_stretch.png": [
+      {
+        "classId": 47,
+        "confidence": 0.9385,
+        "box": {
+          "x": 0.28447,
+          "y": 0.04077,
+          "width": 0.40088,
+          "height": 0.73484
+        }
+      },
+      {
+        "classId": 50,
+        "confidence": 0.91868,
+        "box": {
+          "x": 0.53753,
+          "y": 0.16601,
+          "width": 0.16629,
+          "height": 0.65071
+        }
+      },
+      {
+        "classId": 67,
+        "confidence": 0.87159,
+        "box": {
+          "x": 0.00102,
+          "y": 0.00397,
+          "width": 0.99898,
+          "height": 0.9803
+        }
+      }
+    ]
+  }
+}

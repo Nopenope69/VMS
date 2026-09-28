@@ -67,10 +67,11 @@ VigilOne v1.0.0 is strictly scoped as a self-contained, rock-solid **Edge NVR Ap
 | S3 / object-storage archive | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE=true` | Scheduling and checksum logic exist; no S3 client is attached and uploads fail closed. |
 | Enterprise SSO (OIDC) | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_OIDC_SSO=true` | OIDC/PKCE service exists but has not been validated against a real identity provider. |
 | DI/DO relays and access-control I/O | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_DIO_RELAY=true` | Handshake state machine exists; no GPIO/serial/Modbus driver is attached (NO_PHYSICAL_RELAY_DRIVER_ATTACHED). |
-| ANPR / licence-plate recognition | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_ANPR=true` | Plate post-processing and watchlist matching exist; no plate detector or OCR model is attached. |
-| Video redaction | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_REDACTION=true` | FFmpeg filter generation is real; it needs face/plate masks from a detector that is not yet attached. |
+| ANPR / licence-plate recognition | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_ANPR=true` | Plate reads come from the anpr-worker (PP-OCRv4 detection + fast-plate-ocr, candidate models needing a human licence approval) on cameras in LPR mode; accuracy on Indian site data is not measured yet. |
+| Video redaction | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_REDACTION=true` | Jobs verify the source hashes, detect faces/plates through the redaction adapter (candidate models needing a human licence approval), burn opaque masks with ffmpeg, verify and hash the derivative and record it in chain of custody. Recall on site footage is not measured. |
 | Smart search | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_SMART_SEARCH=true` | Plain SQL over DetectionEvent rows; there is no embedding or semantic search yet. |
 | Floorplans | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_FLOORPLANS=true` | Floorplan CRUD and FOV projection exist; not validated on a real site. |
+| Camera-native events (ONVIF, Hikvision, Dahua) | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_CAMERA_EVENTS=true` | ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras. |
 <!-- FEATURE_FLAGS:END -->
 
 Also out of scope for v1 and not behind a flag: **email notifications** (SMTP dispatch answers 501; supported alert channels are HTTP webhooks and Slack).

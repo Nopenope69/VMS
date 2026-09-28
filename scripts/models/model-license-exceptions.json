@@ -1,0 +1,4 @@
+{
+  "$comment": "Human decisions only. A candidate model (models.lock.json candidateModels) may run in the product only if it is listed here with the approver's name, the date and the reason. The coding agent must never add entries. Every approval is re-checked against the model's SHA-256.",
+  "approvals": []
+}

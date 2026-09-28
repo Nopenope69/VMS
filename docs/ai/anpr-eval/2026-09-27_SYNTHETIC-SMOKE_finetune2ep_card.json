@@ -1,0 +1,26 @@
+{
+ "status": "UNPINNED_FINE_TUNE",
+ "onnx": "last.onnx",
+ "onnxSha256": "7e260e7ea5fdfcec305991a7840ead31689550ea5c584414ec93ea172d7e04c1",
+ "plateConfigSha256": "0335c74a305173bb6f393efed0fde03cadeaa0b649ed8e19f431016d8232d0a6",
+ "base": "fast-plate-ocr-cct-s-v2",
+ "dataset": {
+  "kind": "SYNTHETIC",
+  "dataset": "random synthetic plates (seed 7, n=300)",
+  "splitMethod": "explicit",
+  "counts": {
+   "train": 180,
+   "val": 60,
+   "test": 60
+  },
+  "plateOverlapTrainTest": 0,
+  "rejected": []
+ },
+ "hyperparameters": {
+  "epochs": 2,
+  "batchSize": 32,
+  "lr": 0.0005,
+  "seed": 7
+ },
+ "trainedAt": "2026-09-27T17:26:11.074883+00:00"
+}

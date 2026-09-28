@@ -1,0 +1,10 @@
+# Build context is the repository root; send only what the image needs.
+**
+!services/ai-worker/package.json
+!services/ai-worker/package-lock.json
+!services/ai-worker/tsconfig.json
+!services/ai-worker/tsconfig.build.json
+!services/ai-worker/src/**
+services/ai-worker/src/**/__tests__/**
+!scripts/models/models.lock.json
+!scripts/models/pipelines/**

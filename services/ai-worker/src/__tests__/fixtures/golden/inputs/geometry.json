@@ -1,0 +1,66 @@
+{
+  "astronaut_416.png": {
+    "source": "astronaut.png",
+    "geometry": {
+      "sourceWidth": 512,
+      "sourceHeight": 512,
+      "modelWidth": 416,
+      "modelHeight": 416,
+      "scale": 0.8125,
+      "padX": 0,
+      "padY": 0,
+      "scaledWidth": 416,
+      "scaledHeight": 416,
+      "letterbox": true,
+      "padPosition": "top-left"
+    }
+  },
+  "camera_416.png": {
+    "source": "camera.png",
+    "geometry": {
+      "sourceWidth": 512,
+      "sourceHeight": 512,
+      "modelWidth": 416,
+      "modelHeight": 416,
+      "scale": 0.8125,
+      "padX": 0,
+      "padY": 0,
+      "scaledWidth": 416,
+      "scaledHeight": 416,
+      "letterbox": true,
+      "padPosition": "top-left"
+    }
+  },
+  "coffee_416.png": {
+    "source": "coffee.png",
+    "geometry": {
+      "sourceWidth": 600,
+      "sourceHeight": 400,
+      "modelWidth": 416,
+      "modelHeight": 416,
+      "scale": 0.6933333333333334,
+      "padX": 0,
+      "padY": 0,
+      "scaledWidth": 416,
+      "scaledHeight": 277,
+      "letterbox": true,
+      "padPosition": "top-left"
+    }
+  },
+  "chelsea_416.png": {
+    "source": "chelsea.png",
+    "geometry": {
+      "sourceWidth": 451,
+      "sourceHeight": 300,
+      "modelWidth": 416,
+      "modelHeight": 416,
+      "scale": 0.9223946784922394,
+      "padX": 0,
+      "padY": 0,
+      "scaledWidth": 416,
+      "scaledHeight": 277,
+      "letterbox": true,
+      "padPosition": "top-left"
+    }
+  }
+}

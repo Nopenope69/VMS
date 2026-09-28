@@ -1,0 +1,120 @@
+{
+  "url": "http://127.0.0.1:7014",
+  "at": "2026-09-27T17:45:32.627Z",
+  "checks": [
+    {
+      "id": "descriptor.schema",
+      "description": "GET /v1/descriptor returns a valid AdapterDescriptorV1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "descriptor.air_gapped",
+      "description": "Adapter does not require network egress (air-gapped deployment)",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "health.schema",
+      "description": "GET /v1/health returns a valid AdapterHealthV1",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "health.models_described",
+      "description": "Every loaded model id is described by the descriptor",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "health.http_status",
+      "description": "Health answers HTTP 200 when READY/DEGRADED and 503 otherwise",
+      "passed": true,
+      "detail": "status=READY http=200"
+    },
+    {
+      "id": "http.correlation_echo",
+      "description": "X-Correlation-Id is echoed on responses",
+      "passed": true,
+      "detail": "got 'conf-bd9cdfe5cef5'"
+    },
+    {
+      "id": "infer.ok.schema",
+      "description": "A valid request returns a valid InferenceResultV1 with status ok",
+      "passed": true,
+      "detail": "http=200  "
+    },
+    {
+      "id": "infer.ok.request_id",
+      "description": "requestId is echoed",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "infer.ok.provenance_model",
+      "description": "Provenance names the requested model and its descriptor SHA-256",
+      "passed": true,
+      "detail": "redaction-regions@1.0.0/42a767f548363545ca61761a2729c233494a0a28da1e1139be6c5f3ea01c8c53 vs redaction-regions@1.0.0/42a767f548363545ca61761a2729c233494a0a28da1e1139be6c5f3ea01c8c53"
+    },
+    {
+      "id": "infer.ok.provenance_adapter",
+      "description": "Provenance names this adapter",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "infer.ok.frame_timestamp",
+      "description": "Provenance carries the frame timestamp, not the processing time",
+      "passed": true,
+      "detail": "2026-09-27T17:45:32.216Z vs 2026-09-27T17:45:32.216Z"
+    },
+    {
+      "id": "infer.ok.classes",
+      "description": "Detections only use the model card's classes",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "infer.ok.unique_inference_id",
+      "description": "Every inference has a fresh inferenceId",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "id": "error.invalid_frame",
+      "description": "A frame with the wrong byte length yields INVALID_FRAME (400), no detections",
+      "passed": true,
+      "detail": "http=400 INVALID_FRAME"
+    },
+    {
+      "id": "error.malformed_json",
+      "description": "Malformed JSON yields an INVALID_FRAME error result (400)",
+      "passed": true,
+      "detail": "http=400 INVALID_FRAME"
+    },
+    {
+      "id": "error.unsupported_task",
+      "description": "An unserved task yields UNSUPPORTED_TASK (400)",
+      "passed": true,
+      "detail": "http=400 UNSUPPORTED_TASK"
+    },
+    {
+      "id": "error.unknown_model",
+      "description": "An unknown model id yields MODEL_NOT_LOADED (503)",
+      "passed": true,
+      "detail": "http=503 MODEL_NOT_LOADED"
+    },
+    {
+      "id": "deadline.honoured",
+      "description": "A 1 ms deadline returns DEADLINE_EXCEEDED (504) or an ok result within 1 ms",
+      "passed": true,
+      "detail": "DEADLINE_EXCEEDED"
+    },
+    {
+      "id": "backpressure.burst",
+      "description": "A burst of 16 concurrent requests yields only valid ok / OVERLOADED(429 + Retry-After) / DEADLINE_EXCEEDED results",
+      "passed": true,
+      "detail": "ok=8 overloaded=8 other=0"
+    }
+  ]
+}

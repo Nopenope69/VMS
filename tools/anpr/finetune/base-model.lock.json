@@ -1,0 +1,28 @@
+{
+  "$comment": "Fine-tuning starting point for the plate OCR: the Keras weights and model config of the pinned runtime model fast-plate-ocr-cct-s-v2 (same release as its ONNX file). Training inputs only; the runtime never loads these.",
+  "key": "fast-plate-ocr-cct-s-v2",
+  "runtimeOnnxSha256": "384bbbd2cea3ef54761d3df70822ef3a349ee1a112aeafddbe0e3ba06bc6e47b",
+  "files": [
+    {
+      "role": "weights",
+      "fileName": "cct_s_v2_global.keras",
+      "url": "https://github.com/ankandrew/cnn-ocr-lp/releases/download/arg-plates/cct_s_v2_global.keras",
+      "sha256": "dc6db494714d88e1fb0a21b4e4e96089842dd5440418262abfc382454453c2c8",
+      "license": "MIT"
+    },
+    {
+      "role": "model_config",
+      "fileName": "cct_s_v2_global_model_config.yaml",
+      "url": "https://github.com/ankandrew/cnn-ocr-lp/releases/download/arg-plates/cct_s_v2_global_model_config.yaml",
+      "sha256": "244c3c712205750e9747bca4707cd553a84005f41959745bff676b0fca8faba3",
+      "license": "MIT"
+    },
+    {
+      "role": "plate_config",
+      "fileName": "cct_s_v2_global_plate_config.yaml",
+      "url": "https://github.com/ankandrew/cnn-ocr-lp/releases/download/arg-plates/cct_s_v2_global_plate_config.yaml",
+      "sha256": "0335c74a305173bb6f393efed0fde03cadeaa0b649ed8e19f431016d8232d0a6",
+      "license": "MIT"
+    }
+  ]
+}

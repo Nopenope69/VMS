@@ -38,6 +38,32 @@ export interface CreateModelManifestInput {
   noticeRequired?: boolean;
   licenseNotes?: string;
   isActive?: boolean;
+  /** Phase 2 fields: decoding contract and weights provenance (optional for legacy callers). */
+  task?: string;
+  weightsSource?: string;
+  modelSignature?: Record<string, unknown>;
+  classes?: Record<string, string>;
+  nmsConfig?: Record<string, unknown>;
+}
+
+/** Human approvals for candidate models; see scripts/models/model-license-exceptions.json. */
+export function readModelLicenseApprovals(): Array<{ key: string; sha256: string; approvedBy: string; approvedAt: string; reason: string }> {
+  const candidates = [
+    process.env.VIGILONE_MODEL_EXCEPTIONS,
+    '/etc/vigilone/model-license-exceptions.json',
+    require('path').resolve(__dirname, '../../../../scripts/models/model-license-exceptions.json'),
+  ].filter(Boolean) as string[];
+  const fs = require('fs');
+  const file = candidates.find((f) => fs.existsSync(f));
+  if (!file) return [];
+  try {
+    const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Array.isArray(j.approvals) ? j.approvals : []).filter(
+      (a: any) => a && typeof a.key === 'string' && /^[a-f0-9]{64}$/.test(a.sha256) && a.approvedBy && a.approvedAt && a.reason
+    );
+  } catch {
+    return [];
+  }
 }
 
 export interface ManifestValidationResult {
@@ -78,6 +104,9 @@ export const REJECTED_COPYLEFT_LICENSES = [
   'PROPRIETARY',
   'COMMERCIAL-ONLY',
 ] as const;
+
+/** modelSignature.decoder values of multi-model pipelines whose components are candidate models. */
+const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline']);
 
 export class ModelManifestService {
   private prisma: PrismaClient;
@@ -120,6 +149,13 @@ export class ModelManifestService {
     isException: boolean;
     reason?: string;
   } {
+    // A pipeline of models may carry "A AND B": every part must pass on its own.
+    if (typeof licenseName === 'string' && licenseName.includes(' AND ')) {
+      const parts = licenseName.split(' AND ').map((p) => this.evaluateLicensePolicy(p.trim()));
+      const bad = parts.find((p) => !p.approved);
+      if (bad) return bad;
+      return { approved: true, isException: parts.some((p) => p.isException) };
+    }
     const spdx = this.normalizeSpdx(licenseName);
     if (!spdx) {
       return { approved: false, isException: false, reason: 'License identifier is missing or empty' };
@@ -279,6 +315,21 @@ export class ModelManifestService {
       }
     }
 
+    // 5b. Pipelines of candidate models (P4.1 ANPR, P4.4 redaction regions): the training-data
+    // declaration comes from human approvals, so every component must have one for its exact
+    // SHA-256 in the approvals file this backend reads. The worker's claim alone is not enough.
+    const sig: any = input.modelSignature;
+    if (sig && (PIPELINE_DECODERS.has(sig.decoder) || Array.isArray(sig.components))) {
+      const comps: any[] = Array.isArray(sig.components) ? sig.components : [];
+      if (comps.length === 0) errors.push('pipeline manifests must list their components');
+      const approvals = readModelLicenseApprovals();
+      for (const c of comps) {
+        if (!approvals.some((a) => a.key === c.key && a.sha256 === c.sha256)) {
+          errors.push(`pipeline component '${c.key}' (${c.sha256}) has no human licence approval (model-license-exceptions.json)`);
+        }
+      }
+    }
+
     // 6. Runtime and Preprocessing Configuration Pinning
     if (!input.runtimeConfig || typeof input.runtimeConfig !== 'object') {
       errors.push('runtimeConfig configuration is required');
@@ -338,7 +389,20 @@ export class ModelManifestService {
           `Model version immutability violation: Model '${input.name}' version '${input.version}' is already registered with sha256 '${existing.sha256}'. Model weights must not be mutated in place; register a new version instead.`
         );
       }
-      // Immutable artifact match: return existing registration
+      // Immutable artifact match. A registration made before the Phase 2 columns existed may lack
+      // the decoding contract; fill those once, never overwrite them.
+      if (!existing.modelSignatureJson && input.modelSignature) {
+        return this.prisma.modelManifest.update({
+          where: { id: existing.id },
+          data: {
+            task: input.task ?? existing.task,
+            weightsSource: existing.weightsSource ?? input.weightsSource,
+            modelSignatureJson: input.modelSignature as any,
+            classesJson: (input.classes as any) ?? undefined,
+            nmsConfigJson: (input.nmsConfig as any) ?? undefined,
+          },
+        });
+      }
       return existing;
     }
 
@@ -356,6 +420,11 @@ export class ModelManifestService {
         noticeRequired: input.noticeRequired ?? inferredObligations.noticeRequired,
         licenseNotes: input.licenseNotes ?? inferredObligations.licenseNotes,
         isActive: input.isActive ?? true,
+        task: input.task ?? 'object_detection',
+        weightsSource: input.weightsSource,
+        modelSignatureJson: (input.modelSignature as any) ?? undefined,
+        classesJson: (input.classes as any) ?? undefined,
+        nmsConfigJson: (input.nmsConfig as any) ?? undefined,
       },
     });
   }

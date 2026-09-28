@@ -1,0 +1,27 @@
+{
+  "scenario": "P4.1 ANPR LPR lane: synthetic plate -> MediaMTX -> ai-worker (anpr) -> backend -> known-plate alarm",
+  "simulated": "SIMULATED-CAMERA with a SYNTHETIC plate (tools/anpr/synth_plates.py); candidate models run under a TEST-ONLY approval",
+  "at": "2026-09-27T17:06:08.563Z",
+  "measured": {
+    "observations": [
+      {
+        "plate": "MH12AB1234",
+        "display": "MH 12 AB 1234",
+        "reads": 1,
+        "bestConfidence": 0.99874347448349
+      }
+    ],
+    "latencyFrameToAlarmMs": 648,
+    "segmentsBeforeWorkerKill": 1,
+    "segmentsAfterWorkerKill": 3,
+    "segmentFilesAtEnd": 3
+  },
+  "checks": {
+    "plateReadExactly": true,
+    "observationCarriesPipelineProvenance": true,
+    "alarmFromKnownPlateList": true,
+    "alarmEventCarriesProvenance": true,
+    "recordingContinuedWhileWorkerKilled": true
+  },
+  "result": "PASS"
+}

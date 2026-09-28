@@ -14,12 +14,6 @@
       "justification": "Only selects Prisma log verbosity and dev hot-reload singleton caching; no success value or data path depends on it."
     },
     {
-      "file": "backend/src/routes/internal.routes.ts",
-      "patternId": "SUCCESS_IN_CATCH",
-      "text": "return res.status(200).json({ success: true, detectionId: existing.id, inferenceId, duplicate: true });",
-      "justification": "Idempotent duplicate: success is returned only after re-reading the row that won the unique-constraint race; a conflict with no matching row returns 409 DETECTION_CONFLICT_UNRESOLVED (tested)."
-    },
-    {
       "file": "backend/src/scripts/soakHarness.ts",
       "patternId": "MOCK_OR_STUB_IDENTIFIER",
       "text": "mainRtspUri: `rtsp://mock-camera-feed:554/${cam.streamPath}`,",
@@ -180,6 +174,108 @@
       "patternId": "MOCK_OR_STUB_IDENTIFIER",
       "text": "process.env.NODE_ENV === 'test' ? ['onnxruntime', 'openvino', 'mock-runtime'] : ['onnxruntime', 'openvino'];",
       "justification": "'mock-runtime' is accepted only when NODE_ENV=test; production and development accept onnxruntime/openvino only."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "import { decodeYolox } from './yoloxDecoder';",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "import { decodeRfdetr } from './rfdetrDecoder';",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export { decodeYolox, yoloxAnchorCount } from './yoloxDecoder';",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export { decodeRfdetr } from './rfdetrDecoder';",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "case 'yolox': {",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "case 'rfdetr': {",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/index.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "throw new Error(`RF-DETR logits length ${logits.length} is not a multiple of ${numQueries} queries`);",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/rfdetrDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export interface RfdetrDecodeOptions {",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/rfdetrDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "opts: RfdetrDecodeOptions",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/rfdetrDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "throw new Error(`RF-DETR boxes length mismatch: expected ${Q} x 4 = ${Q * 4}, got ${boxes.length}`);",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/rfdetrDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "throw new Error(`RF-DETR logits length mismatch: expected ${Q} x ${C} = ${Q * C}, got ${logits.length}`);",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/yoloxDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export interface YoloxDecodeOptions {",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/yoloxDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export function yoloxAnchorCount(modelWidth: number, modelHeight: number, strides: number[] = [8, 16, 32]): number {",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/yoloxDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "opts: YoloxDecodeOptions",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/yoloxDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "const expectedRows = yoloxAnchorCount(opts.modelWidth, opts.modelHeight, strides);",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/decoders/yoloxDecoder.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "`YOLOX output length mismatch: expected ${expectedRows} x ${rowLen} = ${expectedRows * rowLen} ` +",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "services/ai-worker/src/types.ts",
+      "patternId": "HARDCODED_MODEL_NAME",
+      "text": "export type ModelDecoderKind = 'generic' | 'yolox' | 'rfdetr';",
+      "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
     }
   ]
 }

@@ -173,6 +173,8 @@ enum NotificationChannelType {
   WEBHOOK
   SLACK
   EMAIL
+  WHATSAPP
+  SMS
 }
 
 enum NotificationJobStatus {
@@ -191,6 +193,7 @@ enum NodeState {
 }
 
 enum RuleTriggerType {
+  CAMERA_ANALYTIC
   MOTION_ZONE
   ANPR_WATCHLIST
   PERSON_DETECTED
@@ -286,12 +289,18 @@ model Tenant {
   sites                 Site[]
   cameras               Camera[]
   auditEvents           AuditEvent[]
+  canonicalEvents       CanonicalEvent[]
+  alarmSlaPolicies      AlarmSlaPolicy[]
+  escalationPolicies    EscalationPolicy[]
+  alarmFeedback         AlarmFeedback[]
+  cameraEventSources    CameraEventSource[]
   exports               EvidenceExport[]
   licenses              License[]
   eventRules            EventRule[]
   layouts               Layout[]
   alarms                Alarm[]
   retentionPolicies     RetentionPolicy[]
+  dataProtection        DataProtectionSettings?
   detectionEvents       DetectionEvent[]
   vehicleObservations   VehicleObservation[]
   vehicleWatchlists     VehicleWatchlist[]
@@ -408,6 +417,10 @@ model Camera {
   macAddress      String?
   hasPtz          Boolean        @default(false)
   vendorQuirks    String[]       @default([])
+  /// Dedicated licence-plate camera (P4.1): ANPR runs on its frames; see lprConfigJson.
+  lprMode         Boolean        @default(false)
+  /// { fps (1-5), roi: [x1,y1,x2,y2] normalised, maxWidth, minConfidence }
+  lprConfigJson   Json?
   
   // Stream & Recording State
   mainRtspUri           String         // Resolved via ONVIF GetStreamUri
@@ -450,6 +463,7 @@ model Camera {
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   spatialPlacement        CameraSpatialPlacement?
   incidents               Incident[]
+  eventSources            CameraEventSource[]
 
   @@index([tenantId, siteId])
   @@index([streamPath])
@@ -803,6 +817,12 @@ model Alarm {
   event            Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
   ruleId           String?
   rule             EventRule?    @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  /// The canonical (orchestrator) event that raised this alarm, with its AI provenance.
+  canonicalEventId String?
+  canonicalEvent   CanonicalEvent? @relation(fields: [canonicalEventId], references: [id], onDelete: SetNull)
+  /// The automation rule (IncidentOrchestrator) whose TRIGGER_ALARM action raised this alarm.
+  automationRuleId String?
+  automationRule   AutomationRule? @relation(fields: [automationRuleId], references: [id], onDelete: SetNull)
   
   title            String
   description      String?
@@ -817,11 +837,22 @@ model Alarm {
   resolvedById     String?
   resolutionNotes  String?
 
+  // Phase 3 incident workflow (P3.4)
+  assignedToUserId     String?
+  assignedAt           DateTime?
+  ackDueAt             DateTime?
+  resolveDueAt         DateTime?
+  ackSlaBreachedAt     DateTime?
+  resolveSlaBreachedAt DateTime?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   notificationJobs NotificationJob[]
   notificationLogs NotificationLog[]
+  escalations      AlarmEscalation[]
+  feedback         AlarmFeedback?
+  evidenceHolds    IncidentEvidenceHold[]
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
@@ -846,10 +877,43 @@ model DetectionEvent {
   attributesJson Json?          // Arbitrary classifier attributes (e.g. color, sub-category)
   snapshotPath   String?
   timestamp      DateTime       @default(now())
+  // Phase 2 (P2.6): per-inference provenance (events.v1 AiProvenanceV1) and the v1 object class
+  objectClass    String?
+  modelSha256    String?
+  provenanceJson Json?
 
   @@index([tenantId, type, timestamp])
   @@index([cameraId, timestamp])
   @@index([modelManifestId])
+  @@index([modelSha256])
+}
+
+/// Canonical events that entered the IncidentOrchestrator (P2.9 provenance, P3.6 correlation windows).
+/// id is the VigilOneEvent id, so re-ingesting the same event is idempotent.
+model CanonicalEvent {
+  id             String        @id
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId       String?
+  type           String
+  source         String
+  severity       EventSeverity @default(INFO)
+  timestampUtc   DateTime
+  correlationId  String
+  trackId        String?
+  payloadJson    Json
+  provenanceJson Json?
+  /// Set once the orchestrator has evaluated rules for this event; null rows are re-driven by the
+  /// inbox sweeper after a crash (transactional inbox).
+  processedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  alarms         Alarm[]
+
+  @@index([processedAt, createdAt])
+  @@index([tenantId, type, timestampUtc])
+  @@index([tenantId, cameraId, timestampUtc])
+  @@index([correlationId])
 }
 
 model ModelManifest {
@@ -866,6 +930,17 @@ model ModelManifest {
   noticeRequired      Boolean          @default(false)
   licenseNotes        String?
   isActive            Boolean          @default(true)
+  // Phase 2 (P2.3/P2.6): decoding contract, provenance and deployment state
+  task                String           @default("object_detection")
+  weightsSource       String?
+  modelSignatureJson  Json?
+  classesJson         Json?
+  nmsConfigJson       Json?
+  /// Published accuracy { dataset, metric, value, reportRef }; null = NOT EVALUATED.
+  evaluationJson      Json?
+  /// The model the ai-worker runs for its task. At most one per task (enforced in ModelRegistryService).
+  deployed            Boolean          @default(false)
+  deployedAt          DateTime?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -894,6 +969,11 @@ model VehicleObservation {
   observationCount   Int               @default(1)
   bestConfidence     Float             @default(0.0)
   bestSnapshotPath   String?
+  /// Provenance of the recognition (pipeline definition + component models), never invented.
+  provenanceJson     Json?
+  plateFormat        String?           // STANDARD | BH | DIPLOMATIC
+  rawText            String?           // OCR text before positional correction
+  lines              Int?              // 1 or 2 (two-line plates)
   
   matchedWatchlistId String?
   matchedWatchlist   VehicleWatchlist? @relation(fields: [matchedWatchlistId], references: [id], onDelete: SetNull)
@@ -911,6 +991,8 @@ model VehicleWatchlist {
   tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plateNumber     String
   normalizedPlate String            // Uppercase, alphanumeric only
+  /// EXACT (normalizedPlate), WILDCARD (* any run, ? one char) or REGEX (restricted, anchored).
+  matchType       String            @default("EXACT")
   category        WatchlistCategory @default(BLACKLIST)
   ownerName       String?
   notes           String?
@@ -964,8 +1046,13 @@ model NotificationJob {
   payloadJson    Json
   createdAt      DateTime              @default(now())
   processedAt    DateTime?
+  /// Provider's id for the accepted message (SMTP queue id, WhatsApp wamid): the delivery receipt key.
+  providerMessageId String?
+  /// Escalation step that queued this job, if any (P3.4).
+  escalationStep Int?
 
   @@index([tenantId, status, nextRetryAt])
+  @@index([providerMessageId])
 }
 
 model NotificationLog {
@@ -981,9 +1068,122 @@ model NotificationLog {
   latencyMs    Int?
   error        String?
   dispatchedAt DateTime            @default(now())
+  /// Delivery receipt (P3.3): SENT on provider acceptance, then DELIVERED / READ / FAILED from callbacks.
+  providerMessageId String?
+  deliveryStatus    String?
+  deliveryUpdatedAt DateTime?
 
   @@index([tenantId, dispatchedAt])
   @@index([channelId, status])
+  @@index([providerMessageId])
+}
+
+/// Acknowledge / resolve deadlines per severity (P3.4). No row = no SLA for that severity.
+model AlarmSlaPolicy {
+  id                   String        @id @default(uuid())
+  tenantId             String
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  severity             EventSeverity
+  ackWithinMinutes     Int
+  resolveWithinMinutes Int?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([tenantId, severity])
+}
+
+/// Who is told, and when, while an alarm stays unacknowledged (P3.4).
+/// stepsJson: [{ "afterMinutes": 0, "channelIds": ["..."] }, { "afterMinutes": 10, "channelIds": ["..."] }]
+model EscalationPolicy {
+  id          String            @id @default(uuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  minSeverity EventSeverity     @default(WARNING)
+  enabled     Boolean           @default(true)
+  stepsJson   Json
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  escalations AlarmEscalation[]
+
+  @@index([tenantId, enabled])
+}
+
+model AlarmEscalation {
+  id                  String           @id @default(uuid())
+  alarmId             String
+  alarm               Alarm            @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  policyId            String
+  policy              EscalationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  stepIndex           Int
+  channelIds          Json
+  notificationsQueued Int              @default(0)
+  firedAt             DateTime         @default(now())
+
+  @@unique([alarmId, policyId, stepIndex])
+}
+
+/// Operator verdict on an alarm (P3.7), kept for false-alarm statistics and model/rule tuning.
+model AlarmFeedback {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  alarmId          String   @unique
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  verdict          String   // FALSE_ALARM | TRUE_ALARM
+  reason           String?
+  userId           String
+  automationRuleId String?
+  cameraId         String?
+  modelSha256      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, verdict, createdAt])
+  @@index([automationRuleId])
+  @@index([modelSha256])
+}
+
+/// Evidence auto-pin for critical incidents (P3.4). Segments recorded inside the window are pinned
+/// as they appear (the window extends past the alarm), then the hold is COMPLETE.
+model IncidentEvidenceHold {
+  id             String    @id @default(uuid())
+  tenantId       String
+  alarmId        String
+  alarm          Alarm     @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  cameraId       String
+  windowStart    DateTime
+  windowEnd      DateTime
+  expiresAt      DateTime
+  status         String    @default("PENDING") // PENDING | COMPLETE | FAILED
+  segmentsPinned Int       @default(0)
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@unique([alarmId, cameraId])
+  @@index([status, windowEnd])
+}
+
+/// Camera-originated event feeds (P3.1/P3.2): ONVIF PullPoint, Hikvision ISAPI, Dahua event manager.
+model CameraEventSource {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId    String
+  camera      Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  protocol    String    // ONVIF_PULLPOINT | HIKVISION_ISAPI | DAHUA_EVENT_MANAGER
+  enabled     Boolean   @default(true)
+  status      String    @default("STOPPED") // STOPPED | CONNECTING | RUNNING | BACKOFF | FAILED
+  lastEventAt DateTime?
+  lastError   String?
+  /// Camera clock minus appliance clock at the last check (NTP drift, warned above 100 ms).
+  clockSkewMs Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([cameraId, protocol])
 }
 
 model AiRuntimeDiagnostic {
@@ -1060,6 +1260,7 @@ model AutomationRule {
   conditionsJson     Json
   actionsJson        Json
   executions         RuleExecutionRecord[]
+  alarms             Alarm[]
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
@@ -1135,7 +1336,7 @@ model Incident {
   tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cameraId       String
   camera         Camera                @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  ruleId         String
+  ruleId         String?
   rule           SpatialAnalyticsRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   trackId        String
   cooldownBucket BigInt
@@ -1337,10 +1538,22 @@ model RedactionJob {
   privacyPolicy       PrivacyPolicy?     @relation(fields: [privacyPolicyId], references: [id], onDelete: SetNull)
   status              RedactionJobStatus @default(QUEUED)
   redactionMode       RedactionMode      @default(FACE)
-  modelVersion        String             @default("1.0.0")
+  /// Set only from real detector provenance (never a default).
+  modelVersion        String?
   maskMetadataJson    Json?
+  /// Camera of the source manifest to redact (required when the manifest spans several cameras).
+  cameraId            String?
+  /// Region kinds detected automatically: FACE, LICENSE_PLATE (P4.4).
+  detectKinds         String[]           @default([])
+  sampleFps           Float              @default(4)
+  /// Detector provenance, source segment hashes, ffmpeg version and filter hash of the derivative.
+  provenanceJson      Json?
   outputObjectKey     String?
   outputSha256        String?
+  outputBytes         BigInt?
+  maskCount           Int?
+  errorCode           String?
+  startedAt           DateTime?
   createdByUserId     String
   createdByUser       User               @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
   createdAt           DateTime           @default(now())
@@ -1470,3 +1683,22 @@ model ApplianceState {
   updatedAt             DateTime  @updatedAt
 }
 
+
+/// P4.6 DPDP controls, one row per tenant (absent row = defaults: face processing off, 30-day
+/// retention, every purpose allowed).
+model DataProtectionSettings {
+  tenantId                       String   @id
+  tenant                         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Anything face-related (face detection for redaction, camera face analytics). Default off.
+  faceProcessingEnabled          Boolean  @default(false)
+  /// Plate reads (VehicleObservation rows and their snapshots) older than this are purged.
+  plateRetentionDays             Int      @default(30)
+  /// AI detection snapshots (image files) older than this are deleted; the event row stays.
+  detectionSnapshotRetentionDays Int      @default(30)
+  /// Purposes operators may declare for plate/biometric queries.
+  allowedPurposes                String[] @default(["SECURITY_INCIDENT_INVESTIGATION", "LAW_ENFORCEMENT_REQUEST", "ACCESS_CONTROL", "SAFETY_EMERGENCY", "LEGAL_CLAIM", "AUDIT_REVIEW"])
+  lastPurgeAt                    DateTime?
+  lastPurgeJson                  Json?
+  updatedAt                      DateTime @updatedAt
+  updatedByUserId                String?
+}

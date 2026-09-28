@@ -23,6 +23,7 @@ export enum FeatureFlag {
   REDACTION = 'REDACTION',
   SMART_SEARCH = 'SMART_SEARCH',
   FLOORPLANS = 'FLOORPLANS',
+  CAMERA_EVENTS = 'CAMERA_EVENTS',
 }
 
 export interface FeatureFlagDefinition {
@@ -79,7 +80,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     title: 'ANPR / licence-plate recognition',
     routePrefixes: ['/api/v1/anpr'],
     workers: ['plateTrackAggregator'],
-    status: 'Plate post-processing and watchlist matching exist; no plate detector or OCR model is attached.',
+    status: 'Plate reads come from the anpr-worker (PP-OCRv4 detection + fast-plate-ocr, candidate models needing a human licence approval) on cameras in LPR mode; accuracy on Indian site data is not measured yet.',
   },
   [FeatureFlag.REDACTION]: {
     flag: FeatureFlag.REDACTION,
@@ -87,7 +88,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     title: 'Video redaction',
     routePrefixes: ['/api/v1/privacy/jobs'],
     workers: [],
-    status: 'FFmpeg filter generation is real; it needs face/plate masks from a detector that is not yet attached.',
+    status: 'Jobs verify the source hashes, detect faces/plates through the redaction adapter (candidate models needing a human licence approval), burn opaque masks with ffmpeg, verify and hash the derivative and record it in chain of custody. Recall on site footage is not measured.',
   },
   [FeatureFlag.SMART_SEARCH]: {
     flag: FeatureFlag.SMART_SEARCH,
@@ -104,6 +105,14 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/floorplans'],
     workers: [],
     status: 'Floorplan CRUD and FOV projection exist; not validated on a real site.',
+  },
+  [FeatureFlag.CAMERA_EVENTS]: {
+    flag: FeatureFlag.CAMERA_EVENTS,
+    envVar: envVarFor(FeatureFlag.CAMERA_EVENTS),
+    title: 'Camera-native events (ONVIF, Hikvision, Dahua)',
+    routePrefixes: ['/api/v1/camera-events'],
+    workers: ['cameraEventManager'],
+    status: 'ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras.',
   },
 });
 

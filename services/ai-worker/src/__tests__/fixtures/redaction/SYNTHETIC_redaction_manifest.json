@@ -1,0 +1,20 @@
+{
+ "kind": "SYNTHETIC",
+ "generator": "tools/redaction/make_fixtures.py",
+ "faceSource": "scikit-image 0.26.0 skimage/data/astronaut.png (NASA, public domain)",
+ "faceSourceSha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+ "file": "SYNTHETIC_face_plate_scene.png",
+ "portraitBoxXYXY": [
+  40,
+  60,
+  340,
+  360
+ ],
+ "plateBoxXYXY": [
+  534,
+  410,
+  856,
+  478
+ ],
+ "plateText": "MH12AB1234"
+}

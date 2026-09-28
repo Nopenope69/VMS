@@ -58,12 +58,14 @@ Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`.
 | `SCENE_CHANGE` | `camera.degraded` | `reason: TAMPER_<OCCLUSION\|DEFOCUS\|DISPLACEMENT>`. |
 | `DI_TRIGGER` | `system.digital_input` | Not `access.door_opened`: a digital input is only a door once it is configured as a door contact, which the current model does not record. |
 | `SYSTEM_ALERT` | `system.alert` | `alertCode` becomes `code`. |
+| `AI_OBJECT_DETECTED` | `ai.person_detected` / `ai.vehicle_detected` | Chosen by object class; other classes are unmappable. **Requires provenance** (the AI worker attaches it). |
+| `CAMERA_ANALYTIC` | `system.camera_analytic` | Analytics computed by the camera (ONVIF, Hikvision ISAPI, Dahua). `code: CAMERA_<analyticType>`, protocol, vendor topic and state in `details`. Never `ai.*`: VigilOne did not run the model and has no provenance for it. Source kind `camera`. |
 
 The internal union carries no model provenance, so AI-derived events can only be mapped when the
 caller passes the provenance of the inference that produced them; otherwise the mapping throws
 `AI_PROVENANCE_REQUIRED`. Source kinds map as `VISION_AI`/`ANPR` to `ai`, `SPATIAL_ANALYTICS` to
 `analytics`, `WATCHDOG`/`SYSTEM` to `system`, `HARDWARE_IO` to `io`, `ALARM` to `alarm_panel`,
-`MANUAL` to `operator`.
+`MANUAL` to `operator`, `MOTION_DETECTOR` to `motion`, `CAMERA_ANALYTICS` to `camera`.
 
 Types with no internal producer yet: `camera.online`, `recording.*`, `storage.*`,
-`ai.person_detected`, `ai.vehicle_detected`, `access.door_opened`, `alarm.fire`, `pos.transaction`.
+`access.door_opened`, `alarm.fire`, `pos.transaction`.

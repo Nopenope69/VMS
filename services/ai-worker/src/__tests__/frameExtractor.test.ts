@@ -11,6 +11,8 @@ describe('FrameExtractor: Filter Decimation & Memory-Bounded Extraction', () => 
     height: 48,
     fps: 1,
     letterbox: true,
+    sourceWidth: 1920,
+    sourceHeight: 1080,
   };
 
   const expectedFrameBytes = 64 * 48 * 3; // 9,216 bytes
@@ -31,9 +33,29 @@ describe('FrameExtractor: Filter Decimation & Memory-Bounded Extraction', () => 
       const vfIndex = args.indexOf('-vf');
       expect(vfIndex).toBeGreaterThan(-1);
       const vf = args[vfIndex + 1];
-      expect(vf).toContain('fps=1');
-      expect(vf).toContain('scale=64:48:force_original_aspect_ratio=decrease');
-      expect(vf).toContain('pad=64:48:(ow-iw)/2:(oh-ih)/2');
+      // 1920x1080 into 64x48: scale 1/30 -> 64x36, centred with 6 px bands top and bottom.
+      expect(vf).toBe('fps=1,scale=64:36:flags=bilinear,format=rgb24,pad=64:48:0:6:color=0x000000');
+      expect(extractor.geometry).toMatchObject({ scaledWidth: 64, scaledHeight: 36, padX: 0, padY: 6 });
+    });
+
+    it('uses the model pad value and position (YOLOX: grey 114, top-left)', () => {
+      const extractor = new FrameExtractor({ ...sampleConfig, padValue: 114, padPosition: 'top-left' });
+      const vf = extractor.buildFfmpegArgs('rtsp://127.0.0.1:8554/cam_test_stream')[
+        extractor.buildFfmpegArgs('rtsp://127.0.0.1:8554/cam_test_stream').indexOf('-vf') + 1
+      ];
+      expect(vf).toBe('fps=1,scale=64:36:flags=bilinear,format=rgb24,pad=64:48:0:0:color=0x727272');
+    });
+
+    it('does not guess a source resolution: no geometry until configured or probed', () => {
+      const { sourceWidth, sourceHeight, ...unknownSource } = sampleConfig;
+      const extractor = new FrameExtractor(unknownSource);
+      expect(extractor.geometry).toBeNull();
+      expect(() => extractor.buildFfmpegArgs('rtsp://127.0.0.1:8554/x')).toThrow(/source resolution is known/);
+      // Bytes that arrive without geometry are dropped, never emitted as frames.
+      const frames: any[] = [];
+      extractor.on('frame', (f) => frames.push(f));
+      extractor.handleStdoutData(Buffer.alloc(64 * 48 * 3));
+      expect(frames).toHaveLength(0);
     });
 
     it('constructs plain scaling filter when letterbox is explicitly disabled', () => {
@@ -42,7 +64,7 @@ describe('FrameExtractor: Filter Decimation & Memory-Bounded Extraction', () => 
 
       const vfIndex = args.indexOf('-vf');
       const vf = args[vfIndex + 1];
-      expect(vf).toBe('fps=1,scale=64:48');
+      expect(vf).toBe('fps=1,scale=64:48:flags=bilinear,format=rgb24');
     });
   });
 
@@ -155,5 +177,73 @@ describe('FrameExtractor: Filter Decimation & Memory-Bounded Extraction', () => 
       expect(warningReceived).toBe(true);
       expect(extractor.getAccumulatorLength()).toBe(0);
     });
+  });
+});
+
+describe('FrameExtractor geometry against real ffmpeg output', () => {
+  const { execFileSync } = require('child_process');
+  const { buildVideoFilter } = require('../frameExtractor');
+  const { CoordinateTransformer } = require('../coordinateTransformer');
+
+  // Source 1280x720 (black) with a white rectangle at x 320..640, y 360..540 (normalized 0.25, 0.5, 0.25, 0.25).
+  const cases: Array<[string, boolean, 'center' | 'top-left']> = [
+    ['centred letterbox', true, 'center'],
+    ['top-left letterbox', true, 'top-left'],
+    ['stretch', false, 'center'],
+  ];
+
+  for (const [name, letterbox, padPosition] of cases) {
+    it(`${name}: the white box maps back to its source coordinates within one model pixel`, () => {
+      const W = 416;
+      const g = CoordinateTransformer.computeGeometry(1280, 720, W, W, letterbox, padPosition);
+      const vf = buildVideoFilter(g, 1, 114);
+      const raw: Buffer = execFileSync(
+        'ffmpeg',
+        [
+          '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:d=1,drawbox=x=320:y=360:w=320:h=180:color=white:t=fill',
+          '-frames:v', '1', '-vf', vf, '-pix_fmt', 'rgb24', '-f', 'rawvideo', '-',
+        ],
+        { maxBuffer: 16 * 1024 * 1024 }
+      );
+      expect(raw.length).toBe(W * W * 3);
+      let x1 = W, y1 = W, x2 = -1, y2 = -1;
+      for (let y = 0; y < W; y++) {
+        for (let x = 0; x < W; x++) {
+          if (raw[(y * W + x) * 3] > 200) {
+            x1 = Math.min(x1, x); y1 = Math.min(y1, y); x2 = Math.max(x2, x); y2 = Math.max(y2, y);
+          }
+        }
+      }
+      const box = CoordinateTransformer.reverseTransformBox(
+        { x: x1 / W, y: y1 / W, width: (x2 + 1 - x1) / W, height: (y2 + 1 - y1) / W },
+        g
+      );
+      const tolX = 1.5 / 1280 + 1 / (g.scaledWidth as number);
+      const tolY = 1.5 / 720 + 1 / (g.scaledHeight as number);
+      expect(Math.abs(box.x - 0.25)).toBeLessThanOrEqual(tolX);
+      expect(Math.abs(box.y - 0.5)).toBeLessThanOrEqual(tolY);
+      expect(Math.abs(box.width - 0.25)).toBeLessThanOrEqual(2 * tolX);
+      expect(Math.abs(box.height - 0.25)).toBeLessThanOrEqual(2 * tolY);
+    });
+  }
+});
+
+describe('FrameExtractor probe failures never crash the process', () => {
+  it('stop() while the resolution probe is in flight: the late probe failure is swallowed', async () => {
+    const extractor = new FrameExtractor({ cameraId: 'c', tenantId: 't', streamPath: 'no_such_stream', rtspPort: 1, probeTimeoutMs: 3000 });
+    extractor.start(); // probes rtsp://127.0.0.1:1/..., which is refused
+    extractor.removeAllListeners(); // what StreamManager.stop() does
+    await extractor.stop();
+    await new Promise((r) => setTimeout(r, 500)); // the probe fails after stop; nothing may throw
+    expect(extractor.geometry).toBeNull();
+  });
+
+  it('a probe failure while running is reported as an error event', async () => {
+    const extractor = new FrameExtractor({ cameraId: 'c', tenantId: 't', streamPath: 'no_such_stream', rtspPort: 1, probeTimeoutMs: 3000 });
+    const err = await new Promise<Error>((resolve) => {
+      extractor.on('error', resolve);
+      extractor.start();
+    });
+    expect(err.message).toMatch(/ffprobe/);
   });
 });

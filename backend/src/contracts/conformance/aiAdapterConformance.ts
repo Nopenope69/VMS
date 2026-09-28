@@ -1,0 +1,197 @@
+/**
+ * ai-adapter.v1 conformance kit (P2.1). Runs black-box checks against any adapter's HTTP
+ * endpoint and validates every response with the authoritative zod schemas. A third-party
+ * adapter (ANPR container, external analytics box) is conformant when all checks pass.
+ *
+ *   npm run conformance:ai-adapter -- --url http://127.0.0.1:7010
+ */
+import crypto from 'crypto';
+import {
+  AdapterDescriptorV1,
+  AdapterHealthV1,
+  InferenceResultV1,
+  AI_ADAPTER_CONTRACT,
+} from '../aiAdapter.v1';
+
+export interface ConformanceCheck {
+  id: string;
+  description: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ConformanceOptions {
+  baseUrl: string;
+  /** Air-gapped deployments must reject adapters that need network egress (default true). */
+  airGapped?: boolean;
+  /** Concurrent requests for the backpressure check (default 16). */
+  burst?: number;
+  timeoutMs?: number;
+}
+
+interface HttpResult {
+  status: number;
+  headers: Headers;
+  json: any;
+  text: string;
+}
+
+async function call(baseUrl: string, path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<HttpResult> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), init.timeoutMs ?? 15000);
+  try {
+    const res = await fetch(baseUrl.replace(/\/+$/, '') + path, { ...init, signal: ctl.signal });
+    const text = await res.text();
+    let json: any = undefined;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* not JSON */
+    }
+    return { status: res.status, headers: res.headers, json, text };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function issues(r: { success: boolean; error?: any }): string {
+  return r.success ? '' : r.error.issues.map((i: any) => `${i.path.join('.')}: ${i.message}`).join('; ');
+}
+
+/** A grey rgb24 frame with the given size, base64-encoded. */
+export function greyFrame(width: number, height: number, level = 128): string {
+  return Buffer.alloc(width * height * 3, level).toString('base64');
+}
+
+export async function runAiAdapterConformance(opts: ConformanceOptions): Promise<ConformanceCheck[]> {
+  const checks: ConformanceCheck[] = [];
+  const add = (id: string, description: string, passed: boolean, detail = '') =>
+    checks.push({ id, description, passed, detail });
+  const base = opts.baseUrl;
+
+  // 1. Descriptor
+  const d = await call(base, '/v1/descriptor');
+  const dParsed = AdapterDescriptorV1.safeParse(d.json);
+  add('descriptor.schema', 'GET /v1/descriptor returns a valid AdapterDescriptorV1', d.status === 200 && dParsed.success, d.status !== 200 ? `HTTP ${d.status}` : issues(dParsed));
+  const descriptor = dParsed.success ? dParsed.data : null;
+  if (descriptor && (opts.airGapped ?? true)) {
+    add('descriptor.air_gapped', 'Adapter does not require network egress (air-gapped deployment)', descriptor.requiresNetworkEgress === false,
+      descriptor.requiresNetworkEgress ? 'requiresNetworkEgress=true' : '');
+  }
+
+  // 2. Health
+  const h = await call(base, '/v1/health');
+  const hParsed = AdapterHealthV1.safeParse(h.json);
+  add('health.schema', 'GET /v1/health returns a valid AdapterHealthV1', hParsed.success, issues(hParsed));
+  const health = hParsed.success ? hParsed.data : null;
+  if (health && descriptor) {
+    const known = new Set(descriptor.models.map((m) => m.modelId));
+    const unknown = health.loadedModelIds.filter((id) => !known.has(id));
+    add('health.models_described', 'Every loaded model id is described by the descriptor', unknown.length === 0, unknown.join(', '));
+    add('health.http_status', 'Health answers HTTP 200 when READY/DEGRADED and 503 otherwise',
+      (health.status === 'READY' || health.status === 'DEGRADED') ? h.status === 200 : h.status === 503, `status=${health.status} http=${h.status}`);
+  }
+
+  const model = descriptor?.models.find((m) => m.task === 'object_detection') ?? descriptor?.models[0];
+  const ready = health?.status === 'READY' || health?.status === 'DEGRADED';
+  const mkRequest = (over: Record<string, any> = {}, frameOver: Record<string, any> = {}) => ({
+    contract: AI_ADAPTER_CONTRACT,
+    requestId: `conf-${crypto.randomUUID()}`,
+    tenantId: 'conformance-tenant',
+    task: model?.task ?? 'object_detection',
+    modelId: model?.modelId ?? 'no-model',
+    deadlineMs: 10000,
+    frame: {
+      cameraId: 'conformance-camera',
+      streamSessionId: 'conformance-session',
+      sequenceNumber: 1,
+      timestampUtc: new Date().toISOString(),
+      width: 64,
+      height: 48,
+      format: 'rgb24',
+      data: { kind: 'inline_base64', value: greyFrame(64, 48) },
+      ...frameOver,
+    },
+    ...over,
+  });
+  const infer = (body: unknown, headers: Record<string, string> = {}, raw?: string) =>
+    call(base, '/v1/infer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: raw ?? JSON.stringify(body),
+      timeoutMs: opts.timeoutMs ?? 30000,
+    });
+
+  // 3. Correlation id
+  const corr = `conf-${crypto.randomBytes(6).toString('hex')}`;
+  const c = await call(base, '/v1/health', { headers: { 'X-Correlation-Id': corr } });
+  add('http.correlation_echo', 'X-Correlation-Id is echoed on responses', c.headers.get('x-correlation-id') === corr, `got '${c.headers.get('x-correlation-id')}'`);
+
+  // 4. Successful inference with provenance
+  if (ready && model) {
+    const req1 = mkRequest();
+    const r1 = await infer(req1);
+    const p1 = InferenceResultV1.safeParse(r1.json);
+    add('infer.ok.schema', 'A valid request returns a valid InferenceResultV1 with status ok', r1.status === 200 && p1.success && p1.data.status === 'ok',
+      `http=${r1.status} ${issues(p1)} ${p1.success && p1.data.status === 'error' ? p1.data.errorCode + ': ' + p1.data.message : ''}`);
+    if (p1.success && p1.data.status === 'ok') {
+      const ok = p1.data;
+      const prov = ok.provenance;
+      add('infer.ok.request_id', 'requestId is echoed', ok.requestId === req1.requestId);
+      add('infer.ok.provenance_model', 'Provenance names the requested model and its descriptor SHA-256',
+        prov.modelId === req1.modelId && prov.modelSha256 === model.sha256 && prov.modelName === model.name && prov.modelVersion === model.version,
+        `${prov.modelId}/${prov.modelSha256} vs ${model.modelId}/${model.sha256}`);
+      add('infer.ok.provenance_adapter', 'Provenance names this adapter', prov.adapterId === descriptor!.adapterId && prov.adapterVersion === descriptor!.adapterVersion);
+      add('infer.ok.frame_timestamp', 'Provenance carries the frame timestamp, not the processing time',
+        Date.parse(prov.frameTimestampUtc) === Date.parse(req1.frame.timestampUtc), `${prov.frameTimestampUtc} vs ${req1.frame.timestampUtc}`);
+      const classes = new Set(model.classes);
+      const stray = ok.detections.filter((x) => !classes.has(x.objectClass)).map((x) => x.objectClass);
+      add('infer.ok.classes', "Detections only use the model card's classes", stray.length === 0, stray.join(', '));
+      const r2 = await infer(mkRequest());
+      const p2 = InferenceResultV1.safeParse(r2.json);
+      add('infer.ok.unique_inference_id', 'Every inference has a fresh inferenceId',
+        p2.success && p2.data.status === 'ok' && p2.data.provenance.inferenceId !== prov.inferenceId);
+    }
+  } else {
+    add('infer.ok.schema', 'A valid request returns status ok', false, `adapter not READY (health=${health?.status ?? 'invalid'})`);
+  }
+
+  // 5. Error channel
+  const expectError = async (id: string, description: string, res: HttpResult, code: string, httpStatus: number) => {
+    const p = InferenceResultV1.safeParse(res.json);
+    const passed = p.success && p.data.status === 'error' && p.data.errorCode === code && res.status === httpStatus;
+    add(id, description, passed, p.success ? `http=${res.status} ${p.data.status === 'error' ? p.data.errorCode : 'ok'}` : issues(p));
+  };
+  await expectError('error.invalid_frame', 'A frame with the wrong byte length yields INVALID_FRAME (400), no detections',
+    await infer(mkRequest({}, { data: { kind: 'inline_base64', value: greyFrame(10, 10) } })), 'INVALID_FRAME', 400);
+  await expectError('error.malformed_json', 'Malformed JSON yields an INVALID_FRAME error result (400)', await infer(null, {}, '{not json'), 'INVALID_FRAME', 400);
+  if (ready) {
+    await expectError('error.unsupported_task', 'An unserved task yields UNSUPPORTED_TASK (400)',
+      await infer(mkRequest({ task: model?.task === 'embedding' ? 'plate_recognition' : 'embedding' })), 'UNSUPPORTED_TASK', 400);
+    await expectError('error.unknown_model', 'An unknown model id yields MODEL_NOT_LOADED (503)',
+      await infer(mkRequest({ modelId: 'model-that-does-not-exist' })), 'MODEL_NOT_LOADED', 503);
+    const dl = await infer(mkRequest({ deadlineMs: 1 }, { width: 1280, height: 720, data: { kind: 'inline_base64', value: greyFrame(1280, 720) } }));
+    const dlp = InferenceResultV1.safeParse(dl.json);
+    add('deadline.honoured', 'A 1 ms deadline returns DEADLINE_EXCEEDED (504) or an ok result within 1 ms',
+      dlp.success && ((dlp.data.status === 'error' && dlp.data.errorCode === 'DEADLINE_EXCEEDED' && dl.status === 504) || (dlp.data.status === 'ok' && dlp.data.latencyMs <= 1)),
+      dlp.success ? (dlp.data.status === 'error' ? dlp.data.errorCode : `ok latency=${dlp.data.latencyMs}`) : issues(dlp));
+
+    // 6. Backpressure: a burst must never produce an invalid or success-without-provenance result.
+    const n = opts.burst ?? 16;
+    const burst = await Promise.all(
+      Array.from({ length: n }, () =>
+        infer(mkRequest({}, { width: 640, height: 480, data: { kind: 'inline_base64', value: greyFrame(640, 480) } }))
+      )
+    );
+    const parsed = burst.map((r) => ({ r, p: InferenceResultV1.safeParse(r.json) }));
+    const allValid = parsed.every(({ p }) => p.success);
+    const overloaded = parsed.filter(({ p }) => p.success && p.data.status === 'error' && p.data.errorCode === 'OVERLOADED');
+    const badOverload = overloaded.filter(({ r }) => r.status !== 429 || !r.headers.get('retry-after'));
+    const unexpected = parsed.filter(({ p }) => p.success && p.data.status === 'error' && !['OVERLOADED', 'DEADLINE_EXCEEDED'].includes(p.data.errorCode));
+    add('backpressure.burst', `A burst of ${n} concurrent requests yields only valid ok / OVERLOADED(429 + Retry-After) / DEADLINE_EXCEEDED results`,
+      allValid && badOverload.length === 0 && unexpected.length === 0,
+      `ok=${parsed.filter(({ p }) => p.success && p.data.status === 'ok').length} overloaded=${overloaded.length} other=${unexpected.length}`);
+  }
+
+  return checks;
+}

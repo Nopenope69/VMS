@@ -12,6 +12,8 @@ import {
   FileText,
   Video,
   Filter,
+  UserCheck,
+  Download,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -19,6 +21,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
+import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluationBanner';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
 const describeError = (err: any): string =>
@@ -40,9 +43,43 @@ interface AlarmItem {
   resolvedAt?: string | null;
   resolvedBy?: string | null;
   resolutionNotes?: string | null;
+  /** Incident workflow (P3.4). */
+  assignedToUserId?: string | null;
+  ackDueAt?: string | null;
+  resolveDueAt?: string | null;
+  ackSlaBreachedAt?: string | null;
+  resolveSlaBreachedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Rule-raised alarms carry the canonical event and, for AI events, the model provenance. */
+  metadataJson?: { provenance?: { modelName?: string; modelVersion?: string } | null } | null;
 }
+
+/** The signed-in user's id, as stored by the login flow (App.tsx). */
+const currentUserId = (): string | null => {
+  try {
+    return JSON.parse(localStorage.getItem('vigilone_user') || 'null')?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const SlaBadge: React.FC<{ alarm: AlarmItem }> = ({ alarm }) => {
+  if (alarm.state === 'RESOLVED') return null;
+  if (alarm.ackSlaBreachedAt && alarm.state === 'ACTIVE') {
+    return <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-rose-600/20 text-rose-400 border border-rose-600 font-mono">ACK SLA BREACHED</span>;
+  }
+  if (alarm.resolveSlaBreachedAt) {
+    return <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-rose-600/20 text-rose-400 border border-rose-600 font-mono">RESOLVE SLA BREACHED</span>;
+  }
+  const due = alarm.state === 'ACTIVE' ? alarm.ackDueAt : alarm.resolveDueAt;
+  if (!due) return null;
+  return (
+    <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-vms-surface text-vms-muted border border-vms-border font-mono" title={due}>
+      {alarm.state === 'ACTIVE' ? 'ack' : 'resolve'} by {new Date(due).toISOString().slice(11, 16)} UTC
+    </span>
+  );
+};
 
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Events: React.FC = () => {
@@ -58,6 +95,8 @@ export const Events: React.FC = () => {
   const [resolvingAlarm, setResolvingAlarm] = useState<AlarmItem | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [submittingResolve, setSubmittingResolve] = useState(false);
+  /** Operator verdict recorded with the resolution (P3.7); '' = not stated. */
+  const [verdict, setVerdict] = useState<'' | 'FALSE_ALARM' | 'TRUE_ALARM'>('');
   const [bulkTriaging, setBulkTriaging] = useState(false);
 
   const RESOLUTION_PRESETS = [
@@ -172,6 +211,31 @@ export const Events: React.FC = () => {
     }
   }, [consoleTab, alarmStateFilter, alarmSeverityFilter, eventSeverityFilter, unackOnly]);
 
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  // Assign to the signed-in operator, or release the assignment
+  const handleAssign = async (alarm: AlarmItem) => {
+    const me = currentUserId();
+    const target = alarm.assignedToUserId === me ? null : me;
+    try {
+      await api.post(`/alarms/${alarm.id}/assign`, { userId: target });
+      fetchAlarms();
+    } catch (err: any) {
+      setAlarmError(`Assignment failed; nothing changed (${describeError(err)})`);
+    }
+  };
+
+  // One-click evidence export over the alarm's incident window
+  const handleExport = async (alarm: AlarmItem) => {
+    setExportNotice(null);
+    try {
+      const res = await api.post(`/alarms/${alarm.id}/export`);
+      setExportNotice(`Evidence package ${res.data.filename} created (${res.data.window.source === 'INCIDENT_HOLD' ? 'incident hold window' : 'default alarm window'}).`);
+    } catch (err: any) {
+      setAlarmError(`Export failed; no package was created (${describeError(err)})`);
+    }
+  };
+
   // Acknowledge Alarm
   const handleAcknowledgeAlarm = async (alarmId: string) => {
     try {
@@ -274,6 +338,14 @@ export const Events: React.FC = () => {
       await api.post(`/alarms/${resolvingAlarm.id}/resolve`, {
         notes: resolutionNotes.trim() || 'Resolved by security operator',
       });
+      if (verdict) {
+        try {
+          await api.post(`/alarms/${resolvingAlarm.id}/feedback`, { verdict, reason: resolutionNotes.trim().slice(0, 500) || undefined });
+        } catch (fbErr: any) {
+          setAlarmError(`Alarm resolved, but the verdict was not saved (${describeError(fbErr)})`);
+        }
+      }
+      setVerdict('');
       setResolvingAlarm(null);
       fetchAlarms();
     } catch (err: any) {
@@ -370,6 +442,7 @@ export const Events: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-vms-bg p-3 md:p-4 space-y-3">
+      <AiEvaluationBanner />
       {/* Top Header & Mode Navigation */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-vms-border pb-3">
         <div className="flex items-center gap-2.5">
@@ -430,6 +503,12 @@ export const Events: React.FC = () => {
         </div>
       </div>
 
+      {consoleTab === 'ALARMS' && exportNotice && (
+        <div role="status" className="px-3 py-2 text-xs font-mono rounded border border-emerald-800 bg-emerald-950/60 text-emerald-300 flex justify-between">
+          <span>{exportNotice}</span>
+          <button onClick={() => setExportNotice(null)} className="text-vms-muted hover:text-vms-text ml-2">Dismiss</button>
+        </div>
+      )}
       {((consoleTab === 'ALARMS' && alarmError) || (consoleTab === 'EVENTS' && eventError)) && (
         <div
           role="alert"
@@ -615,7 +694,14 @@ export const Events: React.FC = () => {
                         <td className="px-4 py-3 max-w-sm">
                           <div className="font-semibold text-vms-text text-xs">
                             {alarm.title}
+                            <AiProvenanceBadge provenance={alarm.metadataJson?.provenance} />
+                            <SlaBadge alarm={alarm} />
                           </div>
+                          {alarm.assignedToUserId && (
+                            <div className="text-[10px] text-vms-muted font-mono mt-0.5">
+                              assigned{alarm.assignedToUserId === currentUserId() ? ' to you' : ''}
+                            </div>
+                          )}
                           {alarm.description && (
                             <div className="text-[11px] text-vms-muted mt-0.5 line-clamp-1">
                               {alarm.description}
@@ -649,6 +735,28 @@ export const Events: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {alarm.state !== 'RESOLVED' && !__DEMO_MODE__ && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleAssign(alarm)}
+                                title={alarm.assignedToUserId === currentUserId() ? 'Release assignment' : 'Assign to me'}
+                                icon={<UserCheck className="w-3 h-3" />}
+                              >
+                                {alarm.assignedToUserId === currentUserId() ? 'Unassign' : 'Take'}
+                              </Button>
+                            )}
+                            {alarm.cameraId && !__DEMO_MODE__ && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleExport(alarm)}
+                                title="Export signed evidence package for this alarm"
+                                icon={<Download className="w-3 h-3" />}
+                              >
+                                Export
+                              </Button>
+                            )}
                             {alarm.state === 'ACTIVE' && (
                               <Button
                                 size="sm"
@@ -871,7 +979,10 @@ export const Events: React.FC = () => {
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => setResolutionNotes(preset)}
+                    onClick={() => {
+                      setResolutionNotes(preset);
+                      if (preset.startsWith('False Alarm')) setVerdict('FALSE_ALARM');
+                    }}
                     className="px-2 py-1 text-[11px] bg-vms-panel hover:bg-vms-surface border border-vms-border rounded text-vms-muted hover:text-vms-text transition text-left"
                   >
                     {preset}
@@ -886,6 +997,19 @@ export const Events: React.FC = () => {
                 onChange={(e) => setResolutionNotes(e.target.value)}
                 className="w-full bg-vms-bg border border-vms-border rounded p-2.5 text-xs text-vms-text placeholder-vms-dim focus:outline-none focus:border-vms-accent font-sans resize-none"
               />
+              <label className="flex items-center gap-2 mt-2 text-xs text-vms-muted">
+                Verdict
+                <select
+                  value={verdict}
+                  onChange={(e) => setVerdict(e.target.value as typeof verdict)}
+                  className="bg-vms-bg border border-vms-border rounded px-2 py-1 text-xs text-vms-text font-mono"
+                >
+                  <option value="">not stated</option>
+                  <option value="TRUE_ALARM">true alarm</option>
+                  <option value="FALSE_ALARM">false alarm</option>
+                </select>
+                <span className="text-vms-dim">feeds false-alarm statistics per rule and model</span>
+              </label>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-vms-border">

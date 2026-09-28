@@ -11,12 +11,12 @@
  *  - AI failure is reported, never masked; it never touches recording or evidence.
  */
 import { z } from 'zod';
-import { Confidence, NonEmptyId, NormalizedBox, PermissiveLicense, Sha256Hex, UtcTimestamp } from './common';
+import { Confidence, NonEmptyId, NormalizedBox, PermissiveLicense, PermissiveLicenseExpression, Sha256Hex, UtcTimestamp } from './common';
 import { AiProvenanceV1 } from './events.v1';
 
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'embedding']);
+export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding']);
 
 export const ModelCardV1 = z
   .object({
@@ -26,8 +26,8 @@ export const ModelCardV1 = z
     sha256: Sha256Hex,
     task: AiTaskV1,
     classes: z.array(z.string().min(1)).min(1),
-    codeLicense: PermissiveLicense,
-    weightsLicense: PermissiveLicense,
+    codeLicense: PermissiveLicenseExpression,
+    weightsLicense: PermissiveLicenseExpression,
     /** Where the weights came from (URL or document reference), for licence audit. */
     weightsSource: z.string().min(1),
     runtime: z.enum(['onnxruntime', 'openvino']),
@@ -37,8 +37,16 @@ export const ModelCardV1 = z
         height: z.number().int().positive(),
         colorSpace: z.enum(['RGB', 'BGR']),
         letterbox: z.boolean(),
+        /** 'fixed' (default): frames are resized to width x height. 'min_side': the shorter side is
+         *  scaled to width (= height) and both sides rounded to multiples of 32 (text detection). */
+        resizeMode: z.enum(['fixed', 'min_side']).optional(),
       })
       .strict(),
+    /** Pipelines: the models the adapter chains, each with its own artefact hash and licence. */
+    components: z
+      .array(z.object({ role: z.string().min(1), name: z.string().min(1), version: z.string().min(1), sha256: Sha256Hex, weightsLicense: PermissiveLicense }).strict())
+      .max(8)
+      .optional(),
     /** Published accuracy for this model on a named dataset, or null if not yet measured. */
     evaluation: z
       .object({

@@ -1,3 +1,4 @@
+import { collectAiProvenance } from './aiProvenance';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -256,13 +257,23 @@ export class EvidenceArchive {
         throw new Error('NO_RECORDING_SEGMENTS_FOUND: No recording segments found within specified time range');
       }
 
-      const segmentFilePaths = segments
-        .map((s) => s.filePath)
-        .filter((p): p is string => Boolean(p) && fs.existsSync(p));
-
-      if (segmentFilePaths.length === 0) {
-        throw new Error('NO_RECORDING_SEGMENTS_FOUND: Associated recording segment files not found on disk');
+      // Every listed segment must be on disk with the bytes its recorded SHA-256 describes; a
+      // segment finalised without a hash gets its real hash now. The manifest never lists a segment
+      // that is not in the video, and never a hash that was not computed from the bytes (P4.5).
+      for (const seg of segments) {
+        if (!seg.filePath || !fs.existsSync(seg.filePath)) {
+          throw new Error(`EXPORT_SEGMENT_MISSING: segment ${seg.id} (${seg.filePath}) is not on disk`);
+        }
+        const actual = await computeFileSha256(seg.filePath);
+        if (seg.sha256Hash && seg.sha256Hash !== actual) {
+          throw new Error(`EXPORT_SEGMENT_INTEGRITY_FAILED: segment ${seg.id} has SHA-256 ${actual}, the catalog recorded ${seg.sha256Hash}`);
+        }
+        if (!seg.sha256Hash) {
+          await this.prisma.recordingSegment.update({ where: { id: seg.id }, data: { sha256Hash: actual } });
+          (seg as any).sha256Hash = actual;
+        }
       }
+      const segmentFilePaths = segments.map((s) => s.filePath as string);
 
       await FFmpegService.concatSegments(
         segmentFilePaths,
@@ -316,7 +327,7 @@ export class EvidenceArchive {
       const assemblySpecification = {
         derivationMode,
         containerFormat: 'mp4',
-        concatTool: 'ffmpeg-v6.1',
+        concatTool: (await FFmpegService.version()) ?? 'ffmpeg (version unavailable)',
         derivationDescription:
           derivationMode === 'FRAME_ACCURATE'
             ? 'Frame-accurate re-encoded derivative clip with keyframe alignment (libx264, yuv420p) derived from listed source segments.'
@@ -422,6 +433,20 @@ export class EvidenceArchive {
         },
       };
 
+      // AI provenance (P4.5): every AI-derived record for this camera and window, with its model.
+      const aiDoc = await collectAiProvenance(this.prisma, params.tenantId, params.cameraId, params.startTime, params.endTime);
+      const aiPath = path.join(workDir, 'ai_provenance.json');
+      fs.writeFileSync(aiPath, canonicalizeJson(aiDoc), 'utf8');
+      manifestData.aiProvenance = {
+        schema: aiDoc.schema,
+        artifact: 'ai_provenance.json',
+        recordCount: aiDoc.records.length,
+        detectionCount: aiDoc.records.filter((r) => r.kind === 'DETECTION').length,
+        plateReadCount: aiDoc.records.filter((r) => r.kind === 'PLATE_READ').length,
+        unattributedCount: aiDoc.unattributed.count,
+        models: aiDoc.models.map((m) => ({ name: m.name, version: m.version, sha256: m.sha256 })),
+      };
+
       // Generate Section 63 BSA Part A & Part B PDF certificate
       const pdfCertificatePath = path.join(workDir, 'certificate_sec63.pdf');
       await BsaCertificatePackageBuilder.generatePdf(pdfCertificatePath, {
@@ -449,6 +474,7 @@ export class EvidenceArchive {
         partBExpertName: params.partBExpertName,
         partBExpertDesignation: params.partBExpertDesignation,
         partBExpertOrganization: params.partBExpertOrganization,
+        aiProvenance: { recordCount: manifestData.aiProvenance.recordCount, unattributedCount: aiDoc.unattributed.count, models: manifestData.aiProvenance.models },
       });
 
       // Package everything into structured export archive with complete artifacts binding
@@ -461,6 +487,7 @@ export class EvidenceArchive {
         applianceSignature: '', // PackageAssembler signs canonical manifest with artifacts[] included
         certificatePdfPath: pdfCertificatePath,
         custodyHistory,
+        extraArtifacts: [{ sourcePath: aiPath, path: 'ai_provenance.json', mediaType: 'application/json', role: 'AI_PROVENANCE' }],
       });
 
       // Update DB record

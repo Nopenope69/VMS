@@ -1,0 +1,6 @@
+Code=CrossLineDetection;action=Start;index=0;data={
+   "Class" : "Normal",
+   "Name" : "Gate; north",
+   "Object" : { "ObjectType" : "Human", "ObjectID" : 12 },
+   "UTC" : 1790501412
+}

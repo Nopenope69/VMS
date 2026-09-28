@@ -40,11 +40,11 @@ describe('AiWorker End-to-End', () => {
       },
       classesJson: {
         '0': 'person',
-        '1': 'vehicle',
+        '1': 'car',
       },
       thresholdsJson: {
         person: 0.45,
-        vehicle: 0.5,
+        car: 0.5,
       },
       modelSignatureJson: {
         input: { name: 'images', shape: [1, 3, 640, 640], dtype: 'float32' },
@@ -208,5 +208,45 @@ describe('AiWorker End-to-End', () => {
     expect(trackerGate).not.toBe(trackerLobby);
     expect(trackerGate.getTracks().length).toBeGreaterThan(0);
     expect(trackerLobby.getTracks().length).toBe(0);
+  });
+
+  it('attaches per-inference provenance and the v1 object class to every detection', async () => {
+    const worker = new AiWorker({ backendBaseUrl: 'http://localhost:4000/api/v1/internal', internalSecret: 's', adapterId: 'ai-worker-test' });
+    (worker as any).apiClient.submitDetection = jest.fn().mockResolvedValue({ success: true });
+    await worker.initializeModel(manifest, artifactPath);
+    const geometry = CoordinateTransformer.computeGeometry(1920, 1080, 640, 640, true);
+    const sampledAt = new Date('2026-09-27T10:00:00.000Z');
+    const events = await worker.processFrame({
+      cameraId: 'cam-p', tenantId: 't-p', streamPath: 'cam_p', streamSessionId: 's', sequenceNumber: 1,
+      sampledAt, receivedAt: sampledAt, width: 640, height: 640, channels: 3, data: Buffer.alloc(640 * 640 * 3), geometry,
+    });
+    expect(events.length).toBeGreaterThan(0);
+    for (const e of events) {
+      expect(e.provenance).toMatchObject({
+        adapterId: 'ai-worker-test', modelId: manifest.id, modelName: manifest.name, modelVersion: manifest.version,
+        modelSha256: manifest.sha256, frameTimestampUtc: '2026-09-27T10:00:00.000Z',
+      });
+      expect(e.provenance!.inferenceId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(['person', 'car']).toContain(e.objectClass);
+    }
+    expect(worker.core.health().status).toBe('READY');
+  });
+
+  it('refuses a model whose weights licence is not permissive, and stays FAILED', async () => {
+    const worker = new AiWorker({ backendBaseUrl: 'http://localhost:4000/api/v1/internal', internalSecret: 's' });
+    await expect(worker.initializeModel({ ...manifest, weightLicense: 'AGPL-3.0' }, artifactPath)).rejects.toMatchObject({
+      code: 'LICENSE_REJECTED',
+    });
+    expect(worker.core.health()).toMatchObject({ status: 'FAILED', loadedModelIds: [] });
+    expect(worker.core.health().lastError).toMatch(/LICENSE_REJECTED/);
+  });
+
+  it('refuses a model whose artefact SHA-256 does not match the manifest', async () => {
+    const worker = new AiWorker({ backendBaseUrl: 'http://localhost:4000/api/v1/internal', internalSecret: 's' });
+    await expect(worker.initializeModel({ ...manifest, sha256: 'b'.repeat(64) }, artifactPath)).rejects.toMatchObject({
+      code: 'MODEL_INTEGRITY_FAILED',
+    });
+    expect(worker.core.health().status).toBe('FAILED');
+    await expect(worker.processFrame(Buffer.alloc(3), { cameraId: 'c', tenantId: 't' })).rejects.toThrow(/Model not loaded/);
   });
 });

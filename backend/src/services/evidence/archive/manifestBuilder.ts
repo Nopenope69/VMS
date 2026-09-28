@@ -42,17 +42,8 @@ export interface ManifestVerificationResult {
  * Deterministic JSON stringifier to guarantee identical canonical bytes
  * across machines regardless of object key insertion order.
  */
-export function canonicalizeJson(obj: any): string {
-  if (obj === null || typeof obj !== 'object') {
-    return JSON.stringify(obj);
-  }
-  if (Array.isArray(obj)) {
-    return '[' + obj.map(canonicalizeJson).join(',') + ']';
-  }
-  const keys = Object.keys(obj).sort();
-  const pairs = keys.map((k) => JSON.stringify(k) + ':' + canonicalizeJson(obj[k]));
-  return '{' + pairs.join(',') + '}';
-}
+import { canonicalizeJson } from './canonicalJson';
+export { canonicalizeJson };
 
 export class ManifestBuilder {
   private prisma: PrismaClient;

@@ -23,6 +23,7 @@ describe('Feature flags: typed registry', () => {
     expect([...ALL_FEATURE_FLAGS].sort()).toEqual(
       [
         'ANPR',
+        'CAMERA_EVENTS',
         'DIO_RELAY',
         'FEDERATION',
         'FLOORPLANS',

@@ -1,7 +1,7 @@
 const path = require('path');
 
 module.exports = {
-  testEnvironment: 'node',
+  testEnvironment: path.resolve(__dirname, 'jest.environment.js'),
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   transform: {

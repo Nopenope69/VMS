@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import crypto from 'crypto';
-import { buildLoopbackRtspUrl } from './rtspUrlBuilder';
+import { buildLoopbackRtspUrl, redactRtspUrl } from './rtspUrlBuilder';
 import { VideoFrame, CameraStreamConfig, FrameGeometry } from './types';
 import { CoordinateTransformer } from './coordinateTransformer';
 
@@ -32,7 +32,9 @@ export class FrameExtractor extends EventEmitter {
   public readonly fps: number;
   public readonly frameByteSize: number;
   public readonly maxAccumulatorBytes: number;
-  public readonly geometry: FrameGeometry;
+  /** Null until the source resolution is known (configured, or probed from the loopback stream). */
+  public geometry: FrameGeometry | null = null;
+  private readonly sourceConfigured: boolean;
 
   constructor(options: FrameExtractorOptions) {
     super();
@@ -43,34 +45,39 @@ export class FrameExtractor extends EventEmitter {
     this.frameByteSize = this.width * this.height * 3; // RGB24
     this.maxAccumulatorBytes = this.frameByteSize * 2;
 
-    const sourceWidth = options.sourceWidth || 1920;
-    const sourceHeight = options.sourceHeight || 1080;
-    const letterbox = options.letterbox !== false;
-    this.geometry = CoordinateTransformer.computeGeometry(
+    // Never guess the source resolution: it is either configured or probed before decoding starts.
+    this.sourceConfigured = !!(options.sourceWidth && options.sourceHeight);
+    if (this.sourceConfigured) {
+      this.geometry = this.computeGeometryFor(options.sourceWidth!, options.sourceHeight!);
+    }
+  }
+
+  private computeGeometryFor(sourceWidth: number, sourceHeight: number): FrameGeometry {
+    return CoordinateTransformer.computeGeometry(
       sourceWidth,
       sourceHeight,
       this.width,
       this.height,
-      letterbox
+      this.config.letterbox !== false,
+      this.config.padPosition ?? 'center'
     );
   }
 
   /**
-   * Builds the safe FFmpeg argument array.
+   * Builds the safe FFmpeg argument array. The scale and pad sizes come from the computed
+   * geometry (integers), so the reverse coordinate transform matches the pixels exactly.
    */
   public buildFfmpegArgs(rtspUrl: string): string[] {
-    const letterbox = this.config.letterbox !== false;
-    const vfFilter = letterbox
-      ? `fps=${this.fps},scale=${this.width}:${this.height}:force_original_aspect_ratio=decrease,pad=${this.width}:${this.height}:(ow-iw)/2:(oh-ih)/2`
-      : `fps=${this.fps},scale=${this.width}:${this.height}`;
-
+    if (!this.geometry) {
+      throw new Error('Cannot build ffmpeg arguments before the source resolution is known');
+    }
     return [
       '-nostats',
       '-loglevel', 'error',
       '-rtsp_transport', 'tcp',
       '-i', rtspUrl,
       '-an', // strictly disable audio decode
-      '-vf', vfFilter,
+      '-vf', buildVideoFilter(this.geometry, this.fps, this.config.padValue ?? 0),
       '-pix_fmt', 'rgb24',
       '-f', 'rawvideo',
       '-',
@@ -99,6 +106,34 @@ export class FrameExtractor extends EventEmitter {
     this.currentSessionId = crypto.randomUUID();
 
     const rtspUrl = buildLoopbackRtspUrl(this.config.streamPath, this.config.rtspPort);
+    if (!this.geometry) {
+      probeStreamResolution(rtspUrl, this.config.probeTimeoutMs ?? 10000).then(
+        ({ width, height }) => {
+          if (!this.isRunning) return;
+          try {
+            this.geometry = this.computeGeometryFor(width, height);
+            this.spawnDecoder(rtspUrl);
+          } catch (err: any) {
+            this.failStart(err);
+          }
+        },
+        (err: Error) => this.failStart(err)
+      );
+      return;
+    }
+    this.spawnDecoder(rtspUrl);
+  }
+
+  private failStart(err: Error): void {
+    // stop() may have run while the probe was in flight: a stopped extractor reports nothing.
+    if (!this.isRunning) return;
+    this.isRunning = false;
+    this.resetAccumulator();
+    // An 'error' event without listeners would throw and take the whole worker down.
+    if (this.listenerCount('error') > 0) this.emit('error', err);
+  }
+
+  private spawnDecoder(rtspUrl: string): void {
     const args = this.buildFfmpegArgs(rtspUrl);
 
     this.process = spawn('ffmpeg', args, {
@@ -110,7 +145,7 @@ export class FrameExtractor extends EventEmitter {
     });
 
     this.process.stderr?.on('data', (chunk: Buffer) => {
-      const line = chunk.toString('utf8').trim();
+      const line = redactRtspUrl(chunk.toString('utf8').trim());
       if (line) {
         this.lastStderrLine = line;
       }
@@ -125,6 +160,8 @@ export class FrameExtractor extends EventEmitter {
       this.resetAccumulator();
       this.isRunning = false;
       this.process = null;
+      // The camera may come back at another resolution: probe again on the next start.
+      if (!this.sourceConfigured) this.geometry = null;
       this.emit('exit', { code, signal, lastError: this.lastStderrLine });
     });
   }
@@ -134,6 +171,11 @@ export class FrameExtractor extends EventEmitter {
    */
   public handleStdoutData(chunk: Buffer): void {
     if (!chunk || chunk.length === 0) {
+      return;
+    }
+    if (!this.geometry) {
+      // Bytes without a known geometry cannot be mapped back to the camera: drop them.
+      this.resetAccumulator();
       return;
     }
 
@@ -163,7 +205,7 @@ export class FrameExtractor extends EventEmitter {
         height: this.height,
         channels: 3,
         data: frameBuffer,
-        geometry: this.geometry,
+        geometry: this.geometry!,
       };
 
       this.emit('frame', frame);
@@ -225,4 +267,57 @@ export class FrameExtractor extends EventEmitter {
   public getLastError(): string {
     return this.lastStderrLine;
   }
+}
+
+/** ffmpeg -vf chain for a geometry: decimate, scale to the exact integer size, pad if letterboxed. */
+export function buildVideoFilter(g: FrameGeometry, fps: number, padValue: number = 0): string {
+  const sw = g.scaledWidth ?? g.modelWidth;
+  const sh = g.scaledHeight ?? g.modelHeight;
+  const chain = [`fps=${fps}`, `scale=${sw}:${sh}:flags=bilinear`, 'format=rgb24'];
+  if (g.letterbox !== false && (sw !== g.modelWidth || sh !== g.modelHeight)) {
+    const v = Math.max(0, Math.min(255, Math.round(padValue)));
+    const hex = v.toString(16).padStart(2, '0');
+    chain.push(`pad=${g.modelWidth}:${g.modelHeight}:${g.padX}:${g.padY}:color=0x${hex}${hex}${hex}`);
+  }
+  return chain.join(',');
+}
+
+/**
+ * Reads the video resolution of the loopback stream with ffprobe (argument array, no shell).
+ * Rejects on timeout, non-zero exit or a stream without a video track.
+ */
+export function probeStreamResolution(
+  rtspUrl: string,
+  timeoutMs: number = 10000
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(
+      'ffprobe',
+      ['-v', 'error', '-rtsp_transport', 'tcp', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', rtspUrl],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error(`ffprobe timed out after ${timeoutMs}ms probing ${redactRtspUrl(rtspUrl)}`));
+    }, timeoutMs);
+    proc.stdout.on('data', (c) => (out += c));
+    proc.stderr.on('data', (c) => (err += c));
+    proc.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    proc.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) return reject(new Error(`ffprobe exited ${code} probing ${redactRtspUrl(rtspUrl)}: ${redactRtspUrl(err.trim())}`));
+      try {
+        const s = JSON.parse(out).streams?.[0];
+        if (!s?.width || !s?.height) throw new Error('no video stream');
+        resolve({ width: s.width, height: s.height });
+      } catch (e: any) {
+        reject(new Error(`ffprobe returned no video resolution for ${redactRtspUrl(rtspUrl)}: ${e.message}`));
+      }
+    });
+  });
 }

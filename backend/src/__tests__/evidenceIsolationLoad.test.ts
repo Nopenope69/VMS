@@ -136,6 +136,7 @@ describe('Architectural Evidence Plane Isolation Under Heavy AI Load', () => {
       engine
     );
     (worker as any).loadedModel = { manifest, buffer: Buffer.from('mock'), verified: true };
+    worker.core.setModel({ manifest }); // the adapter core serves inference (Phase 2)
     (worker as any).apiClient.submitDetection = jest.fn().mockResolvedValue({ success: true });
 
     const geometry = CoordinateTransformer.computeGeometry(1920, 1080, 640, 640, true);
