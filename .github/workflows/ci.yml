@@ -3,8 +3,8 @@ name: VigilOne Commercial CI
 on:
   push:
     branches: [ master, main ]
+  # Every PR, including PRs stacked on another feature branch (they otherwise get no CI at all).
   pull_request:
-    branches: [ master, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
