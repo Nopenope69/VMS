@@ -11,7 +11,7 @@ import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './ret
 import { computeFileSha256 } from '../../../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
 import config from '../../../config/env';
-import { activeWriteGraceMs } from '../../reconciliation/crashRecovery.service';
+import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
 
 export interface RegisterSegmentInput {
   tenantId?: string;
@@ -412,7 +412,7 @@ export class RecordingCatalog {
           // Admission Control (C-018): unmappable files must be isolated to .quarantine and never indexed.
           // Never move a file the recorder may still be writing (same grace as crash recovery).
           try {
-            if (Date.now() - fs.statSync(filePath).mtimeMs < activeWriteGraceMs()) continue;
+            if (isWithinActiveWriteGrace(fs.statSync(filePath).mtimeMs)) continue;
           } catch {
             continue;
           }

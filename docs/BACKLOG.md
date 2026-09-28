@@ -33,7 +33,7 @@ found. Pick them up in the phase noted.
 | `sax` (BlueOak-1.0.0, via `onvif` -> `xml2js`) and the other pending licence exceptions need a human decision; if BlueOak is rejected, replace the `onvif` package (camera events already use fast-xml-parser). | P3.1 | Human decision |
 | `EvidenceArchive` writes `concatTool: 'ffmpeg-v6.1'` into manifests as a constant instead of the version of the ffmpeg binary that ran. | P3.4 | Phase 4 (fail-loud) |
 | Webhook and Slack channels are blocked in air-gapped mode because the SSRF guard only allows public addresses; a LAN webhook target for air-gapped sites needs an explicit, audited allowlist. | P3.3 | Phase 4 |
-| `disasterRecoveryDrill.test.ts` Scenario B failed once in a parallel full run (`orphansIndexed` 0, expected 2), then passed in a second full run and 10/10 isolated runs. All its dependencies are mocked or per-test; cause not found. Investigate before calling it a flake. | Session 2 verification | Phase 4 |
+| ~~`disasterRecoveryDrill.test.ts` Scenario B failed once in a parallel run~~ **Resolved:** same-millisecond mtime race in the active-write grace check (negative file age counted as "being written" even with grace 0); fixed with `isWithinActiveWriteGrace`, reproduced under `--maxWorkers=2` before the fix and 810/810 twice after. | Session 2 verification | Done |
 
 ## Phase 4 (ANPR) follow-ups
 

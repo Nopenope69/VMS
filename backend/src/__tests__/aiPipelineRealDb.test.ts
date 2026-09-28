@@ -17,6 +17,10 @@ import { markAutomationRulesChanged } from '../services/automation/ruleCache';
 import { EvidenceManifestService } from '../services/evidence/evidenceManifest.service';
 import { RecordingIndexService } from '../services/recording/recordingIndex.service';
 
+// beforeAll starts the real app: on a cold ts-jest cache that compiles the whole backend, which
+// takes longer than Jest's 5 s default on 2-core CI runners (CI run 36396607639).
+jest.setTimeout(60000);
+
 const prisma = new PrismaClient();
 const SECRET = process.env.INTERNAL_API_SECRET as string;
 

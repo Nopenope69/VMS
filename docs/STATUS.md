@@ -204,8 +204,10 @@ cameras. Docker image builds still fail here (apt mirrors return 403 inside buil
 - UI changes (notification channels, dead letters, rule builder, SLA badges, export, camera event
   feeds) were verified by type-check, build and bundle checks, not in a browser.
 - `disasterRecoveryDrill.test.ts` failed once in the first full run (`orphansIndexed` 0, expected
-  2) and passed in the second full run and 10/10 isolated runs. Every dependency of that test is
-  mocked or per-test; I did not find the cause. Recorded in BACKLOG, not dismissed as a flake.
+  2). **Root cause found later (CI run 36396607639, fixed in the commit after `238b5d8`):** a file
+  written in the same millisecond as the recovery scan has an mtime a fraction of a millisecond
+  ahead of `Date.now()`, so its age was negative and it was skipped as "being written" even with
+  the grace period set to 0.
 - Model accuracy on real sites: NOT EVALUATED (P2.10).
 
 ### Licence questions

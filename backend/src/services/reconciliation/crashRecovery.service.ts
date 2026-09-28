@@ -37,6 +37,17 @@ export function activeWriteGraceMs(): number {
   return Number.isFinite(n) && n >= 0 ? n * 1000 : 120000;
 }
 
+/**
+ * True when a file may still be open in the recorder: modified less than the grace period ago.
+ * A grace of 0 turns the check off. The check must not depend on the file's mtime (sub-millisecond,
+ * set by the kernel) being earlier than Date.now() (whole milliseconds): a file written in the same
+ * millisecond as the scan has a slightly negative age, which previously counted as "active" even
+ * with the check turned off. A future mtime with a grace > 0 still counts as active (the safe side).
+ */
+export function isWithinActiveWriteGrace(mtimeMs: number, graceMs: number = activeWriteGraceMs(), nowMs: number = Date.now()): boolean {
+  return graceMs > 0 && nowMs - mtimeMs < graceMs;
+}
+
 export type MediaClassification =
   | 'VALID'
   | 'PARTIAL_BUT_READABLE'
@@ -344,7 +355,7 @@ export class CrashRecoveryService {
           // Never touch a segment the recorder may still be writing (backend restarts while
           // MediaMTX keeps recording): a fresh file is legitimately 0 bytes or "truncated".
           try {
-            if (Date.now() - fs.statSync(filePath).mtimeMs < graceMs) {
+            if (isWithinActiveWriteGrace(fs.statSync(filePath).mtimeMs, graceMs)) {
               filesSkippedActive++;
               continue;
             }
