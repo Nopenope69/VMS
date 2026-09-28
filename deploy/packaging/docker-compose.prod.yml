@@ -29,6 +29,8 @@ services:
 
   postgres:
     restart: always
+    # P5.1: pgvector image for vector embeddings; see note below on Alpine→Debian migration
+    image: pgvector/pgvector:pg16
     # Explicitly empty host ports - accessible ONLY within internal vigilone-net
     ports: []
     volumes:
