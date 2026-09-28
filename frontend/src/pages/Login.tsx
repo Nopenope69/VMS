@@ -4,6 +4,7 @@ import api from '../services/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { DEMO_FORM_PREFILL, DEMO_TOKEN, DEMO_USER } from '../demo/fixtures';
 
 interface LoginProps {
   onLoginSuccess: (user: any, token: string) => void;
@@ -24,32 +25,23 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Demo-only helpers: compiled out of production builds (__DEMO_MODE__ === false).
   const handleBypassDemo = () => {
-    const demoUser = {
-      id: 'demo-super-admin',
-      name: 'Alex Vance (Chief Security Officer)',
-      email: 'admin@vigilone.local',
-      role: 'SUPER_ADMIN',
-      tenantId: 'demo-tenant-hq',
-      tenant: {
-        id: 'demo-tenant-hq',
-        name: 'Metro Transit Command Facility',
-      },
-    };
-    const demoToken = 'demo-jwt-token-preview-mode';
-    onLoginSuccess(demoUser, demoToken);
+    if (!__DEMO_MODE__) return;
+    onLoginSuccess(DEMO_USER, DEMO_TOKEN);
   };
 
   const handleFillDemo = () => {
+    if (!__DEMO_MODE__) return;
     if (isBootstrap) {
-      setTenantName('Metro Transit Command Facility');
-      setAdminName('Alex Vance (Chief Security Officer)');
-      setEmail('admin@vigilone.local');
-      setPassword('Password123!');
-      setSetupToken('vigilone_dev_setup_token_99182');
+      setTenantName(DEMO_FORM_PREFILL.facilityName);
+      setAdminName(DEMO_FORM_PREFILL.adminName);
+      setEmail(DEMO_FORM_PREFILL.email);
+      setPassword(DEMO_FORM_PREFILL.password);
+      setSetupToken(DEMO_FORM_PREFILL.setupToken);
     } else {
-      setEmail('admin@vigilone.local');
-      setPassword('Password123!');
+      setEmail(DEMO_FORM_PREFILL.email);
+      setPassword(DEMO_FORM_PREFILL.password);
     }
   };
 
@@ -114,7 +106,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
         {/* Login Card */}
         <Card padding="lg" className="shadow-2xl space-y-4">
-          {/* Quick Test / Demo Bypass Banner */}
+          {/* Demo-build-only banner (VITE_DEMO_MODE=true); absent from production bundles */}
+          {__DEMO_MODE__ && (
           <div className="p-3 bg-vms-panel border border-vms-accent/40 rounded flex flex-col gap-2.5">
             <div className="flex items-start gap-2">
               <Zap className="w-4 h-4 text-vms-accent flex-shrink-0 mt-0.5" />
@@ -148,6 +141,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               </Button>
             </div>
           </div>
+          )}
 
           {error && (
             <div className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-xs text-status-alarm flex items-center gap-2.5">

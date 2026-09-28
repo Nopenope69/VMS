@@ -371,7 +371,16 @@ export async function handleIngestDetection(req: Request, res: Response) {
     // Handle concurrent retry race condition on unique constraint
     if (err.code === 'P2002') {
       const existing = await prisma.detectionEvent.findUnique({ where: { inferenceId } });
-      return res.status(200).json({ success: true, detectionId: existing?.id, inferenceId });
+      if (!existing) {
+        // The unique violation was not on inferenceId: nothing was stored, so do not report success.
+        console.error('Detection ingest unique-constraint conflict without a matching inferenceId row:', err.meta);
+        return res.status(409).json({
+          error: 'Detection conflicts with an existing record but no row matches this inferenceId',
+          code: 'DETECTION_CONFLICT_UNRESOLVED',
+          inferenceId,
+        });
+      }
+      return res.status(200).json({ success: true, detectionId: existing.id, inferenceId, duplicate: true });
     }
     console.error('Error ingesting detection:', err);
     return res.status(500).json({ error: 'Failed to ingest detection event' });

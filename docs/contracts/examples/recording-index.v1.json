@@ -1,0 +1,221 @@
+{
+  "valid": [
+    {
+      "contract": "recording-index.v1",
+      "segmentId": "seg_01",
+      "tenantId": "t_01",
+      "cameraId": "cam_01",
+      "startUtc": "2026-09-26T10:00:00.000Z",
+      "endUtc": "2026-09-26T10:10:00.000Z",
+      "durationMs": 600000,
+      "sizeBytes": "314572800",
+      "container": "fmp4",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "status": "FINALIZED",
+      "integrity": {
+        "state": "HASHED",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "pts": {
+        "start": "0",
+        "end": "54000000",
+        "timebase": {
+          "numerator": 1,
+          "denominator": 90000
+        }
+      },
+      "storage": {
+        "location": "LOCAL",
+        "volumeId": "vol_01",
+        "epochId": "ep_01"
+      },
+      "evidencePinned": true
+    },
+    {
+      "contract": "recording-index.v1",
+      "segmentId": "seg_02",
+      "tenantId": "t_01",
+      "cameraId": "cam_01",
+      "startUtc": "2026-09-26T10:00:00.000Z",
+      "endUtc": "2026-09-26T10:10:00.000Z",
+      "durationMs": 600000,
+      "sizeBytes": "314572800",
+      "container": "fmp4",
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 25,
+      "status": "RECORDING",
+      "integrity": {
+        "state": "PENDING"
+      },
+      "pts": {
+        "start": "0",
+        "end": "54000000",
+        "timebase": {
+          "numerator": 1,
+          "denominator": 90000
+        }
+      },
+      "storage": {
+        "location": "LOCAL",
+        "volumeId": "vol_01",
+        "epochId": "ep_01"
+      },
+      "evidencePinned": false
+    }
+  ],
+  "invalid": [
+    {
+      "why": "end before start",
+      "value": {
+        "contract": "recording-index.v1",
+        "segmentId": "seg_01",
+        "tenantId": "t_01",
+        "cameraId": "cam_01",
+        "startUtc": "2026-09-26T10:00:00.000Z",
+        "endUtc": "2026-09-26T09:00:00.000Z",
+        "durationMs": 600000,
+        "sizeBytes": "314572800",
+        "container": "fmp4",
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "status": "FINALIZED",
+        "integrity": {
+          "state": "HASHED",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "pts": {
+          "start": "0",
+          "end": "54000000",
+          "timebase": {
+            "numerator": 1,
+            "denominator": 90000
+          }
+        },
+        "storage": {
+          "location": "LOCAL",
+          "volumeId": "vol_01",
+          "epochId": "ep_01"
+        },
+        "evidencePinned": true
+      }
+    },
+    {
+      "why": "still recording but claims a final hash",
+      "value": {
+        "contract": "recording-index.v1",
+        "segmentId": "seg_01",
+        "tenantId": "t_01",
+        "cameraId": "cam_01",
+        "startUtc": "2026-09-26T10:00:00.000Z",
+        "endUtc": "2026-09-26T10:10:00.000Z",
+        "durationMs": 600000,
+        "sizeBytes": "314572800",
+        "container": "fmp4",
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "status": "RECORDING",
+        "integrity": {
+          "state": "HASHED",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "pts": {
+          "start": "0",
+          "end": "54000000",
+          "timebase": {
+            "numerator": 1,
+            "denominator": 90000
+          }
+        },
+        "storage": {
+          "location": "LOCAL",
+          "volumeId": "vol_01",
+          "epochId": "ep_01"
+        },
+        "evidencePinned": true
+      }
+    },
+    {
+      "why": "sizeBytes as float",
+      "value": {
+        "contract": "recording-index.v1",
+        "segmentId": "seg_01",
+        "tenantId": "t_01",
+        "cameraId": "cam_01",
+        "startUtc": "2026-09-26T10:00:00.000Z",
+        "endUtc": "2026-09-26T10:10:00.000Z",
+        "durationMs": 600000,
+        "sizeBytes": "3.5e8",
+        "container": "fmp4",
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "status": "FINALIZED",
+        "integrity": {
+          "state": "HASHED",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "pts": {
+          "start": "0",
+          "end": "54000000",
+          "timebase": {
+            "numerator": 1,
+            "denominator": 90000
+          }
+        },
+        "storage": {
+          "location": "LOCAL",
+          "volumeId": "vol_01",
+          "epochId": "ep_01"
+        },
+        "evidencePinned": true
+      }
+    },
+    {
+      "why": "non-fmp4 container",
+      "value": {
+        "contract": "recording-index.v1",
+        "segmentId": "seg_01",
+        "tenantId": "t_01",
+        "cameraId": "cam_01",
+        "startUtc": "2026-09-26T10:00:00.000Z",
+        "endUtc": "2026-09-26T10:10:00.000Z",
+        "durationMs": 600000,
+        "sizeBytes": "314572800",
+        "container": "mkv",
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "status": "FINALIZED",
+        "integrity": {
+          "state": "HASHED",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "pts": {
+          "start": "0",
+          "end": "54000000",
+          "timebase": {
+            "numerator": 1,
+            "denominator": 90000
+          }
+        },
+        "storage": {
+          "location": "LOCAL",
+          "volumeId": "vol_01",
+          "epochId": "ep_01"
+        },
+        "evidencePinned": true
+      }
+    }
+  ]
+}

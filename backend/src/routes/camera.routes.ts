@@ -119,10 +119,11 @@ router.post('/', authorize(Permission.CAMERA_CREATE), enforceCameraQuota, async 
     let mainRtspUri = manualRtspUri;
     let subRtspUri: string | undefined;
     let hasPtz = false;
-    let manufacturer = 'Generic';
-    let model = 'IP Camera';
-    let serialNumber = 'N/A';
-    let firmwareVersion = '1.0.0';
+    // Unknown until the camera reports it; never invent a model or firmware version.
+    let manufacturer = 'UNKNOWN';
+    let model = 'UNKNOWN';
+    let serialNumber = 'UNKNOWN';
+    let firmwareVersion = 'UNKNOWN';
     let detectedQuirks: string[] = vendorQuirks || [];
 
     if (!mainRtspUri) {

@@ -13,6 +13,8 @@ export interface OnvifDeviceInfo {
   firmwareVersion: string;
   serialNumber: string;
   hardwareId: string;
+  /** Set when the camera did not return device information; all fields are then 'UNKNOWN'. */
+  deviceInfoError?: string;
 }
 
 export interface OnvifStreamUris {
@@ -69,20 +71,23 @@ export class OnvifClientManager {
     return new Promise((resolve, reject) => {
       cam.getDeviceInformation((err, info) => {
         if (err || !info) {
+          // Some cameras stream fine but reject GetDeviceInformation. Report that honestly rather
+          // than inventing a model or firmware version.
           resolve({
-            manufacturer: 'Generic ONVIF',
-            model: 'Camera',
-            firmwareVersion: '1.0.0',
+            manufacturer: 'UNKNOWN',
+            model: 'UNKNOWN',
+            firmwareVersion: 'UNKNOWN',
             serialNumber: 'UNKNOWN',
             hardwareId: 'UNKNOWN',
+            deviceInfoError: err ? err.message : 'EMPTY_DEVICE_INFORMATION_RESPONSE',
           });
         } else {
           resolve({
-            manufacturer: info.manufacturer || 'Generic',
-            model: info.model || 'Camera',
-            firmwareVersion: info.firmwareVersion || 'Unknown',
-            serialNumber: info.serialNumber || 'Unknown',
-            hardwareId: info.hardwareId || 'Unknown',
+            manufacturer: info.manufacturer || 'UNKNOWN',
+            model: info.model || 'UNKNOWN',
+            firmwareVersion: info.firmwareVersion || 'UNKNOWN',
+            serialNumber: info.serialNumber || 'UNKNOWN',
+            hardwareId: info.hardwareId || 'UNKNOWN',
           });
         }
       });

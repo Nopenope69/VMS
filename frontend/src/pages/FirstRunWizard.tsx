@@ -21,6 +21,7 @@ import {
 import api from '../services/api';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { DEMO_FORM_PREFILL, DEMO_TOKEN, DEMO_USER } from '../demo/fixtures';
 
 interface FirstRunWizardProps {
   onBootstrapComplete: (user: any, token: string) => void;
@@ -116,30 +117,21 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
     }
   };
 
+  // Demo-only helpers: compiled out of production builds (__DEMO_MODE__ === false).
   const handleBypassSetup = () => {
-    const demoUser = {
-      id: 'demo-super-admin',
-      name: 'Alex Vance (Chief Security Officer)',
-      email: 'admin@vigilone.local',
-      role: 'SUPER_ADMIN',
-      tenantId: 'demo-tenant-hq',
-      tenant: {
-        id: 'demo-tenant-hq',
-        name: 'Metro Transit Command Facility',
-      },
-    };
-    const demoToken = 'demo-jwt-token-preview-mode';
-    onBootstrapComplete(demoUser, demoToken);
+    if (!__DEMO_MODE__) return;
+    onBootstrapComplete(DEMO_USER, DEMO_TOKEN);
   };
 
   const handleFillAllDemo = () => {
-    setSetupToken('vigilone_dev_setup_token_99182');
-    setFacilityName('Metro Transit Command Facility');
+    if (!__DEMO_MODE__) return;
+    setSetupToken(DEMO_FORM_PREFILL.setupToken);
+    setFacilityName(DEMO_FORM_PREFILL.facilityName);
     setTimezone('UTC');
-    setAdminName('Alex Vance (Chief Security Officer)');
-    setAdminEmail('admin@vigilone.local');
-    setAdminPassword('Password123!');
-    setConfirmPassword('Password123!');
+    setAdminName(DEMO_FORM_PREFILL.adminName);
+    setAdminEmail(DEMO_FORM_PREFILL.email);
+    setAdminPassword(DEMO_FORM_PREFILL.password);
+    setConfirmPassword(DEMO_FORM_PREFILL.password);
     setCaAcknowledged(true);
     setErrorMessage('');
   };
@@ -232,8 +224,8 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = ({
           </div>
         </div>
 
-        {/* Quick Test / Demo Bypass Bar */}
-        {!isSuccess && !alreadyBootstrapped && (
+        {/* Demo-build-only bar (VITE_DEMO_MODE=true); absent from production bundles */}
+        {__DEMO_MODE__ && !isSuccess && !alreadyBootstrapped && (
           <div className="bg-vms-surface border-b border-vms-border px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 text-vms-accent flex-shrink-0" />

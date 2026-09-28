@@ -36,6 +36,7 @@ usage() {
     echo "  ota <action>         Manage signed OTA update bundles (apply, rollback, status)"
     echo "  backup <action>      Manage atomic appliance backups (create, restore)"
     echo "  support-bundle       Generate a sanitized diagnostics archive for technical support"
+    echo "  acceptance [zip]     Run the automatable installation acceptance checks; lists manual items"
     echo "  reset-factory        Factory reset database and appliance state (destructive)"
     echo "  version              Display VigilOne software and appliance version"
     echo "  help                 Display this help menu"
@@ -107,7 +108,8 @@ cmd_token() {
 
     if [[ -f "$TOKEN_FILE" ]]; then
         TOKEN="$(cat "$TOKEN_FILE" | tr -d '
-')"
+
+')"
         echo -e "${YELLOW}================================================================================${NC}"
         echo -e "  VigilOne Initial Setup PIN: ${GREEN}${TOKEN}${NC}"
         echo -e "${YELLOW}================================================================================${NC}"
@@ -378,6 +380,16 @@ cmd_version() {
 COMMAND="${1:-help}"
 shift || true
 
+cmd_acceptance() {
+    # Automated items of docs/operations/INSTALLATION_ACCEPTANCE_CHECKLIST.md; manual items are
+    # printed as MANUAL. Optional argument: path to an exported evidence package (F27-F29).
+    local script="${INSTALL_DIR}/scripts/acceptance/acceptance.sh"
+    [[ -x "$script" ]] || fatal "Acceptance tooling not installed at ${script} (re-run install.sh from a current release)"
+    command -v node >/dev/null 2>&1 || log_warn "node is not installed on the host; report generation and evidence verification need Node >= 20"
+    INSTALL_DIR="$INSTALL_DIR" CONFIG_DIR="$CONFIG_DIR" RECORDINGS_DIR="$RECORDINGS_DIR" \
+        EVIDENCE_ZIP="${1:-}" RESULTS_DIR="${INSTALL_DIR}/acceptance-results" "$script"
+}
+
 case "$COMMAND" in
     status)          cmd_status "$@" ;;
     token)           cmd_token "$@" ;;
@@ -387,6 +399,7 @@ case "$COMMAND" in
     ota)             cmd_ota "$@" ;;
     backup)          cmd_backup "$@" ;;
     support-bundle)  cmd_support_bundle "$@" ;;
+    acceptance)      cmd_acceptance "$@" ;;
     reset-factory)   cmd_reset_factory "$@" ;;
     version)         cmd_version "$@" ;;
     help|--help|-h)  usage ;;

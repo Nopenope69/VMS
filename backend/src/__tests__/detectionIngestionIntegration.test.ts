@@ -255,5 +255,31 @@ describe('Detection Ingestion Integration & Database-Native Idempotency', () => 
       expect(res.body.detectionId).toBe('det-evt-race-winner');
       expect(res.body.inferenceId).toBe('inf-race-001');
     });
+
+    it('does NOT report success when a P2002 conflict has no row for this inferenceId', async () => {
+      const p2002Error: any = new Error('Unique constraint failed on some other constraint');
+      p2002Error.code = 'P2002';
+
+      (prisma.detectionEvent.upsert as jest.Mock).mockRejectedValue(p2002Error);
+      (prisma.detectionEvent.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const req: any = {
+        body: {
+          tenantId: 'tenant-1',
+          cameraId: 'cam-01',
+          modelManifestId: 'manifest-01',
+          inferenceId: 'inf-orphan-001',
+          type: 'VEHICLE_DETECTED',
+          confidence: 0.92,
+        },
+      };
+      const res = createMockRes();
+
+      await handleIngestDetection(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.success).toBeUndefined();
+      expect(res.body.code).toBe('DETECTION_CONFLICT_UNRESOLVED');
+    });
   });
 });

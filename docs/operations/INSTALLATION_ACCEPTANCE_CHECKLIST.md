@@ -8,6 +8,12 @@
 
 ---
 
+> **Automation:** run `vigilonectl acceptance [Evidence_x.zip]` on the appliance. It checks every
+> item below that can be verified from the host (B9-B11, C12-C14, D17-D20, E21, E23, E24, F27-F29),
+> reports FAIL/NOT_VERIFIED honestly, and lists the remaining items as MANUAL. It does not replace
+> the witnessed checks. Note: E23 applies to the configured segment length (`recordSegmentDuration`
+> in `mediamtx.yml`, 10 minutes by default), not a fixed 1 minute.
+
 ## 1. Objective Acceptance Gate Overview
 
 An on-site installation of the VigilOne Edge NVR appliance is deemed **Accepted** only when all 30 objective verification items below have been validated, witnessed, and checked. Any single failure item constitutes a non-acceptance event requiring immediate technical remediation prior to customer sign-off.

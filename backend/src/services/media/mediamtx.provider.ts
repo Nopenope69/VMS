@@ -103,6 +103,18 @@ export class MediaMTXProvider implements IMediaProvider {
       throw new Error(`MediaMTX error toggling recording for camera ${cameraId}: ${err.message}`);
     }
   }
+
+  /**
+   * Engine reachability probe for health checks. Unlike getStreamStatus (which returns null for
+   * both "no such path" and "engine unreachable"), this throws when the control API cannot be reached.
+   */
+  async ping(): Promise<void> {
+    try {
+      await this.client.get('/v3/paths/list', { params: { itemsPerPage: 1 } });
+    } catch (err: any) {
+      throw new Error(`MediaMTX control API unreachable: ${err.message}`);
+    }
+  }
 }
 
 export const mediaProvider = new MediaMTXProvider();

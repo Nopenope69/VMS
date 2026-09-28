@@ -1,5 +1,9 @@
 # Stage 0 (Containment & Safety) — Verification Evidence Pack
 
+> [!IMPORTANT]
+> **INTERNAL SELF-ASSESSMENT.** This document was written by the coding agent that implemented the work. It is not an independent audit, third-party certification, legal opinion or human sign-off. Any "independent verifier", reviewer or sign-off role named below is a role label from the execution contract, not a person who reviewed this work. Treat results as self-reported until re-run (see `docs/STATUS.md` and `docs/generated/TEST_STATUS.md`).
+
+
 **Verification Date**: 2026-09-12  
 **Standard**: Master Execution Contract (docs/audits/CRITIQUE_DETAILED_AND_PATH_FORWARD_2026-09-11.md)  
 **Verification Gate**: Gate 0 (Containment & Baseline Safety)  

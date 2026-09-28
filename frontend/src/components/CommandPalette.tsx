@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useFeatureFlags } from '../services/features';
 import {
   Search,
   Camera,
@@ -47,6 +48,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const featureFlags = useFeatureFlags();
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -256,8 +258,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     });
 
-    return items;
-  }, [cameras, onSelectTab, onFocusCamera, onClose]);
+    return items.filter((item) => item.id !== 'nav-floorplans' || featureFlags.FLOORPLANS);
+  }, [cameras, onSelectTab, onFocusCamera, onClose, featureFlags]);
 
   // Filter items by query
   const filteredItems = useMemo(() => {

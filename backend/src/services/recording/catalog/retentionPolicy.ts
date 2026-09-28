@@ -71,7 +71,13 @@ export class RetentionPolicyEngine {
       return false;
     }
 
-    // Fallback path for mocked in-memory environments
+    // Non-atomic path for in-memory test doubles only. A real Prisma client always has $executeRaw;
+    // anything else outside NODE_ENV=test is a wiring error and must not delete footage.
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error(
+        'RETENTION_ATOMIC_DELETE_UNAVAILABLE: Prisma client without $executeRaw; refusing non-atomic segment deletion'
+      );
+    }
     const isPinned = await this.pinRegistry.isPinned(segmentId);
     if (isPinned) {
       return false;

@@ -17,8 +17,14 @@ import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import CommandPalette from './components/CommandPalette';
 import HotkeyHelpModal from './components/HotkeyHelpModal';
-import { DEMO_SAMPLE_CAMERAS } from './pages/LiveView';
+import { DEMO_SAMPLE_CAMERAS } from './demo/fixtures';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
+import {
+  ALL_FEATURES_OFF,
+  FeatureFlagContext,
+  FeatureFlagStates,
+  fetchFeatureFlags,
+} from './services/features';
 
 const OutOfScopeNotice: React.FC<{ name: string; description: string }> = ({ name, description }) => (
   <div className="max-w-2xl mx-auto my-16 p-6">
@@ -58,6 +64,7 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('live');
   const [loading, setLoading] = useState(true);
   const [isBootstrapped, setIsBootstrapped] = useState<boolean | null>(null);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlagStates>(ALL_FEATURES_OFF);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showHotkeyHelp, setShowHotkeyHelp] = useState(false);
   const [camerasList, setCamerasList] = useState<any[]>([]);
@@ -135,6 +142,15 @@ export const App: React.FC = () => {
     localStorage.setItem('vigilone_token', userToken);
   };
 
+  // Feature flags (fail-closed: all OFF until the backend confirms otherwise)
+  useEffect(() => {
+    if (token) {
+      fetchFeatureFlags().then(setFeatureFlags);
+    } else {
+      setFeatureFlags(ALL_FEATURES_OFF);
+    }
+  }, [token]);
+
   // Fetch cameras for command palette search
   useEffect(() => {
     if (token) {
@@ -142,10 +158,10 @@ export const App: React.FC = () => {
         .get('/cameras')
         .then((res) => {
           const cams = res.data.cameras || [];
-          setCamerasList(cams.length > 0 ? cams : DEMO_SAMPLE_CAMERAS);
+          setCamerasList(__DEMO_MODE__ && cams.length === 0 ? DEMO_SAMPLE_CAMERAS : cams);
         })
         .catch(() => {
-          setCamerasList(DEMO_SAMPLE_CAMERAS);
+          setCamerasList(__DEMO_MODE__ ? DEMO_SAMPLE_CAMERAS : []);
         });
     }
   }, [token]);
@@ -260,6 +276,7 @@ export const App: React.FC = () => {
   }
 
   return (
+    <FeatureFlagContext.Provider value={featureFlags}>
     <div className="min-h-screen bg-vms-bg flex flex-col font-sans text-vms-text">
       <Navbar
         currentTab={currentTab}
@@ -279,7 +296,15 @@ export const App: React.FC = () => {
         )}
         {currentTab === 'playback' && <Playback />}
         {currentTab === 'investigation' && <Investigation />}
-        {currentTab === 'floorplans' && <FloorplanView />}
+        {currentTab === 'floorplans' &&
+          (featureFlags.FLOORPLANS ? (
+            <FloorplanView />
+          ) : (
+            <OutOfScopeNotice
+              name="Floorplans & Indoor Spatial View"
+              description="Floorplans are disabled on this appliance (VIGILONE_FEATURE_FLOORPLANS). The subsystem has not been validated on a real site."
+            />
+          ))}
         {currentTab === 'devices' && <Devices />}
         {currentTab === 'anpr' && (
           <OutOfScopeNotice
@@ -320,6 +345,7 @@ export const App: React.FC = () => {
         onClose={() => setShowHotkeyHelp(false)}
       />
     </div>
+    </FeatureFlagContext.Provider>
   );
 };
 

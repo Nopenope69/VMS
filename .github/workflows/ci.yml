@@ -34,6 +34,10 @@ jobs:
         working-directory: ./frontend
         run: npm run build
 
+      - name: Production bundle contains no demo hazards
+        working-directory: ./frontend
+        run: npm run check:no-demo
+
       - name: Upload Frontend Dist Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -56,7 +60,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U vigilone -d vigilone_db"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -71,6 +75,9 @@ jobs:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+
+      - name: Install ffmpeg (real fMP4 ingestion tests spawn ffmpeg)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg && ffmpeg -version | head -1
 
       - name: Install backend dependencies
         working-directory: ./backend
@@ -106,6 +113,95 @@ jobs:
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
           INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
         run: npm test
+
+  ai-worker-checks:
+    name: AI Worker Typecheck & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      # The ai-worker compiles and tests against the backend toolchain (tsc, jest, ts-jest, @types).
+      - name: Install backend toolchain
+        working-directory: ./backend
+        run: npm ci
+
+      - name: AI Worker Build (tsc)
+        working-directory: ./services/ai-worker
+        run: npm run build
+
+      - name: AI Worker Tests
+        working-directory: ./services/ai-worker
+        run: npm test
+
+  governance-gates:
+    name: Hygiene, Model Licence & Fail-Loud Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Repository hygiene gate
+        working-directory: ./backend
+        run: npm run check:hygiene
+
+      - name: Model licence gate
+        working-directory: ./backend
+        run: npm run check:model-licenses
+
+      - name: Fail-loud gate (no fake-success patterns outside the justified allowlist)
+        working-directory: ./backend
+        run: npm run check:no-fake-success
+
+      - name: Generated test status has not been hand-edited
+        working-directory: ./backend
+        run: npm run check:status-docs
+
+      - name: README feature-flag table is generated, not hand-typed
+        working-directory: ./backend
+        run: npm run check:feature-flag-docs
+
+  field-tooling-checks:
+    name: Field Validation Tooling (bench, fault, soak, acceptance)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests (node --test)
+        run: node --test scripts/lib/*.test.mjs scripts/soak/*.test.mjs
+
+      - name: Shell syntax
+        run: for f in scripts/fault/*.sh scripts/sim/*.sh scripts/acceptance/*.sh scripts/install-drill/*.sh deploy/packaging/vigilonectl; do bash -n "$f" || exit 1; done
+
+      - name: Compatibility matrix is generated from committed bench reports
+        run: node scripts/bench/update-matrix.mjs --check
 
   packaging-and-installer-checks:
     name: Packaging, vigilonectl & Installer Invariants

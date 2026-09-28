@@ -1,0 +1,54 @@
+{
+  "valid": [
+    {
+      "contract": "media-provider.v1",
+      "path": "cam_01",
+      "state": "READY",
+      "readersCount": 2,
+      "tracks": [
+        "H264"
+      ],
+      "bytesReceived": 123456,
+      "observedAtUtc": "2026-09-26T10:00:00.000Z"
+    },
+    {
+      "contract": "media-provider.v1",
+      "path": "cam_01",
+      "state": "NOT_FOUND_OR_UNAVAILABLE",
+      "readersCount": null,
+      "tracks": null,
+      "bytesReceived": null,
+      "observedAtUtc": "2026-09-26T10:00:00.000Z"
+    }
+  ],
+  "invalid": [
+    {
+      "why": "telemetry reported for an unobserved path",
+      "value": {
+        "contract": "media-provider.v1",
+        "path": "cam_01",
+        "state": "NOT_FOUND_OR_UNAVAILABLE",
+        "readersCount": 2,
+        "tracks": [
+          "H264"
+        ],
+        "bytesReceived": 123456,
+        "observedAtUtc": "2026-09-26T10:00:00.000Z"
+      }
+    },
+    {
+      "why": "path traversal",
+      "value": {
+        "contract": "media-provider.v1",
+        "path": "../etc",
+        "state": "READY",
+        "readersCount": 2,
+        "tracks": [
+          "H264"
+        ],
+        "bytesReceived": 123456,
+        "observedAtUtc": "2026-09-26T10:00:00.000Z"
+      }
+    }
+  ]
+}

@@ -14,7 +14,8 @@ router.get('/health', async (req: Request, res: Response) => {
 
   let mediaEngineStatus = 'ok';
   try {
-    await mediaProvider.getStreamStatus('__health_probe__');
+    // getStreamStatus swallows errors (returns null), so it cannot detect an unreachable engine.
+    await mediaProvider.ping();
   } catch (err: any) {
     mediaEngineStatus = `error: ${err.message}`;
   }

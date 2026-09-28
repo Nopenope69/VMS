@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { LicenseClaims } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
+import { getInstalledSoftwareVersion } from '../utils/softwareVersion';
 
 const router = Router();
 let prisma = prismaInstance;
@@ -223,7 +224,7 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
             id: 'SINGLETON',
             isBootstrapped: true,
             bootstrappedAt: now,
-            initializationVersion: '1.0.0',
+            initializationVersion: getInstalledSoftwareVersion().version,
           },
           update: {
             isBootstrapped: true,

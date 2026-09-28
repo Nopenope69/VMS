@@ -152,4 +152,22 @@ describe('Prometheus Metrics Engine & Request Logger Middleware', () => {
     expect(statusCode).toBe(403);
     expect(responseData).toContain('Forbidden: External metrics scrape prohibited');
   });
+
+  it('exports real event-loop delay, heap and CPU metrics (no values reported before samples exist)', async () => {
+    const first = await MetricsService.scrapeMetrics();
+    expect(first).toContain('vigilone_event_loop_lag_samples');
+    expect(first).toMatch(/vigilone_process_cpu_seconds_total \d+\.\d{3}/);
+    expect(first).toMatch(/vigilone_process_heap_used_bytes \d+/);
+    // Busy-wait so the sampler observes a real delay, then scrape again.
+    await new Promise((r) => setTimeout(r, 60));
+    const start = Date.now();
+    while (Date.now() - start < 120) {
+      // block the event loop
+    }
+    await new Promise((r) => setTimeout(r, 60));
+    const second = await MetricsService.scrapeMetrics();
+    const p99 = second.match(/vigilone_event_loop_lag_seconds\{quantile="1"\} ([0-9.]+)/);
+    expect(p99).not.toBeNull();
+    expect(Number(p99![1])).toBeGreaterThan(0.05);
+  });
 });

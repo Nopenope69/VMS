@@ -18,6 +18,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import { ConfirmModal } from '../components/ui/Modal';
 import api from '../services/api';
+import { DEMO_SAMPLE_CAMERAS } from '../demo/fixtures';
 
 type GridType = '1x1' | '2x2' | '3x3' | '1+5' | '4x4';
 
@@ -35,45 +36,6 @@ interface LiveViewProps {
   onNavigateToDevices: () => void;
   onNavigateToAlarms?: () => void;
 }
-
-export const DEMO_SAMPLE_CAMERAS: CameraData[] = [
-  {
-    id: 'demo-cam-01',
-    name: 'Sector A — North Perimeter Gate',
-    streamPath: 'live/north_gate',
-    ipAddress: '192.168.10.101',
-    hasPtz: true,
-    recordingMode: 'CONTINUOUS',
-    isOnline: true,
-  },
-  {
-    id: 'demo-cam-02',
-    name: 'Sector B — Terminal Concourse East',
-    streamPath: 'live/concourse_east',
-    ipAddress: '192.168.10.102',
-    hasPtz: false,
-    recordingMode: 'CONTINUOUS',
-    isOnline: true,
-  },
-  {
-    id: 'demo-cam-03',
-    name: 'Sector C — Secure Evidence Vault',
-    streamPath: 'live/vault_secure',
-    ipAddress: '192.168.10.103',
-    hasPtz: true,
-    recordingMode: 'MOTION',
-    isOnline: true,
-  },
-  {
-    id: 'demo-cam-04',
-    name: 'Sector D — Loading Dock Ingress',
-    streamPath: 'live/loading_dock',
-    ipAddress: '192.168.10.104',
-    hasPtz: false,
-    recordingMode: 'CONTINUOUS',
-    isOnline: true,
-  },
-];
 
 export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavigateToAlarms }) => {
   const [cameras, setCameras] = useState<CameraData[]>([]);
@@ -160,7 +122,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
       let fetchedCams: CameraData[] = camRes.data.cameras || [];
       const fetchedLayouts: SavedLayout[] = layoutRes.data.layouts || [];
 
-      if (fetchedCams.length === 0) {
+      if (__DEMO_MODE__ && fetchedCams.length === 0) {
         fetchedCams = DEMO_SAMPLE_CAMERAS;
       }
 
@@ -177,8 +139,9 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToDevices, onNavig
       }
     } catch (err) {
       console.error('Failed to load live view data:', err);
-      setCameras(DEMO_SAMPLE_CAMERAS);
-      updateDefaultSlots('2x2', DEMO_SAMPLE_CAMERAS);
+      const fallback = __DEMO_MODE__ ? DEMO_SAMPLE_CAMERAS : [];
+      setCameras(fallback);
+      updateDefaultSlots('2x2', fallback);
     } finally {
       setLoading(false);
     }

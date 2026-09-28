@@ -19,6 +19,10 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
+import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
+
+const describeError = (err: any): string =>
+  err?.response?.data?.error || err?.message || 'backend unreachable';
 
 type ConsoleTab = 'ALARMS' | 'EVENTS';
 
@@ -40,109 +44,6 @@ interface AlarmItem {
   updatedAt: string;
 }
 
-const DEMO_ALARMS: AlarmItem[] = [
-  {
-    id: 'demo-alm-01',
-    title: 'Perimeter Intrusion Detected — North Gate 01',
-    description: 'Thermal boundary tripwire violated outside authorized transit hours. Secondary optical motion confirmed.',
-    severity: 'CRITICAL',
-    state: 'ACTIVE',
-    cameraId: 'demo-cam-1',
-    camera: { id: 'demo-cam-1', name: 'North Gate - Perimeter 01' },
-    createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
-  },
-  {
-    id: 'demo-alm-02',
-    title: 'Lobby Fire Exit Door Held Open > 45s',
-    description: 'Magnetic reed switch state open. Operator verification requested before auto-dispatch.',
-    severity: 'WARNING',
-    state: 'ACTIVE',
-    cameraId: 'demo-cam-2',
-    camera: { id: 'demo-cam-2', name: 'Main Concourse - Lobby West' },
-    createdAt: new Date(Date.now() - 1000 * 60 * 14).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 14).toISOString(),
-  },
-  {
-    id: 'demo-alm-03',
-    title: 'Camera Signal Loss / RTSP Stream Timeout',
-    description: 'Cargo Dock Bay 04 feed dropped. Reconnect attempts: 3/5. Inspect switch port 14.',
-    severity: 'WARNING',
-    state: 'ACKNOWLEDGED',
-    cameraId: 'demo-cam-4',
-    camera: { id: 'demo-cam-4', name: 'Cargo Dock - Loading Bay 04' },
-    acknowledgedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-    acknowledgedBy: 'Alex Vance (Chief Security Officer)',
-    createdAt: new Date(Date.now() - 1000 * 60 * 32).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-  },
-  {
-    id: 'demo-alm-04',
-    title: 'Server Vault Environmental Temp Spike (> 28°C)',
-    description: 'Rack B-03 intake thermal sensor alert. CRAC unit failover triggered.',
-    severity: 'INFO',
-    state: 'RESOLVED',
-    cameraId: 'demo-cam-3',
-    camera: { id: 'demo-cam-3', name: 'Server Vault - High Sec 03' },
-    acknowledgedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    acknowledgedBy: 'Alex Vance (Chief Security Officer)',
-    resolvedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    resolvedBy: 'Alex Vance (Chief Security Officer)',
-    resolutionNotes: 'Maintenance / Sensor Calibration Test — HVAC compressor reset complete.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-];
-
-const DEMO_EVENTS = [
-  {
-    id: 'demo-evt-01',
-    eventType: 'MOTION_DETECTION',
-    severity: 'CRITICAL',
-    title: 'Fast Motion in Restricted Zone',
-    description: 'Bounding box detected speed exceeding threshold (2.4m/s)',
-    acknowledged: false,
-    cameraId: 'demo-cam-1',
-    camera: { id: 'demo-cam-1', name: 'North Gate - Perimeter 01' },
-    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-  },
-  {
-    id: 'demo-evt-02',
-    eventType: 'DOOR_ACCESS_DENIED',
-    severity: 'WARNING',
-    title: 'Badge Read Failure / Invalid PIN',
-    description: 'Badge ID #8492 attempted access to Vault Door B',
-    acknowledged: false,
-    cameraId: 'demo-cam-3',
-    camera: { id: 'demo-cam-3', name: 'Server Vault - High Sec 03' },
-    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-  },
-  {
-    id: 'demo-evt-03',
-    eventType: 'TAMPER_DETECTED',
-    severity: 'WARNING',
-    title: 'Camera Optical Occlusion / Defocus',
-    description: 'Lens contrast score dropped below 15% threshold',
-    acknowledged: true,
-    acknowledgedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    acknowledgedBy: 'Alex Vance',
-    cameraId: 'demo-cam-4',
-    camera: { id: 'demo-cam-4', name: 'Cargo Dock - Loading Bay 04' },
-    timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-  },
-  {
-    id: 'demo-evt-04',
-    eventType: 'SYSTEM_AUDIT',
-    severity: 'INFO',
-    title: 'Scheduled NTP Clock Synchronization',
-    description: 'Time drift corrected: +12ms relative to pool.ntp.org',
-    acknowledged: true,
-    acknowledgedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    acknowledgedBy: 'SYSTEM',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-  },
-];
-
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Events: React.FC = () => {
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('ALARMS');
@@ -153,6 +54,7 @@ export const Events: React.FC = () => {
   const [alarmStateFilter, setAlarmStateFilter] = useState<string>('ACTIVE');
   const [alarmSeverityFilter, setAlarmSeverityFilter] = useState<string>('');
   const [alarmLoading, setAlarmLoading] = useState(false);
+  const [alarmError, setAlarmError] = useState<string | null>(null);
   const [resolvingAlarm, setResolvingAlarm] = useState<AlarmItem | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [submittingResolve, setSubmittingResolve] = useState(false);
@@ -171,31 +73,16 @@ export const Events: React.FC = () => {
   const [eventSeverityFilter, setEventSeverityFilter] = useState<string>('');
   const [unackOnly, setUnackOnly] = useState<boolean>(false);
   const [eventLoading, setEventLoading] = useState(false);
+  const [eventError, setEventError] = useState<string | null>(null);
 
-  // Fetch Alarms
+  // Fetch Alarms. Production shows exactly what the backend returns; an unreachable backend is
+  // surfaced as an error, never papered over with simulated alarms (demo builds only).
   const fetchAlarms = async () => {
     setAlarmLoading(true);
-    try {
-      const params: any = {};
-      if (alarmStateFilter && alarmStateFilter !== 'ALL') params.state = alarmStateFilter;
-      if (alarmSeverityFilter) params.severity = alarmSeverityFilter;
-
-      const res = await api.get('/alarms', { params });
-      if (res.data?.alarms && res.data.alarms.length > 0) {
-        setAlarms(res.data.alarms);
-      } else {
-        let filtered = [...DEMO_ALARMS];
-        if (alarmStateFilter && alarmStateFilter !== 'ALL') {
-          filtered = filtered.filter((a) => a.state === alarmStateFilter);
-        }
-        if (alarmSeverityFilter) {
-          filtered = filtered.filter((a) => a.severity === alarmSeverityFilter);
-        }
-        setAlarms(filtered);
-      }
-    } catch (err) {
-      console.warn('Backend alarms offline, falling back to simulated demo alarms:', err);
-      let filtered = [...DEMO_ALARMS];
+    setAlarmError(null);
+    const applyDemoAlarms = () => {
+      if (!__DEMO_MODE__) return;
+      let filtered = [...DEMO_ALARMS] as AlarmItem[];
       if (alarmStateFilter && alarmStateFilter !== 'ALL') {
         filtered = filtered.filter((a) => a.state === alarmStateFilter);
       }
@@ -203,6 +90,27 @@ export const Events: React.FC = () => {
         filtered = filtered.filter((a) => a.severity === alarmSeverityFilter);
       }
       setAlarms(filtered);
+    };
+    try {
+      const params: any = {};
+      if (alarmStateFilter && alarmStateFilter !== 'ALL') params.state = alarmStateFilter;
+      if (alarmSeverityFilter) params.severity = alarmSeverityFilter;
+
+      const res = await api.get('/alarms', { params });
+      const realAlarms: AlarmItem[] = res.data?.alarms || [];
+      if (__DEMO_MODE__ && realAlarms.length === 0) {
+        applyDemoAlarms();
+      } else {
+        setAlarms(realAlarms);
+      }
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        applyDemoAlarms();
+      } else {
+        console.error('Failed to load alarms:', err);
+        setAlarms([]);
+        setAlarmError(err?.response?.data?.error || err?.message || 'Alarm service unreachable');
+      }
     } finally {
       setAlarmLoading(false);
     }
@@ -211,6 +119,20 @@ export const Events: React.FC = () => {
   // Fetch Raw Events
   const fetchEvents = async () => {
     setEventLoading(true);
+    setEventError(null);
+    const applyDemoEvents = () => {
+      if (!__DEMO_MODE__) return;
+      let filtered = [...DEMO_EVENTS];
+      if (eventSeverityFilter) filtered = filtered.filter((e) => e.severity === eventSeverityFilter);
+      if (unackOnly) filtered = filtered.filter((e) => !e.acknowledged);
+      setEvents(filtered);
+      setEventStats({
+        critical: filtered.filter((e) => e.severity === 'CRITICAL').length,
+        warning: filtered.filter((e) => e.severity === 'WARNING').length,
+        info: filtered.filter((e) => e.severity === 'INFO').length,
+        unacknowledgedTotal: filtered.filter((e) => !e.acknowledged).length,
+      });
+    };
     try {
       const params: any = {};
       if (eventSeverityFilter) params.severity = eventSeverityFilter;
@@ -221,33 +143,22 @@ export const Events: React.FC = () => {
         api.get('/events/stats'),
       ]);
 
-      if (resEvents.data?.events && resEvents.data.events.length > 0) {
-        setEvents(resEvents.data.events);
-        setEventStats(resStats.data || {});
+      const realEvents = resEvents.data?.events || [];
+      if (__DEMO_MODE__ && realEvents.length === 0) {
+        applyDemoEvents();
       } else {
-        let filtered = [...DEMO_EVENTS];
-        if (eventSeverityFilter) filtered = filtered.filter(e => e.severity === eventSeverityFilter);
-        if (unackOnly) filtered = filtered.filter(e => !e.acknowledged);
-        setEvents(filtered);
-        setEventStats({
-          critical: filtered.filter(e => e.severity === 'CRITICAL').length,
-          warning: filtered.filter(e => e.severity === 'WARNING').length,
-          info: filtered.filter(e => e.severity === 'INFO').length,
-          unacknowledgedTotal: filtered.filter(e => !e.acknowledged).length,
-        });
+        setEvents(realEvents);
+        setEventStats(resStats.data || { critical: 0, warning: 0, info: 0, unacknowledgedTotal: 0 });
       }
-    } catch (err) {
-      console.warn('Backend events offline, falling back to simulated demo events:', err);
-      let filtered = [...DEMO_EVENTS];
-      if (eventSeverityFilter) filtered = filtered.filter(e => e.severity === eventSeverityFilter);
-      if (unackOnly) filtered = filtered.filter(e => !e.acknowledged);
-      setEvents(filtered);
-      setEventStats({
-        critical: filtered.filter(e => e.severity === 'CRITICAL').length,
-        warning: filtered.filter(e => e.severity === 'WARNING').length,
-        info: filtered.filter(e => e.severity === 'INFO').length,
-        unacknowledgedTotal: filtered.filter(e => !e.acknowledged).length,
-      });
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        applyDemoEvents();
+      } else {
+        console.error('Failed to load events:', err);
+        setEvents([]);
+        setEventStats({ critical: 0, warning: 0, info: 0, unacknowledgedTotal: 0 });
+        setEventError(err?.response?.data?.error || err?.message || 'Event service unreachable');
+      }
     } finally {
       setEventLoading(false);
     }
@@ -266,14 +177,18 @@ export const Events: React.FC = () => {
     try {
       await api.post(`/alarms/${alarmId}/acknowledge`);
       fetchAlarms();
-    } catch (err) {
-      console.warn('Failed to acknowledge alarm on backend, updating local state:', err);
-      setAlarms(prev => prev.map(a => a.id === alarmId ? {
-        ...a,
-        state: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date().toISOString(),
-        acknowledgedBy: 'Alex Vance (Chief Security Officer)'
-      } : a));
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        setAlarms(prev => prev.map(a => a.id === alarmId ? {
+          ...a,
+          state: 'ACKNOWLEDGED',
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgedBy: DEMO_USER.name
+        } : a));
+      } else {
+        // Never show an alarm as acknowledged unless the backend recorded it.
+        setAlarmError(`Acknowledge failed; alarm is still ACTIVE (${describeError(err)})`);
+      }
     }
   };
 
@@ -299,15 +214,19 @@ export const Events: React.FC = () => {
       await Promise.all(selectedAlarmIds.map((id) => api.post(`/alarms/${id}/acknowledge`)));
       setSelectedAlarmIds([]);
       fetchAlarms();
-    } catch (err) {
-      console.warn('Bulk acknowledge failed on backend, updating local state:', err);
-      setAlarms(prev => prev.map(a => selectedAlarmIds.includes(a.id) ? {
-        ...a,
-        state: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date().toISOString(),
-        acknowledgedBy: 'Alex Vance (Chief Security Officer)'
-      } : a));
-      setSelectedAlarmIds([]);
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        setAlarms(prev => prev.map(a => selectedAlarmIds.includes(a.id) ? {
+          ...a,
+          state: 'ACKNOWLEDGED',
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgedBy: DEMO_USER.name
+        } : a));
+        setSelectedAlarmIds([]);
+      } else {
+        setAlarmError(`Bulk acknowledge failed; refresh to see which alarms the backend recorded (${describeError(err)})`);
+        fetchAlarms();
+      }
     } finally {
       setBulkTriaging(false);
     }
@@ -321,15 +240,19 @@ export const Events: React.FC = () => {
       await Promise.all(criticalActive.map((a) => api.post(`/alarms/${a.id}/acknowledge`)));
       setSelectedAlarmIds([]);
       fetchAlarms();
-    } catch (err) {
-      console.warn('Acknowledge critical failed on backend, updating local state:', err);
-      setAlarms(prev => prev.map(a => a.severity === 'CRITICAL' && a.state === 'ACTIVE' ? {
-        ...a,
-        state: 'ACKNOWLEDGED',
-        acknowledgedAt: new Date().toISOString(),
-        acknowledgedBy: 'Alex Vance (Chief Security Officer)'
-      } : a));
-      setSelectedAlarmIds([]);
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        setAlarms(prev => prev.map(a => a.severity === 'CRITICAL' && a.state === 'ACTIVE' ? {
+          ...a,
+          state: 'ACKNOWLEDGED',
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgedBy: DEMO_USER.name
+        } : a));
+        setSelectedAlarmIds([]);
+      } else {
+        setAlarmError(`Acknowledge of critical alarms failed; refresh to see which the backend recorded (${describeError(err)})`);
+        fetchAlarms();
+      }
     } finally {
       setBulkTriaging(false);
     }
@@ -353,16 +276,20 @@ export const Events: React.FC = () => {
       });
       setResolvingAlarm(null);
       fetchAlarms();
-    } catch (err) {
-      console.warn('Alarm resolution failed on backend, updating local state:', err);
-      setAlarms(prev => prev.map(a => a.id === resolvingAlarm.id ? {
-        ...a,
-        state: 'RESOLVED',
-        resolvedAt: new Date().toISOString(),
-        resolvedBy: 'Alex Vance (Chief Security Officer)',
-        resolutionNotes: resolutionNotes.trim() || 'Resolved by security operator'
-      } : a));
-      setResolvingAlarm(null);
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        setAlarms(prev => prev.map(a => a.id === resolvingAlarm.id ? {
+          ...a,
+          state: 'RESOLVED',
+          resolvedAt: new Date().toISOString(),
+          resolvedBy: DEMO_USER.name,
+          resolutionNotes: resolutionNotes.trim() || 'Resolved by security operator'
+        } : a));
+        setResolvingAlarm(null);
+      } else {
+        // Keep the dialog open with the operator's notes; the alarm was NOT resolved.
+        setAlarmError(`Resolve failed; alarm was not resolved (${describeError(err)})`);
+      }
     } finally {
       setSubmittingResolve(false);
     }
@@ -373,14 +300,17 @@ export const Events: React.FC = () => {
     try {
       await api.patch(`/events/${id}/ack`);
       fetchEvents();
-    } catch (err) {
-      console.warn('Acknowledge event failed on backend, updating local state:', err);
-      setEvents(prev => prev.map(ev => ev.id === id ? {
-        ...ev,
-        acknowledged: true,
-        acknowledgedAt: new Date().toISOString(),
-        acknowledgedBy: 'Alex Vance'
-      } : ev));
+    } catch (err: any) {
+      if (__DEMO_MODE__) {
+        setEvents(prev => prev.map(ev => ev.id === id ? {
+          ...ev,
+          acknowledged: true,
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgedBy: DEMO_USER.name
+        } : ev));
+      } else {
+        setEventError(`Acknowledge failed; event is still unacknowledged (${describeError(err)})`);
+      }
     }
   };
 
@@ -499,6 +429,16 @@ export const Events: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {((consoleTab === 'ALARMS' && alarmError) || (consoleTab === 'EVENTS' && eventError)) && (
+        <div
+          role="alert"
+          className="p-3 bg-status-alarm/10 border border-status-alarm/30 rounded text-xs text-status-alarm font-mono"
+        >
+          INCIDENT FEED UNAVAILABLE: {consoleTab === 'ALARMS' ? alarmError : eventError}. The list below is
+          empty because the backend could not be reached, not because there are no incidents.
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* ALARMS WORKFLOW CONSOLE TAB                                              */}

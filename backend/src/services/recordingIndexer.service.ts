@@ -5,6 +5,7 @@ import config from '../config/env';
 import { FFmpegService } from './ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../utils/segmentPath';
+import { activeWriteGraceMs } from './reconciliation/crashRecovery.service';
 
 export class RecordingIndexerService {
   private prisma: PrismaClient;
@@ -103,8 +104,8 @@ export class RecordingIndexerService {
           const probe = await FFmpegService.probe(filePath);
 
           if (!probe || probe.durationSeconds <= 0) {
-            // If file is fresh (< 5s), it might just be the active segment being written. Skip for now.
-            if (ageMs < 5000) {
+            // A file modified within the active-write grace period may still be open in the recorder.
+            if (ageMs < activeWriteGraceMs()) {
               continue;
             }
 

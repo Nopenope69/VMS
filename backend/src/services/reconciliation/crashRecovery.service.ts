@@ -21,7 +21,20 @@ export interface CrashRecoveryReport {
   validPairsConfirmed: number;
   quarantineSizeBytes: number;
   quarantineCapExceeded: boolean;
+  /** Files left untouched because they were modified within the active-write grace period. */
+  filesSkippedActive: number;
   durationMs: number;
+}
+
+/**
+ * Files modified more recently than this are assumed to be open in the recorder (MediaMTX appends a
+ * 1 s fMP4 part at a time) and are never unlinked, repaired, moved or quarantined. Read per call
+ * from CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS (default 120).
+ */
+export function activeWriteGraceMs(): number {
+  const raw = process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS;
+  const n = raw === undefined ? 120 : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n * 1000 : 120000;
 }
 
 export type MediaClassification =
@@ -287,6 +300,7 @@ export class CrashRecoveryService {
           validPairsConfirmed: 0,
           quarantineSizeBytes: 0,
           quarantineCapExceeded: false,
+          filesSkippedActive: 0,
           durationMs: 0,
         }
       );
@@ -301,6 +315,8 @@ export class CrashRecoveryService {
     let zeroBytePruned = 0;
     let orphansIndexed = 0;
     let validPairsConfirmed = 0;
+    let filesSkippedActive = 0;
+    const graceMs = activeWriteGraceMs();
 
     try {
       const roots =
@@ -325,6 +341,16 @@ export class CrashRecoveryService {
         filesExamined += mediaFiles.length;
 
         for (const filePath of mediaFiles) {
+          // Never touch a segment the recorder may still be writing (backend restarts while
+          // MediaMTX keeps recording): a fresh file is legitimately 0 bytes or "truncated".
+          try {
+            if (Date.now() - fs.statSync(filePath).mtimeMs < graceMs) {
+              filesSkippedActive++;
+              continue;
+            }
+          } catch {
+            continue;
+          }
           const { classification, probe } = await this.classifyFile(filePath);
 
           const existingSegment =
@@ -669,6 +695,7 @@ export class CrashRecoveryService {
         validPairsConfirmed,
         quarantineSizeBytes,
         quarantineCapExceeded,
+        filesSkippedActive,
         durationMs: Date.now() - startTime,
       };
 

@@ -49,6 +49,16 @@ export class RuleEngine {
     }
   }
 
+  /** Enum-valid trigger types that can match this event type (raw name if it is one, plus the mapping). */
+  public static candidateTriggerTypes(eventType: VigilOneEventType): RuleTriggerType[] {
+    const valid = new Set<string>(Object.values(RuleTriggerType));
+    const out = new Set<RuleTriggerType>();
+    if (valid.has(eventType)) out.add(eventType as unknown as RuleTriggerType);
+    const mapped = RuleEngine.mapEventTypeToTriggerType(eventType);
+    if (mapped) out.add(mapped);
+    return [...out];
+  }
+
   /**
    * Evaluates an incoming event against automation rules.
    * Enforces cascade depth limit, correlation action count, cooldown suppression,
@@ -115,10 +125,12 @@ export class RuleEngine {
     }
 
     // 3. Find candidate rules
-    const mappedTriggerType = RuleEngine.mapEventTypeToTriggerType(event.type);
-    const triggerTypes: any[] = [event.type];
-    if (mappedTriggerType) {
-      triggerTypes.push(mappedTriggerType);
+    // Only RuleTriggerType enum values may reach the query. Passing the raw event type (e.g.
+    // 'MOTION', 'SYSTEM_ALERT') made Prisma reject the whole query, so no rule could fire for
+    // those events.
+    const triggerTypes = RuleEngine.candidateTriggerTypes(event.type);
+    if (triggerTypes.length === 0) {
+      return { results: [], cascadeTerminated: false };
     }
 
     const rules = await this.prisma.automationRule.findMany({

@@ -16,6 +16,7 @@ import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
 import EvidenceReviewModal from '../components/EvidenceReviewModal';
 import SmartSearchModal from '../components/SmartSearchModal';
+import { useFeatureFlags } from '../services/features';
 import TimelineScrubber, { TimelineSegment, TimelineTrack } from '../components/TimelineScrubber';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -59,6 +60,7 @@ export const Investigation: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showSmartSearch, setShowSmartSearch] = useState(false);
+  const featureFlags = useFeatureFlags();
   const [activeManifestId, setActiveManifestId] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -374,15 +376,17 @@ export const Investigation: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2">
-          <Button
-            variant="secondary"
-            size="xs"
-            icon={Search}
-            onClick={() => setShowSmartSearch(true)}
-            title="Smart Motion & Region Search"
-          >
-            Smart Search
-          </Button>
+          {featureFlags.SMART_SEARCH && (
+            <Button
+              variant="secondary"
+              size="xs"
+              icon={Search}
+              onClick={() => setShowSmartSearch(true)}
+              title="Smart Motion & Region Search"
+            >
+              Smart Search
+            </Button>
+          )}
 
           <Button
             variant="primary"
@@ -683,7 +687,7 @@ export const Investigation: React.FC = () => {
       )}
 
       <SmartSearchModal
-        isOpen={showSmartSearch}
+        isOpen={featureFlags.SMART_SEARCH && showSmartSearch}
         onClose={() => setShowSmartSearch(false)}
         cameraId={focusedCameraId || selectedCameraIds[0]}
         cameras={cameras}

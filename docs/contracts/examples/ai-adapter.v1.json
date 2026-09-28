@@ -1,0 +1,275 @@
+{
+  "valid": {
+    "AdapterDescriptorV1": {
+      "contract": "ai-adapter.v1",
+      "adapterId": "onnx-worker",
+      "adapterVersion": "0.1.0",
+      "tasks": [
+        "object_detection"
+      ],
+      "models": [
+        {
+          "modelId": "mm_01",
+          "name": "example-detector",
+          "version": "0.0.1",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "task": "object_detection",
+          "classes": [
+            "person",
+            "bicycle",
+            "motorcycle",
+            "car",
+            "bus",
+            "truck"
+          ],
+          "codeLicense": "Apache-2.0",
+          "weightsLicense": "Apache-2.0",
+          "weightsSource": "https://example.invalid/weights (placeholder: no model is shipped yet)",
+          "runtime": "onnxruntime",
+          "input": {
+            "width": 640,
+            "height": 640,
+            "colorSpace": "RGB",
+            "letterbox": true
+          },
+          "evaluation": null
+        }
+      ],
+      "requiresNetworkEgress": false
+    },
+    "InferenceRequestV1": {
+      "contract": "ai-adapter.v1",
+      "requestId": "req_01",
+      "tenantId": "t_01",
+      "task": "object_detection",
+      "modelId": "mm_01",
+      "frame": {
+        "cameraId": "cam_01",
+        "streamSessionId": "sess_1",
+        "sequenceNumber": 42,
+        "timestampUtc": "2026-09-26T10:00:00.000Z",
+        "width": 1920,
+        "height": 1080,
+        "format": "rgb24",
+        "data": {
+          "kind": "shared_memory",
+          "key": "/vigilone/frames/cam_01/42",
+          "byteLength": 6220800
+        }
+      },
+      "deadlineMs": 500
+    },
+    "InferenceResultV1_ok": {
+      "contract": "ai-adapter.v1",
+      "status": "ok",
+      "requestId": "req_01",
+      "detections": [
+        {
+          "objectClass": "person",
+          "classId": 0,
+          "confidence": 0.87,
+          "bbox": {
+            "x": 0.1,
+            "y": 0.2,
+            "width": 0.2,
+            "height": 0.5
+          }
+        }
+      ],
+      "provenance": {
+        "adapterId": "onnx-worker",
+        "adapterVersion": "0.1.0",
+        "modelId": "mm_01",
+        "modelName": "example-detector",
+        "modelVersion": "0.0.1",
+        "modelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runtime": "onnxruntime",
+        "executionProvider": "cpu",
+        "inferenceId": "inf_01",
+        "frameTimestampUtc": "2026-09-26T10:00:00.000Z"
+      },
+      "latencyMs": 38.2
+    },
+    "InferenceResultV1_error": {
+      "contract": "ai-adapter.v1",
+      "status": "error",
+      "requestId": "req_01",
+      "errorCode": "MODEL_NOT_LOADED",
+      "message": "no model loaded for mm_01",
+      "retryable": true
+    },
+    "AdapterHealthV1": {
+      "contract": "ai-adapter.v1",
+      "adapterId": "onnx-worker",
+      "status": "READY",
+      "loadedModelIds": [
+        "mm_01"
+      ],
+      "lastError": null,
+      "observedAtUtc": "2026-09-26T10:00:00.000Z"
+    }
+  },
+  "invalid": [
+    {
+      "why": "ok result without provenance",
+      "schema": "InferenceResultV1",
+      "value": {
+        "contract": "ai-adapter.v1",
+        "status": "ok",
+        "requestId": "req_01",
+        "detections": [
+          {
+            "objectClass": "person",
+            "classId": 0,
+            "confidence": 0.87,
+            "bbox": {
+              "x": 0.1,
+              "y": 0.2,
+              "width": 0.2,
+              "height": 0.5
+            }
+          }
+        ],
+        "latencyMs": 38.2
+      }
+    },
+    {
+      "why": "error result carrying detections",
+      "schema": "InferenceResultV1",
+      "value": {
+        "contract": "ai-adapter.v1",
+        "status": "error",
+        "requestId": "req_01",
+        "errorCode": "MODEL_NOT_LOADED",
+        "message": "no model loaded for mm_01",
+        "retryable": true,
+        "detections": []
+      }
+    },
+    {
+      "why": "AGPL weights",
+      "schema": "ModelCardV1",
+      "value": {
+        "modelId": "mm_01",
+        "name": "example-detector",
+        "version": "0.0.1",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "task": "object_detection",
+        "classes": [
+          "person",
+          "bicycle",
+          "motorcycle",
+          "car",
+          "bus",
+          "truck"
+        ],
+        "codeLicense": "Apache-2.0",
+        "weightsLicense": "AGPL-3.0",
+        "weightsSource": "https://example.invalid/weights (placeholder: no model is shipped yet)",
+        "runtime": "onnxruntime",
+        "input": {
+          "width": 640,
+          "height": 640,
+          "colorSpace": "RGB",
+          "letterbox": true
+        },
+        "evaluation": null
+      }
+    },
+    {
+      "why": "CC-BY-NC weights",
+      "schema": "ModelCardV1",
+      "value": {
+        "modelId": "mm_01",
+        "name": "example-detector",
+        "version": "0.0.1",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "task": "object_detection",
+        "classes": [
+          "person",
+          "bicycle",
+          "motorcycle",
+          "car",
+          "bus",
+          "truck"
+        ],
+        "codeLicense": "Apache-2.0",
+        "weightsLicense": "CC-BY-NC-4.0",
+        "weightsSource": "https://example.invalid/weights (placeholder: no model is shipped yet)",
+        "runtime": "onnxruntime",
+        "input": {
+          "width": 640,
+          "height": 640,
+          "colorSpace": "RGB",
+          "letterbox": true
+        },
+        "evaluation": null
+      }
+    },
+    {
+      "why": "READY with no loaded model",
+      "schema": "AdapterHealthV1",
+      "value": {
+        "contract": "ai-adapter.v1",
+        "adapterId": "onnx-worker",
+        "status": "READY",
+        "loadedModelIds": [],
+        "lastError": null,
+        "observedAtUtc": "2026-09-26T10:00:00.000Z"
+      }
+    },
+    {
+      "why": "FAILED without lastError",
+      "schema": "AdapterHealthV1",
+      "value": {
+        "contract": "ai-adapter.v1",
+        "adapterId": "onnx-worker",
+        "status": "FAILED",
+        "loadedModelIds": [],
+        "lastError": null,
+        "observedAtUtc": "2026-09-26T10:00:00.000Z"
+      }
+    },
+    {
+      "why": "model task not declared by adapter",
+      "schema": "AdapterDescriptorV1",
+      "value": {
+        "contract": "ai-adapter.v1",
+        "adapterId": "onnx-worker",
+        "adapterVersion": "0.1.0",
+        "tasks": [
+          "plate_recognition"
+        ],
+        "models": [
+          {
+            "modelId": "mm_01",
+            "name": "example-detector",
+            "version": "0.0.1",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "task": "object_detection",
+            "classes": [
+              "person",
+              "bicycle",
+              "motorcycle",
+              "car",
+              "bus",
+              "truck"
+            ],
+            "codeLicense": "Apache-2.0",
+            "weightsLicense": "Apache-2.0",
+            "weightsSource": "https://example.invalid/weights (placeholder: no model is shipped yet)",
+            "runtime": "onnxruntime",
+            "input": {
+              "width": 640,
+              "height": 640,
+              "colorSpace": "RGB",
+              "letterbox": true
+            },
+            "evaluation": null
+          }
+        ],
+        "requiresNetworkEgress": false
+      }
+    }
+  ]
+}

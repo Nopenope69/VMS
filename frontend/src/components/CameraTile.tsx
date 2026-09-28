@@ -62,7 +62,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
 
   // Initialize WebRTC WHEP connection
   useEffect(() => {
-    if (camera.id.startsWith('demo-')) {
+    if ((__DEMO_MODE__ && camera.id.startsWith('demo-'))) {
       setStreamStatus('connected');
       return;
     }
@@ -87,7 +87,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
 
   const handleRetryConnection = () => {
     setStreamStatus('connecting');
-    if (camera.id.startsWith('demo-')) {
+    if ((__DEMO_MODE__ && camera.id.startsWith('demo-'))) {
       setTimeout(() => setStreamStatus('connected'), 400);
       return;
     }
@@ -126,7 +126,7 @@ export const CameraTile: React.FC<CameraTileProps> = ({ camera, isFullscreen, on
       title={onToggleFullscreen ? (isFullscreen ? 'Double-click to restore grid' : 'Double-click to maximize') : undefined}
     >
       {/* Video Canvas - Video First Primary Surface */}
-      {camera.id.startsWith('demo-') ? (
+      {(__DEMO_MODE__ && camera.id.startsWith('demo-')) ? (
         <div className="w-full h-full bg-[#0d121c] relative flex items-center justify-center overflow-hidden select-none">
           {/* Subtle Grid Reticle */}
           <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-35" />

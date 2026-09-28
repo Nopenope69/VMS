@@ -93,9 +93,11 @@ export class ObjectStorageArchiveService {
       throw new Error(`Archive job ${jobId} not found`);
     }
 
-    if (process.env.NODE_ENV === 'production') {
+    // No S3 client is attached. The in-memory store is a test fixture: outside NODE_ENV=test
+    // (development included) the job must fail closed rather than be marked COMPLETED.
+    if (process.env.NODE_ENV !== 'test') {
       throw new Error(
-        'FEATURE_DEFERRED_FOR_V1: Offsite S3 object storage archival is deferred for v1 edge NVR release. In-memory store is prohibited in production.'
+        'FEATURE_DEFERRED_FOR_V1: Offsite S3 object storage archival is not implemented (no S3 client attached). The in-memory test store is only available under NODE_ENV=test.'
       );
     }
 

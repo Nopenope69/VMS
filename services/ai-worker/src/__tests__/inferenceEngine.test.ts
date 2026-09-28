@@ -28,6 +28,20 @@ describe('OnnxInferenceEngine', () => {
         /FATAL CONFIGURATION ERROR: AI_INFERENCE_MODE=test-stub is strictly forbidden in production/
       );
     });
+
+    it('throws if AI_INFERENCE_MODE=test-stub outside NODE_ENV=test (e.g. development)', () => {
+      process.env.NODE_ENV = 'development';
+      delete process.env.AI_ENV;
+      process.env.AI_INFERENCE_MODE = 'test-stub';
+      expect(() => new OnnxInferenceEngine()).toThrow(/only permitted when NODE_ENV=test/);
+    });
+
+    it('allows test-stub only under NODE_ENV=test', () => {
+      process.env.NODE_ENV = 'test';
+      delete process.env.AI_ENV;
+      process.env.AI_INFERENCE_MODE = 'test-stub';
+      expect(new OnnxInferenceEngine().getMode()).toBe('test-stub');
+    });
   });
 
   describe('2. Native Mode Fail-Fast', () => {

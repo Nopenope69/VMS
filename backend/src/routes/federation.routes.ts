@@ -58,22 +58,24 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: 'pairingToken, nodeUuid, and publicKeyEd25519 are required' });
       return;
     }
+    // The node must report its own facts; the central console never invents versions or capabilities.
+    if (!softwareVersion || !schemaVersion || !capabilities || typeof capabilities !== 'object') {
+      res.status(400).json({
+        error: 'softwareVersion, schemaVersion and capabilities must be reported by the registering node',
+        code: 'NODE_FACTS_REQUIRED',
+      });
+      return;
+    }
 
     const node = await federationService.registerNode({
       pairingToken,
       nodeUuid,
       name: name || `Edge-${nodeUuid.slice(0, 8)}`,
       publicKeyEd25519,
-      softwareVersion: softwareVersion || '1.0.0',
-      schemaVersion: schemaVersion || '5.22.0',
+      softwareVersion,
+      schemaVersion,
       protocolVersion: protocolVersion || 1,
-      capabilities: capabilities || {
-        anprEnabled: true,
-        ptzSupport: true,
-        maxCameras: 16,
-        localStorageGb: 1000,
-        hardwarePlatform: 'Linux x86_64',
-      },
+      capabilities,
     });
 
     res.status(201).json({

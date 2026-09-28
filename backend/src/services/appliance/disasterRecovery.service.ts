@@ -5,6 +5,7 @@ import ClockGuard from '../../utils/clockGuard';
 import PinStateMirrorService from '../evidence/pinStateMirror.service';
 import ControlPlaneManifestService from './controlPlaneManifest.service';
 import { CrashRecoveryService } from '../reconciliation/crashRecovery.service';
+import { getInstalledSoftwareVersion } from '../../utils/softwareVersion';
 
 export interface DisasterRecoveryMetadata {
   backupId: string;
@@ -104,14 +105,14 @@ export class DisasterRecoveryService {
         const otaData = JSON.parse(fs.readFileSync(backupOtaFloor, 'utf8'));
         const liveOtaPath = process.env.OTA_RELEASE_STATE_PATH || path.join(this.configDir, 'ota_release.state');
         let currentEpoch = 1;
-        let currentVersion = '1.0.0';
+        let currentVersion = getInstalledSoftwareVersion().version;
         if (fs.existsSync(liveOtaPath)) {
           const liveData = JSON.parse(fs.readFileSync(liveOtaPath, 'utf8'));
           if (typeof liveData.highestAcceptedEpoch === 'number') currentEpoch = liveData.highestAcceptedEpoch;
           if (liveData.highestAcceptedVersion) currentVersion = liveData.highestAcceptedVersion;
         }
         const maxEpoch = Math.max(currentEpoch, otaData.highestAcceptedEpoch || 1);
-        const maxVersion = maxEpoch > currentEpoch ? (otaData.highestAcceptedVersion || '1.0.0') : currentVersion;
+        const maxVersion = maxEpoch > currentEpoch ? (otaData.highestAcceptedVersion || currentVersion) : currentVersion;
         fs.mkdirSync(path.dirname(liveOtaPath), { recursive: true, mode: 0o700 });
         fs.writeFileSync(
           liveOtaPath,

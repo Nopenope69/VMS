@@ -5,10 +5,12 @@ import crypto from "crypto";
 import archiver from "archiver";
 import { PrismaClient } from "@prisma/client";
 import { StorageVolumeService } from "../storage/storageVolume.service";
+import { getInstalledSoftwareVersion } from "../../utils/softwareVersion";
 
 export interface ApplianceIdentity {
   applianceId: string;
   softwareVersion: string;
+  softwareVersionSource: 'OTA_VERSION_FILE' | 'BUILD_PACKAGE_JSON' | 'UNKNOWN';
   nodeFingerprint: string;
   isBootstrapped: boolean;
   bootstrappedAt: Date | null;
@@ -89,9 +91,11 @@ export class ApplianceService {
       .digest("hex")
       .substring(0, 16);
 
+    const installed = getInstalledSoftwareVersion();
     return {
       applianceId,
-      softwareVersion: "1.0.0",
+      softwareVersion: installed.version,
+      softwareVersionSource: installed.source,
       nodeFingerprint,
       isBootstrapped,
       bootstrappedAt,

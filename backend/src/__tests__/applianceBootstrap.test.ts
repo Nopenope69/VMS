@@ -165,7 +165,7 @@ describe("Appliance Bootstrap & Concurrency Lifecycle", () => {
 
     it("validates mandatory fields", async () => {
       const { execute } = createMockReqRes("POST", "/bootstrap", {
-        "x-setup-token": "vigilone_dev_setup_token_99182",
+        "x-setup-token": process.env.SETUP_TOKEN as string,
       }, {
         tenantName: "",
         adminEmail: "",
@@ -177,7 +177,7 @@ describe("Appliance Bootstrap & Concurrency Lifecycle", () => {
 
     it("successfully bootstraps on valid first-run request", async () => {
       const { execute } = createMockReqRes("POST", "/bootstrap", {
-        "x-setup-token": "vigilone_dev_setup_token_99182",
+        "x-setup-token": process.env.SETUP_TOKEN as string,
       }, {
         tenantName: "Acme Corp",
         adminEmail: "admin@acme.corp",
@@ -199,7 +199,7 @@ describe("Appliance Bootstrap & Concurrency Lifecycle", () => {
     it("permanently returns 410 Gone once initialized", async () => {
       // 1. Initial bootstrap
       const { execute: execFirst } = createMockReqRes("POST", "/bootstrap", {
-        "x-setup-token": "vigilone_dev_setup_token_99182",
+        "x-setup-token": process.env.SETUP_TOKEN as string,
       }, {
         tenantName: "Acme Corp",
         adminEmail: "admin@acme.corp",
@@ -217,7 +217,7 @@ describe("Appliance Bootstrap & Concurrency Lifecycle", () => {
       AuthRateLimiter.reset();
       // 3. Second bootstrap attempt MUST fail with 410 Gone
       const { execute: execSecond } = createMockReqRes("POST", "/bootstrap", {
-        "x-setup-token": "vigilone_dev_setup_token_99182",
+        "x-setup-token": process.env.SETUP_TOKEN as string,
       }, {
         tenantName: "Intruder Corp",
         adminEmail: "intruder@evil.com",

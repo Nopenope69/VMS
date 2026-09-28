@@ -1,0 +1,225 @@
+/**
+ * events.v1: canonical event envelope for the VigilOne event fabric.
+ * Spec: docs/contracts/events.v1.md. Contract test: src/__tests__/contracts/events.v1.test.ts.
+ *
+ * Every meaningful occurrence (camera, recording, storage, motion, AI, access, alarm, POS,
+ * system) travels as one typed, versioned envelope. AI-derived events MUST carry provenance.
+ */
+import { z } from 'zod';
+import { Confidence, NonEmptyId, NormalizedBox, Sha256Hex, UtcTimestamp } from './common';
+
+export const EVENTS_CONTRACT_VERSION = 1 as const;
+
+// ---------------------------------------------------------------------------------------------
+// Payloads
+// ---------------------------------------------------------------------------------------------
+
+const CameraStatePayload = z
+  .object({
+    reason: z.string().min(1).optional(),
+    lastSeenUtc: UtcTimestamp.optional(),
+    fps: z.number().nonnegative().optional(),
+    expectedFps: z.number().positive().optional(),
+    packetLossPercent: z.number().min(0).max(100).optional(),
+  })
+  .strict();
+
+const RecordingPayload = z
+  .object({
+    segmentId: NonEmptyId.optional(),
+    reason: z.string().min(1).optional(),
+  })
+  .strict();
+
+const StoragePayload = z
+  .object({
+    volumeId: NonEmptyId,
+    usedPercent: z.number().min(0).max(100),
+    freeBytes: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const MotionPayload = z
+  .object({
+    score: Confidence,
+    zoneId: NonEmptyId.optional(),
+    bbox: NormalizedBox.optional(),
+    method: z.enum(['SCENE_DIFF', 'AI']).optional(),
+  })
+  .strict();
+
+const ObjectDetectionPayload = z
+  .object({
+    objectClass: z.string().min(1),
+    confidence: Confidence,
+    bbox: NormalizedBox,
+    trackId: NonEmptyId.optional(),
+  })
+  .strict();
+
+const LineCrossingPayload = z
+  .object({
+    ruleId: NonEmptyId,
+    trackId: NonEmptyId,
+    direction: z.enum(['A_TO_B', 'B_TO_A', 'UNSPECIFIED']),
+    objectClass: z.string().min(1).optional(),
+  })
+  .strict();
+
+const LoiteringPayload = z
+  .object({
+    zoneId: NonEmptyId,
+    trackId: NonEmptyId,
+    dwellSeconds: z.number().nonnegative(),
+    thresholdSeconds: z.number().positive(),
+  })
+  .strict();
+
+const PlatePayload = z
+  .object({
+    plateText: z.string().min(1).max(20),
+    confidence: Confidence,
+    watchlistMatchId: NonEmptyId.optional(),
+    watchlistCategory: z.string().min(1).optional(),
+    vehicleColor: z.string().min(1).optional(),
+  })
+  .strict();
+
+const DoorPayload = z
+  .object({
+    doorId: NonEmptyId,
+    credentialId: NonEmptyId.optional(),
+    forced: z.boolean().optional(),
+  })
+  .strict();
+
+const FirePayload = z
+  .object({
+    panelId: NonEmptyId,
+    zone: z.string().min(1),
+    state: z.enum(['ALARM', 'TROUBLE', 'RESTORED']),
+  })
+  .strict();
+
+const PosPayload = z
+  .object({
+    terminalId: NonEmptyId,
+    transactionId: NonEmptyId,
+    amountMinor: z.number().int(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+  })
+  .strict();
+
+const SystemPayload = z
+  .object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    subsystem: z.string().min(1).optional(),
+    details: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+/** Fixed event types (system.* is an open family, validated by pattern). */
+export const EVENT_PAYLOADS_V1 = {
+  'camera.online': CameraStatePayload,
+  'camera.offline': CameraStatePayload,
+  'camera.degraded': CameraStatePayload,
+  'recording.started': RecordingPayload,
+  'recording.stopped': RecordingPayload,
+  'storage.warning': StoragePayload,
+  'storage.critical': StoragePayload,
+  'storage.rollover': StoragePayload,
+  'storage.full': StoragePayload,
+  'motion.detected': MotionPayload,
+  'ai.person_detected': ObjectDetectionPayload,
+  'ai.vehicle_detected': ObjectDetectionPayload,
+  'ai.line_crossing': LineCrossingPayload,
+  'ai.loitering': LoiteringPayload,
+  'ai.plate_detected': PlatePayload,
+  'access.door_opened': DoorPayload,
+  'alarm.fire': FirePayload,
+  'pos.transaction': PosPayload,
+} as const;
+
+export type FixedEventTypeV1 = keyof typeof EVENT_PAYLOADS_V1;
+export const FIXED_EVENT_TYPES_V1 = Object.keys(EVENT_PAYLOADS_V1) as FixedEventTypeV1[];
+export const SYSTEM_EVENT_TYPE = /^system\.[a-z][a-z0-9_]*$/;
+
+export const EventTypeV1 = z
+  .string()
+  .refine(
+    (t) => (FIXED_EVENT_TYPES_V1 as string[]).includes(t) || SYSTEM_EVENT_TYPE.test(t),
+    'unknown event type (see docs/contracts/events.v1.md)'
+  );
+
+export const isAiEventType = (type: string): boolean => type.startsWith('ai.');
+
+// ---------------------------------------------------------------------------------------------
+// Envelope
+// ---------------------------------------------------------------------------------------------
+
+export const EventSourceV1 = z
+  .object({
+    kind: z.enum(['camera', 'recorder', 'storage', 'motion', 'ai', 'analytics', 'access', 'alarm_panel', 'pos', 'io', 'system', 'operator']),
+    id: NonEmptyId,
+  })
+  .strict();
+
+/** Per-inference provenance. Mandatory for ai.* events; forbidden to be invented. */
+export const AiProvenanceV1 = z
+  .object({
+    adapterId: NonEmptyId,
+    adapterVersion: z.string().min(1),
+    modelId: NonEmptyId,
+    modelName: z.string().min(1),
+    modelVersion: z.string().min(1),
+    modelSha256: Sha256Hex,
+    runtime: z.string().min(1),
+    executionProvider: z.string().min(1).optional(),
+    inferenceId: NonEmptyId,
+    frameTimestampUtc: UtcTimestamp,
+  })
+  .strict();
+
+export const EventEnvelopeV1 = z
+  .object({
+    id: NonEmptyId,
+    type: EventTypeV1,
+    version: z.literal(EVENTS_CONTRACT_VERSION),
+    tenantId: NonEmptyId,
+    siteId: NonEmptyId.nullable(),
+    cameraId: NonEmptyId.nullable(),
+    timestampUtc: UtcTimestamp,
+    source: EventSourceV1,
+    correlationId: NonEmptyId,
+    severity: z.enum(['INFO', 'WARNING', 'CRITICAL']).optional(),
+    payload: z.record(z.unknown()),
+    provenance: AiProvenanceV1.nullable(),
+  })
+  .strict()
+  .superRefine((ev, ctx) => {
+    const payloadSchema: z.ZodTypeAny = (EVENT_PAYLOADS_V1 as Record<string, z.ZodTypeAny>)[ev.type] ?? SystemPayload;
+    const parsed = payloadSchema.safeParse(ev.payload);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue, path: ['payload', ...issue.path] });
+      }
+    }
+    if (isAiEventType(ev.type) && ev.provenance === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['provenance'],
+        message: 'ai.* events must carry per-inference provenance',
+      });
+    }
+    if (!isAiEventType(ev.type) && ev.provenance !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['provenance'],
+        message: 'provenance is reserved for ai.* events',
+      });
+    }
+  });
+
+export type EventEnvelopeV1 = z.infer<typeof EventEnvelopeV1>;
+export type AiProvenanceV1 = z.infer<typeof AiProvenanceV1>;

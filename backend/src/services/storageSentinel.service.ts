@@ -15,7 +15,8 @@ export type StorageHealthState =
   | 'CRITICAL'
   | 'EMERGENCY_PURGE'
   | 'EMERGENCY_PRESERVE_EVIDENCE'
-  | 'PINNED_STORAGE_EXHAUSTION';
+  | 'PINNED_STORAGE_EXHAUSTION'
+  | 'NON_RECORDING_STORAGE_EXHAUSTION';
 
 export class StorageSentinelService {
   private prisma: PrismaClient;
@@ -124,42 +125,61 @@ export class StorageSentinelService {
           });
 
           if (candidates.length === 0) {
-            // No unpinned segments exist; enter PINNED_STORAGE_EXHAUSTION
-            this.currentState = 'PINNED_STORAGE_EXHAUSTION';
-            console.error(
-              `[StorageSentinel] PINNED_STORAGE_EXHAUSTION: All remaining video is locked under active evidence leases. Cannot free disk space!`
-            );
+            // Nothing purgeable. Say why truthfully: either every finalized recording is pinned,
+            // or there are no finalized recordings at all and the disk is full of other data.
+            const pinnedCount =
+              typeof (this.prisma.recordingSegment as any).count === 'function'
+                ? await this.prisma.recordingSegment.count({ where: { status: 'FINALIZED' } })
+                : null;
+            const nothingRecorded = pinnedCount === 0;
+            const alertCode = nothingRecorded ? 'NON_RECORDING_STORAGE_EXHAUSTION' : 'PINNED_STORAGE_EXHAUSTION';
+            const message = nothingRecorded
+              ? `Disk capacity critical (${freeGb} GB free) and there are no finalized recordings to purge: the volume is filled by other data (OS, database, logs, exports).`
+              : `Disk capacity critical (${freeGb} GB free), all ${pinnedCount ?? 'remaining'} finalized recordings are pinned under active evidence holds.`;
+            this.currentState = alertCode;
+            console.error(`[StorageSentinel] ${alertCode}: ${message}`);
 
             await this.prisma.event.create({
               data: {
                 type: 'STORAGE_WARNING',
                 severity: 'CRITICAL',
-                title: 'Pinned Storage Exhaustion',
-                description: `Disk capacity is critical (${freeGb} GB free), but all candidate recordings are pinned under active Section 63 evidence exports.`,
-                metadata: { usagePercent: currentUsagePercent, freeGb },
+                title: nothingRecorded ? 'Storage Exhausted by Non-Recording Data' : 'Pinned Storage Exhaustion',
+                description: message,
+                metadata: { usagePercent: currentUsagePercent, freeGb, finalizedSegments: pinnedCount },
               },
             });
 
-            // Ingest into authoritative IncidentOrchestrator pipeline
+            // Ingest into the IncidentOrchestrator for every tenant on the appliance. The disk is
+            // shared, so each tenant's operators must see the alarm; alarms need a real tenant row
+            // (the former 'system-appliance' pseudo-tenant violated Alarm_tenantId_fkey).
             try {
+              const tenants: Array<{ id: string }> =
+                typeof (this.prisma as any).tenant?.findMany === 'function'
+                  ? await this.prisma.tenant.findMany({ select: { id: true } })
+                  : [];
+              if (tenants.length === 0) {
+                console.error(`[StorageSentinel] ${alertCode}: no tenant exists yet (appliance not bootstrapped); alarm not raised`);
+              }
               const { incidentOrchestrator } = await import('./incident/orchestrator/incidentOrchestrator.service');
-              const alertId = `storage-${Date.now()}`;
-              await incidentOrchestrator.ingestEvent({
-                id: alertId,
-                correlationId: alertId,
-                source: 'SYSTEM',
-                type: 'SYSTEM_ALERT',
-                severity: EventSeverity.CRITICAL,
-                timestampUtc: new Date(),
-                tenantId: 'system-appliance',
-                payload: {
-                  kind: 'SYSTEM_ALERT',
-                  subsystem: 'STORAGE',
-                  alertCode: 'PINNED_STORAGE_EXHAUSTION',
-                  message: `Disk capacity critical (${freeGb} GB free), all candidate recordings are pinned under active Section 63 evidence exports.`,
-                  details: { usagePercent: currentUsagePercent, freeGb },
-                },
-              });
+              for (const tenant of tenants) {
+                const alertId = `storage-${alertCode}-${tenant.id}-${Date.now()}`;
+                await incidentOrchestrator.ingestEvent({
+                  id: alertId,
+                  correlationId: alertId,
+                  source: 'SYSTEM',
+                  type: 'SYSTEM_ALERT',
+                  severity: EventSeverity.CRITICAL,
+                  timestampUtc: new Date(),
+                  tenantId: tenant.id,
+                  payload: {
+                    kind: 'SYSTEM_ALERT',
+                    subsystem: 'STORAGE',
+                    alertCode,
+                    message,
+                    details: { usagePercent: currentUsagePercent, freeGb, finalizedSegments: pinnedCount },
+                  },
+                });
+              }
             } catch (err: any) {
               console.warn(`[StorageSentinel] Ingest into IncidentOrchestrator warning: ${err.message}`);
             }

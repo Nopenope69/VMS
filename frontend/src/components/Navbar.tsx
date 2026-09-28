@@ -19,6 +19,7 @@ import {
   Keyboard,
 } from 'lucide-react';
 import api from '../services/api';
+import { FeatureFlagName, useFeatureFlags } from '../services/features';
 import NotificationSettingsModal from './NotificationSettingsModal';
 import BackupModal from './BackupModal';
 
@@ -38,6 +39,8 @@ interface NavItem {
   icon: any;
   badge?: number;
   roles: string[];
+  /** Hidden unless this backend feature flag is enabled. */
+  featureFlag?: FeatureFlagName;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -84,12 +87,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const role = user?.role || 'VIEWER';
+  const featureFlags = useFeatureFlags();
+  const isVisible = (item: NavItem) =>
+    item.roles.includes(role) && (!item.featureFlag || featureFlags[item.featureFlag]);
 
   // Semantic Categories
   const surveillanceItems: NavItem[] = [
     { id: 'live', index: '1', label: 'Live Grid', icon: Camera, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
     { id: 'investigation', index: '2', label: 'Investigation', icon: Film, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
-    { id: 'floorplans', index: '3', label: 'Floorplans', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'floorplans', index: '3', label: 'Floorplans', icon: Compass, roles: ['VIEWER', 'OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'], featureFlag: 'FLOORPLANS' },
   ];
 
   const incidentItems: NavItem[] = [
@@ -107,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   const allItems: NavItem[] = [...surveillanceItems, ...incidentItems, ...adminItems];
-  const activeAllowedItems = allItems.filter((item) => item.roles.includes(role));
+  const activeAllowedItems = allItems.filter(isVisible);
 
   const canManageNotifications = role === 'OPERATOR' || role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
   const canBackup = role === 'TENANT_ADMIN' || role === 'SUPER_ADMIN';
@@ -150,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const renderNavGroup = (items: typeof allItems) => {
     return items
-      .filter((item) => item.roles.includes(role))
+      .filter(isVisible)
       .map((item) => {
         const Icon = item.icon;
         const active = currentTab === item.id;

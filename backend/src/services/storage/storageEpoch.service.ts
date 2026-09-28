@@ -2,6 +2,9 @@ import crypto from 'crypto';
 import { PrismaClient, StorageEpoch } from '@prisma/client';
 
 export class StorageEpochService {
+  /** prevEpochHash marker for a detected chain break (never a valid 64-hex SHA-256). */
+  public static readonly CHAIN_BREAK_PREFIX = 'CHAIN_BREAK:';
+
   private prisma: PrismaClient;
 
   constructor(prisma: PrismaClient) {
@@ -117,7 +120,17 @@ export class StorageEpochService {
       });
 
       nextEpochNumber = currentEpoch.epochNumber + 1;
-      prevEpochHash = currentEpoch.epochHash || '0'.repeat(64);
+      if (currentEpoch.epochHash) {
+        prevEpochHash = currentEpoch.epochHash;
+      } else {
+        // Both create paths always set epochHash, so this is corruption. Do not re-anchor to genesis
+        // (that would hide the break) and do not block the volume transition (recording must go on):
+        // record an explicit, non-hash marker that any chain verifier will reject.
+        prevEpochHash = `${StorageEpochService.CHAIN_BREAK_PREFIX}${currentEpoch.id}`;
+        console.error(
+          `[StorageEpoch] Epoch ${currentEpoch.id} (camera ${input.cameraId}) has no epochHash; recording chain break`
+        );
+      }
     }
 
     // 2. Compute cryptographic epoch hash
