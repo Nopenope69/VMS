@@ -1,24 +1,31 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-28T08:54:31.989Z",
-  "commit": "52f2485c101fff4f7e54acc915670165334ea864",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36399955968",
+  "generatedAt": "2026-09-28T09:00:35.841Z",
+  "commit": "819ec53f9c579fdc3ed821c560fde150694d1df9",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36400564505",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 99,
-        "passed": 96,
-        "failed": 3
+        "total": 120,
+        "passed": 120,
+        "failed": 0
       },
       "tests": {
-        "total": 642,
-        "passed": 639,
-        "failed": 3,
-        "skipped": 0
+        "total": 810,
+        "passed": 809,
+        "failed": 0,
+        "skipped": 1
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
+        {
+          "file": "backend/src/__tests__/aiPipelineRealDb.test.ts",
+          "status": "passed",
+          "passed": 21,
+          "failed": 0,
+          "skipped": 0
+        },
         {
           "file": "backend/src/__tests__/aiWorker.test.ts",
           "status": "passed",
@@ -30,6 +37,20 @@
           "file": "backend/src/__tests__/alarmWorkflow.test.ts",
           "status": "passed",
           "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/alarmWorkflowRealDb.test.ts",
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/anprRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
           "failed": 0,
           "skipped": 0
         },
@@ -48,7 +69,28 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/auditChainRealDb.test.ts",
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/authSecurity.test.ts",
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraEventParsers.test.ts",
+          "status": "passed",
+          "passed": 24,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraEventsIntegration.test.ts",
           "status": "passed",
           "passed": 8,
           "failed": 0,
@@ -104,9 +146,16 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/contracts/aiAdapterConformance.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/contracts/events.v1.test.ts",
           "status": "passed",
-          "passed": 24,
+          "passed": 27,
           "failed": 0,
           "skipped": 0
         },
@@ -126,15 +175,15 @@
         },
         {
           "file": "backend/src/__tests__/crashRecovery.test.ts",
-          "status": "failed",
-          "passed": 3,
-          "failed": 1,
+          "status": "passed",
+          "passed": 4,
+          "failed": 0,
           "skipped": 0
         },
         {
           "file": "backend/src/__tests__/crashRecoveryActiveSegment.test.ts",
           "status": "passed",
-          "passed": 4,
+          "passed": 6,
           "failed": 0,
           "skipped": 0
         },
@@ -148,7 +197,7 @@
         {
           "file": "backend/src/__tests__/detectionIngestionIntegration.test.ts",
           "status": "passed",
-          "passed": 10,
+          "passed": 4,
           "failed": 0,
           "skipped": 0
         },
@@ -168,15 +217,22 @@
         },
         {
           "file": "backend/src/__tests__/disasterRecoveryDrill.test.ts",
-          "status": "failed",
-          "passed": 1,
-          "failed": 1,
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
           "skipped": 0
         },
         {
           "file": "backend/src/__tests__/docsHygiene.test.ts",
           "status": "passed",
           "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/dpdpRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
           "failed": 0,
           "skipped": 0
         },
@@ -272,6 +328,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/evidencePackageVerifyRealDb.test.ts",
+          "status": "passed",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/evidencePin.test.ts",
           "status": "passed",
           "passed": 3,
@@ -301,9 +364,9 @@
         },
         {
           "file": "backend/src/__tests__/failureEnvelopeValidation.test.ts",
-          "status": "failed",
-          "passed": 7,
-          "failed": 1,
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
           "skipped": 0
         },
         {
@@ -405,6 +468,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/indianPlate.test.ts",
+          "status": "passed",
+          "passed": 25,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/internalCameras.test.ts",
           "status": "passed",
           "passed": 7,
@@ -433,6 +503,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/maskPlanner.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/mediaAuth.test.ts",
           "status": "passed",
           "passed": 10,
@@ -447,9 +524,44 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/migrationPhase2.test.ts",
+          "status": "passed",
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/migrationPhase3.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/migrationPhase4Anpr.test.ts",
+          "status": "passed",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/migrationPhase4Dpdp.test.ts",
+          "status": "passed",
+          "passed": 1,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/migrationPhase4Redaction.test.ts",
+          "status": "passed",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/modelManifest.test.ts",
           "status": "passed",
-          "passed": 24,
+          "passed": 17,
           "failed": 0,
           "skipped": 0
         },
@@ -457,6 +569,13 @@
           "file": "backend/src/__tests__/noFakeSuccessGate.test.ts",
           "status": "passed",
           "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/notificationDeliveryRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -505,7 +624,7 @@
         {
           "file": "backend/src/__tests__/plateTrackAggregator.test.ts",
           "status": "passed",
-          "passed": 6,
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -582,7 +701,28 @@
         {
           "file": "backend/src/__tests__/redaction.test.ts",
           "status": "passed",
-          "passed": 10,
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/redactionRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/ruleBuilderRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/ruleConditions.test.ts",
+          "status": "passed",
+          "passed": 15,
           "failed": 0,
           "skipped": 0
         },
@@ -622,16 +762,16 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/smtpClient.test.ts",
+          "status": "other",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 1
+        },
+        {
           "file": "backend/src/__tests__/soakWorkload64.test.ts",
           "status": "passed",
           "passed": 2,
-          "failed": 0,
-          "skipped": 0
-        },
-        {
-          "file": "backend/src/__tests__/spatialAnalyticsIntegration.test.ts",
-          "status": "passed",
-          "passed": 11,
           "failed": 0,
           "skipped": 0
         },
@@ -699,6 +839,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/trackerValidation.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/turnAuth.test.ts",
           "status": "passed",
           "passed": 6,
@@ -717,18 +864,32 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 13,
-        "passed": 13,
-        "failed": 0
+        "total": 23,
+        "passed": 17,
+        "failed": 1
       },
       "tests": {
-        "total": 83,
-        "passed": 83,
-        "failed": 0,
-        "skipped": 0
+        "total": 175,
+        "passed": 139,
+        "failed": 2,
+        "skipped": 34
       },
-      "success": true,
+      "success": false,
       "suiteDetails": [
+        {
+          "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/anprAdapter.test.ts",
+          "status": "other",
+          "passed": 0,
+          "failed": 0,
+          "skipped": 6
+        },
         {
           "file": "services/ai-worker/src/__tests__/classScopedNms.test.ts",
           "status": "passed",
@@ -744,9 +905,16 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/decoders.test.ts",
+          "status": "passed",
+          "passed": 21,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "services/ai-worker/src/__tests__/frameExtractor.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 14,
           "failed": 0,
           "skipped": 0
         },
@@ -758,10 +926,38 @@
           "skipped": 0
         },
         {
-          "file": "services/ai-worker/src/__tests__/inferenceEngine.test.ts",
-          "status": "passed",
-          "passed": 7,
+          "file": "services/ai-worker/src/__tests__/goldenAnpr.test.ts",
+          "status": "other",
+          "passed": 0,
           "failed": 0,
+          "skipped": 8
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/goldenRfdetr.test.ts",
+          "status": "other",
+          "passed": 0,
+          "failed": 0,
+          "skipped": 2
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/goldenYolox.test.ts",
+          "status": "other",
+          "passed": 0,
+          "failed": 0,
+          "skipped": 8
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/goldenYunet.test.ts",
+          "status": "other",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 2
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/inferenceEngine.test.ts",
+          "status": "failed",
+          "passed": 6,
+          "failed": 2,
           "skipped": 0
         },
         {
@@ -772,9 +968,30 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/motionGate.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/plateEval.test.ts",
+          "status": "other",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 3
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/redactionAdapter.test.ts",
+          "status": "other",
+          "passed": 0,
+          "failed": 0,
+          "skipped": 5
+        },
+        {
           "file": "services/ai-worker/src/__tests__/rtspUrlBuilder.test.ts",
           "status": "passed",
-          "passed": 10,
+          "passed": 13,
           "failed": 0,
           "skipped": 0
         },
@@ -795,7 +1012,7 @@
         {
           "file": "services/ai-worker/src/__tests__/streamSupervisor.test.ts",
           "status": "passed",
-          "passed": 4,
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -816,7 +1033,7 @@
         {
           "file": "services/ai-worker/src/__tests__/worker.test.ts",
           "status": "passed",
-          "passed": 4,
+          "passed": 7,
           "failed": 0,
           "skipped": 0
         }
@@ -824,11 +1041,11 @@
     }
   ],
   "totals": {
-    "suites": 112,
-    "tests": 725,
-    "passed": 722,
-    "failed": 3,
-    "skipped": 0
+    "suites": 143,
+    "tests": 985,
+    "passed": 948,
+    "failed": 2,
+    "skipped": 35
   },
   "allPassed": false
 }
