@@ -1,6 +1,8 @@
-# VigilOne — North Star (V0.1), V1.0 and Next Steps, 29 Sept 2026
+# VigilOne: North Star (V0.1), V1.0 and next steps
 
-Status: planning doc, written 29 Sept 2026. Reconciles the project research docs in this folder with the state of the two repos. Companion docs in `docs/strategy/`:
+Status: planning doc, rewritten 29 Sept 2026 against master `482b331`. It replaces the earlier draft of the same name, which was written from a stale local clone and still listed Phases 0 to 4 as future work.
+
+Test and build status is not restated here. See `docs/generated/TEST_STATUS.md` (CI-generated) and `docs/STATUS.md` (session logs with the commands run). Companion docs in this folder:
 
 - `vigilone-ai-strategy-collated-2026-09-28.md`
 - `vigilone-first-in-india-ai-features-2026-09-28.md`
@@ -9,63 +11,83 @@ Status: planning doc, written 29 Sept 2026. Reconciles the project research docs
 - `vigilone-vms-review-2026-09-13.md`
 - `vigilone-vms-review-2026-09-14-remediation-round2.md`
 
-## Product ladder (definitions)
+## Scope
 
-- **VMS-LITE ("Basic VMS")** — github.com/Nopenope69/VMS-LITE. The MVP gate: 8 frozen domains (camera onboarding, live, recording, playback/search, evidence export, health, events/alerts, users/RBAC). Not part of V0.1 or V1.0; it is the stepping stone and pilot vehicle.
-- **V0.1 — North Star.** VigilOne as the full 6-layer platform (video fabric, event fabric, AI runtime, rules, multi-site, unified physical security), field-proven, with the AI runtime real (detector, tracker, published precision/recall) but not yet feature-rich.
-- **V1.0.** V0.1 plus every AI/ML feature from the AI research docs.
+- **VigilOne** is the only active product track. **VMS-LITE** is handed off (Antigravity will build it if needed) and is out of scope here. The two share contracts only (events.v1, media-provider.v1, recording-index.v1), never code.
+- **V0.1 (North Star):** VigilOne as the full six-layer platform (video fabric, event fabric, AI runtime, rules, multi-site, unified physical security), field-proven, with a real AI runtime and published precision/recall.
+- **V1.0:** V0.1 plus the AI/ML features from the research docs.
+- Working assumption, to confirm: V0.1 is the full route through Phase 8. A smaller cut through Phase 5 (real AI, ANPR, search) is the fallback.
 
-Assumption to confirm: V0.1 = the full 8-phase platform route below. A smaller alternative is a cut through Phase 5 (real AI + ANPR + search).
+## Where the build stands
 
-## What was checked on 29 Sept 2026
+Phases 0 to 4 of the 8-phase route are built and merged. Every "verified" label below carries the repo's own qualifier: built and tested, but on simulated cameras, test doubles or synthetic data unless stated.
 
-- **VMS-LITE** (cloud clone, HEAD `9c3d1b1`, 92 commits, phases 13–21 landed 27 Sept). `.planning/STATE.md` says 100% complete. Two claims do not hold when read in code:
-  - `src/mediamtx/mediamtx.client.ts` lines ~118–120 still store a mock path and return `true` when MediaMTX is unreachable, contradicting its own roadmap Workstream 1.1 ("fail explicitly").
-  - The "72-hour soak" (`tests/soak-acceptance.test.ts`) runs on a simulated clock (72 virtual ticks); it is not a real soak.
-  - The client is a real Vite shell but has only 2 pages (`LiveViewPage`, `PlaybackPage`); the rest are modals.
-  - Tests: 24 of 34 test files could not load in the review sandbox (Prisma engine download blocked), 82 tests passed — inconclusive, not a pass or fail. Its own STATE.md claims 162 passing.
-- **VigilOne local working clone** (`optimistic-newton`, HEAD `f38adf5`, 25 Sept, 56 commits, clean tree): includes `services/ai-worker`, tracking engine, spatial analytics integration, "561-test baseline" per its own docs. No `.onnx`/`.pt` model files tracked. Live GitHub state was not re-fetched (no credentials in the review shell).
-- The older clone `~/vigilone-vms` is stale (13 Sept, `f6a6c11`).
+| Phase | Built | Not yet proven |
+| --- | --- | --- |
+| 0 Stabilise | Feature flags (default off), demo UI stripped from production bundle, fail-loud CI gate, generated status, docs hygiene gate, four versioned contracts | None open, apart from keeping CI green |
+| 1 Field-proof core | Bench harness, fault drills, soak runner, acceptance automation; real defects found and fixed | Real cameras, clean-VM install, real 72-hour soak |
+| 2 Real AI | ai-adapter.v1 server and conformance kit, YOLOX and RF-DETR with pinned hashes, tracker, model registry with audit, eval harness, model cards | Detector accuracy on site footage (not evaluated) |
+| 3 Real events | ONVIF PullPoint and Profile M parser, Hikvision and Dahua events, SMTP/WhatsApp/SMS channels, alarm SLA and escalation, rule builder, correlation, false-alarm feedback | Physical cameras, real WhatsApp/SMS/SMTP providers, live Profile M metadata capture |
+| 4 India ANPR and privacy | Indian plate formats, ANPR adapter, plate eval and fine-tune tools, real redaction, AI provenance in evidence packages, `vigilone-verify` CLI, DPDP controls | Accuracy on Indian roads, redaction recall on site footage, licence and DPDP decisions |
 
-## V0.1 — what is left to build
+Layer view (qualitative on purpose; earlier percentage scores predate Phases 0 to 4 and are retired):
 
-| Layer | State at 27 Sept (arch / working) | Left for V0.1 |
-|---|---|---|
-| Video fabric | 80 / 30 | Field-proof on real cameras (4-camera bench, then a real 72-hour soak); real browser e2e run; one unedited CI run linked from docs; `dr-drill.sh` executed once outside its sandbox; demo "Bypass & Test UI" stripped from pilot builds |
-| Event fabric | 75 / 50 | ONVIF Profile M ingestion and event subscription (client does discovery and PTZ only); WhatsApp and email; incident workflow |
-| AI runtime | 50 / 5 | Real ONNX model file; `onnxruntime-node` in a package.json; `ai-worker` in docker-compose; RF-DETR or YOLOX with a tracker feeding the spatial engine; published precision/recall on own footage; model registry with SHA-256 and licence in the audit chain |
-| Rules | 70 / 30 | Real producers for `TRIPWIRE_CROSS`, `LOITERING_DWELL`, `ANPR_WATCHLIST` |
-| Multi-site | 35 / 0 | Federation outbound client and tunnel; real S3 archive (in-memory today) |
-| Unified physical security | 25 / 5 | Physical relay driver, then access-control, intrusion, POS, BMS |
+- **Video fabric:** built and crash-tested against simulated sources. Next gate is real cameras.
+- **Event fabric:** built against test doubles and fixtures from published formats. Next gate is real device streams.
+- **AI runtime:** real detectors, tracker and provenance chain. No accuracy number on real footage yet.
+- **Rules:** real producers exist (tracker-fed tripwire and loitering, ANPR watchlist, camera analytics, correlation).
+- **Multi-site:** federation and S3 archive exist as code. Earlier audits found no working outbound client and an in-memory S3 path. Re-verify at the start of Phase 6 before trusting either.
+- **Unified physical security:** no physical relay driver, and digital inputs carry no "door contact" semantics. Phase 7.
 
-Also required: India ANPR (plate detector + OCR fine-tuned on Indian plates incl. two-line two-wheeler plates); real redaction with derivative hash chained to the master evidence hash; SSO, HA, SDK and AI adapter contract (Phase 8); confirm STQC/BIS scope directly (VMS certification requirement is unverified).
+## Human track (unblocks Phases 1 to 4, runs in parallel with Phase 5)
 
-Proposed V0.1 exit gate: 16–32 real cameras in a supervised pilot, 72-hour real soak, published detector precision/recall, and a Section 63 BSA export that carries AI provenance.
+None of this is more code. It gates every "SIMULATED" and "NOT EVALUATED" label above.
 
-## V1.0 — AI/ML features on top of V0.1
+1. **Hardware:** one Hikvision, one Dahua, one generic ONVIF camera with analytics, on PoE. Run the clean-VM install drill and the real bench and soak per `docs/operations/FIELD_VALIDATION_TOOLKIT.md`. Capture redacted real event streams as test fixtures.
+2. **Data:** labelled plate frames per LPR camera (day, night IR, two-line plates, held-out days), real site clips for redaction recall, annotated footage for detector precision/recall.
+3. **Licence decisions** (the numbered list in `docs/STATUS.md`): YuNet and WIDER FACE terms, the ANPR model training data, COCO-trained detector weights, BlueOak and MIT-0 dependencies, test-only tools. Each approved model needs an entry with its exact SHA-256 in `scripts/models/model-license-exceptions.json`.
+4. **DPDP:** allowed purposes, retention periods and lawful basis for face processing, per deployment.
+5. **Providers:** a WhatsApp Business test number with an approved template, an SMS gateway, the site SMTP relay.
+6. **Product decision:** may footage of a camera removed from the database ever be auto-deleted by the quarantine cap?
 
-Framing (from the 28 Sept collated strategy): Detect → Track → Understand → Search → Explain, materialised as an Intelligence Graph (camera → frame → object → track → attribute → action → relationship → event → incident → evidence).
+## Remaining phases
 
-- **Detect:** weapon detection (gun/knife; fine-tune a permissive detector on licence-cleared data; much lower false-positive bar); audio-visual threat detection (gunshot, scream, glass-break; opt-in, needs camera audio); fire/smoke and PPE for parity; face detection with 1:N face search off by default (DPDP).
-- **Track:** gait-based re-ID for helmeted/masked people (OpenGait, MIT), as a forensic add-on; cross-camera re-ID.
-- **Understand:** zero-shot natural-language anomaly rules (operator-assist only — arXiv 2603.04727 found baseline F1 0.09, 0.64 with heavy prompt engineering); predictive crowd-crush forecasting (needs overlapping cameras and calibrated homography; pilot at one site type).
-- **Search:** SigLIP/Jina-class embeddings of object crops in pgvector with a natural-language query box. Parity feature, not a "first" (CP Plus × Qualcomm, Videonetics already claim it). Note Jina CLIP v2 is CC BY-NC — use SigLIP instead.
-- **Explain:** verbalised, evidence-chained reasoning (the "why the AI flagged this" text hashed into the tamper-evident chain), plus local-VLM verification of flagged events. Cheapest and most defensible "first" because it rides on the existing Section 63 chain.
-- **Moat:** opt-in per-site frame collection and labelling loop for Indian-conditions fine-tuning.
+Each phase has an exit gate. A phase is not closed on simulated evidence alone.
 
-Caveats carried from the research: do not embed YOLO-World (GPL-3.0; use Grounding DINO or OWLv2); "first in India" claims are unverified until checked against vendors (AllGoVision, Vehant OKEAN and SrivisifAI already cover more than the first pass implied).
+**Phase 5: Search and explain.**
+- Semantic search over object crops using SigLIP-class embeddings in pgvector (not Jina CLIP v2, which is CC BY-NC). A parity feature, not a claimed first.
+- Evidence-chained explanations first: the "why this was flagged" text is hashed into the custody chain and checked by `vigilone-verify`. Cheapest and most defensible, because it rides on the provenance work already built.
+- Local VLM verification of flagged events, shipped as operator assist only (a recent study found weak zero-shot anomaly detection, F1 0.09 baseline and 0.64 with heavy prompting; arXiv 2603.04727).
+- Exit gate: retrieval recall@k on labelled site queries, published; explanations verify offline; VLM precision/recall published.
 
-## Next steps, in order
+**Phase 6: Multi-site.** Federation outbound client and reverse tunnel proven across a real network; S3/MinIO archive proven against a real bucket, with pinned evidence bypassing the off-peak window. Exit gate: two sites syncing events, audit and alarms with induced link loss.
 
-1. **This week — fix LITE gaps.** Remove the mock fallback in `mediamtx.client.ts`; get the full suite passing on a machine where Prisma works (or CI); replace the simulated 72-hour soak with a real one before claiming the field gate.
-2. **Weeks 1–4 — LITE on real cameras.** Clean-VM install, 4 mixed-brand cameras, then a 16-camera real soak. Add real pages for health/storage, events, users, settings. This is the LITE pilot.
-3. **In parallel — stabilise VigilOne (Phase 0).** Flag out-of-scope features, strip the bypass UI, fix the CI job gap, link one unedited CI run in the docs.
-4. **V0.1 Phases 1–3.** Field-proof the core; first real detector with published precision/recall; real events (ONVIF Profile M, WhatsApp/email, incident workflow).
-5. **V0.1 Phases 4–8.** India ANPR, real redaction and AI provenance; semantic search; multi-site; unified physical security; platform layer. Estimate from the 27 Sept status: ~18–24 months with 3–4 engineers plus one data/model person.
-6. **V1.0 only after V0.1.** Ship evidence-chained explainability first, then zero-shot rules as operator-assist, then weapon and audio detection; gait and crowd forecasting last.
+**Phase 7: Unified physical security.** Physical relay driver with the confirmation handshake against real hardware; door-contact semantics for digital inputs (maps to `access.door_opened`); then access control, intrusion, POS and BMS integrations, one at a time.
+
+**Phase 8: Platform.** Public AI adapter contract and SDK, SSO, high availability, certification. Confirm STQC/BIS scope directly with the body; a VMS certification requirement is unverified.
+
+No calendar estimate is given here. Re-estimate after the human track shows how long real-hardware validation takes.
+
+## V0.1 exit gate (proposed)
+
+16 to 32 real cameras in a supervised pilot, a real 72-hour soak, published detector precision/recall, and a Section 63 BSA export that carries AI provenance and verifies with the standalone verifier.
+
+## V1.0: AI/ML features on top of V0.1
+
+Framing: Detect, Track, Understand, Search, Explain, materialised as an intelligence graph (camera, frame, object, track, attribute, action, relationship, event, incident, evidence).
+
+- **Detect:** weapon detection (fine-tune a permissive detector on licence-cleared data; high false-positive bar); audio-visual threat detection (gunshot, scream, glass-break; opt-in, needs camera audio); fire/smoke and PPE for parity; face detection with 1:N face search off by default (DPDP).
+- **Track:** gait re-ID for masked or helmeted people (OpenGait, MIT) as a forensic add-on; cross-camera re-ID.
+- **Understand:** zero-shot language rules and predictive crowd-crush forecasting (needs overlapping cameras and calibrated homography; pilot at one site type). Operator assist only.
+- **Search:** covered in Phase 5.
+- **Explain:** covered in Phase 5, extended to multi-turn investigation later.
+- **Moat:** an opt-in per-site frame collection and labelling loop for Indian-conditions fine-tuning (two-wheelers, auto-rickshaws, Indian plates, local PPE and uniforms). Budget real annotation effort; a base detector alone is not the moat.
+
+Caveats carried from the research: do not embed YOLO-World (GPL-3.0; use Grounding DINO or OWLv2); "first in India" claims stay unverified until checked against AllGoVision, Vehant OKEAN, SrivisifAI and Videonetics.
 
 ## Open decisions
 
-- Is V0.1 the full 8-phase platform or the Phase-5 cut?
-- Should LITE and VigilOne share only contracts (event names/payloads, media-provider interface, recording-index shape) and no code? (Earlier recommendation: yes.)
-- Reference hardware: Intel Core Ultra, Hailo, or Jetson.
+1. Is V0.1 the full Phase 8 platform, or the Phase 5 cut?
+2. Reference hardware: Intel Core Ultra, Hailo or Jetson.
+3. Which licence approvals to grant first, since they gate the production use of every AI model.
+4. Whether Phase 5 starts before the human track finishes (recommended: yes, in parallel).
