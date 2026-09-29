@@ -130,6 +130,9 @@ describe('P4.6 retention purge', () => {
   it('deletes expired plate reads and snapshot files, keeps held and recent ones, audits the run', async () => {
     await call(admin, 'PUT', '/privacy/dpdp/settings', { plateRetentionDays: 7, detectionSnapshotRetentionDays: 3 });
     const now = Date.now();
+    const outsideDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vigilone-outside-'));
+    const outsideFile = path.join(outsideDir, 'must-survive.txt');
+    fs.writeFileSync(outsideFile, 'must survive the purge');
     const snap = (n: string) => {
       const f = path.join(process.env.RECORDINGS_DIR!, `${n}.jpg`);
       fs.writeFileSync(f, crypto.randomBytes(64));
@@ -140,7 +143,7 @@ describe('P4.6 retention purge', () => {
     const heldObs = await prisma.vehicleObservation.create({ data: { tenantId, cameraId, plateNumber: 'KA01AB3333', normalizedPlate: 'KA01AB3333', firstSeenAt: new Date(now - 20 * DAY), lastSeenAt: new Date(now - 20 * DAY) } });
     const alarm = await prisma.alarm.create({ data: { tenantId, cameraId, title: 'held', severity: 'CRITICAL' } });
     await prisma.incidentEvidenceHold.create({ data: { tenantId, alarmId: alarm.id, cameraId, windowStart: new Date(now - 21 * DAY), windowEnd: new Date(now - 19 * DAY), expiresAt: new Date(now + 30 * DAY) } });
-    const outside = await prisma.vehicleObservation.create({ data: { tenantId, cameraId, plateNumber: 'KA01AB4444', normalizedPlate: 'KA01AB4444', firstSeenAt: new Date(now - 9 * DAY), lastSeenAt: new Date(now - 9 * DAY), bestSnapshotPath: '/etc/hostname' } });
+    const outside = await prisma.vehicleObservation.create({ data: { tenantId, cameraId, plateNumber: 'KA01AB4444', normalizedPlate: 'KA01AB4444', firstSeenAt: new Date(now - 9 * DAY), lastSeenAt: new Date(now - 9 * DAY), bestSnapshotPath: outsideFile } });
     const detSnap = snap('old-detection');
     const det = await prisma.detectionEvent.create({ data: { tenantId, cameraId, type: 'PERSON_DETECTED', timestamp: new Date(now - 5 * DAY), snapshotPath: detSnap } });
 
@@ -152,7 +155,8 @@ describe('P4.6 retention purge', () => {
     expect(await prisma.vehicleObservation.findUnique({ where: { id: recent.id } })).not.toBeNull();
     expect(await prisma.vehicleObservation.findUnique({ where: { id: heldObs.id } })).not.toBeNull();
     expect(fs.existsSync(path.join(process.env.RECORDINGS_DIR!, 'old-plate.jpg'))).toBe(false);
-    expect(fs.existsSync('/etc/hostname')).toBe(true);
+    expect(fs.existsSync(outsideFile)).toBe(true);
+    fs.rmSync(outsideDir, { recursive: true, force: true });
     expect(fs.existsSync(detSnap)).toBe(false);
     expect((await prisma.detectionEvent.findUniqueOrThrow({ where: { id: det.id } })).snapshotPath).toBeNull();
     const a = await audits('DPDP_RETENTION_PURGE');
