@@ -3,7 +3,7 @@
  * vigilone-verify: offline verifier for VigilOne evidence packages (P4.5).
  *
  *   vigilone-verify <package.zip | extracted-dir> [--trusted-key key.pem | --trusted-key-sha256 HEX]
- *                   [--require-ai-provenance] [--json]
+ *                   [--require-ai-provenance] [--require-explanations] [--json]
  *
  * Needs only Node.js >= 18. No network access and no dependencies. It checks:
  *   - manifest.json is canonical JSON; manifest.sha256 matches it; manifest.sig is a valid Ed25519
@@ -19,6 +19,10 @@
  *     timestamp and camera, and the counts match the signed summary
  *   - derivation.json (derivatives): the derivative hash, parent master hash and source segments
  *     agree with the manifest, the leaves and the custody ledger
+ *   - explanations.json (Phase 5): every explanation record recomputes its facts, text and record
+ *     hashes, its text equals what the named template renders from its facts, every explanation is
+ *     for the package's camera and inside its time window, and the document agrees with the signed
+ *     summary
  *
  * Exit codes: 0 all checks passed (warnings allowed), 1 a check failed, 2 usage or read error.
  */
@@ -27,7 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const MERKLE_DOMAIN = 'VIGILONE-EVIDENCE-SEGMENT-V1';
 const GENESIS = '0'.repeat(64);
 const HEX64 = /^[a-f0-9]{64}$/;
@@ -176,6 +180,199 @@ function custodyEventHash(e, prev, legacy) {
   return sha256(`${prev}:${e.eventId}:${e.action}:${e.actorUserId}:${ts}:${payloadHash}`);
 }
 
+// ---------------------------------------------------------------- explanations (Phase 5, P5.2)
+// The renderer below is an exact copy of backend/src/services/explanation/template.ts (explain-template.v1).
+// backend/src/__tests__/explanationTemplateParity.test.ts runs both on the same inputs and requires the
+// same bytes. Never edit a template version: add a new one.
+export const EXPLAIN_RECORD_SCHEMA = 'vigilone.explanation.v1';
+export const EXPLAIN_DOCUMENT_SCHEMA = 'vigilone.explanations.v1';
+export const EXPLAIN_TEMPLATE_V1 = 'explain-template.v1';
+const EXPL_MAX_LIST = 10;
+const EXPL_MAX_TEXT = 200;
+const EXPL_MAX_JSON = 240;
+const xq = (v) => JSON.stringify(String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, EXPL_MAX_TEXT));
+const xnum = (v) => String(v);
+const xcj = (v) => {
+  const s = canonicalizeJson(v);
+  return s.length > EXPL_MAX_JSON ? `${s.slice(0, EXPL_MAX_JSON)}...` : s;
+};
+const xPresent = (v) =>
+  v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0) && !(typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+const xstr = (p, k) => (typeof p[k] === 'string' && p[k].length > 0 ? p[k] : null);
+const xnumeric = (p, k) => (typeof p[k] === 'number' && Number.isFinite(p[k]) ? p[k] : null);
+
+function payloadSentence(payload) {
+  if (!payload) return null;
+  const kind = xstr(payload, 'kind');
+  if (!kind) return `The trigger payload has no kind; recorded fields: ${xcj(payload)}.`;
+  const generic = () => `The trigger payload of kind ${xq(kind)} is missing fields for a specific description; recorded fields: ${xcj(payload)}.`;
+  switch (kind) {
+    case 'TRIPWIRE_CROSS': {
+      const track = xstr(payload, 'trackId');
+      const wire = xstr(payload, 'tripwireId');
+      const dir = xstr(payload, 'direction');
+      if (!track || !wire || !dir) return generic();
+      return `Track ${xq(track)} crossed tripwire ${xq(wire)} in direction ${dir}.`;
+    }
+    case 'LOITERING_DWELL': {
+      const track = xstr(payload, 'trackId');
+      const zone = xstr(payload, 'zoneId');
+      const dwell = xnumeric(payload, 'dwellTimeSeconds');
+      const limit = xnumeric(payload, 'thresholdSeconds');
+      if (!track || !zone || dwell === null || limit === null) return generic();
+      return `Track ${xq(track)} stayed in zone ${xq(zone)} for ${xnum(dwell)} seconds; the configured threshold is ${xnum(limit)} seconds.`;
+    }
+    case 'ANPR_MATCH': {
+      const plate = xstr(payload, 'plateText');
+      const conf = xnumeric(payload, 'confidence');
+      if (!plate || conf === null) return generic();
+      const cat = xstr(payload, 'watchlistCategory');
+      return `Plate ${xq(plate)} was read with confidence ${xnum(conf)}${cat ? ` and matched watchlist category ${xq(cat)}` : ''}.`;
+    }
+    case 'AI_OBJECT_DETECTED': {
+      const cls = xstr(payload, 'objectClass');
+      const conf = xnumeric(payload, 'confidence');
+      if (!cls || conf === null) return generic();
+      return `A model detected ${xq(cls)} with confidence ${xnum(conf)}.`;
+    }
+    case 'CAMERA_OFFLINE': {
+      const last = xstr(payload, 'lastSeenUtc');
+      if (!last) return generic();
+      return `The camera was last seen at ${last}${xstr(payload, 'reason') ? `; recorded reason ${xq(xstr(payload, 'reason'))}` : ''}.`;
+    }
+    case 'STREAM_DEGRADED': {
+      const fps = xnumeric(payload, 'fps');
+      const expected = xnumeric(payload, 'expectedFps');
+      if (fps === null || expected === null) return generic();
+      return `The stream ran at ${xnum(fps)} frames per second against an expected ${xnum(expected)}.`;
+    }
+    case 'MOTION': {
+      const score = xnumeric(payload, 'score');
+      if (score === null) return generic();
+      return `Classical motion detection reported a score of ${xnum(score)}.`;
+    }
+    default:
+      return `The trigger payload of kind ${xq(kind)} has no dedicated wording; recorded fields: ${xcj(payload)}.`;
+  }
+}
+
+export function renderExplanationV1(facts) {
+  const out = [];
+  const { alarm, subject, trigger, rule } = facts;
+  out.push(`Alarm ${xq(alarm.title)} with severity ${alarm.severity} was raised at ${alarm.triggeredAtUtc} on ${subject.cameraId ? `camera ${subject.cameraId}` : 'no specific camera'}.`);
+  if (trigger.type) {
+    out.push(
+      `It was raised from a ${trigger.type} event${trigger.source ? ` from source ${xq(trigger.source)}` : ''}${trigger.eventId ? ` (event ${trigger.eventId})` : ''}${trigger.timestampUtc ? ` recorded at ${trigger.timestampUtc}` : ''}.`
+    );
+  } else {
+    out.push('No triggering event is linked to this alarm.');
+  }
+  const p = payloadSentence(trigger.payload);
+  if (p) out.push(p);
+  if (rule) {
+    out.push(
+      `Rule ${xq(rule.name ?? rule.id)} (${rule.triggerType ?? 'unknown trigger type'}) matched${xPresent(rule.conditions) ? ` with conditions ${xcj(rule.conditions)}` : ''}${rule.cooldownSeconds !== null ? `; its cooldown is ${xnum(rule.cooldownSeconds)} seconds` : ''}.`
+    );
+  } else {
+    out.push('No automation rule is linked to this alarm.');
+  }
+  if (facts.models.length > 0) {
+    out.push(`Models involved: ${facts.models.map((m) => `${m.name}@${m.version} (sha256 ${m.sha256.slice(0, 12)}, ${m.evaluated ? 'evaluation published' : 'not evaluated on site data'})`).join('; ')}.`);
+  } else {
+    out.push('No AI model is recorded for this alarm.');
+  }
+  if (facts.detections.length > 0) {
+    const shown = facts.detections.slice(0, EXPL_MAX_LIST).map((d) => `${xq(d.label)} with confidence ${xnum(d.confidence)} at ${d.frameTimestampUtc}`);
+    const more = facts.detections.length > EXPL_MAX_LIST ? `; and ${facts.detections.length - EXPL_MAX_LIST} more` : '';
+    out.push(`Detections recorded with this alarm: ${shown.join('; ')}${more}.`);
+  }
+  if (facts.correlated.length > 0) {
+    const shown = facts.correlated.slice(0, EXPL_MAX_LIST).map((c) => `${c.type} at ${c.timestampUtc}`);
+    const more = facts.correlated.length > EXPL_MAX_LIST ? `; and ${facts.correlated.length - EXPL_MAX_LIST} more` : '';
+    out.push(`Earlier events in the same correlation chain: ${shown.join('; ')}${more}.`);
+  }
+  out.push(`Camera clock check: ${facts.cameraClock.status}.`);
+  out.push(`This explanation was generated by template ${EXPLAIN_TEMPLATE_V1} from recorded facts. It is not a model opinion and does not by itself show that the event occurred.`);
+  return out.join('\n');
+}
+const EXPLAIN_RENDERERS = { [EXPLAIN_TEMPLATE_V1]: renderExplanationV1 };
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const exactKeys = (o, keys) => isObj(o) && Object.keys(o).length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(o, k));
+const isoUtc = (s) => typeof s === 'string' && Number.isFinite(Date.parse(s)) && new Date(Date.parse(s)).toISOString() === s;
+const nonEmpty = (s) => typeof s === 'string' && s.length > 0;
+const nullOr = (v, f) => v === null || f(v);
+
+/** Same shape as the backend schema (strict keys). Returns a problem string or null. */
+export function explanationFactsProblem(f) {
+  if (!exactKeys(f, ['subject', 'alarm', 'trigger', 'rule', 'models', 'detections', 'correlated', 'cameraClock'])) return 'facts have missing or unexpected members';
+  if (!exactKeys(f.subject, ['kind', 'id', 'tenantId', 'cameraId']) || f.subject.kind !== 'ALARM' || !nonEmpty(f.subject.id) || !nonEmpty(f.subject.tenantId) || !nullOr(f.subject.cameraId, nonEmpty)) return 'facts.subject is malformed';
+  if (!exactKeys(f.alarm, ['title', 'severity', 'triggeredAtUtc']) || typeof f.alarm.title !== 'string' || !nonEmpty(f.alarm.severity) || !isoUtc(f.alarm.triggeredAtUtc)) return 'facts.alarm is malformed';
+  const t = f.trigger;
+  if (!exactKeys(t, ['eventId', 'type', 'source', 'timestampUtc', 'severity', 'payload']) || !nullOr(t.eventId, nonEmpty) || !nullOr(t.type, nonEmpty) || !nullOr(t.source, nonEmpty) || !nullOr(t.timestampUtc, isoUtc) || !nullOr(t.severity, nonEmpty) || !nullOr(t.payload, isObj)) return 'facts.trigger is malformed';
+  if (f.rule !== null) {
+    const r = f.rule;
+    if (!exactKeys(r, ['kind', 'id', 'name', 'triggerType', 'cooldownSeconds', 'conditions', 'triggerConfig']) || !['AUTOMATION_RULE', 'EVENT_RULE'].includes(r.kind) || !nonEmpty(r.id) || !nullOr(r.name, (x) => typeof x === 'string') || !nullOr(r.triggerType, (x) => typeof x === 'string') || !nullOr(r.cooldownSeconds, Number.isFinite)) return 'facts.rule is malformed';
+  }
+  if (!Array.isArray(f.models) || !f.models.every((m) => exactKeys(m, ['name', 'version', 'sha256', 'task', 'evaluated']) && nonEmpty(m.name) && nonEmpty(m.version) && HEX64.test(m.sha256) && nullOr(m.task, (x) => typeof x === 'string') && typeof m.evaluated === 'boolean')) return 'facts.models is malformed';
+  if (!Array.isArray(f.detections) || !f.detections.every((d) => exactKeys(d, ['id', 'label', 'confidence', 'frameTimestampUtc', 'modelSha256']) && nonEmpty(d.id) && nonEmpty(d.label) && Number.isFinite(d.confidence) && d.confidence >= 0 && d.confidence <= 1 && isoUtc(d.frameTimestampUtc) && nullOr(d.modelSha256, (x) => HEX64.test(x)))) return 'facts.detections is malformed';
+  if (!Array.isArray(f.correlated) || !f.correlated.every((c) => exactKeys(c, ['eventId', 'type', 'timestampUtc']) && nonEmpty(c.eventId) && nonEmpty(c.type) && isoUtc(c.timestampUtc))) return 'facts.correlated is malformed';
+  if (!exactKeys(f.cameraClock, ['status']) || !['OK', 'DRIFT', 'UNDETERMINED', 'UNKNOWN'].includes(f.cameraClock.status)) return 'facts.cameraClock is malformed';
+  return null;
+}
+
+/** Problems found in one explanation record (empty = intact). */
+export function explanationRecordProblems(r) {
+  const problems = [];
+  if (!isObj(r) || r.schema !== EXPLAIN_RECORD_SCHEMA) return ['unknown record schema'];
+  const shape = explanationFactsProblem(r.facts);
+  if (shape) return [shape];
+  if (sha256(canonicalizeJson(r.facts)) !== r.factsSha256) problems.push('factsSha256 does not match the facts');
+  if (typeof r.text !== 'string' || sha256(r.text) !== r.textSha256) problems.push('textSha256 does not match the text');
+  const { recordSha256, ...rest } = r;
+  if (sha256(canonicalizeJson(rest)) !== recordSha256) problems.push('recordSha256 does not match the record');
+  if (r.explanationId !== sha256(`${r.facts.subject.kind}:${r.facts.subject.id}:${r.templateVersion}`)) problems.push('explanationId does not match the subject and template');
+  const render = EXPLAIN_RENDERERS[r.templateVersion];
+  if (!render) problems.push(`unknown template version ${r.templateVersion}`);
+  else if (render(r.facts) !== r.text) problems.push('the text is not what the template renders from the facts');
+  return problems;
+}
+
+/** The explanations section of verifyPackage, exported so it can be tested on its own. */
+export function verifyExplanationsSection({ manifest, artifacts, json, check, warn, opts = {} }) {
+  if (!manifest.explanations) {
+    check('explain.present', false, 'the manifest has no explanations section', opts.requireExplanations ? 'FAIL' : 'WARN');
+    return;
+  }
+  const s = manifest.explanations;
+  const art = artifacts.find((a) => a.path === s.artifact && a.role === 'EXPLANATIONS');
+  check('explain.artifact_bound', Boolean(art), `${s.artifact} listed with role EXPLANATIONS`);
+  const doc = art ? json(art.path) : null;
+  if (!doc) return;
+  const records = Array.isArray(doc.explanations) ? doc.explanations : [];
+  const digest = sha256(canonicalizeJson(records.map((r) => r.recordSha256).sort()));
+  check('explain.summary_matches', doc.schema === EXPLAIN_DOCUMENT_SCHEMA && doc.schema === s.schema && records.length === s.recordCount && doc.digestSha256 === s.digestSha256 && digest === doc.digestSha256, 'explanations.json agrees with the signed summary and its own digest');
+  const badRecords = records.map((r) => ({ id: isObj(r) ? r.explanationId : '(no id)', problems: explanationRecordProblems(r) })).filter((x) => x.problems.length);
+  check('explain.records_intact', badRecords.length === 0, badRecords.length ? badRecords.slice(0, 5).map((b) => `${b.id}: ${b.problems.join(', ')}`).join(' | ') : `${records.length} record(s): hashes recompute and each text equals the template output for its facts`);
+  const ids = records.map((r) => r?.explanationId);
+  check('explain.unique', new Set(ids).size === ids.length, 'one explanation per alarm and template');
+  const cam = manifest.camera?.id;
+  const w = manifest.timeWindow;
+  const from = Date.parse(w?.startUtc);
+  const to = Date.parse(w?.endUtc);
+  const outOfScope = records.filter((r) => {
+    const t = isObj(r) && isObj(r.facts) ? Date.parse(r.facts.alarm?.triggeredAtUtc) : NaN;
+    return !(r?.facts?.subject?.cameraId === cam && t >= from && t <= to);
+  });
+  check('explain.scope', doc.cameraId === cam && doc.window?.startUtc === w?.startUtc && doc.window?.endUtc === w?.endUtc && outOfScope.length === 0, outOfScope.length ? `${outOfScope.length} explanation(s) are for another camera or outside the export window` : 'every explanation is for this camera and inside the export window');
+  if (manifest.aiProvenance) {
+    const listed = new Set((manifest.aiProvenance.models || []).map((m) => m.sha256));
+    const unlisted = new Set();
+    for (const r of records) for (const m of r?.facts?.models || []) if (!listed.has(m.sha256)) unlisted.add(`${m.name}@${m.version}`);
+    if (unlisted.size) warn('explain.models_in_ai_provenance', `model(s) named in explanations but not in the AI provenance: ${[...unlisted].join(', ')}`);
+  }
+}
+
 // ---------------------------------------------------------------- verification
 export function verifyPackage(files, opts = {}) {
   const results = [];
@@ -308,6 +505,9 @@ export function verifyPackage(files, opts = {}) {
     }
   }
 
+  // Explanations (Phase 5)
+  verifyExplanationsSection({ manifest, artifacts, json, check, warn, opts });
+
   // Derivation
   if (manifest.derivation) {
     const d0 = manifest.derivation;
@@ -338,7 +538,7 @@ function main(argv) {
   };
   const target = args.find((a, i) => !a.startsWith('--') && !['--trusted-key', '--trusted-key-sha256'].includes(args[i - 1]));
   if (!target || args.includes('--help')) {
-    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--json]');
+    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--require-explanations] [--json]');
     return 2;
   }
   let files;
@@ -352,6 +552,7 @@ function main(argv) {
     trustedKeyPem: get('--trusted-key') ? fs.readFileSync(get('--trusted-key'), 'utf8') : undefined,
     trustedKeySha256: get('--trusted-key-sha256'),
     requireAiProvenance: args.includes('--require-ai-provenance'),
+    requireExplanations: args.includes('--require-explanations'),
   };
   const results = verifyPackage(files, opts);
   const failed = results.filter((r) => r.status === 'FAIL');

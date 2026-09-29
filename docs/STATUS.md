@@ -6,6 +6,21 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 3 (2026-09-29): Phase 5 Wave A (explain and crop store), in progress
+
+Branch `feat/phase5-explain-crops`. Decisions are in `docs/adr/0005-phase5-search-and-explain.md`.
+
+| Item | Label | Evidence |
+| --- | --- | --- |
+| ADR 0005 (order, VLM sidecar, TS tokenizer, person-crop default) | DONE_VERIFIED | Document written; docs hygiene gate exits 0. |
+| Explanation record, template and hashes (`backend/src/services/explanation/`) | DONE_VERIFIED | `npx jest src/__tests__/explanation.test.ts` passes, including 8 tamper cases. |
+| Offline verifier checks for `explanations.json` | DONE_VERIFIED | `node --test tools/vigilone-verify/*.test.mjs` passes; the tests caught and fixed a WARN/PASS bug in the missing-section check. |
+| Backend and verifier renderers agree | DONE_VERIFIED | Seeded 500-case fuzz plus a mutation check in `explanationTemplateParity.test.ts`. |
+| Crop store (safe paths, atomic write, free-space floor, person gate, hold-aware purge) | DONE_VERIFIED | `npx jest src/__tests__/cropStore.test.ts` passes on a real temp directory. |
+| Explanation persistence (Prisma model, migration), alarm-time hook, archive writes `explanations.json` and the manifest section, crop capture from the detection path | NOT_STARTED | Needs a database to test; not written in this session rather than shipped unrun. Only the `EXPLANATIONS` artifact role was added. |
+| Wave B (pgvector, SigLIP 2 adapter, tokenizer reference tests, search) and Wave C (VLM sidecar) | NOT_STARTED | See the ADR. |
+| Full backend suite and CI on this branch | BLOCKED_HUMAN | Prisma engines cannot be downloaded in the sandbox, and push is not permitted from it. |
+
 ## Session 2, continued (2026-09-27/28): Phase 4, India ANPR and privacy
 
 Same branch (`claude/gracious-galileo-vtpuvp`), so Phase 4 extends the open PR for Phases 2–3
