@@ -36,9 +36,12 @@ filters and number of results, and the query is counted in
 `vigilone_dpdp_sensitive_queries_total{category,purpose}`. The ANPR console asks for the purpose
 before it loads any plate data.
 
-No biometric query endpoints exist: VigilOne does no face recognition and keeps no embeddings. It
-stores no face images either, except that a person crop (see "Object crops" below) can contain a
-face if a site has turned person crops on. The `BIOMETRIC` category exists in `requirePurpose` for any future feature,
+VigilOne does no face recognition and has no face-matching endpoint. It stores no face images and
+keeps no embeddings, except that (a) a person crop (see "Object crops" below) can contain a face if a
+site has turned person crops on, and (b) with semantic search on, crops (person crops only where the
+site enabled them) are turned into embeddings that can be searched by appearance (see "Semantic
+search" below). Any further feature that queries biometric data must use the `BIOMETRIC` category
+in `requirePurpose` and add its data to the purge. The `BIOMETRIC` category exists in `requirePurpose` for any future feature,
 which must use it and add its data to the purge.
 
 ## Retention purge
@@ -85,3 +88,21 @@ at most that resolution.
   `CROP_MIN_FREE_BYTES` (default 5 GiB). Recording is never touched.
 * Every capture outcome is counted in `vigilone_crops_total{outcome}`; `policy_denied` is the
   expected refusal of a person crop, `failed` carries a `code`.
+
+## Semantic search over crops (Phase 5, ADR 0005)
+
+Off unless `VIGILONE_FEATURE_SEMANTIC_SEARCH=true`. Details, setup and limits are in
+`docs/operations/SEMANTIC_SEARCH.md`; the data-protection points are:
+
+* An embedding is stored per crop and model and is deleted with its crop, so the crop retention,
+  evidence holds and the per-site person-crop switch above govern it. A person crop is embedded only
+  while its site still has person crops enabled.
+* Searching by appearance over **people** is treated as biometric-category access: it needs the
+  `CROP_PERSON_QUERY` permission and a declared, allowed purpose (and a reference where the purpose
+  needs one), and every such query and every person-crop image view is written to the audit chain
+  (`CROP_PERSON_SEARCH_QUERY`, `CROP_PERSON_IMAGE_VIEW`) with that purpose. Other crop searches are
+  audited as `CROP_SEARCH_QUERY`. The audit entry is written before the answer is returned.
+* Results never cross tenants, and a search names exactly one embedding model.
+* Appearance search over people can behave like profiling even without face recognition. Whether and
+  where a deployment may turn it on is its own DPDP decision; this is not legal advice.
+

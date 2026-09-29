@@ -39,7 +39,7 @@ Phase 5 adds explanation records, semantic search over object crops, and local V
 - Crops are written only when free space is above a configured floor; below it, capture fails loudly and the recording path is untouched.
 
 ## Consequences
-- The compose and CI Postgres image will change to a pgvector build when the vector index lands (Wave B). Same major version, so the data directory is compatible; backup and restore drills must be re-run with the extension.
+- The compose, CI and DR-drill Postgres image changes to `pgvector/pgvector:0.8.0-pg16` when the vector index lands (Wave B). **Correction (Wave B):** an earlier draft of this ADR said the data directory stays compatible because the major version is the same. That is not safe to assume: `postgres:16-alpine` (musl) and the pgvector image (Debian, glibc) can order text differently, which can corrupt existing indexes. An existing volume from the alpine image must be moved by `pg_dump` and restore, not reused in place. There are no production installs yet, so nothing is migrated today; `docs/operations/SEMANTIC_SEARCH.md` records the procedure. Backup and restore drills must be re-run with the extension.
 - A new adapter task `vlm_verification` is an additive change to the adapter contract (v1.1).
 - A new evidence-package artifact `explanations.json` (role `EXPLANATIONS`) is covered by the signed manifest and checked by `vigilone-verify`.
 
@@ -48,3 +48,10 @@ Phase 5 adds explanation records, semantic search over object crops, and local V
 - Crop metadata is `ObjectCrop`; the bytes are under `CROPS_DIR` (default `<RECORDINGS_DIR>/crops`). The ai-worker cuts the crop from its own frame and attaches it (`AI_ATTACH_CROPS`, default off), so the full frame is never written or sent; the backend can instead cut from a `snapshotPath` image. The backend decides whether to keep it (flag, per-site person policy).
 - Explanations are stored as `Explanation` rows (immutable per alarm and template) and written into exports whenever records exist or the flag is on.
 - The crop purge and the DPDP purge share one hold lookup (`services/privacy/holds.ts`) and both stop rather than guess when it cannot be read.
+
+## Implementation notes (Wave B, 29 Sept 2026)
+- Built without the SigLIP 2 model: the vector store and index (`CropEmbedding`, `vector(768)`, HNSW cosine), the embedder worker, query-by-example search, the audited person-crop path and the retrieval scorer. The dimension is fixed at 768 (SigLIP 2 base size); a model of another size needs a migration.
+- The `ai-adapter.v1` result gains an optional `embedding` field (v1.1, additive). Text queries are refused with 501 until a text encoder and tokenizer exist.
+- Not built, and blocked: the SigLIP 2 adapter, its pinned hash and licence entry, the tokenizer reference-ID tests, and text search. They need the model files from Hugging Face, which this environment's network policy denies.
+- An embedding is deleted with its crop (foreign-key cascade), so crop retention, evidence holds and the person-crop switch govern it. A person crop is embedded only while its site still has person crops enabled.
+
