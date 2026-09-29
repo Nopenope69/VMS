@@ -1,23 +1,23 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-28T09:00:35.841Z",
-  "commit": "819ec53f9c579fdc3ed821c560fde150694d1df9",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36400564505",
+  "generatedAt": "2026-09-29T13:51:27.581Z",
+  "commit": "35e1d7bf179e8acf2196b9b900d1f3086c32ac14",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36577651739",
   "projects": [
     {
       "name": "backend",
       "suites": {
         "total": 120,
-        "passed": 120,
-        "failed": 0
+        "passed": 119,
+        "failed": 1
       },
       "tests": {
         "total": 810,
-        "passed": 809,
-        "failed": 0,
+        "passed": 808,
+        "failed": 1,
         "skipped": 1
       },
-      "success": true,
+      "success": false,
       "suiteDetails": [
         {
           "file": "backend/src/__tests__/aiPipelineRealDb.test.ts",
@@ -224,9 +224,9 @@
         },
         {
           "file": "backend/src/__tests__/docsHygiene.test.ts",
-          "status": "passed",
-          "passed": 5,
-          "failed": 0,
+          "status": "failed",
+          "passed": 4,
+          "failed": 1,
           "skipped": 0
         },
         {
@@ -1043,8 +1043,8 @@
   "totals": {
     "suites": 143,
     "tests": 985,
-    "passed": 948,
-    "failed": 2,
+    "passed": 947,
+    "failed": 3,
     "skipped": 35
   },
   "allPassed": false
