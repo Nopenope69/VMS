@@ -24,6 +24,8 @@ export enum FeatureFlag {
   SMART_SEARCH = 'SMART_SEARCH',
   FLOORPLANS = 'FLOORPLANS',
   CAMERA_EVENTS = 'CAMERA_EVENTS',
+  EXPLANATIONS = 'EXPLANATIONS',
+  OBJECT_CROPS = 'OBJECT_CROPS',
 }
 
 export interface FeatureFlagDefinition {
@@ -113,6 +115,24 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/camera-events'],
     workers: ['cameraEventManager'],
     status: 'ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras.',
+  },
+  [FeatureFlag.EXPLANATIONS]: {
+    flag: FeatureFlag.EXPLANATIONS,
+    envVar: envVarFor(FeatureFlag.EXPLANATIONS),
+    title: 'Alarm explanations',
+    routePrefixes: [],
+    workers: [],
+    status:
+      'Each new alarm gets a template-generated "why was this flagged" record (explain-template.v1, no model), stored and written into evidence packages as explanations.json, where vigilone-verify re-renders and checks it. A failure is audited and logged and never blocks the alarm. Tested on the real database; not yet exercised on a live site.',
+  },
+  [FeatureFlag.OBJECT_CROPS]: {
+    flag: FeatureFlag.OBJECT_CROPS,
+    envVar: envVarFor(FeatureFlag.OBJECT_CROPS),
+    title: 'Object crop capture',
+    routePrefixes: [],
+    workers: ['cropPurger'],
+    status:
+      'Crops are cut from a detection\'s snapshot image into CROPS_DIR with a hash, a free-space floor and a hold-aware retention purge. Person crops need a per-site switch with a recorded purpose and are off by default. The ai-worker does not write snapshots yet, so nothing is captured until a snapshot source exists.',
   },
 });
 

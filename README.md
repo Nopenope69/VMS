@@ -72,6 +72,8 @@ VigilOne v1.0.0 is strictly scoped as a self-contained, rock-solid **Edge NVR Ap
 | Smart search | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_SMART_SEARCH=true` | Plain SQL over DetectionEvent rows; there is no embedding or semantic search yet. |
 | Floorplans | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_FLOORPLANS=true` | Floorplan CRUD and FOV projection exist; not validated on a real site. |
 | Camera-native events (ONVIF, Hikvision, Dahua) | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_CAMERA_EVENTS=true` | ONVIF PullPoint, Hikvision ISAPI and Dahua event clients are tested against local protocol stubs and published formats, not yet against physical cameras. |
+| Alarm explanations | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_EXPLANATIONS=true` | Each new alarm gets a template-generated "why was this flagged" record (explain-template.v1, no model), stored and written into evidence packages as explanations.json, where vigilone-verify re-renders and checks it. A failure is audited and logged and never blocks the alarm. Tested on the real database; not yet exercised on a live site. |
+| Object crop capture | OFF (501 `FEATURE_DISABLED`) | `VIGILONE_FEATURE_OBJECT_CROPS=true` | Crops are cut from a detection's snapshot image into CROPS_DIR with a hash, a free-space floor and a hold-aware retention purge. Person crops need a per-site switch with a recorded purpose and are off by default. The ai-worker does not write snapshots yet, so nothing is captured until a snapshot source exists. |
 <!-- FEATURE_FLAGS:END -->
 
 Also out of scope for v1 and not behind a flag: **email notifications** (SMTP dispatch answers 501; supported alert channels are HTTP webhooks and Slack).
