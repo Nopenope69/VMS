@@ -1,23 +1,23 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-29T13:51:27.581Z",
-  "commit": "35e1d7bf179e8acf2196b9b900d1f3086c32ac14",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36577651739",
+  "generatedAt": "2026-09-29T16:16:52.704Z",
+  "commit": "44c4cdf7b3cbd15e0839acc9dadabaa6b6a210ef",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36596277728",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 120,
-        "passed": 119,
-        "failed": 1
+        "total": 123,
+        "passed": 123,
+        "failed": 0
       },
       "tests": {
-        "total": 810,
-        "passed": 808,
-        "failed": 1,
+        "total": 838,
+        "passed": 837,
+        "failed": 0,
         "skipped": 1
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
         {
           "file": "backend/src/__tests__/aiPipelineRealDb.test.ts",
@@ -188,6 +188,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/cropStore.test.ts",
+          "status": "passed",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/crypto.test.ts",
           "status": "passed",
           "passed": 4,
@@ -224,9 +231,9 @@
         },
         {
           "file": "backend/src/__tests__/docsHygiene.test.ts",
-          "status": "failed",
-          "passed": 4,
-          "failed": 1,
+          "status": "passed",
+          "passed": 5,
+          "failed": 0,
           "skipped": 0
         },
         {
@@ -345,6 +352,20 @@
           "file": "backend/src/__tests__/evidenceRoutes.test.ts",
           "status": "passed",
           "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/explanation.test.ts",
+          "status": "passed",
+          "passed": 17,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/explanationTemplateParity.test.ts",
+          "status": "passed",
+          "passed": 2,
           "failed": 0,
           "skipped": 0
         },
@@ -1041,10 +1062,10 @@
     }
   ],
   "totals": {
-    "suites": 143,
-    "tests": 985,
-    "passed": 947,
-    "failed": 3,
+    "suites": 146,
+    "tests": 1013,
+    "passed": 976,
+    "failed": 2,
     "skipped": 35
   },
   "allPassed": false
