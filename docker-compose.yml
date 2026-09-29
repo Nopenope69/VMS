@@ -93,7 +93,7 @@ services:
       - vigilone-net
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.0-pg16
     container_name: vigilone-postgres
     restart: unless-stopped
     security_opt:

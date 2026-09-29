@@ -71,7 +71,7 @@ docker run -d \
     -e POSTGRES_USER="${DR_TEST_USER}" \
     -e POSTGRES_PASSWORD="${DR_TEST_PASS}" \
     -e POSTGRES_DB="${DR_TEST_DB}" \
-    postgres:16-alpine >/dev/null
+    pgvector/pgvector:0.8.0-pg16 >/dev/null
 
 echo -n "Waiting for Postgres readiness"
 for i in $(seq 1 30); do

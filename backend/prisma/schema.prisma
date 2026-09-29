@@ -303,6 +303,7 @@ model Tenant {
   dataProtection        DataProtectionSettings?
   explanations          Explanation[]
   objectCrops           ObjectCrop[]
+  cropEmbeddings        CropEmbedding[]
   detectionEvents       DetectionEvent[]
   vehicleObservations   VehicleObservation[]
   vehicleWatchlists     VehicleWatchlist[]
@@ -1753,6 +1754,7 @@ model ObjectCrop {
   capturedAt       DateTime
   expiresAt        DateTime
   createdAt        DateTime        @default(now())
+  embeddings       CropEmbedding[]
 
   @@index([expiresAt])
   @@index([tenantId, cameraId, capturedAt])
@@ -1771,4 +1773,30 @@ model SiteCropPolicy {
   nonPersonRetentionDays Int?
   personRetentionDays    Int?
   updatedAt              DateTime  @updatedAt
+}
+
+/// Phase 5 (P5.3): the embedding of one object crop by one embedding model, for semantic search.
+/// The vector column is pgvector `vector(768)` (SigLIP 2 base size); Prisma cannot write it, so rows are
+/// written and searched with SQL in services/search/cropEmbeddingStore.ts. The row is removed with its
+/// crop (ON DELETE CASCADE), so the crop retention purge, holds and the person-crop policy govern the
+/// embedding too: an embedding never outlives the crop it describes. The HNSW cosine index is created in
+/// the migration (Prisma has no syntax for it).
+model CropEmbedding {
+  id           String                      @id @default(uuid())
+  tenantId     String
+  tenant       Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cropId       String
+  crop         ObjectCrop                  @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  /// Provenance of the model that produced the vector (ModelManifest name, version, SHA-256).
+  modelName    String
+  modelVersion String
+  modelSha256  String
+  adapterId    String
+  inferenceId  String?
+  dim          Int
+  embedding    Unsupported("vector(768)")
+  createdAt    DateTime                    @default(now())
+
+  @@unique([cropId, modelSha256])
+  @@index([tenantId, modelSha256])
 }
