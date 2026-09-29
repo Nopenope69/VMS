@@ -21,5 +21,10 @@ node tools/eval/model-card.mjs --model yolox-tiny --metrics /tmp/metrics.json \
 - `sample/annotations.json` is a four-image smoke sample (public-domain/CC0 scikit-image pictures,
   coarse hand annotations, CC0). It tests the harness, not the model; cards built from it say
   NOT EVALUATED.
+- `retrieval-eval.mjs` scores crop search (recall@k, hit rate with a 95% Wilson interval, MRR) from
+  a labels file and the rankings the search API returned; see `docs/operations/SEMANTIC_SEARCH.md`.
+  It refuses missing results, the query crop inside its own ranking and duplicates, and says
+  NOT EVALUATED unless `--real-site-data` is given with at least 100 labelled queries.
+  `__tests__/retrieval-eval.test.mjs` checks it against hand-computed values.
 - Real numbers need labelled frames from real Indian sites (action plan P2.10, HUMAN-REQUIRED):
   at least 500 instances per v1 class, captured with consent and signage (DPDP).
