@@ -32,6 +32,7 @@ describe('Feature flags: typed registry', () => {
         'OBJECT_STORAGE_ARCHIVE',
         'OIDC_SSO',
         'REDACTION',
+        'SEMANTIC_SEARCH',
         'SMART_SEARCH',
       ].sort()
     );
