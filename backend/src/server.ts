@@ -6,6 +6,9 @@ import { redactionQueue } from './routes/privacy.routes';
 import { RetentionPurger } from './services/privacy/dataProtection.service';
 
 const retentionPurger = new RetentionPurger(prisma);
+import { CropPurger } from './services/crops/cropPurge.service';
+
+const cropPurger = new CropPurger(prisma);
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
 import { cameraEventManager } from './routes/cameraEvents.routes';
@@ -52,6 +55,7 @@ export const server = app.listen(config.PORT, () => {
       .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
       .catch((err) => console.error('[Redaction] recovery failed:', err.message));
     if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
+    if (isFeatureEnabled(FeatureFlag.OBJECT_CROPS)) cropPurger.start(Number(process.env.CROP_PURGE_INTERVAL_MS || 3_600_000));
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -75,6 +79,7 @@ process.on('SIGTERM', async () => {
   incidentOrchestrator.stop();
   alarmWorkflow.stop();
   retentionPurger.stop();
+  cropPurger.stop();
   await cameraEventManager.stop();
   server.close(() => {
     prisma.$disconnect();

@@ -6,7 +6,8 @@
  *  - Retention purge: plate reads and AI snapshot files older than the tenant's retention are
  *    deleted, except where an incident hold or a legal-hold manifest covers them.
  * No embeddings are produced or stored by VigilOne today; a feature that adds them must add its
- * purge target here.
+ * purge target here. Object crops (ADR 0005) are purged by services/crops/cropPurge.service.ts,
+ * which uses the same hold lookup (./holds) and fails closed if it cannot be read.
  */
 import fs from 'fs';
 import path from 'path';
@@ -15,6 +16,7 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { AuditChainService } from '../audit/auditChain.service';
 import { MetricsService } from '../observability/metrics.service';
+import { loadHoldChecker } from './holds';
 
 export const DATA_PURPOSES = ['SECURITY_INCIDENT_INVESTIGATION', 'LAW_ENFORCEMENT_REQUEST', 'ACCESS_CONTROL', 'SAFETY_EMERGENCY', 'LEGAL_CLAIM', 'AUDIT_REVIEW'] as const;
 export type DataPurpose = (typeof DATA_PURPOSES)[number];
@@ -141,7 +143,7 @@ export interface PurgeResult {
 }
 
 /** Snapshot files may be deleted only under these roots (never an arbitrary path from the DB). */
-function snapshotRoots(): string[] {
+export function snapshotRoots(): string[] {
   return [process.env.RECORDINGS_DIR || '/recordings', process.env.SNAPSHOTS_DIR || '/recordings/snapshots'].map((p) => path.resolve(p) + path.sep);
 }
 
@@ -162,11 +164,7 @@ export async function purgeTenant(prisma: PrismaClient, tenantId: string, now = 
   const s = await getDataProtection(prisma, tenantId);
   const r: PurgeResult = { tenantId, at: now.toISOString(), plateReadsDeleted: 0, plateReadsHeld: 0, plateSnapshotsDeleted: 0, detectionSnapshotsDeleted: 0, detectionSnapshotsHeld: 0, snapshotFilesOutsideRoots: 0, snapshotFilesMissing: 0 };
 
-  const holds = await prisma.incidentEvidenceHold.findMany({ where: { tenantId, expiresAt: { gt: now } }, select: { cameraId: true, windowStart: true, windowEnd: true } });
-  const legal = await prisma.evidenceManifest.findMany({ where: { tenantId, legalHold: true }, select: { cameraIdsJson: true, startUtc: true, endUtc: true } });
-  const held = (cameraId: string, from: Date, to: Date) =>
-    holds.some((h) => h.cameraId === cameraId && h.windowStart <= to && h.windowEnd >= from) ||
-    legal.some((m) => (m.cameraIdsJson as string[]).includes(cameraId) && m.startUtc <= to && m.endUtc >= from);
+  const held = await loadHoldChecker(prisma, tenantId, now);
 
   const plateCutoff = new Date(now.getTime() - s.plateRetentionDays * 86_400_000);
   for (;;) {

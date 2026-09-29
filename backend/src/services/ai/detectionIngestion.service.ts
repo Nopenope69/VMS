@@ -10,6 +10,8 @@ import {
   fromTripwireCrossing,
 } from '../incident/orchestrator/events';
 import { AiProvenance, VigilOneEvent } from '../incident/orchestrator/types';
+import { FeatureFlag, isFeatureEnabled } from '../../config/featureFlags';
+import { CropCaptureService } from '../crops/cropCapture.service';
 import { Point2D, TripwireRuleInput, LoiteringRuleInput } from '../spatial/engine';
 
 /**
@@ -83,7 +85,8 @@ export class DetectionIngestionService {
   constructor(
     private prisma: PrismaClient,
     private getSpatialEngine: () => SpatialEngineLike,
-    private orchestrator: Pick<IncidentOrchestrator, 'ingestEvent'> = incidentOrchestrator
+    private orchestrator: Pick<IncidentOrchestrator, 'ingestEvent'> = incidentOrchestrator,
+    private cropCapture: Pick<CropCaptureService, 'captureSafely'> = new CropCaptureService(prisma)
   ) {}
 
   public async ingest(body: unknown): Promise<IngestOutcome> {
@@ -174,6 +177,20 @@ export class DetectionIngestionService {
     if (!duplicate && d.trackId && d.trackState === 'CONFIRMED' && centroid) {
       aiEventsEmitted = await this.emitAiObjectEvents(d, camera.id, eventTime, d.provenance);
       incidentsCreated = await this.evaluateSpatialRules(d, camera.id, centroid, eventTime, d.provenance);
+    }
+
+    // Last, so cutting a crop can never delay the events above. captureSafely does not throw and
+    // logs and counts its own failures (feature flag OBJECT_CROPS, default OFF).
+    if (!duplicate && isFeatureEnabled(FeatureFlag.OBJECT_CROPS)) {
+      await this.cropCapture.captureSafely({
+        tenantId: d.tenantId,
+        cameraId: camera.id,
+        detectionId: detection.id,
+        objectClass: d.objectClass,
+        boundingBox: d.boundingBox,
+        snapshotPath: d.snapshotPath,
+        capturedAt: eventTime,
+      });
     }
 
     return { detectionId: detection.id, inferenceId: d.inferenceId, duplicate, incidentsCreated, aiEventsEmitted };
