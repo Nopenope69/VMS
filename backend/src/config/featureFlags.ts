@@ -129,10 +129,10 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     flag: FeatureFlag.OBJECT_CROPS,
     envVar: envVarFor(FeatureFlag.OBJECT_CROPS),
     title: 'Object crop capture',
-    routePrefixes: [],
+    routePrefixes: ['/api/v1/crop-policy'],
     workers: ['cropPurger'],
     status:
-      'Crops are cut from a detection\'s snapshot image into CROPS_DIR with a hash, a free-space floor and a hold-aware retention purge. Person crops need a per-site switch with a recorded purpose and are off by default. The ai-worker does not write snapshots yet, so nothing is captured until a snapshot source exists.',
+      'Crops (a JPEG the ai-worker attaches when AI_ATTACH_CROPS is on, or a cut from a detection\'s snapshot image) are stored in CROPS_DIR with a hash, a free-space floor and a hold-aware retention purge. Person crops need a per-site switch with a recorded purpose and are off by default. Not exercised on a live camera site.',
   },
 });
 

@@ -55,6 +55,8 @@ export const DetectionSubmission = z.object({
   attributesJson: z.record(z.unknown()).optional(),
   timestamp: z.string().optional(),
   snapshotPath: z.string().optional(),
+  /** JPEG crop from the worker (AI_ATTACH_CROPS), base64. Used only by the crop store; never persisted on the detection. */
+  cropJpegBase64: z.string().max(400_000).optional(),
   objectClass: z.string().min(1).optional(),
   trackFirstSeenAt: z.string().optional(),
   provenance: AiProvenanceV1.optional(),
@@ -189,6 +191,7 @@ export class DetectionIngestionService {
         objectClass: d.objectClass,
         boundingBox: d.boundingBox,
         snapshotPath: d.snapshotPath,
+        cropBytes: d.cropJpegBase64 ? Buffer.from(d.cropJpegBase64, 'base64') : undefined,
         capturedAt: eventTime,
       });
     }

@@ -83,6 +83,7 @@ describe('Feature flags: real HTTP routing table (app.ts)', () => {
     [FeatureFlag.OIDC_SSO, 'GET', '/api/v1/sso/providers'],
     [FeatureFlag.REDACTION, 'POST', '/api/v1/privacy/jobs'],
     [FeatureFlag.FLOORPLANS, 'GET', '/api/v1/floorplans'],
+    [FeatureFlag.OBJECT_CROPS, 'GET', '/api/v1/crop-policy/any-site'],
   ];
 
   it.each(gatedProbes)('%s off: %s %s answers 501 FEATURE_DISABLED', async (flag, method, path) => {

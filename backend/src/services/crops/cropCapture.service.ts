@@ -2,17 +2,16 @@
  * Object-crop capture on the detection path (Phase 5, P5.1), behind VIGILONE_FEATURE_OBJECT_CROPS
  * (default OFF).
  *
- * A crop is cut from the detection's own snapshot image (the file named by `snapshotPath`) with
- * ffmpeg's crop filter and stored by the CropStore. Nothing is captured when there is no snapshot,
- * no bounding box or no object class: the class decides whether the crop is a person crop, so it is
+ * A crop comes from one of two places: a JPEG crop the ai-worker already cut and attached
+ * (`cropBytes`, AI_ATTACH_CROPS; the full frame never leaves the worker), or the detection's own
+ * snapshot image (`snapshotPath`) cut here with ffmpeg's crop filter. Either way the CropStore stores
+ * it. Nothing is captured when there is neither, or no object class: the class decides whether the crop is a person crop, so it is
  * never guessed. Person crops go through the per-site policy gate (SiteCropPolicy: off unless the
  * site recorded a purpose); the CropStore enforces it again on write.
  *
  * Capture is best-effort by design and loud by rule: a failure never stops detection ingestion or
  * touches recording, and every failure is logged (rate-limited per code) and counted. The expected
  * "person crops are off for this site" answer is counted as `policy_denied`, not logged as an error.
- * Note: the ai-worker does not write snapshot files today, so in a live deployment nothing is
- * captured until a snapshot source exists.
  */
 import { execFile } from 'child_process';
 import fs from 'fs';
@@ -40,6 +39,8 @@ export interface CropCaptureInput {
   objectClass?: string | null;
   boundingBox?: CropBox | null;
   snapshotPath?: string | null;
+  /** A JPEG the ai-worker already cut for this detection. Wins over snapshotPath. */
+  cropBytes?: Buffer | null;
   capturedAt: Date;
 }
 
@@ -93,6 +94,13 @@ function resolveSnapshot(snapshotPath: string): string {
   return real;
 }
 
+/** A crop supplied by the worker must be a whole JPEG (start and end markers); anything else is refused. */
+function requireJpeg(b: Buffer): Buffer {
+  const ok = b.length > 4 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff && b[b.length - 2] === 0xff && b[b.length - 1] === 0xd9;
+  if (!ok) throw new CropStoreError('CUT_FAILED', 'the crop supplied with the detection is not a complete JPEG');
+  return b;
+}
+
 export type CropCutter = (snapshotFile: string, box: CropBox) => Promise<Buffer>;
 
 /** Cuts the normalised box out of an image as a JPEG with ffmpeg. Throws CropStoreError('CUT_FAILED'|'EMPTY'). */
@@ -137,7 +145,8 @@ export class CropCaptureService {
    * non-error reason (`exists`, `skipped`); throws CropStoreError for a policy refusal or a failure.
    */
   async capture(input: CropCaptureInput): Promise<{ outcome: 'stored'; crop: StoredCrop } | { outcome: 'exists' | 'skipped' }> {
-    if (!input.snapshotPath || !input.boundingBox || !input.objectClass) return { outcome: 'skipped' };
+    const hasCrop = Boolean(input.cropBytes && input.cropBytes.length > 0);
+    if (!input.objectClass || (!hasCrop && (!input.snapshotPath || !input.boundingBox))) return { outcome: 'skipped' };
     if (await this.prisma.objectCrop.findUnique({ where: { detectionEventId: input.detectionId }, select: { id: true } })) return { outcome: 'exists' };
 
     const camera = await this.prisma.camera.findUnique({ where: { id: input.cameraId }, select: { siteId: true, tenantId: true } });
@@ -147,7 +156,7 @@ export class CropCaptureService {
     // Refuse before reading or cutting anything: a denied person crop must not even be decoded.
     if (cropClass === 'PERSON' && !policy.personCropsEnabled) throw new CropStoreError('POLICY_DENIED', 'person crops are disabled for this site');
 
-    const bytes = await this.cut(resolveSnapshot(input.snapshotPath), input.boundingBox);
+    const bytes = hasCrop ? requireJpeg(input.cropBytes!) : await this.cut(resolveSnapshot(input.snapshotPath!), input.boundingBox!);
     const store = this.makeStore(this.rootFn(), policy);
     const stored = store.write({ tenantId: input.tenantId, cameraId: input.cameraId, cropId: input.detectionId, capturedAt: input.capturedAt, cropClass, bytes });
     try {

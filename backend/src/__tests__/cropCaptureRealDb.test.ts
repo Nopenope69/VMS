@@ -238,3 +238,56 @@ describe('P5.1 crop capture on the detection path', () => {
     await expect(svc.capture({ tenantId, cameraId, detectionId: det.id, objectClass: 'car', boundingBox: { x: 1, y: 1, width: 0.2, height: 0.2 }, snapshotPath: snap, capturedAt: t0 })).rejects.toBeInstanceOf(CropStoreError);
   });
 });
+
+describe('P5.1 crop supplied by the ai-worker (AI_ATTACH_CROPS)', () => {
+  const jpegB64 = () => fs.readFileSync(snap).toString('base64'); // a complete JPEG made by ffmpeg
+  const noSnapshot = { snapshotPath: undefined, boundingBox: undefined };
+
+  it('flag ON: the attached JPEG is stored as-is (no snapshot file or box needed); the detection keeps no image', async () => {
+    process.env[FLAG] = 'true';
+    const svc = new DetectionIngestionService(prisma, () => ({} as any), noEvents);
+    const out = await submit(svc, { ...noSnapshot, cropJpegBase64: jpegB64() });
+    const row = await cropRow(out.detectionId);
+    expect(row).toMatchObject({ cropClass: 'NON_PERSON', objectClass: 'car' });
+    const stored = fs.readFileSync(path.join(cropsDir, row!.relativePath));
+    expect(stored.equals(Buffer.from(jpegB64(), 'base64'))).toBe(true);
+    expect(row!.sha256).toBe(crypto.createHash('sha256').update(stored).digest('hex'));
+    expect(await prisma.detectionEvent.findUniqueOrThrow({ where: { id: out.detectionId } })).toMatchObject({ snapshotPath: null });
+  });
+
+  it('flag OFF: an attached crop is ignored', async () => {
+    const svc = new DetectionIngestionService(prisma, () => ({} as any), noEvents);
+    const out = await submit(svc, { ...noSnapshot, cropJpegBase64: jpegB64() });
+    expect(await cropRow(out.detectionId)).toBeNull();
+  });
+
+  it('a person crop is refused unless the site enabled it, before anything is written', async () => {
+    process.env[FLAG] = 'true';
+    const svc = new DetectionIngestionService(prisma, () => ({} as any), noEvents);
+    const denied = await submit(svc, { ...noSnapshot, type: 'PERSON_DETECTED', objectClass: 'person', cropJpegBase64: jpegB64() });
+    expect(await cropRow(denied.detectionId)).toBeNull();
+    expect(filesUnder(cropsDir).filter((f) => f.includes(denied.detectionId))).toEqual([]);
+
+    await prisma.siteCropPolicy.create({ data: { siteId, personCropsEnabled: true, acknowledgedPurpose: 'SECURITY_INCIDENT_INVESTIGATION', acknowledgedByUserId: 'admin-1', acknowledgedAt: new Date() } });
+    try {
+      const allowed = await submit(svc, { ...noSnapshot, type: 'PERSON_DETECTED', objectClass: 'person', cropJpegBase64: jpegB64() });
+      expect(await cropRow(allowed.detectionId)).toMatchObject({ cropClass: 'PERSON' });
+    } finally {
+      await prisma.siteCropPolicy.deleteMany({ where: { siteId } });
+    }
+  });
+
+  it('bytes that are not a complete JPEG are refused and counted; the detection is still stored', async () => {
+    process.env[FLAG] = 'true';
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const svc = new DetectionIngestionService(prisma, () => ({} as any), noEvents);
+    const before = counter('failed', 'CUT_FAILED');
+    const truncated = Buffer.from(jpegB64(), 'base64').subarray(0, 500).toString('base64');
+    for (const bad of [truncated, Buffer.from('not an image at all').toString('base64')]) {
+      const out = await submit(svc, { ...noSnapshot, cropJpegBase64: bad });
+      expect(await prisma.detectionEvent.findUnique({ where: { id: out.detectionId } })).not.toBeNull();
+      expect(await cropRow(out.detectionId)).toBeNull();
+    }
+    expect(counter('failed', 'CUT_FAILED')).toBe(before + 2);
+  });
+});

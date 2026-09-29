@@ -319,6 +319,9 @@ services:
       - AI_ADAPTER_HOST=127.0.0.1
       - AI_ADAPTER_PORT=7010
       - AI_DETECT_FPS=${AI_DETECT_FPS:-2}
+      # Sends a JPEG crop with each confirmed detection; the backend keeps it only with VIGILONE_FEATURE_OBJECT_CROPS
+      # and, for people, only where the site enabled person crops.
+      - AI_ATTACH_CROPS=${AI_ATTACH_CROPS:-false}
       - AI_MAX_STREAMS=${AI_MAX_STREAMS:-16}
       - AI_GATE_MODE=${AI_GATE_MODE:-motion}
       # A refused model (bad SHA-256, disallowed licence) is audited once; the worker stays up with
