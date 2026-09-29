@@ -65,6 +65,14 @@ jobs:
         run: |
           (cd frontend && npm ci && npm run build)
           (cd backend && npm ci && npx prisma generate && npx prisma migrate deploy)
+          # Same ai-worker setup as ci.yml: without onnxruntime-node and the pinned models the
+          # native-engine tests fail and the golden-model suites are skipped.
+          (cd services/ai-worker && ONNXRUNTIME_NODE_INSTALL=skip npm ci)
+
+      - name: Fetch pinned models (SHA-256 verified against scripts/models/models.lock.json)
+        run: |
+          scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
+          scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
 
       - name: Backend suite (JSON report; failures are recorded, not hidden)
         working-directory: ./backend
@@ -72,6 +80,8 @@ jobs:
 
       - name: AI worker suite (JSON report)
         working-directory: ./services/ai-worker
+        env:
+          VIGILONE_REQUIRE_MODEL_TESTS: '1'
         run: ../../backend/node_modules/.bin/jest --config jest.config.js --json --outputFile=/tmp/ai-worker-jest.json || echo "AI_FAILED=1" >> "$GITHUB_ENV"
 
       - name: Generate status from the reports
