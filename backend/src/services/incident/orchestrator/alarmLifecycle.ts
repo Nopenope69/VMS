@@ -1,6 +1,7 @@
 import { PrismaClient, Alarm, AlarmState, EventSeverity } from '@prisma/client';
 import { assertTenantBoundary } from '../../rbac/permissions';
 import { AuditChainService } from '../../audit/auditChain.service';
+import { runExplanationHook } from '../../explanation/explanationHook';
 import { CommandContext, AlarmFilter } from './types';
 
 export class AlarmLifecycle {
@@ -184,7 +185,7 @@ export class AlarmLifecycle {
   ): Promise<Alarm> {
     const tenantId = context?.tenantId || data.tenantId;
 
-    return await this.executeTransaction(async (tx) => {
+    const alarm = await this.executeTransaction(async (tx) => {
       const alarm = await tx.alarm.create({
         data: {
           tenantId,
@@ -223,5 +224,10 @@ export class AlarmLifecycle {
 
       return alarm;
     });
+
+    // After the commit, so a failure here can never undo or delay the alarm. The hook does not
+    // throw; it audits and logs its own failures (feature flag EXPLANATIONS, default OFF).
+    await runExplanationHook(this.prisma, alarm);
+    return alarm;
   }
 }
