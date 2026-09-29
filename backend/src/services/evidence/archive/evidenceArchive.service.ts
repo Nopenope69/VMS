@@ -1,4 +1,7 @@
 import { collectAiProvenance } from './aiProvenance';
+import { buildExplanationsDocument } from '../../explanation/explanation';
+import { loadExplanationRecords } from '../../explanation/explanationService';
+import { FeatureFlag, isFeatureEnabled } from '../../../config/featureFlags';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -447,6 +450,31 @@ export class EvidenceArchive {
         models: aiDoc.models.map((m) => ({ name: m.name, version: m.version, sha256: m.sha256 })),
       };
 
+      // Explanations (P5.2): the stored "why was this flagged" records for alarms raised on this camera
+      // inside the window. Written when the feature is on or when records exist (a record must never
+      // be left out of a package because the flag was switched off later). An invalid stored record
+      // fails the export loudly; it is never dropped or repaired.
+      const explanationRecords = await loadExplanationRecords(this.prisma, params.tenantId, params.cameraId, params.startTime, params.endTime);
+      const extraArtifacts: Array<{ sourcePath: string; path: string; mediaType: string; role: 'AI_PROVENANCE' | 'EXPLANATIONS' }> = [
+        { sourcePath: aiPath, path: 'ai_provenance.json', mediaType: 'application/json', role: 'AI_PROVENANCE' },
+      ];
+      if (isFeatureEnabled(FeatureFlag.EXPLANATIONS) || explanationRecords.length > 0) {
+        const explDoc = buildExplanationsDocument({
+          cameraId: params.cameraId,
+          window: { startUtc: params.startTime.toISOString(), endUtc: params.endTime.toISOString() },
+          records: explanationRecords,
+        });
+        const explPath = path.join(workDir, 'explanations.json');
+        fs.writeFileSync(explPath, canonicalizeJson(explDoc), 'utf8');
+        manifestData.explanations = {
+          schema: explDoc.schema,
+          artifact: 'explanations.json',
+          recordCount: explDoc.explanations.length,
+          digestSha256: explDoc.digestSha256,
+        };
+        extraArtifacts.push({ sourcePath: explPath, path: 'explanations.json', mediaType: 'application/json', role: 'EXPLANATIONS' });
+      }
+
       // Generate Section 63 BSA Part A & Part B PDF certificate
       const pdfCertificatePath = path.join(workDir, 'certificate_sec63.pdf');
       await BsaCertificatePackageBuilder.generatePdf(pdfCertificatePath, {
@@ -487,7 +515,7 @@ export class EvidenceArchive {
         applianceSignature: '', // PackageAssembler signs canonical manifest with artifacts[] included
         certificatePdfPath: pdfCertificatePath,
         custodyHistory,
-        extraArtifacts: [{ sourcePath: aiPath, path: 'ai_provenance.json', mediaType: 'application/json', role: 'AI_PROVENANCE' }],
+        extraArtifacts,
       });
 
       // Update DB record
