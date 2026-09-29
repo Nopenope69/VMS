@@ -6,6 +6,50 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 4 (2026-09-29): Phase 5 Wave A wiring
+
+Branch `feat/phase5-wave-a-wiring`. Every new behaviour sits behind a flag that is OFF by default
+(`VIGILONE_FEATURE_EXPLANATIONS`, `VIGILONE_FEATURE_OBJECT_CROPS`).
+
+### Step 0: is main verified on CI?
+
+The default branch is `master` (there is no `main`). The Wave A merge commit `44c4cdf` did get a
+CI run: run 36596277782, all 9 jobs green, so the CI workflow is **DONE_VERIFIED for the merge**.
+What was red is a different workflow, **Generated Test Status** (runs 36577651739 and 36596277728).
+There is no CI job named "inferenceEngine"; that is the ai-worker suite file that failed inside the
+status workflow.
+
+| Job / workflow | Status | Cause | Fix |
+| --- | --- | --- | --- |
+| CI: all 9 jobs (frontend, backend, ai-worker, e2e, governance, field tooling, packaging, compose, secrets) on `44c4cdf` | green (run 36596277782) | n/a | none needed |
+| Generated Test Status, step "Fail if any suite failed" | red on every master push | `status.yml` never ran `npm ci` in `services/ai-worker` (no `onnxruntime-node`) and never fetched the pinned models, so 2 native-engine tests in `inferenceEngine.test.ts` failed and 34 golden-model tests were skipped (generated status: ai-worker 17/23 suites, 139/175 tests). Reproduced locally by hiding the ai-worker `node_modules`: the same 2 tests fail. | PR 5 (`fix/status-workflow-ai-worker-deps`) mirrors the `ci.yml` setup and sets `VIGILONE_REQUIRE_MODEL_TESTS=1`. Locally with that setup the ai-worker suite is 22 suites run, 170 passed, 5 skipped (a suite `ci.yml` also skips). **DONE_UNVERIFIED**: the workflow only runs on push to master, so it is verified on GitHub only after PR 5 merges. |
+
+The earlier "2 ai-worker failures, output not captured" note (Phase 4, "Not verified") has the
+same likely cause (a missing dependency or model after a heavy run), but that was not proven for
+those local runs; it is proven for the status workflow.
+
+### Step 1: Wave A wiring
+
+Local baseline before any change: backend 123/123 suites, 837 passed, 1 skipped. After the last
+code commit: **128/128 suites, 868 passed, 1 skipped** (`cd backend && npx jest --runInBand`, real
+PostgreSQL 16, real ffmpeg). The local database was a native PostgreSQL 16 service, not the
+`postgres:16-alpine` container (there is no Docker daemon in this environment); CI uses the
+container.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Prisma models `Explanation`, `ObjectCrop`, `SiteCropPolicy`; migration `20261002000000_phase5_explanations_crops` | DONE_VERIFIED | `prisma migrate deploy` on the local database and on a fresh database, then `prisma migrate diff` shows no drift; `migrationPhase5Wave.test.ts` 3/3 (hash, class, size, expiry and person-acknowledgement CHECKs, cascades). `SiteCropPolicy` is a third table beyond the two requested, needed for the per-site person gate. |
+| Explanation service (`services/explanation/explanationService.ts`) | DONE_VERIFIED | `explanationWiringRealDb.test.ts` 7/7: facts from a real alarm, canonical event, rule, detection, model manifest and correlation chain; the stored record passes `verifyExplanationRecord`; a second call returns the stored record unchanged. Limits: the camera clock is always `UNKNOWN` (no clock verdict is persisted, and none is derived from the skew estimate); the only detection listed is the one named by the trigger's `inferenceId`; rule fields are read at generation time. |
+| Non-blocking fail-loud hook in `AlarmLifecycle.elevateAlarm`, flag `EXPLANATIONS` default OFF | DONE_VERIFIED | Same suite. Flag off: nothing written. A facts failure leaves the alarm ACTIVE, logs, increments `vigilone_explanations_total{outcome="failed"}` and writes an `EXPLANATION_FAILED` audit row; a failing audit write is logged and counted too. Mutation check: making the hook rethrow fails 2 tests. Not exercised through the full orchestrator `TRIGGER_ALARM` action or on a live site. |
+| `explanations.json` (role `EXPLANATIONS`) and the manifest `explanations` section in `evidenceArchive.service.ts` | DONE_VERIFIED | `explanationExportRealDb.test.ts` 5/5: a real export from a real ffmpeg segment passes `vigilone-verify --require-explanations` in a separate process (`explain.*` checks PASS); an edited record, and a stripped section re-signed with another key, are rejected; with the flag off and no records the verifier warns and `--require-explanations` fails; records are still included if the flag was switched off; a stored record that no longer matches its row fails the export. The Section 63 PDF does not mention explanations. |
+| Crop capture on the detection path, flag `OBJECT_CROPS` default OFF | DONE_VERIFIED for the code path; **no live source** | `cropCaptureRealDb.test.ts` 10/10 through `DetectionIngestionService.ingest`: real ffmpeg cut (decoded 320x240 from a 640x480 snapshot), hash recorded, 14-day retention, per-site overrides, low or unknown free space fails loudly without stopping the detection, snapshot paths outside the allowed roots or behind a symlink are refused, and a database failure removes the written file. Mutation check: opening the person gate fails the refusal test. **The ai-worker does not write snapshot files today, so a live deployment captures nothing until a snapshot source exists (NOT_STARTED).** |
+| Person crops behind the per-site policy gate | DONE_VERIFIED in the database and service; **no way to set it** | Off by default; a row enabling it without a recorded purpose and acknowledger is refused by a CHECK; same suite. There is no API or UI to write `SiteCropPolicy` yet (NOT_STARTED). The lawful basis and the retention defaults are still the open DPDP decision (BLOCKED_HUMAN). |
+| Scheduled hold-aware crop purge (`CropPurger`, `purgeTenantCrops`) | DONE_VERIFIED for the purge logic; **DONE_UNVERIFIED for scheduling** | `cropPurgeRealDb.test.ts` 6/6 on real files: expired crops removed; incident-hold and legal-hold crops kept; other-camera and lapsed holds do not protect; if either hold lookup fails nothing is deleted and the failure is logged, counted and audited (`CROP_PURGE_FAILED`), and the next run succeeds; a missing file removes its row; an undeletable file keeps its row; pagination continues past 505 held rows. Mutation check: swallowing the lookup error fails the fail-closed test. The interval timer and the start in `server.ts` are not covered by a test. The shared hold lookup moved to `privacy/holds.ts`; `dpdpRealDb.test.ts` is unchanged and passes. |
+| One existing test file changed | note | `evidenceBindingChain.test.ts` builds Prisma by hand; it gained `explanation.findMany` (as Phase 4 did for provenance). No assertion changed. `featureFlags.test.ts` gained the two flag names in its expected list. |
+| Docs hygiene, model-licence, fail-loud, feature-flag-docs and status-docs gates; `node --test tools/vigilone-verify/*.test.mjs` (12/12); `docker compose config -q` (base and prod override) | DONE_VERIFIED | All exit 0 before each commit and after the last. |
+| CI on `feat/phase5-wave-a-wiring` | see the PR | Filled in below once the run finished. |
+| Wave B and Wave C | NOT_STARTED | Unchanged. |
+
 ## Session 3 (2026-09-29): Phase 5 Wave A (explain and crop store), in progress
 
 Branch `feat/phase5-explain-crops`. Decisions are in `docs/adr/0005-phase5-search-and-explain.md`.
@@ -17,9 +61,9 @@ Branch `feat/phase5-explain-crops`. Decisions are in `docs/adr/0005-phase5-searc
 | Offline verifier checks for `explanations.json` | DONE_VERIFIED | `node --test tools/vigilone-verify/*.test.mjs` passes; the tests caught and fixed a WARN/PASS bug in the missing-section check. |
 | Backend and verifier renderers agree | DONE_VERIFIED | Seeded 500-case fuzz plus a mutation check in `explanationTemplateParity.test.ts`. |
 | Crop store (safe paths, atomic write, free-space floor, person gate, hold-aware purge) | DONE_VERIFIED | `npx jest src/__tests__/cropStore.test.ts` passes on a real temp directory. |
-| Explanation persistence (Prisma model, migration), alarm-time hook, archive writes `explanations.json` and the manifest section, crop capture from the detection path | NOT_STARTED | Needs a database to test; not written in this session rather than shipped unrun. Only the `EXPLANATIONS` artifact role was added. |
+| Explanation persistence (Prisma model, migration), alarm-time hook, archive writes `explanations.json` and the manifest section, crop capture from the detection path | Superseded | Built and tested in Session 4 below. |
 | Wave B (pgvector, SigLIP 2 adapter, tokenizer reference tests, search) and Wave C (VLM sidecar) | NOT_STARTED | See the ADR. |
-| Full backend suite and CI on this branch | BLOCKED_HUMAN | Prisma engines cannot be downloaded in the sandbox, and push is not permitted from it. |
+| Full backend suite and CI on this branch | DONE_VERIFIED (later) | It merged before this session could run either. CI then ran: PR run 36595729357 and the master push run 36596277782 (merge commit `44c4cdf`), 9/9 jobs green. See Session 4, Step 0. |
 
 ## Session 2, continued (2026-09-27/28): Phase 4, India ANPR and privacy
 
