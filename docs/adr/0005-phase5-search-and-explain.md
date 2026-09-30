@@ -42,3 +42,9 @@ Phase 5 adds explanation records, semantic search over object crops, and local V
 - The compose and CI Postgres image will change to a pgvector build when the vector index lands (Wave B). Same major version, so the data directory is compatible; backup and restore drills must be re-run with the extension.
 - A new adapter task `vlm_verification` is an additive change to the adapter contract (v1.1).
 - A new evidence-package artifact `explanations.json` (role `EXPLANATIONS`) is covered by the signed manifest and checked by `vigilone-verify`.
+
+## Implementation notes (Wave A wiring, 29 Sept 2026)
+- The per-site person-crop switch is the `SiteCropPolicy` table (one row per site, person crops off when no row exists). Turning it on needs a recorded purpose and who acknowledged it; a database CHECK refuses anything less. It is set through `PUT /api/v1/crop-policy/:siteId` (administrators, audited); there is no UI yet.
+- Crop metadata is `ObjectCrop`; the bytes are under `CROPS_DIR` (default `<RECORDINGS_DIR>/crops`). The ai-worker cuts the crop from its own frame and attaches it (`AI_ATTACH_CROPS`, default off), so the full frame is never written or sent; the backend can instead cut from a `snapshotPath` image. The backend decides whether to keep it (flag, per-site person policy).
+- Explanations are stored as `Explanation` rows (immutable per alarm and template) and written into exports whenever records exist or the flag is on.
+- The crop purge and the DPDP purge share one hold lookup (`services/privacy/holds.ts`) and both stop rather than guess when it cannot be read.

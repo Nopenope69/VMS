@@ -14,7 +14,16 @@ import { createHash, randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export type CropCode = 'BAD_ID' | 'POLICY_DENIED' | 'LOW_SPACE' | 'SPACE_UNKNOWN' | 'EMPTY' | 'TOO_LARGE' | 'WRITE_FAILED';
+export type CropCode =
+  | 'BAD_ID'
+  | 'POLICY_DENIED'
+  | 'LOW_SPACE'
+  | 'SPACE_UNKNOWN'
+  | 'EMPTY'
+  | 'TOO_LARGE'
+  | 'WRITE_FAILED'
+  | 'SOURCE_UNREADABLE'
+  | 'CUT_FAILED';
 
 export class CropStoreError extends Error {
   constructor(public readonly code: CropCode, message: string) {

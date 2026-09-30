@@ -36,8 +36,9 @@ filters and number of results, and the query is counted in
 `vigilone_dpdp_sensitive_queries_total{category,purpose}`. The ANPR console asks for the purpose
 before it loads any plate data.
 
-No biometric query endpoints exist: VigilOne does no face recognition, stores no face images and
-keeps no embeddings. The `BIOMETRIC` category exists in `requirePurpose` for any future feature,
+No biometric query endpoints exist: VigilOne does no face recognition and keeps no embeddings. It
+stores no face images either, except that a person crop (see "Object crops" below) can contain a
+face if a site has turned person crops on. The `BIOMETRIC` category exists in `requirePurpose` for any future feature,
 which must use it and add its data to the purge.
 
 ## Retention purge
@@ -56,3 +57,31 @@ Each run is audited as `DPDP_RETENTION_PURGE` with its counts, stored in `lastPu
 counted in `vigilone_dpdp_purged_total{kind}` (failures in `vigilone_dpdp_purge_failures_total`).
 
 Recorded video follows the recording retention policies, not these settings.
+
+## Object crops (Phase 5, ADR 0005)
+
+Off unless `VIGILONE_FEATURE_OBJECT_CROPS=true`. A crop is a small JPEG of one detection, stored
+under `CROPS_DIR` (default `<RECORDINGS_DIR>/crops`) with its SHA-256. It comes from a JPEG the
+ai-worker attaches (worker setting `AI_ATTACH_CROPS=true`; the full frame never leaves the worker)
+or from a detection's snapshot image. The crop is cut from the worker's model-input image, so it is
+at most that resolution.
+
+* **Person crops are off for every site** until an administrator enables them with
+  `PUT /api/v1/crop-policy/:siteId` (`{"personCropsEnabled": true, "purpose": "...", "purposeReference": "..."}`).
+  The purpose must be one of the allowed purposes above (a reference is required where the list
+  says so). The acting user and time are stored, the change is audited (`CROP_POLICY_UPDATE`), and
+  the database refuses an enabled row without them. Disabling clears the acknowledgement. Crops
+  already stored stay until their retention ends or a hold releases; `GET` reports how many person
+  crops remain. The lawful basis for enabling this is the deployment's own DPDP decision; nothing
+  here is legal advice.
+* **Retention:** 14 days for other objects, 7 days for people; each can be overridden per site
+  (1 to 3650 days, `null` resets it).
+* **Purge:** runs hourly (`CROP_PURGE_INTERVAL_MS`, at least 1000 ms, a bad value stops startup).
+  Held evidence is never purged (same incident-hold and legal-hold lookup as above). If the hold
+  lookup cannot be read, that run deletes nothing and is logged, counted
+  (`vigilone_crop_purge_failures_total`) and audited (`CROP_PURGE_FAILED`). Runs are audited as
+  `CROP_RETENTION_PURGE`.
+* **Free space:** a crop is refused, loudly, when free space cannot be read or would fall below
+  `CROP_MIN_FREE_BYTES` (default 5 GiB). Recording is never touched.
+* Every capture outcome is counted in `vigilone_crops_total{outcome}`; `policy_denied` is the
+  expected refusal of a person crop, `failed` carries a `code`.

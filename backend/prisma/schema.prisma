@@ -301,6 +301,8 @@ model Tenant {
   alarms                Alarm[]
   retentionPolicies     RetentionPolicy[]
   dataProtection        DataProtectionSettings?
+  explanations          Explanation[]
+  objectCrops           ObjectCrop[]
   detectionEvents       DetectionEvent[]
   vehicleObservations   VehicleObservation[]
   vehicleWatchlists     VehicleWatchlist[]
@@ -389,6 +391,7 @@ model Site {
 
   cameras     Camera[]
   floorplans  Floorplan[]
+  cropPolicy  SiteCropPolicy?
 
   @@index([tenantId])
 }
@@ -459,6 +462,7 @@ model Camera {
   diagnostics           StreamDiagnostic[]
   alarms                Alarm[]
   detectionEvents       DetectionEvent[]
+  objectCrops           ObjectCrop[]
   vehicleObservations   VehicleObservation[]
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   spatialPlacement        CameraSpatialPlacement?
@@ -853,6 +857,7 @@ model Alarm {
   escalations      AlarmEscalation[]
   feedback         AlarmFeedback?
   evidenceHolds    IncidentEvidenceHold[]
+  explanations     Explanation[]
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
@@ -881,6 +886,7 @@ model DetectionEvent {
   objectClass    String?
   modelSha256    String?
   provenanceJson Json?
+  objectCrops    ObjectCrop[]
 
   @@index([tenantId, type, timestamp])
   @@index([cameraId, timestamp])
@@ -1701,4 +1707,68 @@ model DataProtectionSettings {
   lastPurgeJson                  Json?
   updatedAt                      DateTime @updatedAt
   updatedByUserId                String?
+}
+
+/// Phase 5 (P5.2): the "why was this flagged" record for an alarm, generated from recorded facts by a
+/// fixed template (no model). recordJson is the whole ExplanationRecordV1; the hashes inside it are
+/// checked again by `vigilone-verify` when the record is exported in an evidence package.
+model Explanation {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  alarmId          String
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  /// Copied from the facts so exports can select by camera and window without parsing recordJson.
+  cameraId         String?
+  alarmTriggeredAt DateTime
+  /// SHA-256 of `ALARM:<alarmId>:<templateVersion>`; one explanation per alarm and template.
+  explanationId    String   @unique
+  templateVersion  String
+  recordSha256     String
+  recordJson       Json
+  generatedAt      DateTime
+  createdAt        DateTime @default(now())
+
+  @@unique([alarmId, templateVersion])
+  @@index([tenantId, cameraId, alarmTriggeredAt])
+}
+
+/// Phase 5 (P5.1): metadata for an object crop stored on disk by the CropStore. The bytes live under
+/// CROPS_DIR; relativePath and sha256 let the store verify them on read. Person crops exist only when
+/// the site policy allows them (SiteCropPolicy).
+model ObjectCrop {
+  id               String          @id @default(uuid())
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId         String
+  camera           Camera          @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  detectionEventId String?         @unique
+  detectionEvent   DetectionEvent? @relation(fields: [detectionEventId], references: [id], onDelete: SetNull)
+  /// PERSON | NON_PERSON (CHECK in the migration).
+  cropClass        String
+  objectClass      String
+  relativePath     String          @unique
+  sha256           String
+  byteLength       Int
+  capturedAt       DateTime
+  expiresAt        DateTime
+  createdAt        DateTime        @default(now())
+
+  @@index([expiresAt])
+  @@index([tenantId, cameraId, capturedAt])
+}
+
+/// Per-site switch for person crops (ADR 0005 decision 4). No row means the defaults: person crops off.
+/// Turning it on requires a recorded purpose and who acknowledged it (CHECK in the migration).
+model SiteCropPolicy {
+  siteId                 String    @id
+  site                   Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  personCropsEnabled     Boolean   @default(false)
+  acknowledgedPurpose    String?
+  acknowledgedByUserId   String?
+  acknowledgedAt         DateTime?
+  /// Null means the ADR default (14 days non-person, 7 days person).
+  nonPersonRetentionDays Int?
+  personRetentionDays    Int?
+  updatedAt              DateTime  @updatedAt
 }

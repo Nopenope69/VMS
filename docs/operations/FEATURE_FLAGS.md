@@ -34,6 +34,8 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `SMART_SEARCH` | `VIGILONE_FEATURE_SMART_SEARCH` | `/api/v1/search` |
 | `FLOORPLANS` | `VIGILONE_FEATURE_FLOORPLANS` | `/api/v1/floorplans` |
 | `CAMERA_EVENTS` | `VIGILONE_FEATURE_CAMERA_EVENTS` | `/api/v1/camera-events` (and the `cameraEventManager` worker; see `docs/operations/CAMERA_EVENTS.md`) |
+| `EXPLANATIONS` | `VIGILONE_FEATURE_EXPLANATIONS` | no routes: an explanation is generated for each new alarm and written into evidence packages (ADR 0005) |
+| `OBJECT_CROPS` | `VIGILONE_FEATURE_OBJECT_CROPS` | `/api/v1/crop-policy` (per-site person-crop switch and retention), crop capture on the detection path and the `cropPurger` worker (ADR 0005); person crops also need the per-site switch |
 
 Note: the ANPR router also checks the licence entitlement (`requireFeature('ANPR')` in
 `middleware/license.ts`). The feature flag is an operational switch; the licence is a commercial

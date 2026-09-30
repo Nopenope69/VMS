@@ -14,6 +14,7 @@ import { AiAdapterCore, AdapterError } from './adapter/adapterCore';
 import { ModelCardV1 } from './adapter/contract';
 import { eventTypeForClass } from './classMap';
 import { MetricsRegistry } from './metrics';
+import { cropToJpeg } from './cropExtractor';
 import {
   ModelManifestRecord,
   NormalizedDetectionEvent,
@@ -34,6 +35,8 @@ export interface AiWorkerConfig {
   /** Concurrency limits of the shared adapter core (stream pipeline + /v1/infer). */
   maxInFlight?: number;
   maxQueued?: number;
+  /** Attach a JPEG crop of each CONFIRMED detection for the backend crop store. Default OFF (AI_ATTACH_CROPS). */
+  attachCrops?: boolean;
 }
 
 export const AI_WORKER_ADAPTER_VERSION = '2.0.0-phase2';
@@ -67,6 +70,32 @@ export class AiWorker {
       },
       metrics
     );
+  }
+
+  private lastCropLog = 0;
+
+  /**
+   * Adds a JPEG crop to the event. Never throws: a crop is an extra, and a failure here must not
+   * stop the detection from being submitted. Failures are counted and logged (once a minute).
+   */
+  private async attachCrop(event: NormalizedDetectionEvent, frame: Buffer, geometry: FrameGeometry): Promise<void> {
+    const counter = 'vigilone_ai_crops_attached_total';
+    const help = 'Detection crops attached for the backend crop store, by outcome';
+    try {
+      const jpeg = await cropToJpeg(frame, geometry, event.boundingBox);
+      if (!jpeg) {
+        this.core.metrics.inc(counter, help, { outcome: 'too_small' });
+        return;
+      }
+      event.cropJpegBase64 = jpeg.toString('base64');
+      this.core.metrics.inc(counter, help, { outcome: 'attached' });
+    } catch (err: any) {
+      this.core.metrics.inc(counter, help, { outcome: 'failed' });
+      if (Date.now() - this.lastCropLog >= 60_000) {
+        this.lastCropLog = Date.now();
+        console.error(`[AiWorker] crop attach failed for ${event.objectClass ?? 'object'} on ${event.cameraId}; the detection is sent without it: ${err?.message || err}`);
+      }
+    }
   }
 
   public getApiClient(): AuthenticatedInternalApiClient {
@@ -204,7 +233,9 @@ export class AiWorker {
             event.trackFirstSeenAt = firstSeen.get(event.trackId)!.toISOString();
           }
           if (event.trackState === 'CONFIRMED') {
+            if (this.config.attachCrops === true) await this.attachCrop(event, frameData as Buffer, geometry!);
             await this.apiClient.submitDetection(event);
+            delete event.cropJpegBase64; // the returned events stay small
             this.core.metrics.inc('vigilone_ai_detections_submitted_total', 'Confirmed-track detections sent to the backend', { objectClass: event.objectClass || 'unknown' });
           }
         }

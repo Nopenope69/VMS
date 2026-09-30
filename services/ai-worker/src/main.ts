@@ -20,6 +20,8 @@
  *  BACKEND_INTERNAL_URL       e.g. http://backend:4000/api/v1/internal (pipeline mode)
  *  INTERNAL_API_SECRET        shared secret for the internal API (pipeline mode)
  *  AI_DETECT_FPS              frames per second sampled per camera (1..5, default 1)
+ *  AI_ATTACH_CROPS            'true' sends a JPEG crop with each CONFIRMED detection for the backend crop
+ *                             store (default false; the backend also needs VIGILONE_FEATURE_OBJECT_CROPS)
  *  AI_MAX_STREAMS             cameras processed concurrently (default 16)
  *  AI_INFERENCE_TIMEOUT_MS    per-frame deadline (default 1000)
  *  AI_GATE_MODE               motion gating: 'motion' (default) or 'off' (P2.5)
@@ -77,6 +79,7 @@ export async function boot(): Promise<BootResult> {
       internalSecret: env('INTERNAL_API_SECRET', '')!,
       adapterId: env('AI_ADAPTER_ID', 'vigilone-ai-worker'),
       schedulerOptions: { maxConcurrency: 2, timeoutMs: Number(env('AI_INFERENCE_TIMEOUT_MS', '1000')) },
+      attachCrops: env('AI_ATTACH_CROPS', 'false') === 'true',
     },
     undefined,
     metrics

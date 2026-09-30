@@ -115,6 +115,11 @@ export interface NormalizedDetectionEvent {
   timestamp: string;
   /** VigilOne v1 class (person, bicycle, motorcycle, car, bus, truck). */
   objectClass?: string;
+  /**
+   * JPEG crop of this detection (base64), attached only when AI_ATTACH_CROPS is on and only for
+   * CONFIRMED tracks. The backend keeps it only if its own flag and the site policy allow.
+   */
+  cropJpegBase64?: string;
   /** ai-adapter.v1 / events.v1 per-inference provenance (P2.6). */
   provenance?: {
     adapterId: string;
