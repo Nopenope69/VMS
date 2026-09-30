@@ -12,10 +12,11 @@ Branch `feat/phase5-siglip2` (from `master` `00a1786`). The Hugging Face hosts (
 `us.aws.cdn.hf.co`) were allowed, so the item that was BLOCKED_HUMAN in Session 5 is built. Operations:
 `docs/operations/SEMANTIC_SEARCH.md`.
 
-**Still not done, and only a person can do it:** (1) the licence approval. SigLIP 2's towers are candidate
-models (training data unpublished), so the product still refuses them. The approval entry in
-`scripts/models/model-license-exceptions.json` is deliberately not added by this change; it is a decision
-for the owner and is recorded there with their name. (2) Retrieval quality on site footage: NOT MEASURED.
+**Licence approval (added after this section was first written, 30 Sept 2026):** the repository owner
+approved both SigLIP 2 towers for product use and asked the coding agent to enter the approval. It is in
+`scripts/models/model-license-exceptions.json`, names the owner and says the agent entered it. It is a
+business decision, not a legal clearance: the training data (WebLI) is unpublished and has not been reviewed
+by counsel. **Still not done:** retrieval quality on site footage (NOT MEASURED).
 
 Pinned artefacts (SHA-256 computed from the files fetched here; `scripts/models/models.lock.json`):
 vision tower `c0573e3f4140c3a7c4e9cc5912bd6b26a033b46a6a8e8af26cbea262b163bcad`, text tower
@@ -35,13 +36,13 @@ dependency-licence gates exit 0. The one skipped backend test was already skippe
 | Pillow-exact preprocessing (`embedding/preprocess.ts`) | DONE_VERIFIED | `embeddingPreprocess.test.ts` 7/7: the resized 224x224 bytes equal Pillow 12.3.0 `Image.resize(BILINEAR)` on five synthetic images (enlarging, identity, mixed, shrinking, strong shrink) by SHA-256. Synthetic images only. |
 | Official-checkpoint reference (`tools/reference/siglip2_reference.py`) | DONE_VERIFIED | Ran with torch 2.14.0, transformers 5.17.0: the official processor equals PIL resize plus normalisation (max difference 0); the pinned ONNX towers equal the official PyTorch weights (5 images, 9 prompts): cosine at least 0.9999998, largest component difference 7.6e-6. Output committed in `fixtures/embedding/siglip2.reference.json`. |
 | Tokenizer (`@huggingface/tokenizers` 0.2.0, Apache-2.0) | DONE_VERIFIED on 9 prompts | Token IDs equal the official tokenizer's for English, mixed Latin and Devanagari, accents, empty, upper case and an over-long input (truncation keeps the end token, padding 0 to 64). The ADR listed emoji as a case; **no emoji fixture was tested**. |
-| Embedding pipeline, adapter core, boot mode, `POST /v1/embed-text` | DONE_VERIFIED | `goldenSiglip2.test.ts` 25/25 and `embeddingAdapter.test.ts` 24/24: the worker's own preprocessing, tokenizer and towers reproduce the official embeddings (cosine above 0.99999); refusals (wrong task, model, frame, blank or over-long text, wrong contract), runtime error, wrong-size vector, late answer, backpressure, FAILED health when unloaded; without an approval per tower it refuses (`LICENSE_REJECTED`), and an approval for another hash is refused. Approvals in tests are a TEST-ONLY temporary file, not a licence decision. |
+| Embedding pipeline, adapter core, boot mode, `POST /v1/embed-text` | DONE_VERIFIED | `goldenSiglip2.test.ts` 26/26 (25 before the approval was added) and `embeddingAdapter.test.ts` 24/24: the worker's own preprocessing, tokenizer and towers reproduce the official embeddings (cosine above 0.99999); refusals (wrong task, model, frame, blank or over-long text, wrong contract), runtime error, wrong-size vector, late answer, backpressure, FAILED health when unloaded; without an approval per tower it refuses (`LICENSE_REJECTED`), and an approval for another hash is refused. Approvals in tests are a TEST-ONLY temporary file, not a licence decision. |
 | Contract v1.1 text request; backend conformance | DONE_VERIFIED | `contracts/embeddingAdapterConformance.test.ts`: the real adapter core validates against the zod schemas, and the adapter and schema agree on valid text lengths. Docs updated. |
 | Text search `POST /api/v1/search/crops {text}` | DONE_VERIFIED against a stand-in adapter over HTTP, and with the real model | `cropSearchApiRealDb.test.ts` 17/17 (9 new): text embedded through the verified client, best match first, audited with the text; person text needs the permission and a purpose; other tenants never seen; blank, over-long and text-plus-crop refused before the adapter is called; 503 for an unreachable, erroring, wrong-model or unregistered adapter, 409 for a different requested model. |
 | End to end with the real model | DONE_VERIFIED | `semanticSearchRealModels.test.ts` 7/7: real adapter over HTTP, crop embedder, pgvector, Express. Four public-domain pictures; the text queries "astronaut", "cat", "cup of coffee" and "man with a camera on a tripod" each return the right picture first; every crop gets one 768-dim vector under the pipeline SHA-256. **This proves the pipeline, not retrieval quality on site footage.** |
 | Compose service `embedding-worker` (`--profile search`), CI | DONE_UNVERIFIED | `docker compose config` accepts it; no Docker daemon here, so it has not run in a container. CI now caches the 1.5 GB model files and runs the worker golden tests with the models required, and the end-to-end test in the `ai-e2e-scenario` job; those runs are pending. |
 | Memory and speed | measured once, on the build machine | Loading both towers peaked at about 3.7 GB RSS and settled near 2.2 GB; about 0.33 s per crop and 0.11 s per text query (4 cores, one thread). Not measured on reference hardware, so the 4.5 GB compose limit is an estimate. |
-| Licence entry for the towers | BLOCKED_HUMAN | See above. |
+| Licence entry for the towers | DONE (owner decision) | Entered at the owner's instruction on 30 Sept 2026; the licence gate lists both towers as approved, and `goldenSiglip2.test.ts` loads the pipeline through the product path with the repository's approvals file (and still refuses with an empty one). Not a legal clearance. |
 | Retrieval quality on site data | BLOCKED_HUMAN | Needs labelled site queries (`docs/operations/RETRIEVAL_LABELLING.md`). |
 
 ## Session 6 (2026-09-30): DPDP record, retrieval collection tooling, person-search permission

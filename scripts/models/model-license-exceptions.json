@@ -1,4 +1,19 @@
 {
   "$comment": "Human decisions only. A candidate model (models.lock.json candidateModels) may run in the product only if it is listed here with the approver's name, the date and the reason. The coding agent must never add entries. Every approval is re-checked against the model's SHA-256.",
-  "approvals": []
+  "approvals": [
+    {
+      "key": "siglip2-base-p16-224-vision",
+      "sha256": "c0573e3f4140c3a7c4e9cc5912bd6b26a033b46a6a8e8af26cbea262b163bcad",
+      "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 01CBjncYM8Qx21Ja96if5yCv",
+      "approvedAt": "2026-09-30",
+      "reason": "Owner decision to run SigLIP 2 base for crop and text search. Weights are Apache-2.0 upstream (google/siglip2-base-patch16-224); the pinned ONNX export matches the official checkpoint (tools/reference/siglip2_reference.py). Training data (WebLI) is unpublished and was not reviewed by counsel; this is a business decision, not a legal clearance. Person search remains governed by the DPDP decision record."
+    },
+    {
+      "key": "siglip2-base-p16-224-text",
+      "sha256": "baf12d941beabafafb14f7b4adb38dc15be18681b964a84410ec53d9d65e6293",
+      "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 01CBjncYM8Qx21Ja96if5yCv",
+      "approvedAt": "2026-09-30",
+      "reason": "Owner decision to run SigLIP 2 base for crop and text search. Weights are Apache-2.0 upstream (google/siglip2-base-patch16-224); the pinned ONNX export matches the official checkpoint (tools/reference/siglip2_reference.py). Training data (WebLI) is unpublished and was not reviewed by counsel; this is a business decision, not a legal clearance. Person search remains governed by the DPDP decision record."
+    }
+  ]
 }

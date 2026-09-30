@@ -1,9 +1,9 @@
 # Semantic crop search (Phase 5, ADR 0005)
 
 Status: **built, and shown to work end to end with the real SigLIP 2 model on public-domain pictures.
-The model is not yet approved to run in the product** (it is a candidate model: a human approval per
-SHA-256 is still missing, see "Turning it on"), and **retrieval quality on site data has not been
-measured.**
+The owner approved the model to run in the product on 30 Sept 2026** (a business decision recorded in
+`scripts/models/model-license-exceptions.json`, not a legal clearance; see "Turning it on"), and
+**retrieval quality on site data has not been measured.**
 
 ## What exists
 
@@ -52,10 +52,13 @@ measured.**
 2. Fetch the model files (about 1.5 GB, SHA-256 verified; the towers come from
    `huggingface.co`, which an air-gapped site must load another way):
    `scripts/models/fetch-model.sh siglip2-base-p16-224-vision` and `... siglip2-base-p16-224-text`.
-3. **A human approval is required.** The towers are candidate models because SigLIP 2's training data
-   (WebLI) is unpublished. The worker refuses to load them (`LICENSE_REJECTED`, health FAILED, nothing is
-   embedded) until `scripts/models/model-license-exceptions.json` holds an approval for the exact SHA-256 of
-   each tower, and the backend refuses to register the pipeline without the same approvals. The weights
+3. **A human approval is required, and has been given.** The towers are candidate models because SigLIP 2's
+   training data (WebLI) is unpublished. The worker refuses to load them (`LICENSE_REJECTED`, health FAILED,
+   nothing is embedded) unless `scripts/models/model-license-exceptions.json` holds an approval for the exact
+   SHA-256 of each tower, and the backend refuses to register the pipeline without the same approvals. The
+   repository owner approved both towers on 30 Sept 2026 (entered by the coding agent at the owner's
+   instruction; the entry says so). It is a business decision: counsel has not reviewed the training data.
+   A deployment that mounts its own approvals file (`VIGILONE_MODEL_EXCEPTIONS`) must carry the same entries. The weights
    themselves are Apache-2.0 upstream (`google/siglip2-base-patch16-224`); the ONNX repository this build
    uses states no licence of its own and points to that base model.
 4. Start the adapter: `docker compose --profile search up -d embedding-worker` (or
