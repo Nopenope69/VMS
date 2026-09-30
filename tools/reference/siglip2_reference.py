@@ -74,6 +74,7 @@ PROMPTS = [
     "",
     "A PHOTO OF A CAR",
     "café ünïcödé प्रवेश द्वार",
+    "a very long description of a white delivery van parked near the main gate " * 8,  # > 64 tokens: truncation
 ]
 
 

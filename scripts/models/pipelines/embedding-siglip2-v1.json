@@ -1,0 +1,26 @@
+{
+  "$comment": "Crop embeddings (Phase 5): SigLIP 2 base, patch 16, 224 px. The image tower embeds crops, the text tower embeds search text into the same 768-dim space. Components are candidate models; the worker refuses to run without a human approval for each SHA-256. The pipeline's SHA-256 (this file) is the model identity the backend registers and stores with every embedding.",
+  "name": "siglip2-base-p16-224",
+  "version": "1.0.0",
+  "tasks": [
+    "embedding"
+  ],
+  "components": [
+    {
+      "role": "image_encoder",
+      "key": "siglip2-base-p16-224-vision",
+      "sha256": "c0573e3f4140c3a7c4e9cc5912bd6b26a033b46a6a8e8af26cbea262b163bcad"
+    },
+    {
+      "role": "text_encoder",
+      "key": "siglip2-base-p16-224-text",
+      "sha256": "baf12d941beabafafb14f7b4adb38dc15be18681b964a84410ec53d9d65e6293"
+    }
+  ],
+  "dim": 768,
+  "text": {
+    "maxTokens": 64,
+    "lowercase": true,
+    "padTokenId": 0
+  }
+}
