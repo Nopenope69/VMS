@@ -83,6 +83,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | `adm-zip`, `globalthis`, `matcher`, `serialize-error`, `define-properties`, `gopd`, `escape-string-regexp`, `define-data-property`, `has-property-descriptors`, `object-keys`, `es-define-property`, `es-errors` | **MIT** | onnxruntime-node install/runtime helpers |
 | `global-agent` | **BSD-3-Clause** | onnxruntime-node proxy support |
 | `semver` | **ISC** | onnxruntime-node |
+| `@huggingface/tokenizers` 0.2.0 | **Apache-2.0** | SigLIP 2 text tokenizer (pure TypeScript, no dependencies) |
 | `type-fest` | **MIT OR CC0-1.0** (used under MIT) | type definitions |
 
 ### 3.2b AI models (weights are fetched by `scripts/models/fetch-model.sh`, pinned by SHA-256 in `scripts/models/models.lock.json`; not committed)
@@ -98,6 +99,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | PP-OCRv4 text detection (`ppocrv4-det`) | **Apache-2.0** | PaddleOCR, ONNX from the `rapidocr_onnxruntime` 1.4.4 wheel (Apache-2.0) | Training datasets not fully published; some public text datasets are research-only |
 | fast-plate-ocr `cct_s_v2_global` (`fast-plate-ocr-cct-s-v2`) | **MIT** | github.com/ankandrew/cnn-ocr-lp release `arg-plates` | Training data unpublished; India is not a listed region |
 | YuNet 2023mar (`yunet-2023mar`) | **MIT** | opencv/opencv_zoo | Trained on WIDER FACE, whose terms forbid commercial use of derived data |
+| SigLIP 2 base patch16-224 vision and text towers (`siglip2-base-p16-224-vision`, `-text`) | **Apache-2.0** (upstream `google/siglip2-base-patch16-224`; the ONNX repository's own card states no licence) | ONNX export by `onnx-community/siglip2-base-patch16-224-ONNX`, pinned commit `ba1f3b0843f2`; tokenizer file identical to the official one | Training data (WebLI) unpublished |
 
 ### 3.2c Test and evaluation tools (never shipped in the appliance)
 | Tool | License | Use |
@@ -108,6 +110,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | MailHog 1.0.1 | **MIT** | SMTP interop test server (binary, CI only) |
 | `rapidocr_onnxruntime` 1.4.4 (Python) | **Apache-2.0** | Reference DB text-detection post-processing for the ANPR golden tests |
 | `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
+| `torch` 2.14.0, `transformers` 5.17.0, `tokenizers`, `safetensors`, `sentencepiece`, `pillow` (Python) | **BSD-3-Clause**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **MIT-CMU (HPND)** | Reference embeddings and token IDs for the SigLIP 2 tests (`tools/reference/requirements-siglip2.txt`); never shipped |
 | `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
 | DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |
 | NASA portrait of Eileen Collins (`skimage/data/astronaut.png` from scikit-image 0.26.0, BSD-3-Clause package) | **Public domain** ("No known copyright restrictions, released into the public domain", scikit-image docs) | The only real-world image in the redaction test fixture; pinned by SHA-256 in `tools/redaction/make_fixtures.py` |

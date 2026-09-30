@@ -9,6 +9,7 @@
     "test": "../../backend/node_modules/.bin/jest --config jest.config.js"
   },
   "dependencies": {
+    "@huggingface/tokenizers": "0.2.0",
     "onnxruntime-node": "1.30.0"
   },
   "devDependencies": {

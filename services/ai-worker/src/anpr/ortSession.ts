@@ -29,7 +29,7 @@ export class OrtSession {
     }
   }
 
-  async run(feeds: Record<string, { type: 'float32' | 'uint8'; data: Float32Array | Uint8Array; dims: number[] }>): Promise<Record<string, { data: Float32Array; dims: number[] }>> {
+  async run(feeds: Record<string, { type: 'float32' | 'uint8' | 'int64'; data: Float32Array | Uint8Array | BigInt64Array; dims: number[] }>): Promise<Record<string, { data: Float32Array; dims: number[] }>> {
     const t: Record<string, any> = {};
     for (const [k, v] of Object.entries(feeds)) t[k] = new this.ort.Tensor(v.type, v.data, v.dims);
     const out = await this.session.run(t);

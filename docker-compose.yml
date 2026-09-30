@@ -293,6 +293,51 @@ services:
           cpus: '2.00'
           memory: 1024M
 
+  embedding-worker:
+    # Phase 5 crop and text embeddings (SigLIP 2 base, image + text towers) over ai-adapter.v1.1 for the
+    # backend's crop embedder and text search. Candidate models: refuses (FAILED health) without human
+    # approvals, so nothing is embedded. Enable with --profile search, then set
+    # VIGILONE_FEATURE_SEMANTIC_SEARCH=true and EMBEDDING_ADAPTER_URL=http://127.0.0.1:7013 on the backend.
+    # Memory: both towers are 1.5 GB of files; measured peak RSS while loading was about 3.7 GB and about
+    # 2.2 GB afterwards (docs/operations/SEMANTIC_SEARCH.md), hence the limit. Fetch the files first:
+    #   scripts/models/fetch-model.sh siglip2-base-p16-224-vision && scripts/models/fetch-model.sh siglip2-base-p16-224-text
+    build:
+      context: .
+      dockerfile: services/ai-worker/Dockerfile
+    image: vigilone-ai-worker:latest
+    container_name: vigilone-embedding-worker
+    profiles: ["search"]
+    restart: unless-stopped
+    network_mode: "service:backend"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=production
+      - AI_WORKER_MODE=embedding
+      - BACKEND_INTERNAL_URL=http://127.0.0.1:4000/api/v1/internal
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - VIGILONE_MODELS_DIR=/models
+      - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
+      - AI_ADAPTER_HOST=127.0.0.1
+      - AI_ADAPTER_PORT=7013
+      - AI_EXIT_ON_REFUSAL=false
+    volumes:
+      - ${VIGILONE_MODELS_DIR:-./.cache/models}:/models:ro
+      - ./scripts/models/model-license-exceptions.json:/run/vigilone/model-license-exceptions.json:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 4608M
+
   ai-worker:
     build:
       context: .

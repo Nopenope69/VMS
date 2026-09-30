@@ -1,6 +1,7 @@
 /**
  * P5.3 crop search API on the real Express app and pgvector database: flag and licence gating, RBAC,
- * tenant isolation, query by example, the refused text query, the purpose-limited and audited path for
+ * tenant isolation, query by example, text queries (through a stand-in embedding adapter over HTTP, so
+ * the real client checks run), the purpose-limited and audited path for
  * person crops, and the crop image endpoint (hash-checked). VECTORS ARE SYNTHETIC (see
  * cropEmbeddingStoreRealDb.test.ts); this tests the API around them, not retrieval quality.
  */
@@ -14,6 +15,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import http from 'http';
 import { PrismaClient } from '@prisma/client';
 import { createTenantWithCamera, createUserWithToken, startApp } from './helpers/realDb';
 import { signLicensePayload } from '../utils/license';
@@ -149,8 +151,9 @@ describe('P5.3 crop search API', () => {
     expect((await call(otherAdmin, 'POST', '', { cropId: crops.car1.id })).status).toBe(404); // not their crop
   });
 
-  it('a text query is refused with 501 TEXT_QUERY_NOT_AVAILABLE; malformed bodies are 400', async () => {
+  it('a text query without a configured embedding adapter is 501 TEXT_QUERY_NOT_AVAILABLE; malformed bodies are 400', async () => {
     process.env[FLAG] = 'true';
+    delete process.env.EMBEDDING_ADAPTER_URL;
     const t = await call(admin, 'POST', '', { text: 'red car near the gate' });
     expect([t.status, t.json.code]).toEqual([501, 'TEXT_QUERY_NOT_AVAILABLE']);
     for (const body of [{}, { cropId: crops.car1.id, embedding: crops.car1.vec }, { embedding: [1, 2, 3] }, { cropId: crops.car1.id, limit: 1000 }, { cropId: crops.car1.id, junk: 1 }, { cropId: crops.car1.id, minScore: 5 }]) {
@@ -237,5 +240,121 @@ describe('P5.3 crop search API', () => {
     } finally {
       await prisma.tenant.delete({ where: { id: c.tenantId } }).catch(() => undefined);
     }
+  });
+});
+
+describe('P5.3 text queries (stand-in embedding adapter over HTTP; vectors are SYNTHETIC)', () => {
+  let stub: http.Server;
+  let url = '';
+  const stubMode = { kind: 'ok' as 'ok' | 'wrongModel' | 'unregistered' | 'errorStatus', seenText: [] as string[] };
+  // What each query text "means": the vector of a stored crop, so the expected best hit is known.
+  const meaning = (t: string): number[] => (t.includes('person') ? crops.person1.vec : t.includes('truck') ? crops.truck.vec : crops.car1.vec);
+  const b64 = (v: number[]) => Buffer.from(Float32Array.from(v).buffer).toString('base64');
+
+  beforeAll(async () => {
+    stub = http.createServer((req, res) => {
+      const send = (o: unknown, status = 200) => { res.statusCode = status; res.end(JSON.stringify(o)); };
+      const card = () => ({ modelId: 'emb-1', name: stubMode.kind === 'unregistered' ? 'unregistered-model' : modelName, version: '1.0.0', sha256: stubMode.kind === 'unregistered' ? sha('unregistered') : modelSha, task: 'embedding', classes: ['embedding'], codeLicense: 'Apache-2.0', weightsLicense: 'Apache-2.0', weightsSource: 'SIMULATED stub', runtime: 'onnxruntime', input: { width: 224, height: 224, colorSpace: 'RGB', letterbox: false }, evaluation: null });
+      if (req.url === '/v1/health') return send({ contract: 'ai-adapter.v1', adapterId: 'stub', status: 'READY', loadedModelIds: ['emb-1'], lastError: null, observedAtUtc: new Date().toISOString() });
+      if (req.url === '/v1/descriptor') return send({ contract: 'ai-adapter.v1', adapterId: 'stub', adapterVersion: 't', tasks: ['embedding'], requiresNetworkEgress: false, models: [card()] });
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const rq = JSON.parse(body);
+        if (req.url !== '/v1/embed-text') return send({ error: 'not found' }, 404);
+        stubMode.seenText.push(rq.text);
+        if (stubMode.kind === 'errorStatus') return send({ contract: 'ai-adapter.v1', status: 'error', requestId: rq.requestId, errorCode: 'OVERLOADED', message: 'busy', retryable: true }, 429);
+        const wrong = stubMode.kind === 'wrongModel';
+        return send({
+          contract: 'ai-adapter.v1', status: 'ok', requestId: rq.requestId, detections: [],
+          embedding: { dim: EMBEDDING_DIM, encoding: 'float32_base64', vector: b64(meaning(rq.text)), normalized: false },
+          provenance: { adapterId: 'stub', adapterVersion: 't', modelId: 'emb-1', modelName: wrong ? 'some-other-model' : modelName, modelVersion: '1.0.0', modelSha256: wrong ? sha('other') : modelSha, runtime: 'onnxruntime', inferenceId: crypto.randomUUID(), frameTimestampUtc: new Date().toISOString() },
+          latencyMs: 1,
+        });
+      });
+    });
+    await new Promise<void>((r) => stub.listen(0, '127.0.0.1', () => r()));
+    url = `http://127.0.0.1:${(stub.address() as any).port}`;
+  });
+  afterAll(() => new Promise<void>((r) => stub.close(() => r())));
+  beforeEach(() => {
+    process.env[FLAG] = 'true';
+    process.env.EMBEDDING_ADAPTER_URL = url;
+    stubMode.kind = 'ok';
+    stubMode.seenText.length = 0;
+  });
+  afterEach(() => {
+    delete process.env.EMBEDDING_ADAPTER_URL;
+  });
+
+  it('embeds the text through the adapter and returns the nearest non-person crops; the query text is audited', async () => {
+    const r = await call(viewer, 'POST', '', { text: '  a red truck  ', limit: 5 });
+    expect(r.status).toBe(200);
+    expect(stubMode.seenText).toEqual(['a red truck']);
+    expect(r.json.hits[0].cropId).toBe(crops.truck.id);
+    expect(r.json.hits.map((h: any) => h.cropId)).not.toContain(crops.person1.id);
+    expect(r.json.hits.map((h: any) => h.cropId)).not.toContain(crops.foreign.id);
+    expect(r.json.model.sha256).toBe(modelSha);
+    const audit = await prisma.auditEvent.findFirstOrThrow({ where: { tenantId, action: 'CROP_SEARCH_QUERY' }, orderBy: { sequenceNumber: 'desc' } });
+    expect(audit.metadataJson).toMatchObject({ queryKind: 'text', queryText: 'a red truck', queryCropId: null, modelSha256: modelSha });
+  });
+
+  it('naming the model that the text encoder serves is fine; naming another is 409', async () => {
+    expect((await call(admin, 'POST', '', { text: 'car', modelSha256: modelSha })).status).toBe(200);
+    const other = await call(admin, 'POST', '', { text: 'car', modelSha256: sha('another-model') });
+    expect([other.status, other.json.code]).toEqual([409, 'TEXT_MODEL_MISMATCH']);
+  });
+
+  it('text that matches people is person access: permission, purpose, audit with the text', async () => {
+    const body = { text: 'a person in a red jacket', includePersons: true, personsOnly: true };
+    expect((await call(viewer, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    expect((await call(operator, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN'); // administrators only
+    expect((await call(admin, 'POST', '', body)).json.code).toBe('PURPOSE_REQUIRED');
+    const before = await prisma.auditEvent.count({ where: { tenantId, action: 'CROP_PERSON_SEARCH_QUERY' } });
+    const ok = await call(admin, 'POST', '', body, purpose);
+    expect(ok.status).toBe(200);
+    expect(ok.json.hits.map((h: any) => h.cropId)).toEqual([crops.person1.id, crops.person2.id]); // the text is not a stored crop, so nothing is excluded
+    expect(await prisma.auditEvent.count({ where: { tenantId, action: 'CROP_PERSON_SEARCH_QUERY' } })).toBe(before + 1);
+    const audit = await prisma.auditEvent.findFirstOrThrow({ where: { tenantId, action: 'CROP_PERSON_SEARCH_QUERY' }, orderBy: { sequenceNumber: 'desc' } });
+    expect(audit.metadataJson).toMatchObject({ purpose: 'SECURITY_INCIDENT_INVESTIGATION', queryKind: 'text', queryText: 'a person in a red jacket' });
+  });
+
+  it('person text without asking for persons never returns person crops', async () => {
+    const r = await call(admin, 'POST', '', { text: 'a person walking' });
+    expect(r.status).toBe(200);
+    expect(r.json.hits.every((h: any) => h.cropClass === 'NON_PERSON')).toBe(true);
+  });
+
+  it('the other tenant only ever sees its own crops', async () => {
+    const r = await call(otherAdmin, 'POST', '', { text: 'a car' });
+    expect(r.json.hits.map((h: any) => h.cropId)).toEqual([crops.foreign.id]);
+  });
+
+  it.each([
+    ['blank text', { text: '   ' }],
+    ['text longer than 512 characters', { text: 'x'.repeat(513) }],
+    ['text together with a crop id', { text: 'car', cropId: 'use-car1' }],
+  ])('refuses %s (400 INVALID_SEARCH)', async (_n, body: { text: string; cropId?: string }) => {
+    const r = await call(admin, 'POST', '', body.cropId ? { ...body, cropId: crops.car1.id } : body);
+    expect([r.status, r.json.code]).toEqual([400, 'INVALID_SEARCH']);
+    expect(stubMode.seenText).toEqual([]); // nothing was sent to the adapter
+  });
+
+  it('an adapter that is down, errors, serves another model or an unregistered model gives 503, never a result', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    stubMode.kind = 'errorStatus';
+    let r = await call(admin, 'POST', '', { text: 'car' });
+    expect([r.status, r.json.code]).toEqual([503, 'EMBEDDING_ADAPTER_UNAVAILABLE']);
+    stubMode.kind = 'wrongModel';
+    r = await call(admin, 'POST', '', { text: 'car' });
+    expect([r.status, r.json.code]).toEqual([503, 'EMBEDDING_ADAPTER_INVALID']);
+    stubMode.kind = 'unregistered';
+    r = await call(admin, 'POST', '', { text: 'car' });
+    expect([r.status, r.json.code]).toEqual([503, 'EMBEDDING_MODEL_NOT_REGISTERED']);
+    process.env.EMBEDDING_ADAPTER_URL = 'http://127.0.0.1:1'; // nothing listens
+    stubMode.kind = 'ok';
+    r = await call(admin, 'POST', '', { text: 'car' });
+    expect([r.status, r.json.code]).toEqual([503, 'EMBEDDING_ADAPTER_UNAVAILABLE']);
+    jest.restoreAllMocks();
   });
 });

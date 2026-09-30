@@ -10,6 +10,9 @@
  *  - redaction / redaction-adapter-only: face and plate regions for redaction (P4.4), default
  *    port 7012. 'redaction' registers the pipeline manifest with the backend; the backend's
  *    redaction jobs call this adapter over HTTP. No cameras are read in this mode.
+ *  - embedding / embedding-adapter-only: SigLIP 2 crop and text embeddings (Phase 5), default port
+ *    7013. 'embedding' registers the pipeline manifest with the backend; the backend's crop embedder
+ *    and text search call this adapter over HTTP. No cameras are read in this mode.
  *
  * Environment:
  *  AI_MODEL_KEY               lock-file key of the model to install/register (default: lock default)
@@ -43,6 +46,8 @@ import { AnprAdapterCore } from './anpr/anprAdapterCore';
 import { LprRunner } from './anpr/lprRunner';
 import { loadRedactionPipeline, LoadedRedactionPipeline } from './redaction/redactionPipeline';
 import { RedactionAdapterCore } from './redaction/redactionAdapterCore';
+import { loadEmbeddingPipeline, LoadedEmbeddingPipeline } from './embedding/embeddingPipeline';
+import { EmbeddingAdapterCore } from './embedding/embeddingAdapterCore';
 import { AuthenticatedInternalApiClient as ApiClient } from './apiClient';
 import { ortRuntimeVersion } from './runtimeInfo';
 
@@ -69,6 +74,7 @@ export async function boot(): Promise<BootResult> {
   const mode = env('AI_WORKER_MODE', 'pipeline');
   if (mode === 'anpr' || mode === 'anpr-adapter-only') return bootAnpr(mode);
   if (mode === 'redaction' || mode === 'redaction-adapter-only') return bootRedaction(mode);
+  if (mode === 'embedding' || mode === 'embedding-adapter-only') return bootEmbedding(mode);
   const lock = readModelLock();
   const key = env('AI_MODEL_KEY', lock.default)!;
   const localEntry = findLockEntry(key, lock);
@@ -370,5 +376,67 @@ async function bootRedaction(mode: 'redaction' | 'redaction-adapter-only'): Prom
   });
   core.setModelId(registered.id);
   log('info', 'redaction pipeline registered', { modelId: registered.id });
+  return { worker: null as any, close, port: boundPort };
+}
+
+/**
+ * Embedding service (Phase 5): SigLIP 2 image and text towers. Like ANPR and redaction, the models are
+ * candidates: without a human approval for each SHA-256 it refuses (LICENSE_REJECTED) and serves FAILED
+ * health, so the backend embeds nothing rather than something unverified.
+ */
+async function bootEmbedding(mode: 'embedding' | 'embedding-adapter-only'): Promise<BootResult> {
+  const adapterId = env('AI_ADAPTER_ID', 'vigilone-embedding')!;
+  let loaded: LoadedEmbeddingPipeline | null = null;
+  let failure: string | undefined;
+  try {
+    loaded = await loadEmbeddingPipeline();
+    log('info', 'embedding pipeline loaded', { pipeline: `${loaded.definition.name}@${loaded.definition.version}`, sha256: loaded.definitionSha256 });
+  } catch (e: any) {
+    failure = e.message;
+    log('error', 'embedding pipeline refused', { error: e.message });
+  }
+  const core = new EmbeddingAdapterCore(loaded, { adapterId, adapterVersion: '1.0.0-phase5', failure });
+  const server = createAdapterServer(core);
+  const host = env('AI_ADAPTER_HOST', '127.0.0.1')!;
+  const port = Number(env('AI_ADAPTER_PORT', '7013'));
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  const boundPort = (server.address() as any).port as number;
+  log('info', 'ai-adapter.v1 (embedding) listening', { host, port: boundPort, mode });
+  const close = async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  };
+  if (!loaded) {
+    if (env('AI_EXIT_ON_REFUSAL', 'true') === 'true') {
+      await close();
+      process.exit(EXIT_MODEL_REFUSED);
+    }
+    return { worker: null as any, close, port: boundPort };
+  }
+  if (mode === 'embedding-adapter-only') return { worker: null as any, close, port: boundPort };
+
+  if (!env('INTERNAL_API_SECRET')) throw new Error('INTERNAL_API_SECRET is required in embedding mode');
+  const api = new ApiClient({ baseUrl: env('BACKEND_INTERNAL_URL', 'http://127.0.0.1:4000/api/v1/internal')!, internalSecret: env('INTERNAL_API_SECRET')! });
+  const l = loaded;
+  const approvals = l.components.map((c) => c.approval!).filter(Boolean);
+  const registered = await api.registerPipelineManifest({
+    name: l.definition.name,
+    version: l.definition.version,
+    sha256: l.definitionSha256,
+    task: 'embedding',
+    codeLicense: [...new Set(l.components.map((c) => c.entry.codeLicense))].join(' AND '),
+    weightLicense: [...new Set(l.components.map((c) => c.entry.weightLicense))].join(' AND '),
+    weightsSource: l.components.map((c) => `${c.role}: ${c.entry.weightsSource}`).join('; '),
+    trainingData: {
+      source: l.components.map((c) => `${c.role}: ${c.entry.trainingData.source}`).join('; '),
+      license: 'HUMAN-APPROVED EXCEPTION',
+      provenance: approvals.map((a) => `${a.key} approved by ${a.approvedBy} on ${a.approvedAt}: ${a.reason}`).join('; '),
+      commercialUse: true,
+    },
+    runtimeConfig: { runtime: 'onnxruntime', runtimeVersion: ortRuntimeVersion(), executionProvider: 'cpu', inputWidth: 224, inputHeight: 224, colorSpace: 'RGB', modelFormat: 'ONNX' },
+    modelSignature: { decoder: 'embedding_pipeline', components: l.definition.components },
+    classes: { '0': 'embedding' },
+  });
+  core.setModelId(registered.id);
+  log('info', 'embedding pipeline registered', { modelId: registered.id });
   return { worker: null as any, close, port: boundPort };
 }

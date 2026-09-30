@@ -10,12 +10,43 @@ import { recordSensitiveQuery, requirePurpose } from '../services/privacy/dataPr
 import { CropStore } from '../services/crops/cropStore';
 import { cropsRoot } from '../services/crops/cropCapture.service';
 import { EMBEDDING_DIM, EmbeddingError, MAX_RESULTS, searchSimilar, searchSimilarToCrop, SearchFilters } from '../services/search/cropEmbeddingStore';
+import { EmbeddingAdapterClient, EmbeddingResult } from '../services/search/embeddingAdapterClient';
+import { embeddingAdapterUrl } from '../services/search/embeddingWorkers';
+
+/** Embeds query text with the verified embedding adapter; null when no adapter is configured. */
+export type TextEmbedder = (text: string) => Promise<EmbeddingResult>;
+const MAX_QUERY_TEXT = 512;
+
+function defaultTextEmbedder(): TextEmbedder | null {
+  let url: string;
+  try {
+    url = embeddingAdapterUrl();
+  } catch {
+    return null;
+  }
+  return async (text) => {
+    // Verify health, descriptor and registry on every query: it is cheap next to an inference, and a model
+    // swapped under us is caught instead of compared against the wrong vectors.
+    const client = new EmbeddingAdapterClient(prisma, url, 10000);
+    await client.connect();
+    return client.embedText(text);
+  };
+}
+let textEmbedderOverride: TextEmbedder | null | undefined;
+/** Test hook: replace (or with null, remove) the text embedder. undefined restores the default. */
+export function setTextEmbedderForTests(fn: TextEmbedder | null | undefined) {
+  textEmbedderOverride = fn;
+}
+const textEmbedder = (): TextEmbedder | null => (textEmbedderOverride !== undefined ? textEmbedderOverride : defaultTextEmbedder());
 
 /**
  * /api/v1/search/crops, behind VIGILONE_FEATURE_SEMANTIC_SEARCH (app.ts) and the ADVANCED_SEARCH licence.
  *
- *  - Query by example only: a stored crop (`cropId`) or a raw vector (`embedding`). A text query is refused
- *    with 501 TEXT_QUERY_NOT_AVAILABLE: there is no text encoder installed, and nothing pretends otherwise.
+ *  - Query by example (a stored crop `cropId` or a raw vector `embedding`) or by `text`. A text query is
+ *    embedded by the embedding adapter's text tower (the same model that embeds crops, so the vectors are
+ *    comparable); without EMBEDDING_ADAPTER_URL it is refused with 501 TEXT_QUERY_NOT_AVAILABLE, and if the
+ *    adapter is down or serves an unregistered model it is 503, never a guess. Text matching people is
+ *    person access like any other: it needs the person permission and a purpose, and the text is audited.
  *  - Non-person crops need SEARCH_VIEW. Anything involving PERSON crops (asking for them, using one as the
  *    example, or viewing one) also needs CROP_PERSON_QUERY and a declared, allowed purpose, and is written
  *    to the audit chain with that purpose (DPDP: appearance search over people behaves like profiling).
@@ -61,7 +92,8 @@ const Body = z
 
 const fail = (res: Response, err: any) => {
   if (err instanceof EmbeddingError) {
-    const status = err.code === 'EMBEDDING_NOT_FOUND' || err.code === 'EMBEDDING_CROP_NOT_FOUND' ? 404 : 400;
+    const unavailable = ['EMBEDDING_ADAPTER_UNAVAILABLE', 'EMBEDDING_ADAPTER_INVALID', 'EMBEDDING_MODEL_NOT_REGISTERED'].includes(err.code);
+    const status = unavailable ? 503 : err.code === 'EMBEDDING_NOT_FOUND' || err.code === 'EMBEDDING_CROP_NOT_FOUND' ? 404 : 400;
     return res.status(status).json({ error: err.message, code: err.code });
   }
   return res.status(500).json({ error: err.message });
@@ -71,14 +103,24 @@ router.post('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Re
   const p = Body.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.') || 'body'}: ${p.error.issues[0].message}`, code: 'INVALID_SEARCH' });
   const b = p.data;
-  if (b.text !== undefined) {
-    return res.status(501).json({ error: 'Text queries need a text encoder, which is not installed. Search by example (cropId or embedding).', code: 'TEXT_QUERY_NOT_AVAILABLE' });
-  }
-  if ((b.cropId ? 1 : 0) + (b.embedding ? 1 : 0) !== 1) return res.status(400).json({ error: 'give exactly one of cropId or embedding', code: 'INVALID_SEARCH' });
+  if ((b.cropId ? 1 : 0) + (b.embedding ? 1 : 0) + (b.text !== undefined ? 1 : 0) !== 1) return res.status(400).json({ error: 'give exactly one of cropId, embedding or text', code: 'INVALID_SEARCH' });
+  const queryText = b.text?.trim();
+  if (b.text !== undefined && (!queryText || queryText.length > MAX_QUERY_TEXT)) return res.status(400).json({ error: `text must be 1 to ${MAX_QUERY_TEXT} characters and not blank`, code: 'INVALID_SEARCH' });
   const tenantId = req.user!.tenantId;
   try {
-    // Which model: the caller's choice, else the most recently used one for this tenant.
+    let queryVector: Float32Array | undefined;
     let modelSha256 = b.modelSha256;
+    if (queryText) {
+      const embed = textEmbedder();
+      if (!embed) return res.status(501).json({ error: 'Text queries need the embedding adapter (EMBEDDING_ADAPTER_URL is not set). Search by example (cropId or embedding).', code: 'TEXT_QUERY_NOT_AVAILABLE' });
+      // The text is matched against the model that embedded it; asking for another model's vectors cannot work.
+      // (Person access is checked below, before anything is answered, so this does not reveal person data.)
+      const r = await embed(queryText);
+      if (modelSha256 && modelSha256 !== r.model.sha256) return res.status(409).json({ error: `the text encoder serves model ${r.model.sha256}, not the requested ${modelSha256}`, code: 'TEXT_MODEL_MISMATCH' });
+      modelSha256 = r.model.sha256;
+      queryVector = r.vector;
+    }
+    // Which model: the caller's choice, else the most recently used one for this tenant.
     if (!modelSha256) {
       const last = await prisma.cropEmbedding.findFirst({ where: { tenantId }, orderBy: { createdAt: 'desc' }, select: { modelSha256: true } });
       if (!last) return res.status(404).json({ error: 'no crop has been embedded yet', code: 'NO_EMBEDDINGS' });
@@ -107,11 +149,12 @@ router.post('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Re
       minScore: b.minScore,
       exact: b.exact,
     };
-    const result = b.cropId ? await searchSimilarToCrop(prisma, b.cropId, filters) : await searchSimilar(prisma, b.embedding!, filters);
+    const result = b.cropId ? await searchSimilarToCrop(prisma, b.cropId, filters) : await searchSimilar(prisma, queryVector ?? Float32Array.from(b.embedding!), filters);
     const model = await prisma.cropEmbedding.findFirst({ where: { tenantId, modelSha256 }, select: { modelName: true, modelVersion: true, modelSha256: true } });
     const details = {
-      queryKind: b.cropId ? 'crop' : 'vector',
+      queryKind: b.cropId ? 'crop' : queryText ? 'text' : 'vector',
       queryCropId: b.cropId ?? null,
+      queryText: queryText ?? null,
       modelSha256,
       mode: result.mode,
       filters: { cameraIds: b.cameraIds ?? null, from: b.from ?? null, to: b.to ?? null, objectClasses: b.objectClasses ?? null, includePersons: b.includePersons === true, personsOnly: b.personsOnly === true, minScore: b.minScore ?? null },

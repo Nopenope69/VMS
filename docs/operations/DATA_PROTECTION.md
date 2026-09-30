@@ -101,7 +101,9 @@ Off unless `VIGILONE_FEATURE_SEMANTIC_SEARCH=true`. Details, setup and limits ar
   `CROP_PERSON_QUERY` permission and a declared, allowed purpose (and a reference where the purpose
   needs one), and every such query and every person-crop image view is written to the audit chain
   (`CROP_PERSON_SEARCH_QUERY`, `CROP_PERSON_IMAGE_VIEW`) with that purpose. Other crop searches are
-  audited as `CROP_SEARCH_QUERY`. The audit entry is written before the answer is returned.
+  audited as `CROP_SEARCH_QUERY`. The audit entry is written before the answer is returned. A text
+  query ("a person in a red jacket") is the same kind of access when it asks for people, and the audit
+  entry records the query text itself, so an operator's free text is stored in the tamper-evident chain.
 * Results never cross tenants, and a search names exactly one embedding model.
 * Appearance search over people can behave like profiling even without face recognition. Whether and
   where a deployment may turn it on is its own DPDP decision; this is not legal advice. A proposed
