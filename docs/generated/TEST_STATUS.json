@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T07:55:12.030Z",
-  "commit": "3e6dc6b8b3a6f0421b7a71ec63d6d48b9c89f865",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36686196918",
+  "generatedAt": "2026-09-30T08:16:27.020Z",
+  "commit": "46433ff0a436b7600fee7432dec8a20aeb5a0c41",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36688424227",
   "projects": [
     {
       "name": "backend",
@@ -974,9 +974,9 @@
         "failed": 2
       },
       "tests": {
-        "total": 238,
+        "total": 239,
         "passed": 203,
-        "failed": 26,
+        "failed": 27,
         "skipped": 9
       },
       "success": false,
@@ -1069,7 +1069,7 @@
           "file": "services/ai-worker/src/__tests__/goldenSiglip2.test.ts",
           "status": "failed",
           "passed": 0,
-          "failed": 25,
+          "failed": 26,
           "skipped": 0
         },
         {
@@ -1182,9 +1182,9 @@
   ],
   "totals": {
     "suites": 163,
-    "tests": 1198,
+    "tests": 1199,
     "passed": 1156,
-    "failed": 26,
+    "failed": 27,
     "skipped": 16
   },
   "allPassed": false
