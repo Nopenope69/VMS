@@ -36,6 +36,12 @@ depends on a model directly.
     deadlineMs }`. The answer is an ordinary `ok` result with `embedding` set, empty `detections` and
     provenance naming the same model that embeds images, so the two vectors are comparable. An adapter
     without a text tower answers 404. Errors use the same codes and HTTP statuses as `/v1/infer`.
+  - `vlm_verification` (v1.1, additive and optional): the request carries `vlmQuery: { targetClass }` (a
+    lower-case class name the adapter lists in its model card's `classes`; no free-text prompt) and a `jpeg`
+    frame; `vlmQuery` is refused on any other task and required on this one. The `ok` result carries
+    `verification: { targetClass, answer: yes | no | unclear, reason, promptSha256 }` and empty
+    `detections`. The answer is advisory: a consumer must never change an alarm because of it. A model card
+    may name `llama.cpp` as its runtime.
   - `error`: `errorCode` (`MODEL_NOT_LOADED`, `MODEL_INTEGRITY_FAILED`, `LICENSE_REJECTED`,
     `UNSUPPORTED_TASK`, `INVALID_FRAME`, `DEADLINE_EXCEEDED`, `RUNTIME_ERROR`, `OVERLOADED`),
     `message`, `retryable`. An error never carries detections.

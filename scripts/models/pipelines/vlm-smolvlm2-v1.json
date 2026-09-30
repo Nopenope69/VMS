@@ -1,0 +1,54 @@
+{
+  "$comment": "Alarm second opinion (Phase 5 Wave C): SmolVLM2 2.2B served by llama.cpp's llama-server, started by the ai-worker with the files it verified. Advisory only: the answer is shown to operators and never changes an alarm. The SHA-256 of this file is the model identity stored with every verification, so the prompt template, generation settings and llama.cpp build are part of it.",
+  "name": "smolvlm2-2.2b-alarm-check",
+  "version": "1.0.0",
+  "tasks": [
+    "vlm_verification"
+  ],
+  "components": [
+    {
+      "role": "vlm_language_model",
+      "key": "smolvlm2-2.2b-instruct-q4km",
+      "sha256": "0cf76814555b8665149075b74ab6b5c1d428ea1d3d01c1918c12012e8d7c9f58"
+    },
+    {
+      "role": "vlm_projector",
+      "key": "smolvlm2-2.2b-instruct-mmproj-q8",
+      "sha256": "ae07ea1facd07dd3230c4483b63e8cda96c6944ad2481f33d531f79e892dd024"
+    }
+  ],
+  "llamaCpp": {
+    "tag": "b11277",
+    "commit": "eae11d2217fe9225d1aaba48773b6cca45ae4de9",
+    "repository": "https://github.com/ggml-org/llama.cpp"
+  },
+  "generation": {
+    "temperature": 0,
+    "seed": 42,
+    "maxTokens": 96,
+    "contextSize": 4096
+  },
+  "prompt": {
+    "templateVersion": "vlm-alarm-check.v1",
+    "system": "You check security camera alarms. Answer only about what is visible in the image.",
+    "question": "Is there a {targetClass} in this image? Answer yes, no or unclear, with a short reason.",
+    "reasonMaxChars": 160
+  },
+  "targetClasses": [
+    "person",
+    "car",
+    "truck",
+    "bus",
+    "motorcycle",
+    "bicycle",
+    "auto rickshaw",
+    "dog",
+    "cat",
+    "cow",
+    "fire",
+    "smoke",
+    "backpack",
+    "handbag",
+    "suitcase"
+  ]
+}

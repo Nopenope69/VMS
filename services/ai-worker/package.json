@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "../../backend/node_modules/.bin/tsc",
-    "test": "../../backend/node_modules/.bin/jest --config jest.config.js"
+    "test": "../../backend/node_modules/.bin/jest --config jest.config.js --runInBand"
   },
   "dependencies": {
     "@huggingface/tokenizers": "0.2.0",

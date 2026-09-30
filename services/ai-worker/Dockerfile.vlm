@@ -1,0 +1,51 @@
+# VigilOne alarm second opinion (Phase 5 Wave C): the ai-worker in `vlm` mode plus llama-server built from
+# the pinned llama.cpp commit (scripts/models/pipelines/vlm-smolvlm2-v1.json). Build from the repository root:
+#   docker build -f services/ai-worker/Dockerfile.vlm -t vigilone-vlm-worker .
+# The worker starts llama-server itself with model files it has verified; models arrive on a read-only volume.
+
+FROM debian:bookworm-slim AS llama
+ARG LLAMA_CPP_TAG=b11277
+ARG LLAMA_CPP_COMMIT=eae11d2217fe9225d1aaba48773b6cca45ae4de9
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates cmake g++ make \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+# Fail the build if the tag no longer points at the pinned commit.
+RUN git clone --depth 1 --branch "$LLAMA_CPP_TAG" https://github.com/ggml-org/llama.cpp . \
+    && test "$(git rev-parse HEAD)" = "$LLAMA_CPP_COMMIT" \
+    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_TESTS=OFF \
+    && cmake --build build -j"$(nproc)" --target llama-server
+
+FROM node:20-bookworm-slim AS builder
+WORKDIR /build
+COPY services/ai-worker/package.json services/ai-worker/package-lock.json ./
+ENV ONNXRUNTIME_NODE_INSTALL=skip
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY services/ai-worker/tsconfig.json services/ai-worker/tsconfig.build.json ./
+COPY services/ai-worker/src ./src
+RUN npx tsc -p tsconfig.build.json
+
+FROM node:20-bookworm-slim AS runner
+# ffmpeg validates JPEG frames before they reach the model.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates libgomp1 libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 vigilone && useradd -u 10001 -g vigilone -M -s /usr/sbin/nologin vigilone
+WORKDIR /app
+ENV NODE_ENV=production \
+    ONNXRUNTIME_NODE_INSTALL=skip \
+    VIGILONE_MODELS_DIR=/models \
+    VIGILONE_MODEL_LOCK=/app/models.lock.json \
+    VLM_LLAMA_SERVER_BIN=/usr/local/bin/llama-server \
+    AI_WORKER_MODE=vlm \
+    AI_ADAPTER_HOST=127.0.0.1 \
+    AI_ADAPTER_PORT=7014
+COPY services/ai-worker/package.json services/ai-worker/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev && npm cache clean --force
+COPY --from=builder /build/dist ./dist
+COPY --from=llama /src/build/bin/llama-server /usr/local/bin/llama-server
+COPY scripts/models/models.lock.json /app/models.lock.json
+COPY scripts/models/pipelines /app/pipelines
+USER vigilone:vigilone
+EXPOSE 7014
+HEALTHCHECK --interval=15s --timeout=3s --start-period=180s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.AI_ADAPTER_PORT||7014)+'/v1/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+CMD ["node", "dist/main.js"]

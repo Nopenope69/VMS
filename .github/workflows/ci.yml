@@ -183,6 +183,29 @@ jobs:
           # SigLIP 2 candidate models (tests only, same rule)
           scripts/models/fetch-model.sh siglip2-base-p16-224-vision && scripts/models/fetch-model.sh siglip2-base-p16-224-text
 
+      # llama-server for the VLM second opinion, built from the commit pinned in the pipeline file. The cache
+      # key is that file, so a new pin rebuilds; the build step checks the tag still points at the commit.
+      - name: Cache llama.cpp build and VLM model files
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/llama.cpp/build/bin/llama-server
+            .cache/models/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf
+            .cache/models/mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf
+          key: vlm-${{ hashFiles('scripts/models/pipelines/vlm-smolvlm2-v1.json') }}
+
+      - name: Build llama-server (pinned llama.cpp) and fetch SmolVLM2 (SHA-256 verified)
+        run: |
+          TAG=$(node -p "require('./scripts/models/pipelines/vlm-smolvlm2-v1.json').llamaCpp.tag")
+          COMMIT=$(node -p "require('./scripts/models/pipelines/vlm-smolvlm2-v1.json').llamaCpp.commit")
+          if [ ! -x /tmp/llama.cpp/build/bin/llama-server ]; then
+            git clone --depth 1 --branch "$TAG" https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+            test "$(git -C /tmp/llama.cpp rev-parse HEAD)" = "$COMMIT"
+            cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_TESTS=OFF
+            cmake --build /tmp/llama.cpp/build -j"$(nproc)" --target llama-server
+          fi
+          scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-q4km && scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-mmproj-q8
+
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
         run: npm run build
@@ -191,6 +214,7 @@ jobs:
         working-directory: ./services/ai-worker
         env:
           VIGILONE_REQUIRE_MODEL_TESTS: '1'
+          VLM_LLAMA_SERVER_BIN: /tmp/llama.cpp/build/bin/llama-server
         run: npm test
 
       - name: ai-adapter.v1 conformance against the real worker
