@@ -335,6 +335,16 @@ jobs:
         working-directory: ./backend
         run: npm run check:dependency-licenses
 
+      # Phase 8 certification preparation: CycloneDX SBOM of npm packages, pinned AI models and container images.
+      - name: Release SBOM (CycloneDX)
+        run: node scripts/release/generate-sbom.mjs dist-sbom
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: vigilone-sbom
+          path: dist-sbom/
+
   field-tooling-checks:
     name: Field Validation Tooling (bench, fault, soak, acceptance)
     runs-on: ubuntu-latest
