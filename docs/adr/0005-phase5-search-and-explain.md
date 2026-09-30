@@ -55,3 +55,9 @@ Phase 5 adds explanation records, semantic search over object crops, and local V
 - Not built, and blocked: the SigLIP 2 adapter, its pinned hash and licence entry, the tokenizer reference-ID tests, and text search. They need the model files from Hugging Face, which this environment's network policy denies.
 - An embedding is deleted with its crop (foreign-key cascade), so crop retention, evidence holds and the person-crop switch govern it. A person crop is embedded only while its site still has person crops enabled.
 
+
+## Implementation notes (SigLIP 2 adapter and text search, 30 Sept 2026)
+- Built: the embedding adapter (image and text towers, mode `embedding`, port 7013), Pillow-exact preprocessing, the TypeScript tokenizer with reference IDs, the additive `POST /v1/embed-text` request (v1.1) and text search in `POST /api/v1/search/crops`. The pipeline file `scripts/models/pipelines/embedding-siglip2-v1.json` pins both towers and its own SHA-256 is the model identity stored with every vector, so a text vector and a crop vector always come from the same pair of towers.
+- The pinned ONNX towers were compared with the official PyTorch checkpoint (cosine at least 0.9999998), and the worker reproduces the official embeddings, so the export is not an unexamined third-party conversion.
+- The tokenizer decision held: `@huggingface/tokenizers` reproduced the official IDs on every fixture, so no Python sidecar is needed. Emoji was in the planned fixture list and was not tested.
+- Still a human decision: the licence approval for the towers (training data unpublished). Still unmeasured: retrieval quality on site footage.

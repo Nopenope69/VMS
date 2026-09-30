@@ -1,0 +1,10 @@
+# Versions used to generate services/ai-worker/src/__tests__/fixtures/embedding/siglip2.reference.json
+# with tools/reference/siglip2_reference.py (CPU torch is enough).
+torch==2.14.0
+transformers==5.17.0
+tokenizers==0.23.2
+safetensors==0.8.0
+sentencepiece==0.2.2
+pillow==12.3.0
+numpy==2.4.6
+onnxruntime==1.30.0

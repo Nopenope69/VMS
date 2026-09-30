@@ -5,7 +5,7 @@
  * `embedding` task, the model it serves must be registered here as an ACTIVE embedding model with the
  * same name, version and SHA-256, every response must match the contract, its provenance must name that
  * same model, and the vector must decode to exactly EMBEDDING_DIM finite floats. Anything else throws an
- * EmbeddingError and no embedding is stored.
+ * EmbeddingError and no embedding is stored. The same rules apply to text embedding (embedText).
  */
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
@@ -104,9 +104,23 @@ export class EmbeddingAdapterClient {
       deadlineMs: this.timeoutMs,
       frame: { cameraId: 'crop', streamSessionId: 'crop', sequenceNumber: seq, timestampUtc: capturedAtUtc, width, height, format: 'jpeg', data: { kind: 'inline_base64', value: jpeg.toString('base64') } },
     };
+    return this.post('/v1/infer', body);
+  }
+
+  /**
+   * Embeds search text with the same model that embeds crops (ai-adapter.v1.1 POST /v1/embed-text), so the
+   * vector can be compared with stored crop embeddings. Same checks as embed().
+   */
+  async embedText(text: string): Promise<EmbeddingResult> {
+    if (!this.modelId || !this.model || !this.adapterId) throw new Error('connect() first');
+    const body = { contract: 'ai-adapter.v1', requestId: crypto.randomUUID(), tenantId: 'embedding', modelId: this.modelId, text, deadlineMs: this.timeoutMs };
+    return this.post('/v1/embed-text', body);
+  }
+
+  private async post(path: string, body: { requestId: string }): Promise<EmbeddingResult> {
     let json: unknown;
     try {
-      const r = await fetch(`${this.baseUrl}/v1/infer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs + 5000) });
+      const r = await fetch(`${this.baseUrl}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs + 5000) });
       json = await r.json();
     } catch (e: any) {
       throw new EmbeddingError('EMBEDDING_ADAPTER_UNAVAILABLE', `embedding request failed: ${e.message}`);
@@ -116,14 +130,15 @@ export class EmbeddingAdapterClient {
     const res = parsed.data;
     if (res.requestId !== body.requestId) throw new EmbeddingError('EMBEDDING_ADAPTER_INVALID', 'result answers a different request');
     if (res.status === 'error') throw new EmbeddingError('EMBEDDING_ADAPTER_UNAVAILABLE', `adapter reported ${res.errorCode}: ${res.message}`);
+    const model = this.model!;
     const p = res.provenance;
-    if (p.modelSha256 !== this.model.sha256 || p.modelName !== this.model.name || p.modelVersion !== this.model.version) {
-      throw new EmbeddingError('EMBEDDING_ADAPTER_INVALID', `result names model ${p.modelName}@${p.modelVersion} (${p.modelSha256}), not the verified ${this.model.name}@${this.model.version}`);
+    if (p.modelSha256 !== model.sha256 || p.modelName !== model.name || p.modelVersion !== model.version) {
+      throw new EmbeddingError('EMBEDDING_ADAPTER_INVALID', `result names model ${p.modelName}@${p.modelVersion} (${p.modelSha256}), not the verified ${model.name}@${model.version}`);
     }
     if (!res.embedding) throw new EmbeddingError('EMBEDDING_ADAPTER_INVALID', 'an ok embedding result carries no embedding');
     if (res.embedding.dim !== EMBEDDING_DIM) throw new EmbeddingError('EMBEDDING_INVALID', `the adapter returned ${res.embedding.dim} dimensions; this appliance stores ${EMBEDDING_DIM}`);
     const raw = decodeFloat32Base64(res.embedding.vector);
     if (raw.length !== res.embedding.dim) throw new EmbeddingError('EMBEDDING_INVALID', `the vector decodes to ${raw.length} components, the result says ${res.embedding.dim}`);
-    return { vector: normalizeVector(raw), model: this.model, adapterId: this.adapterId, inferenceId: p.inferenceId };
+    return { vector: normalizeVector(raw), model, adapterId: this.adapterId!, inferenceId: p.inferenceId };
   }
 }

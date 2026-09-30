@@ -6,13 +6,51 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 7 (2026-09-30): Phase 5, SigLIP 2 adapter and text search
+
+Branch `feat/phase5-siglip2` (from `master` `00a1786`). The Hugging Face hosts (`huggingface.co` and
+`us.aws.cdn.hf.co`) were allowed, so the item that was BLOCKED_HUMAN in Session 5 is built. Operations:
+`docs/operations/SEMANTIC_SEARCH.md`.
+
+**Still not done, and only a person can do it:** (1) the licence approval. SigLIP 2's towers are candidate
+models (training data unpublished), so the product still refuses them. The approval entry in
+`scripts/models/model-license-exceptions.json` is deliberately not added by this change; it is a decision
+for the owner and is recorded there with their name. (2) Retrieval quality on site footage: NOT MEASURED.
+
+Pinned artefacts (SHA-256 computed from the files fetched here; `scripts/models/models.lock.json`):
+vision tower `c0573e3f4140c3a7c4e9cc5912bd6b26a033b46a6a8e8af26cbea262b163bcad`, text tower
+`baf12d941beabafafb14f7b4adb38dc15be18681b964a84410ec53d9d65e6293`, tokenizer
+`cb9140fae3ac5122c972d37adf83e1248471a38147ad76f8215c8872c6fd8322` (identical to the official
+`google/siglip2-base-patch16-224` tokenizer file). Source: `onnx-community/siglip2-base-patch16-224-ONNX`
+at commit `ba1f3b0843f24bc5417d38e19c37b287d719b2f4`. Official checkpoint used as ground truth:
+`google/siglip2-base-patch16-224` `model.safetensors` `612923381c76ec5a9bed335d1c48827e3f2e506ac31b044b63b2031fadee6a0b`
+(repository revision `75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2`).
+
+Local runs (Node 20, native PostgreSQL 16 with pgvector 0.6.0, the SigLIP 2 files present):
+ai-worker **23 suites passed, 5 skipped (203 tests passed, 34 skipped)**, the skips being the ANPR and redaction suites whose model files were not in the models directory used for this run (CI fetches them and requires them); backend **135/135 suites, 959 passed, 1 skipped**; hygiene, model-licence, fail-loud, feature-flag-docs, status-docs and
+dependency-licence gates exit 0. The one skipped backend test was already skipped in Session 5 (939 passed, 1 skipped).
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Pillow-exact preprocessing (`embedding/preprocess.ts`) | DONE_VERIFIED | `embeddingPreprocess.test.ts` 7/7: the resized 224x224 bytes equal Pillow 12.3.0 `Image.resize(BILINEAR)` on five synthetic images (enlarging, identity, mixed, shrinking, strong shrink) by SHA-256. Synthetic images only. |
+| Official-checkpoint reference (`tools/reference/siglip2_reference.py`) | DONE_VERIFIED | Ran with torch 2.14.0, transformers 5.17.0: the official processor equals PIL resize plus normalisation (max difference 0); the pinned ONNX towers equal the official PyTorch weights (5 images, 9 prompts): cosine at least 0.9999998, largest component difference 7.6e-6. Output committed in `fixtures/embedding/siglip2.reference.json`. |
+| Tokenizer (`@huggingface/tokenizers` 0.2.0, Apache-2.0) | DONE_VERIFIED on 9 prompts | Token IDs equal the official tokenizer's for English, mixed Latin and Devanagari, accents, empty, upper case and an over-long input (truncation keeps the end token, padding 0 to 64). The ADR listed emoji as a case; **no emoji fixture was tested**. |
+| Embedding pipeline, adapter core, boot mode, `POST /v1/embed-text` | DONE_VERIFIED | `goldenSiglip2.test.ts` 25/25 and `embeddingAdapter.test.ts` 24/24: the worker's own preprocessing, tokenizer and towers reproduce the official embeddings (cosine above 0.99999); refusals (wrong task, model, frame, blank or over-long text, wrong contract), runtime error, wrong-size vector, late answer, backpressure, FAILED health when unloaded; without an approval per tower it refuses (`LICENSE_REJECTED`), and an approval for another hash is refused. Approvals in tests are a TEST-ONLY temporary file, not a licence decision. |
+| Contract v1.1 text request; backend conformance | DONE_VERIFIED | `contracts/embeddingAdapterConformance.test.ts`: the real adapter core validates against the zod schemas, and the adapter and schema agree on valid text lengths. Docs updated. |
+| Text search `POST /api/v1/search/crops {text}` | DONE_VERIFIED against a stand-in adapter over HTTP, and with the real model | `cropSearchApiRealDb.test.ts` 17/17 (9 new): text embedded through the verified client, best match first, audited with the text; person text needs the permission and a purpose; other tenants never seen; blank, over-long and text-plus-crop refused before the adapter is called; 503 for an unreachable, erroring, wrong-model or unregistered adapter, 409 for a different requested model. |
+| End to end with the real model | DONE_VERIFIED | `semanticSearchRealModels.test.ts` 7/7: real adapter over HTTP, crop embedder, pgvector, Express. Four public-domain pictures; the text queries "astronaut", "cat", "cup of coffee" and "man with a camera on a tripod" each return the right picture first; every crop gets one 768-dim vector under the pipeline SHA-256. **This proves the pipeline, not retrieval quality on site footage.** |
+| Compose service `embedding-worker` (`--profile search`), CI | DONE_UNVERIFIED | `docker compose config` accepts it; no Docker daemon here, so it has not run in a container. CI now caches the 1.5 GB model files and runs the worker golden tests with the models required, and the end-to-end test in the `ai-e2e-scenario` job; those runs are pending. |
+| Memory and speed | measured once, on the build machine | Loading both towers peaked at about 3.7 GB RSS and settled near 2.2 GB; about 0.33 s per crop and 0.11 s per text query (4 cores, one thread). Not measured on reference hardware, so the 4.5 GB compose limit is an estimate. |
+| Licence entry for the towers | BLOCKED_HUMAN | See above. |
+| Retrieval quality on site data | BLOCKED_HUMAN | Needs labelled site queries (`docs/operations/RETRIEVAL_LABELLING.md`). |
+
 ## Session 5 (2026-09-29): Phase 5 Wave B (semantic search), partly blocked
 
 Branch `feat/phase5-wave-b`, stacked on `feat/phase5-wave-a-wiring` (PR 6). Decisions:
 `docs/adr/0005-phase5-search-and-explain.md`. Operations: `docs/operations/SEMANTIC_SEARCH.md`.
 Flags: `VIGILONE_FEATURE_SEMANTIC_SEARCH` (default OFF), and crops need `VIGILONE_FEATURE_OBJECT_CROPS`.
 
-**Blocked: the SigLIP 2 model.** This environment's network policy denies `huggingface.co` (the proxy
+**Blocked (superseded in Session 7: the hosts were allowed and the adapter is built): the SigLIP 2 model.** This environment's network policy denied `huggingface.co` (the proxy
 answers 403 to CONNECT; `hf-mirror.com` and `modelscope.cn` are unreachable too; npm and PyPI work). So
 the model weights, the tokenizer files and the Python reference token IDs cannot be fetched here, and I
 will not invent hashes or expected IDs. To unblock (BLOCKED_HUMAN):

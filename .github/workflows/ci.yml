@@ -150,11 +150,21 @@ jobs:
           ONNXRUNTIME_NODE_INSTALL: skip
         run: npm ci
 
+      # The SigLIP 2 towers are about 1.5 GB. Their identity is fixed by SHA-256 in the pipeline file, so
+      # that file is the cache key, and fetch-model.sh still verifies every file it finds.
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: models-siglip2-${{ hashFiles('scripts/models/pipelines/embedding-siglip2-v1.json') }}
+
       - name: Fetch pinned models (SHA-256 verified against scripts/models/models.lock.json)
         run: |
           scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
           # ANPR candidate models (tests only; the product needs a human approval to run them)
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
+          # SigLIP 2 candidate models (tests only, same rule)
+          scripts/models/fetch-model.sh siglip2-base-p16-224-vision && scripts/models/fetch-model.sh siglip2-base-p16-224-text
 
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
@@ -236,6 +246,22 @@ jobs:
         run: |
           scripts/models/fetch-model.sh yunet-2023mar
           scripts/e2e/redaction-scenario.sh /tmp/redaction-e2e-report.json
+
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: models-siglip2-${{ hashFiles('scripts/models/pipelines/embedding-siglip2-v1.json') }}
+
+      - name: Semantic search end to end (real SigLIP 2, real pgvector, public-domain pictures, evaluation-only approval bypass)
+        working-directory: ./backend
+        env:
+          VIGILONE_REQUIRE_MODEL_TESTS: '1'
+          JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
+          INTERNAL_API_SECRET: vigilone_internal_secret_token_98234
+        run: |
+          ../scripts/models/fetch-model.sh siglip2-base-p16-224-vision && ../scripts/models/fetch-model.sh siglip2-base-p16-224-text
+          npx jest --runInBand src/__tests__/semanticSearchRealModels.test.ts
 
       - name: Upload scenario report
         if: always()
