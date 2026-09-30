@@ -86,7 +86,7 @@ export function createRequireNodeSignature(
         where: { nodeUuid },
       });
 
-      if (!node || (node as any).status === 'DEPROVISIONED') {
+      if (!node || node.deprovisionedAt) {
         res.status(401).json({ error: 'Unregistered or deprovisioned edge node' });
         return;
       }

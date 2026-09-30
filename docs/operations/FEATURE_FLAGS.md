@@ -25,8 +25,8 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 
 | Flag | Env var | Gated prefix |
 | --- | --- | --- |
-| `FEDERATION` | `VIGILONE_FEATURE_FEDERATION` | `/api/v1/federation` |
-| `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` |
+| `FEDERATION` | `VIGILONE_FEATURE_FEDERATION` | `/api/v1/federation` and the site `federationUplink` (hash-chained site-to-headquarters sync; `docs/operations/MULTI_SITE.md`) |
+| `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` and the `archiveWorker` (S3-compatible off-site archive; `docs/operations/MULTI_SITE.md`) |
 | `OIDC_SSO` | `VIGILONE_FEATURE_OIDC_SSO` | `/api/v1/sso` |
 | `DIO_RELAY` | `VIGILONE_FEATURE_DIO_RELAY` | `/api/v1/relays`, `/api/v1/access` (doors, I/O modules); also starts the door monitor; see PHYSICAL_ACCESS.md |
 | `ANPR` | `VIGILONE_FEATURE_ANPR` | `/api/v1/anpr`, `/api/v1/internal/anpr/*` (501 `FEATURE_DISABLED`); see ANPR.md |

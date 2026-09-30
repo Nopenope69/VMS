@@ -161,24 +161,14 @@ describe('Systemic Fake-Success Elimination & Adapter Hardening (C-013)', () => 
   });
 
   describe('ObjectStorageArchiveService Hardening', () => {
-    const originalEnv = process.env.NODE_ENV;
-
-    afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it('throws FEATURE_DEFERRED_FOR_V1 in production to prohibit in-memory fake S3 storage', async () => {
-      process.env.NODE_ENV = 'production';
+    it('has no in-memory stand-in for S3: a job cannot complete without a configured, working store', async () => {
       const service = new ObjectStorageArchiveService(mockPrisma);
-
+      expect((service as any).s3Store).toBeUndefined();
       mockPrisma.archiveJob.findUnique.mockResolvedValue({
         id: 'job_prod_01',
-        tenant: { objectStorageConfig: { enabled: true } },
+        tenant: { objectStorageConfig: null },
       });
-
-      await expect(service.processArchiveJob('job_prod_01')).rejects.toThrow(
-        /FEATURE_DEFERRED_FOR_V1/
-      );
+      await expect(service.processArchiveJob('job_prod_01')).rejects.toThrow(/not configured or disabled/);
     });
   });
 

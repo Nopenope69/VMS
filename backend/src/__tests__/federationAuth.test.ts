@@ -25,32 +25,56 @@ describe('FederationService (Cryptographic Node Identity, Pairing & Framing)', (
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      // In-memory stand-in for the FederationPairingToken table (SIMULATED; the real table is tested in
+      // federationSyncRealDb.test.ts).
+      federationPairingToken: (() => {
+        const rows = new Map<string, any>();
+        return {
+          rows,
+          create: jest.fn(async ({ data }: any) => {
+            rows.set(data.tokenSha256, { ...data, usedAt: null });
+            return rows.get(data.tokenSha256);
+          }),
+          updateMany: jest.fn(async ({ where, data }: any) => {
+            const r = rows.get(where.tokenSha256);
+            if (!r || r.usedAt !== null || !(r.expiresAt > where.expiresAt.gt)) return { count: 0 };
+            Object.assign(r, data);
+            return { count: 1 };
+          }),
+          findUnique: jest.fn(async ({ where }: any) => rows.get(where.tokenSha256) ?? null),
+        };
+      })(),
     };
     service = new FederationService(mockPrisma);
   });
 
   describe('Pairing Token Lifecycle', () => {
-    it('should create and consume single-use pairing token', () => {
-      const token = service.createPairingToken(tenantId, 60);
+    it('should create and consume single-use pairing token, storing only its hash', async () => {
+      const token = await service.createPairingToken(tenantId, 60);
       expect(token).toMatch(/^vigilone_pair_/);
+      expect([...mockPrisma.federationPairingToken.rows.keys()]).toEqual([crypto.createHash('sha256').update(token).digest('hex')]);
 
-      const consumedTenant = service.consumePairingToken(token);
+      const consumedTenant = await service.consumePairingToken(token);
       expect(consumedTenant).toBe(tenantId);
 
       // Single-use: Second consumption must fail
-      expect(() => service.consumePairingToken(token)).toThrow('Invalid pairing token');
+      await expect(service.consumePairingToken(token)).rejects.toThrow('Pairing token already used');
+      await expect(service.consumePairingToken('vigilone_pair_unknown')).rejects.toThrow('Invalid pairing token');
     });
 
-    it('should reject expired pairing tokens', () => {
-      // 0 second TTL
-      const token = service.createPairingToken(tenantId, -1);
-      expect(() => service.consumePairingToken(token)).toThrow('Expired pairing token');
+    it('should reject expired pairing tokens and refuse a TTL outside 30 s to 24 h', async () => {
+      const token = await service.createPairingToken(tenantId, 60);
+      for (const r of mockPrisma.federationPairingToken.rows.values()) r.expiresAt = new Date(Date.now() - 1000);
+      await expect(service.consumePairingToken(token)).rejects.toThrow('Expired pairing token');
+      await expect(service.createPairingToken(tenantId, -1)).rejects.toThrow(/ttlSeconds/);
+      await expect(service.createPairingToken(tenantId, 90000)).rejects.toThrow(/ttlSeconds/);
     });
   });
 
   describe('Node Registration & Cryptographic Fingerprinting', () => {
     it('should register node with SHA-256 certificate fingerprint of Ed25519 public key', async () => {
-      const token = service.createPairingToken(tenantId, 60);
+      const token = await service.createPairingToken(tenantId, 60);
+      mockPrisma.federatedNode.findUnique.mockResolvedValue(null);
       const pubKeyBase64 = keyPair.publicKey.toString('base64');
       const expectedFingerprint = crypto
         .createHash('sha256')
