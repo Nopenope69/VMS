@@ -1,0 +1,10 @@
+{
+  "name": "vigilone-test-oidc-provider",
+  "private": true,
+  "description": "Test-only OpenID Connect provider (oidc-provider) for the SSO tests. Never shipped.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "oidc-provider": "9.12.2"
+  }
+}

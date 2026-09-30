@@ -1,7 +1,7 @@
 /**
  * Dependency licence gate (action plan: "every new dependency ... must pass the licence gate").
  *
- * Reads the committed package-lock.json of backend, frontend and services/ai-worker and checks
+ * Reads the committed package-lock.json of backend, frontend, services/ai-worker and tools/sim/oidc and checks
  * every production (non-dev) package against the policy: MIT, Apache-2.0, BSD-2-Clause,
  * BSD-3-Clause, ISC. SPDX "A OR B" passes if any alternative is allowed; "A AND B" needs all.
  * Anything else must be listed in dependency-license-exceptions.json with a justification.
@@ -57,6 +57,8 @@ export function runDependencyLicenseGate(repoRoot = path.resolve(__dirname, '..'
     ['backend', 'backend/package-lock.json'],
     ['frontend', 'frontend/package-lock.json'],
     ['services/ai-worker', 'services/ai-worker/package-lock.json'],
+    // Test-only OIDC provider for the SSO tests (never shipped); audited so nothing unexpected enters CI.
+    ['tools/sim/oidc', 'tools/sim/oidc/package-lock.json'],
   ];
   let ok = true;
   for (const [project, rel] of projects) {

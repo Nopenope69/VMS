@@ -110,9 +110,14 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+      # A real OpenID Connect provider (oidc-provider, test only) for the SSO tests (Phase 8).
+      - name: Install OIDC test provider
+        run: npm ci --prefix tools/sim/oidc
+
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
+          VIGILONE_REQUIRE_OIDC_SIM: '1'
           DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
           JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=

@@ -63,6 +63,7 @@ When shipping an edge appliance image containing an FFmpeg binary compiled with 
 | `express` | **MIT** | HTTP REST server framework |
 | `zod` | **MIT** | Environment & schema validation |
 | `jsonwebtoken` | **MIT** | JWT authentication & short-lived media tokens |
+| `jose` 5.10.0 | **MIT** | OpenID Connect ID-token verification (JWKS, signatures) for single sign-on |
 | `bcryptjs` | **MIT** | Password hashing for operator credentials |
 | `onvif` | **MIT** | ONVIF SOAP client, WS-Discovery, PTZ commands (pulls in `xml2js` -> `sax`, BlueOak-1.0.0: pending licence review, see docs/STATUS.md) |
 | `axios` | **MIT** | HTTP client for MediaMTX Control API |
@@ -104,6 +105,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 ### 3.2c Test and evaluation tools (never shipped in the appliance)
 | Tool | License | Use |
 | :--- | :--- | :--- |
+| `oidc-provider` 9.12.2 (with `koa`, `jose` 6) | **MIT** | Real OpenID Connect provider for the SSO tests (`tools/sim/oidc`); never shipped |
 | `supervision` (Roboflow) | **MIT** | Reference ByteTrack / LineZone for tracker validation |
 | `pycocotools` | **BSD-2-Clause** (FreeBSD) | Reference COCO evaluation |
 | `onnxruntime` (Python), `opencv-python-headless`, `numpy` | **MIT**, **Apache-2.0 / MIT**, **BSD-3-Clause** | Python reference decoders |

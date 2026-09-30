@@ -67,7 +67,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     title: 'Enterprise SSO (OIDC)',
     routePrefixes: ['/api/v1/sso'],
     workers: [],
-    status: 'OIDC/PKCE service exists but has not been validated against a real identity provider.',
+    status: 'OpenID Connect login (code + PKCE, ID token verified, accounts linked by provider and subject). Tested against oidc-provider (an independent implementation); not yet against a customer identity provider (Entra ID, Okta, Keycloak, Google).',
   },
   [FeatureFlag.DIO_RELAY]: {
     flag: FeatureFlag.DIO_RELAY,
