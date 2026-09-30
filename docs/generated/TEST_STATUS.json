@@ -1,21 +1,21 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T07:47:55.023Z",
-  "commit": "2d290b37958eaf44254c394ad13559897c40ccf3",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36685562376",
+  "generatedAt": "2026-09-30T07:55:12.030Z",
+  "commit": "3e6dc6b8b3a6f0421b7a71ec63d6d48b9c89f865",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36686196918",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 133,
-        "passed": 133,
+        "total": 135,
+        "passed": 135,
         "failed": 0
       },
       "tests": {
-        "total": 940,
-        "passed": 939,
+        "total": 960,
+        "passed": 953,
         "failed": 0,
-        "skipped": 1
+        "skipped": 7
       },
       "success": true,
       "suiteDetails": [
@@ -153,6 +153,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/contracts/embeddingAdapterConformance.test.ts",
+          "status": "passed",
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/contracts/events.v1.test.ts",
           "status": "passed",
           "passed": 27,
@@ -232,7 +239,7 @@
         {
           "file": "backend/src/__tests__/cropSearchApiRealDb.test.ts",
           "status": "passed",
-          "passed": 8,
+          "passed": 17,
           "failed": 0,
           "skipped": 0
         },
@@ -839,6 +846,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/semanticSearchRealModels.test.ts",
+          "status": "other",
+          "passed": 1,
+          "failed": 0,
+          "skipped": 6
+        },
+        {
           "file": "backend/src/__tests__/serializationAndLifecycleBug.test.ts",
           "status": "passed",
           "passed": 3,
@@ -955,17 +969,17 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 25,
-        "passed": 24,
-        "failed": 0
+        "total": 28,
+        "passed": 25,
+        "failed": 2
       },
       "tests": {
-        "total": 181,
-        "passed": 176,
-        "failed": 0,
-        "skipped": 5
+        "total": 238,
+        "passed": 203,
+        "failed": 26,
+        "skipped": 9
       },
-      "success": true,
+      "success": false,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1010,6 +1024,20 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/embeddingAdapter.test.ts",
+          "status": "failed",
+          "passed": 20,
+          "failed": 1,
+          "skipped": 4
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/embeddingPreprocess.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "services/ai-worker/src/__tests__/frameExtractor.test.ts",
           "status": "passed",
           "passed": 14,
@@ -1036,6 +1064,13 @@
           "passed": 0,
           "failed": 0,
           "skipped": 2
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/goldenSiglip2.test.ts",
+          "status": "failed",
+          "passed": 0,
+          "failed": 25,
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenYolox.test.ts",
@@ -1146,11 +1181,11 @@
     }
   ],
   "totals": {
-    "suites": 158,
-    "tests": 1121,
-    "passed": 1115,
-    "failed": 0,
-    "skipped": 6
+    "suites": 163,
+    "tests": 1198,
+    "passed": 1156,
+    "failed": 26,
+    "skipped": 16
   },
-  "allPassed": true
+  "allPassed": false
 }
