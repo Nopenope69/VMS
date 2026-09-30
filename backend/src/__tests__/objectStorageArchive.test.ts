@@ -1,15 +1,36 @@
-import {
-  ObjectStorageArchiveService,
-  ArchiveJobRequest,
-} from '../services/storage/objectStorageArchive.service';
+/**
+ * Archive scheduling rules with a SIMULATED store (an in-memory object map) and a mocked database. Real uploads
+ * to an S3-compatible server are tested in archiveS3RealDb.test.ts.
+ */
+import { ObjectStorageArchiveService, ArchiveStore } from '../services/storage/objectStorageArchive.service';
 import { ArchiveJobStatus } from '@prisma/client';
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 describe('ObjectStorageArchiveService (Content-Addressed Archival & Priority Gating)', () => {
   let service: ObjectStorageArchiveService;
   let mockPrisma: any;
   const tenantId = 'tenant_archive_01';
   const cameraId = 'cam_vault_01';
+  const objects = new Map<string, { sha256: string; size: number }>();
+  let putOverride: ((key: string) => void) | null = null;
+  const store: ArchiveStore = {
+    head: async (key) => (objects.has(key) ? { sizeBytes: objects.get(key)!.size, sha256: objects.get(key)!.sha256, etag: null } : null),
+    putFile: async (key, file, sha256, size) => {
+      putOverride?.(key);
+      if (crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') !== sha256) throw new Error('XAmzContentSHA256Mismatch');
+      objects.set(key, { sha256, size });
+    },
+  };
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-unit-'));
+  const file = (content: string) => {
+    const f = path.join(tmp, `${crypto.randomUUID()}.fmp4`);
+    fs.writeFileSync(f, content);
+    return { f, sha: crypto.createHash('sha256').update(content).digest('hex'), size: Buffer.byteLength(content) };
+  };
+  afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
   beforeEach(() => {
     mockPrisma = {
@@ -19,7 +40,8 @@ describe('ObjectStorageArchiveService (Content-Addressed Archival & Priority Gat
         update: jest.fn(),
       },
     };
-    service = new ObjectStorageArchiveService(mockPrisma);
+    objects.clear();
+    service = new ObjectStorageArchiveService(mockPrisma, () => store);
   });
 
   describe('Off-Peak Window Evaluation', () => {
@@ -49,150 +71,59 @@ describe('ObjectStorageArchiveService (Content-Addressed Archival & Priority Gat
     });
   });
 
-  describe('Queue Archive Job', () => {
-    it('should upsert archive job with content-addressed object key', async () => {
-      const checksum = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
-      const req: ArchiveJobRequest = {
-        tenantId,
-        cameraId,
-        segmentPath: '/recordings/cam_01/segment_001.mp4',
-        sha256Checksum: checksum,
-        sizeBytes: 10485760n,
-        priority: false,
-      };
-
-      mockPrisma.archiveJob.upsert.mockResolvedValue({
-        id: 'job_001',
-        ...req,
-        objectKey: `archive/${tenantId}/${cameraId}/${checksum}.fmp4`,
-        status: ArchiveJobStatus.QUEUED,
-      });
-
-      const job = await service.queueArchiveJob(req);
-
-      expect(job.status).toBe(ArchiveJobStatus.QUEUED);
-      expect(mockPrisma.archiveJob.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            tenantId_segmentPath: {
-              tenantId,
-              segmentPath: req.segmentPath,
-            },
-          },
-          create: expect.objectContaining({
-            sha256Checksum: checksum,
-            objectKey: `archive/${tenantId}/${cameraId}/${checksum}.fmp4`,
-          }),
-        })
-      );
+  describe('Processing a job', () => {
+    const cfg = { enabled: true, offPeakStartUtc: '01:00', offPeakEndUtc: '05:00', bandwidthLimitKbps: 0 };
+    const job = (over: Record<string, unknown>) => ({ id: 'job_1', status: ArchiveJobStatus.QUEUED, attempts: 0, maxAttempts: 3, priority: false, tenant: { objectStorageConfig: cfg }, ...over });
+    const peak = new Date('2026-09-07T15:00:00Z');
+    const offPeak = new Date('2026-09-07T03:00:00Z');
+    afterEach(() => {
+      putOverride = null;
     });
-  });
 
-  describe('Pre-Flight HEAD Check & Priority Gating', () => {
-    const mockConfig = {
-      enabled: true,
-      offPeakStartUtc: '01:00',
-      offPeakEndUtc: '05:00',
-      rateLimitBps: 5000000,
-    };
-
-    it('should reject non-priority job during peak business hours', async () => {
-      const peakTime = new Date('2026-09-07T15:00:00Z');
-      mockPrisma.archiveJob.findUnique.mockResolvedValue({
-        id: 'job_peak_01',
-        objectKey: 'archive/tenant/cam/hash.fmp4',
-        sha256Checksum: 'hash123',
-        priority: false,
-        tenant: { objectStorageConfig: mockConfig },
-      });
-
-      const result = await service.processArchiveJob('job_peak_01', undefined, peakTime);
-
-      expect(result.status).toBe('FAILED');
-      expect(result.error).toContain('outside configured off-peak archival window');
+    it('defers a non-priority job outside the off-peak window without touching it', async () => {
+      const f = file('normal');
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ segmentPath: f.f, sha256Checksum: f.sha, sizeBytes: BigInt(f.size), objectKey: `k/${f.sha}` }));
+      const r = await service.processArchiveJob('job_1', peak);
+      expect(r.status).toBe('DEFERRED');
       expect(mockPrisma.archiveJob.update).not.toHaveBeenCalled();
+      expect(objects.size).toBe(0);
     });
 
-    it('should bypass off-peak window check for high-priority EvidencePin jobs', async () => {
-      const peakTime = new Date('2026-09-07T15:00:00Z');
-      const testBuffer = Buffer.from('pinned_legal_evidence_video_content');
-      const checksum = crypto.createHash('sha256').update(testBuffer).digest('hex');
-
-      mockPrisma.archiveJob.findUnique.mockResolvedValue({
-        id: 'job_priority_01',
-        objectKey: `archive/tenant/cam/${checksum}.fmp4`,
-        sha256Checksum: checksum,
-        sizeBytes: BigInt(testBuffer.length),
-        priority: true, // Legal evidence pin priority!
-        tenant: { objectStorageConfig: mockConfig },
-      });
-
-      const result = await service.processArchiveJob('job_priority_01', testBuffer, peakTime);
-
-      expect(result.status).toBe('COMPLETED');
-      expect(result.skippedDuplicate).toBe(false);
-      expect(mockPrisma.archiveJob.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'job_priority_01' },
-          data: expect.objectContaining({ status: ArchiveJobStatus.COMPLETED }),
-        })
-      );
+    it('uploads pinned evidence (priority) at any time, then verifies it by HEAD', async () => {
+      const f = file('pinned legal evidence');
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ priority: true, segmentPath: f.f, sha256Checksum: f.sha, sizeBytes: BigInt(f.size), objectKey: `k/${f.sha}` }));
+      const r = await service.processArchiveJob('job_1', peak);
+      expect(r).toMatchObject({ status: 'COMPLETED', skippedDuplicate: false });
+      expect(objects.get(`k/${f.sha}`)).toEqual({ sha256: f.sha, size: f.size });
+      expect(mockPrisma.archiveJob.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: ArchiveJobStatus.COMPLETED }) }));
     });
 
-    it('should skip duplicate upload via content-addressed pre-flight HEAD check', async () => {
-      const testBuffer = Buffer.from('duplicated_video_content');
-      const checksum = crypto.createHash('sha256').update(testBuffer).digest('hex');
-      const offPeakTime = new Date('2026-09-07T03:00:00Z');
-
-      const jobData = {
-        id: 'job_dup_01',
-        objectKey: `archive/tenant/cam/${checksum}.fmp4`,
-        sha256Checksum: checksum,
-        sizeBytes: BigInt(testBuffer.length),
-        priority: false,
-        tenant: { objectStorageConfig: mockConfig },
-      };
-
-      mockPrisma.archiveJob.findUnique.mockResolvedValue(jobData);
-
-      // 1. First upload succeeds
-      const res1 = await service.processArchiveJob('job_dup_01', testBuffer, offPeakTime);
-      expect(res1.status).toBe('COMPLETED');
-      expect(res1.skippedDuplicate).toBe(false);
-
-      // 2. Second upload with same object key and hash is detected via HEAD check
-      const res2 = await service.processArchiveJob('job_dup_01', testBuffer, offPeakTime);
-      expect(res2.status).toBe('COMPLETED');
-      expect(res2.skippedDuplicate).toBe(true);
+    it('skips an object already stored with the same SHA-256 and size', async () => {
+      const f = file('same content');
+      objects.set(`k/${f.sha}`, { sha256: f.sha, size: f.size });
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ segmentPath: f.f, sha256Checksum: f.sha, sizeBytes: BigInt(f.size), objectKey: `k/${f.sha}` }));
+      expect(await service.processArchiveJob('job_1', offPeak)).toMatchObject({ status: 'COMPLETED', skippedDuplicate: true });
     });
 
-    it('should reject and mark FAILED when segment checksum is corrupted', async () => {
-      const offPeakTime = new Date('2026-09-07T03:00:00Z');
-      const realBuffer = Buffer.from('actual_file_bytes');
-      const badChecksum = 'incorrect_sha256_hash_here';
+    it('refuses a local file whose SHA-256 differs from the index, without uploading', async () => {
+      const f = file('actual bytes');
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ segmentPath: f.f, sha256Checksum: 'a'.repeat(64), sizeBytes: BigInt(f.size), objectKey: 'k/x' }));
+      const r = await service.processArchiveJob('job_1', offPeak);
+      expect(r.status).toBe('FAILED');
+      expect(objects.size).toBe(0);
+    });
 
-      mockPrisma.archiveJob.findUnique.mockResolvedValue({
-        id: 'job_corrupted',
-        objectKey: 'archive/tenant/cam/corrupted.fmp4',
-        sha256Checksum: badChecksum,
-        sizeBytes: BigInt(realBuffer.length),
-        priority: true,
-        tenant: { objectStorageConfig: mockConfig },
-      });
-
-      const result = await service.processArchiveJob('job_corrupted', realBuffer, offPeakTime);
-
-      expect(result.status).toBe('FAILED');
-      expect(result.error).toContain('SHA-256 checksum verification failed');
-      expect(mockPrisma.archiveJob.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'job_corrupted' },
-          data: expect.objectContaining({
-            status: ArchiveJobStatus.FAILED,
-            error: 'Corrupted segment: SHA-256 checksum mismatch',
-          }),
-        })
-      );
+    it('retries when the store does not show the uploaded object, and fails after the last attempt', async () => {
+      const f = file('vanishes');
+      putOverride = () => undefined;
+      const lost: ArchiveStore = { head: async () => null, putFile: async () => undefined };
+      const s2 = new ObjectStorageArchiveService(mockPrisma, () => lost);
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ segmentPath: f.f, sha256Checksum: f.sha, sizeBytes: BigInt(f.size), objectKey: 'k/v' }));
+      expect((await s2.processArchiveJob('job_1', offPeak)).status).toBe('RETRY');
+      mockPrisma.archiveJob.findUnique.mockResolvedValue(job({ attempts: 2, segmentPath: f.f, sha256Checksum: f.sha, sizeBytes: BigInt(f.size), objectKey: 'k/v' }));
+      const r = await s2.processArchiveJob('job_1', offPeak);
+      expect(r.status).toBe('FAILED');
+      expect(r.error).toMatch(/after upload the store reports no object/);
     });
   });
 });

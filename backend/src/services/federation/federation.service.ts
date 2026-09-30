@@ -41,9 +41,16 @@ export interface PairingTokenPayload {
   expiresAt: number; // Unix timestamp ms
 }
 
+export class FederationError extends Error {
+  constructor(public readonly code: 'PAIRING_TOKEN_INVALID' | 'PAIRING_TOKEN_EXPIRED' | 'PAIRING_TOKEN_USED' | 'NODE_OWNED_ELSEWHERE' | 'NODE_DEPROVISIONED' | 'BAD_PUBLIC_KEY', message: string) {
+    super(message);
+  }
+}
+
+const tokenSha = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
+
 export class FederationService {
   private prisma: PrismaClient;
-  private pairingTokens: Map<string, PairingTokenPayload> = new Map();
   private activeChallenges: Map<string, { challenge: string; expiresAt: number }> = new Map();
 
   constructor(prisma: PrismaClient) {
@@ -51,36 +58,33 @@ export class FederationService {
   }
 
   /**
-   * Generates a single-use, time-limited pairing token for a remote edge node
+   * Issues a single-use, time-limited pairing token for a remote site. Only its SHA-256 is stored, so the token
+   * survives a restart and a database read does not reveal it.
    */
-  public createPairingToken(tenantId: string, ttlSeconds: number = 600): string {
-    const token = `vigilone_pair_${crypto.randomBytes(16).toString('hex')}`;
-    this.pairingTokens.set(token, {
-      token,
-      tenantId,
-      expiresAt: Date.now() + ttlSeconds * 1000,
+  public async createPairingToken(tenantId: string, ttlSeconds: number = 600, createdById?: string): Promise<string> {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds < 30 || ttlSeconds > 86400) throw new Error('ttlSeconds must be a whole number from 30 to 86400');
+    const token = `vigilone_pair_${crypto.randomBytes(24).toString('hex')}`;
+    await this.prisma.federationPairingToken.create({
+      data: { tenantId, tokenSha256: tokenSha(token), expiresAt: new Date(Date.now() + ttlSeconds * 1000), createdById },
     });
     return token;
   }
 
-  /**
-   * Validates pairing token and consumes it (single-use)
-   */
-  public consumePairingToken(token: string): string {
-    const payload = this.pairingTokens.get(token);
-    if (!payload) {
-      throw new Error('Invalid pairing token');
-    }
-    if (Date.now() > payload.expiresAt) {
-      this.pairingTokens.delete(token);
-      throw new Error('Expired pairing token');
-    }
-    this.pairingTokens.delete(token);
-    return payload.tenantId;
+  /** Consumes a pairing token atomically (single use) and returns its tenant. */
+  public async consumePairingToken(token: string): Promise<string> {
+    if (typeof token !== 'string' || !token.startsWith('vigilone_pair_')) throw new FederationError('PAIRING_TOKEN_INVALID', 'Invalid pairing token');
+    const h = tokenSha(token);
+    const used = await this.prisma.federationPairingToken.updateMany({ where: { tokenSha256: h, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+    const row = await this.prisma.federationPairingToken.findUnique({ where: { tokenSha256: h } });
+    if (used.count === 1 && row) return row.tenantId;
+    if (!row) throw new FederationError('PAIRING_TOKEN_INVALID', 'Invalid pairing token');
+    if (row.usedAt) throw new FederationError('PAIRING_TOKEN_USED', 'Pairing token already used');
+    throw new FederationError('PAIRING_TOKEN_EXPIRED', 'Expired pairing token');
   }
 
   /**
-   * Registers a new edge node with its cryptographic Ed25519 identity
+   * Registers a site with its Ed25519 identity. Re-pairing an existing node (a key rotation) needs a fresh token
+   * from the same tenant; a node owned by another tenant or deprovisioned cannot be taken over.
    */
   public async registerNode(params: {
     pairingToken: string;
@@ -92,43 +96,35 @@ export class FederationService {
     protocolVersion?: number;
     capabilities: NodeCapabilities;
   }) {
-    const tenantId = this.consumePairingToken(params.pairingToken);
+    try {
+      const k = crypto.createPublicKey({ key: Buffer.from(params.publicKeyEd25519, 'base64'), format: 'der', type: 'spki' });
+      if (k.asymmetricKeyType !== 'ed25519') throw new Error('not ed25519');
+    } catch {
+      throw new FederationError('BAD_PUBLIC_KEY', 'publicKeyEd25519 must be a base64 DER SPKI Ed25519 public key');
+    }
+    const tenantId = await this.consumePairingToken(params.pairingToken);
+    const existing = await this.prisma.federatedNode.findUnique({ where: { nodeUuid: params.nodeUuid } });
+    if (existing && existing.tenantId !== tenantId) throw new FederationError('NODE_OWNED_ELSEWHERE', 'this node id is registered to another tenant');
+    if (existing?.deprovisionedAt) throw new FederationError('NODE_DEPROVISIONED', 'this node was deprovisioned; pair it under a new node id');
 
-    // Compute certificate fingerprint: SHA-256 of the Ed25519 public key
-    const certificateFingerprint = crypto
-      .createHash('sha256')
-      .update(Buffer.from(params.publicKeyEd25519, 'base64'))
-      .digest('hex');
-
-    const node = await this.prisma.federatedNode.upsert({
+    // Certificate fingerprint: SHA-256 of the Ed25519 public key
+    const certificateFingerprint = crypto.createHash('sha256').update(Buffer.from(params.publicKeyEd25519, 'base64')).digest('hex');
+    const facts = {
+      name: params.name,
+      publicKeyEd25519: params.publicKeyEd25519,
+      certificateFingerprint,
+      softwareVersion: params.softwareVersion,
+      protocolVersion: params.protocolVersion || 1,
+      schemaVersion: params.schemaVersion,
+      capabilitiesJson: params.capabilities as any,
+      state: NodeState.ONLINE,
+      lastSeenAt: new Date(),
+    };
+    return this.prisma.federatedNode.upsert({
       where: { nodeUuid: params.nodeUuid },
-      create: {
-        tenantId,
-        nodeUuid: params.nodeUuid,
-        name: params.name,
-        publicKeyEd25519: params.publicKeyEd25519,
-        certificateFingerprint,
-        softwareVersion: params.softwareVersion,
-        protocolVersion: params.protocolVersion || 1,
-        schemaVersion: params.schemaVersion,
-        capabilitiesJson: params.capabilities as any,
-        state: NodeState.ONLINE,
-        lastSeenAt: new Date(),
-      },
-      update: {
-        name: params.name,
-        publicKeyEd25519: params.publicKeyEd25519,
-        certificateFingerprint,
-        softwareVersion: params.softwareVersion,
-        protocolVersion: params.protocolVersion || 1,
-        schemaVersion: params.schemaVersion,
-        capabilitiesJson: params.capabilities as any,
-        state: NodeState.ONLINE,
-        lastSeenAt: new Date(),
-      },
+      create: { tenantId, nodeUuid: params.nodeUuid, ...facts },
+      update: facts,
     });
-
-    return node;
   }
 
   /**

@@ -112,6 +112,8 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | MailHog 1.0.1 | **MIT** | SMTP interop test server (binary, CI only) |
 | `rapidocr_onnxruntime` 1.4.4 (Python) | **Apache-2.0** | Reference DB text-detection post-processing for the ANPR golden tests |
 | `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
+| `botocore` (Python) | **Apache-2.0** | Reference SigV4 signatures for the S3 client tests (`tools/reference/s3_sigv4_reference.py`) |
+| `moto` 5.1.0 server (Python), with `Flask`, `flask-cors` | **Apache-2.0**, **BSD-3-Clause**, **MIT** | S3-compatible server for the archive tests, locally and in CI (`tools/sim/requirements-test-servers.txt`); never shipped |
 | `torch` 2.14.0, `transformers` 5.17.0, `tokenizers`, `safetensors`, `sentencepiece`, `pillow` (Python) | **BSD-3-Clause**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **MIT-CMU (HPND)** | Reference embeddings and token IDs for the SigLIP 2 tests (`tools/reference/requirements-siglip2.txt`); never shipped |
 | `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
 | DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |

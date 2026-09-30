@@ -9,11 +9,15 @@ const retentionPurger = new RetentionPurger(prisma);
 import { CropPurger } from './services/crops/cropPurge.service';
 import { startCropWorkers } from './services/crops/cropWorkers';
 import { startEmbeddingWorkers } from './services/search/embeddingWorkers';
+import { FederationUplink, startFederationUplink } from './services/federation/uplink';
+import { ArchiveWorker, archiveIntervalMs, ObjectStorageArchiveService } from './services/storage/objectStorageArchive.service';
 import { startVlmWorkers } from './services/vlm/vlmWorkers';
 
 const cropPurger = new CropPurger(prisma);
 let cropWorkers: { stop(): void } | null = null;
 let embeddingWorkers: { stop(): void } | null = null;
+let federationUplink: FederationUplink | null = null;
+let archiveWorker: ArchiveWorker | null = null;
 let vlmWorkers: { stop(): void } | null = null;
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
@@ -63,6 +67,19 @@ export const server = app.listen(config.PORT, () => {
     if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
     cropWorkers = startCropWorkers(cropPurger);
     embeddingWorkers = startEmbeddingWorkers(prisma);
+    if (isFeatureEnabled(FeatureFlag.OBJECT_STORAGE_ARCHIVE)) {
+      archiveWorker = new ArchiveWorker(new ObjectStorageArchiveService(prisma));
+      archiveWorker.start(archiveIntervalMs()); // throws on a bad interval, before anything runs
+    }
+    startFederationUplink(prisma)
+      .then((u) => {
+        federationUplink = u;
+        if (u) console.log('[FederationUplink] syncing to headquarters');
+      })
+      .catch((err) => {
+        console.error(`[FederationUplink] not started: ${err.message}`);
+        process.exit(1);
+      });
     vlmWorkers = startVlmWorkers(prisma);
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
@@ -89,6 +106,8 @@ process.on('SIGTERM', async () => {
   retentionPurger.stop();
   cropWorkers?.stop();
   embeddingWorkers?.stop();
+  federationUplink?.stop();
+  archiveWorker?.stop();
   vlmWorkers?.stop();
   await cameraEventManager.stop();
   server.close(() => {
