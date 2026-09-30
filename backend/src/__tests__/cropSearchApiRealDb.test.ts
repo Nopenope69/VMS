@@ -166,6 +166,9 @@ describe('P5.3 crop search API', () => {
     process.env[FLAG] = 'true';
     const body = { cropId: crops.person1.id, includePersons: true, personsOnly: true };
     expect((await call(viewer, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    // Appearance search over people is limited to administrators; operators can search other crops but not people.
+    expect((await call(operator, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    expect((await call(operator, 'GET', `/${crops.person1.id}/image`, undefined, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
     const noPurpose = await call(admin, 'POST', '', body);
     expect([noPurpose.status, noPurpose.json.code]).toEqual([400, 'PURPOSE_REQUIRED']);
     const badPurpose = await call(admin, 'POST', '', body, { 'x-vigilone-purpose': 'MARKETING' });
