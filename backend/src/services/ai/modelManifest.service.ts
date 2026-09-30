@@ -106,7 +106,7 @@ export const REJECTED_COPYLEFT_LICENSES = [
 ] as const;
 
 /** modelSignature.decoder values of multi-model pipelines whose components are candidate models. */
-const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline', 'embedding_pipeline']);
+const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline', 'embedding_pipeline', 'vlm_pipeline']);
 
 export class ModelManifestService {
   private prisma: PrismaClient;

@@ -167,6 +167,9 @@ services:
       - VIGILONE_FEATURE_SEMANTIC_SEARCH=${VIGILONE_FEATURE_SEMANTIC_SEARCH:-false}
       # Required when SEMANTIC_SEARCH is on: an ai-adapter.v1.1 endpoint serving the embedding task.
       - EMBEDDING_ADAPTER_URL=${EMBEDDING_ADAPTER_URL:-}
+      - VIGILONE_FEATURE_VLM_VERIFICATION=${VIGILONE_FEATURE_VLM_VERIFICATION:-false}
+      # Required when VLM_VERIFICATION is on: the ai-adapter.v1.1 endpoint serving vlm_verification.
+      - VLM_ADAPTER_URL=${VLM_ADAPTER_URL:-}
       - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
       - VIGILONE_AIR_GAPPED=${VIGILONE_AIR_GAPPED:-false}
       - INCIDENT_HOLD_PRE_SECONDS=${INCIDENT_HOLD_PRE_SECONDS:-60}
@@ -337,6 +340,52 @@ services:
         limits:
           cpus: '2.00'
           memory: 4608M
+
+  vlm-worker:
+    # Phase 5 Wave C alarm second opinion: SmolVLM2 2.2B via a llama-server child process the worker starts
+    # with verified model files (pinned llama.cpp b11277, built in Dockerfile.vlm). Advisory only: answers are
+    # stored and shown, never change an alarm. Candidate models: refuses (FAILED health) without human
+    # approvals. Enable with --profile vlm, then set VIGILONE_FEATURE_VLM_VERIFICATION=true and
+    # VLM_ADAPTER_URL=http://127.0.0.1:7014 on the backend. Fetch the files first:
+    #   scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-q4km && scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-mmproj-q8
+    # Memory: llama-server peaked at about 3.0 GB RSS on the build machine (docs/operations/VLM_VERIFICATION.md).
+    build:
+      context: .
+      dockerfile: services/ai-worker/Dockerfile.vlm
+    image: vigilone-vlm-worker:latest
+    container_name: vigilone-vlm-worker
+    profiles: ["vlm"]
+    restart: unless-stopped
+    network_mode: "service:backend"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=production
+      - AI_WORKER_MODE=vlm
+      - BACKEND_INTERNAL_URL=http://127.0.0.1:4000/api/v1/internal
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-vigilone_internal_secret_token_98234}
+      - VIGILONE_MODELS_DIR=/models
+      - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
+      - AI_ADAPTER_HOST=127.0.0.1
+      - AI_ADAPTER_PORT=7014
+      - AI_EXIT_ON_REFUSAL=false
+      - VLM_THREADS=${VLM_THREADS:-2}
+    volumes:
+      - ${VIGILONE_MODELS_DIR:-./.cache/models}:/models:ro
+      - ./scripts/models/model-license-exceptions.json:/run/vigilone/model-license-exceptions.json:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 4096M
 
   ai-worker:
     build:

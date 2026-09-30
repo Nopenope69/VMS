@@ -398,6 +398,15 @@ export function validateRequest(body: unknown): InferenceRequestV1 {
   if (typeof f.cameraId !== 'string' || !f.cameraId) fail('frame.cameraId is required');
   if (!f.data || (f.data.kind !== 'inline_base64' && f.data.kind !== 'shared_memory')) fail('frame.data.kind must be inline_base64 or shared_memory');
   if (f.data.kind === 'inline_base64' && (typeof f.data.value !== 'string' || !f.data.value)) fail('frame.data.value is required');
+  // v1.1: vlmQuery belongs to vlm_verification only, and is exactly { targetClass }.
+  if (b.vlmQuery !== undefined) {
+    const q = b.vlmQuery;
+    if (b.task !== 'vlm_verification') fail('vlmQuery is only allowed for the vlm_verification task');
+    if (!q || typeof q !== 'object' || Array.isArray(q) || Object.keys(q).length !== 1 || typeof q.targetClass !== 'string' || !/^[a-z][a-z_ ]{0,39}$/.test(q.targetClass)) {
+      fail('vlmQuery must be exactly { targetClass } with a lower-case class name');
+    }
+  }
+  if (b.task === 'vlm_verification' && b.vlmQuery === undefined) fail('vlm_verification needs vlmQuery');
   return b as InferenceRequestV1;
 }
 

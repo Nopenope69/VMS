@@ -302,6 +302,7 @@ model Tenant {
   retentionPolicies     RetentionPolicy[]
   dataProtection        DataProtectionSettings?
   explanations          Explanation[]
+  vlmVerifications      VlmVerification[]
   objectCrops           ObjectCrop[]
   cropEmbeddings        CropEmbedding[]
   detectionEvents       DetectionEvent[]
@@ -859,6 +860,7 @@ model Alarm {
   feedback         AlarmFeedback?
   evidenceHolds    IncidentEvidenceHold[]
   explanations     Explanation[]
+  vlmVerifications VlmVerification[]
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
@@ -1799,4 +1801,35 @@ model CropEmbedding {
 
   @@unique([cropId, modelSha256])
   @@index([tenantId, modelSha256])
+}
+
+/// Phase 5 Wave C: the local VLM's advisory second opinion on an alarm ("is there a <class> in the frame?").
+/// Never changes the alarm. One row per alarm and model identity (the pipeline SHA-256, which covers the
+/// prompt template, generation settings and llama.cpp build). answer is yes | no | unclear (CHECK).
+model VlmVerification {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  alarmId          String
+  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+  cameraId         String?
+  detectionEventId String?
+  /// SNAPSHOT (the detection's full frame) or CROP (its stored object crop).
+  imageSource      String
+  imageSha256      String
+  targetClass      String
+  answer           String
+  reason           String
+  promptSha256     String
+  modelName        String
+  modelVersion     String
+  modelSha256      String
+  adapterId        String
+  inferenceId      String
+  provenanceJson   Json
+  latencyMs        Int
+  createdAt        DateTime @default(now())
+
+  @@unique([alarmId, modelSha256])
+  @@index([tenantId, createdAt])
 }
