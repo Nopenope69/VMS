@@ -49,9 +49,9 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     envVar: envVarFor(FeatureFlag.FEDERATION),
     title: 'Multi-site federation',
     routePrefixes: ['/api/v1/federation'],
-    workers: [],
+    workers: ['federationUplink'],
     status:
-      'Pairing, control-tunnel protocol and sync engine exist; no outbound WAN client runs, so appliances do not sync across sites.',
+      'A paired site sends its events, alarm changes and audit entries to headquarters as a hash-chained, signed log that survives link outages; headquarters stores them per site and shows cross-site alarms. Tested with two apps and a cut network link on one machine; not yet run across a real WAN. No live video across sites (reverse tunnel not built).',
   },
   [FeatureFlag.OBJECT_STORAGE_ARCHIVE]: {
     flag: FeatureFlag.OBJECT_STORAGE_ARCHIVE,

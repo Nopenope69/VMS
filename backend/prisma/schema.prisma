@@ -312,6 +312,8 @@ model Tenant {
   notificationLogs      NotificationLog[]
   aiRuntimeDiagnostics  AiRuntimeDiagnostic[]
   federatedNodes        FederatedNode[]
+  federatedRecords      FederatedRecord[]
+  federationPairingTokens FederationPairingToken[]
   automationRules       AutomationRule[]
   spatialAnalyticsRules SpatialAnalyticsRule[]
   digitalIoPins         DigitalIoPin[]
@@ -1231,6 +1233,12 @@ model FederatedNode {
   syncCursorAlarm        BigInt             @default(0)
   configVersionApplied   Int                @default(0)
   configRecords          ConfigSyncRecord[]
+  /// Phase 6: the hash-chained record log (streamType LOG). The last accepted seq and its hash.
+  syncCursorLog          BigInt             @default(0)
+  lastLogHash            String             @default("0000000000000000000000000000000000000000000000000000000000000000")
+  /// Set when an administrator retires the node; a deprovisioned node is refused.
+  deprovisionedAt        DateTime?
+  records                FederatedRecord[]
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -1799,4 +1807,73 @@ model CropEmbedding {
 
   @@unique([cropId, modelSha256])
   @@index([tenantId, modelSha256])
+}
+
+/// Phase 6 (HQ side): a record received from a site's hash-chained log. Kept apart from HQ's own events,
+/// alarms and audit (the site's cameras do not exist here). hash = SHA-256(prevHash + canonical record).
+model FederatedRecord {
+  id         String        @id @default(uuid())
+  tenantId   String
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nodeId     String
+  node       FederatedNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  seq        BigInt
+  /// EVENT | ALARM | AUDIT (CHECK in the migration)
+  kind       String
+  sourceId   String
+  occurredAt DateTime
+  dataJson   Json
+  prevHash   String
+  hash       String
+  receivedAt DateTime      @default(now())
+
+  @@unique([nodeId, seq])
+  @@index([tenantId, kind, occurredAt])
+  @@index([nodeId, kind, sourceId])
+}
+
+/// Phase 6 (HQ side): single-use pairing tokens, stored as a SHA-256 so a database read does not reveal them,
+/// and kept across restarts.
+model FederationPairingToken {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tokenSha256 String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+}
+
+/// Phase 6 (site side): this site's outgoing log. Each row chains to the previous one by hash; rows stay
+/// until the headquarters has acknowledged them (and a retention period has passed).
+model FederationOutbox {
+  seq        BigInt   @id @default(autoincrement())
+  kind       String
+  sourceId   String
+  occurredAt DateTime
+  dataJson   Json
+  prevHash   String
+  hash       String   @unique
+  createdAt  DateTime @default(now())
+}
+
+/// Phase 6 (site side): the uplink's single state row (id = 1): identity, watermarks and what HQ acknowledged.
+model FederationUplinkState {
+  id               Int       @id @default(1)
+  nodeUuid         String
+  hqUrl            String
+  hqTenantId       String
+  localTenantId    String
+  ackedSeq         BigInt    @default(0)
+  eventWatermark   DateTime  @default("1970-01-01T00:00:00Z")
+  eventWatermarkId String    @default("")
+  alarmWatermark   DateTime  @default("1970-01-01T00:00:00Z")
+  alarmWatermarkId String    @default("")
+  auditWatermark   BigInt    @default(0)
+  lastSyncAt       DateTime?
+  lastError        String?
+  consecutiveFailures Int    @default(0)
+  registeredAt     DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }

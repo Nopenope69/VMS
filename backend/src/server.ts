@@ -9,10 +9,12 @@ const retentionPurger = new RetentionPurger(prisma);
 import { CropPurger } from './services/crops/cropPurge.service';
 import { startCropWorkers } from './services/crops/cropWorkers';
 import { startEmbeddingWorkers } from './services/search/embeddingWorkers';
+import { FederationUplink, startFederationUplink } from './services/federation/uplink';
 
 const cropPurger = new CropPurger(prisma);
 let cropWorkers: { stop(): void } | null = null;
 let embeddingWorkers: { stop(): void } | null = null;
+let federationUplink: FederationUplink | null = null;
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
 import { cameraEventManager } from './routes/cameraEvents.routes';
@@ -61,6 +63,15 @@ export const server = app.listen(config.PORT, () => {
     if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
     cropWorkers = startCropWorkers(cropPurger);
     embeddingWorkers = startEmbeddingWorkers(prisma);
+    startFederationUplink(prisma)
+      .then((u) => {
+        federationUplink = u;
+        if (u) console.log('[FederationUplink] syncing to headquarters');
+      })
+      .catch((err) => {
+        console.error(`[FederationUplink] not started: ${err.message}`);
+        process.exit(1);
+      });
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -86,6 +97,7 @@ process.on('SIGTERM', async () => {
   retentionPurger.stop();
   cropWorkers?.stop();
   embeddingWorkers?.stop();
+  federationUplink?.stop();
   await cameraEventManager.stop();
   server.close(() => {
     prisma.$disconnect();
