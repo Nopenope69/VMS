@@ -1,21 +1,21 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T22:21:15.173Z",
-  "commit": "28588230f5891edd9e1e20799ec848483cfd4c2a",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36784231760",
+  "generatedAt": "2026-09-30T22:33:29.438Z",
+  "commit": "acf57b32b4e20653e6468cd551e3b3f61e516c32",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36785918733",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 140,
-        "passed": 140,
+        "total": 142,
+        "passed": 142,
         "failed": 0
       },
       "tests": {
-        "total": 1006,
-        "passed": 992,
+        "total": 1031,
+        "passed": 1010,
         "failed": 0,
-        "skipped": 14
+        "skipped": 21
       },
       "success": true,
       "suiteDetails": [
@@ -601,6 +601,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/leaderLeaseRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/license.test.ts",
           "status": "passed",
           "passed": 7,
@@ -923,6 +930,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/ssoOidcRealIdp.test.ts",
+          "status": "other",
+          "passed": 11,
+          "failed": 0,
+          "skipped": 7
+        },
+        {
           "file": "backend/src/__tests__/storageDegradation.test.ts",
           "status": "passed",
           "passed": 2,
@@ -1230,11 +1244,11 @@
     }
   ],
   "totals": {
-    "suites": 170,
-    "tests": 1290,
-    "passed": 1228,
+    "suites": 172,
+    "tests": 1315,
+    "passed": 1246,
     "failed": 28,
-    "skipped": 34
+    "skipped": 41
   },
   "allPassed": false
 }
