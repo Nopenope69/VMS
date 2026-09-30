@@ -302,7 +302,6 @@ model Tenant {
   retentionPolicies       RetentionPolicy[]
   dataProtection          DataProtectionSettings?
   explanations            Explanation[]
-  vlmVerifications        VlmVerification[]
   objectCrops             ObjectCrop[]
   cropEmbeddings          CropEmbedding[]
   detectionEvents         DetectionEvent[]
@@ -313,14 +312,13 @@ model Tenant {
   notificationLogs        NotificationLog[]
   aiRuntimeDiagnostics    AiRuntimeDiagnostic[]
   federatedNodes          FederatedNode[]
-  federatedRecords        FederatedRecord[]
-  federationPairingTokens FederationPairingToken[]
   automationRules         AutomationRule[]
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   digitalIoPins           DigitalIoPin[]
   objectStorageConfig     ObjectStorageConfig?
   archiveJobs             ArchiveJob[]
   identityProviders       IdentityProvider[]
+  externalIdentities      ExternalIdentity[]
   userSessions            UserSession[]
   recordingSegments       RecordingSegment[]
   playbackSessions        PlaybackSession[]
@@ -332,6 +330,9 @@ model Tenant {
   storageVolumes          StorageVolume[]
   storageEpochs           StorageEpoch[]
   incidents               Incident[]
+  vlmVerifications        VlmVerification[]
+  federatedRecords        FederatedRecord[]
+  federationPairingTokens FederationPairingToken[]
 }
 
 model License {
@@ -373,14 +374,15 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditEvents       AuditEvent[]
-  exports           EvidenceExport[]   @relation("RequestedExports")
-  approvedExports   EvidenceExport[]   @relation("ApprovedExports")
-  layouts           Layout[]
-  userSessions      UserSession[]
-  playbackSessions  PlaybackSession[]
-  evidenceManifests EvidenceManifest[]
-  redactionJobs     RedactionJob[]
+  auditEvents        AuditEvent[]
+  exports            EvidenceExport[]   @relation("RequestedExports")
+  approvedExports    EvidenceExport[]   @relation("ApprovedExports")
+  layouts            Layout[]
+  userSessions       UserSession[]
+  externalIdentities ExternalIdentity[]
+  playbackSessions   PlaybackSession[]
+  evidenceManifests  EvidenceManifest[]
+  redactionJobs      RedactionJob[]
 }
 
 model Site {
@@ -1453,14 +1455,63 @@ model IdentityProvider {
   type                  IdentityProviderType @default(OIDC)
   issuerUrl             String
   clientId              String
+  /// AES-256-GCM (utils/crypto encryptCredential). Rows from before Phase 8 held plaintext; the Phase 8 migration
+  /// blanks them and disables the provider, so their secret must be entered again.
   clientSecretEncrypted String
   scopes                String[]             @default(["openid", "profile", "email"])
   enabled               Boolean              @default(true)
+  /// Phase 8. Email linking and provisioning only for these domains (empty = any domain).
+  allowedEmailDomains   String[]             @default([])
+  /// Phase 8. Create a VigilOne user on first login when no account matches (off by default).
+  autoProvision         Boolean              @default(false)
+  /// Phase 8. Role for provisioned users when no mapping matches. Never SUPER_ADMIN (CHECK in the migration).
+  defaultRole           Role                 @default(VIEWER)
+  /// Phase 8. ID-token claim holding group names (e.g. "groups") and { group: role } mapping; the highest mapped
+  /// role wins and is applied at every login. SUPER_ADMIN is refused.
+  roleClaim             String?
+  roleMappingJson       Json?
+  externalIdentities    ExternalIdentity[]
+  loginStates           OidcLoginState[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/// Phase 8: a VigilOne user linked to an identity at a provider (the ID token's `sub`).
+model ExternalIdentity {
+  id          String           @id @default(uuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  providerId  String
+  provider    IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  subject     String
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email       String?
+  lastLoginAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@unique([providerId, subject])
+  @@index([userId])
+}
+
+/// Phase 8: one pending SSO step, single use. kind AUTHORIZE: id = SHA-256 of the `state` sent to the provider,
+/// with the PKCE verifier and nonce. kind LOGIN_CODE: id = SHA-256 of the one-time code handed to the browser
+/// after a successful callback, exchanged once for a session.
+model OidcLoginState {
+  id           String           @id
+  kind         String
+  providerId   String
+  provider     IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  codeVerifier String?
+  nonce        String?
+  userId       String?
+  expiresAt    DateTime
+  createdAt    DateTime         @default(now())
+
+  @@index([expiresAt])
 }
 
 model UserSession {
@@ -1808,6 +1859,14 @@ model CropEmbedding {
 
   @@unique([cropId, modelSha256])
   @@index([tenantId, modelSha256])
+}
+
+/// Phase 8 high availability: leader lease for background services (services/cluster/leaderLease.ts).
+model ClusterLease {
+  name       String   @id
+  holderId   String
+  expiresAt  DateTime
+  acquiredAt DateTime
 }
 
 /// Phase 6 (HQ side): a record received from a site's hash-chained log. Kept apart from HQ's own events,

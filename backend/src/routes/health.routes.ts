@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
 import mediaProvider from '../services/media/mediamtx.provider';
+import { clusterRole } from '../services/cluster/clusterRole';
 
 const router = Router();
 
@@ -29,6 +30,8 @@ router.get('/health', async (req: Request, res: Response) => {
       database: dbStatus,
       mediaEngine: mediaEngineStatus,
     },
+    // Phase 8: present only when high availability is on.
+    ...(clusterRole() ? { cluster: clusterRole() } : {}),
   });
 });
 

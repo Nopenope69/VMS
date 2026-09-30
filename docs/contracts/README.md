@@ -28,3 +28,10 @@ contract test (`backend/src/__tests__/contracts/`).
 - **Wrap, do not refactor (Phase 0).** The v1 contracts wrap existing internals
   (`VigilOneEvent`, `IMediaProvider`, `RecordingSegment`). Internal refactors to speak v1 natively
   are later-phase work tracked in `docs/BACKLOG.md`.
+
+## AI adapter SDK (Phase 8)
+
+`sdk/ai-adapter` packages `ai-adapter.v1` for third parties: the schemas, an HTTP server that enforces the
+contract, the conformance kit (`vigilone-adapter-conformance`) and a YOLOX-tiny example. It ships a copy of
+`common.ts`, `events.v1.ts`, `aiAdapter.v1.ts` and the conformance kit. After changing any of these, run
+`cd sdk/ai-adapter && npm run sync-contract`; CI fails while the copy differs.
