@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-29T16:16:52.704Z",
-  "commit": "44c4cdf7b3cbd15e0839acc9dadabaa6b6a210ef",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36596277728",
+  "generatedAt": "2026-09-30T06:56:34.038Z",
+  "commit": "6d711df43d740fb6ba882b7c68a2973f648c31af",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36680569142",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 123,
-        "passed": 123,
+        "total": 133,
+        "passed": 133,
         "failed": 0
       },
       "tests": {
-        "total": 838,
-        "passed": 837,
+        "total": 940,
+        "passed": 939,
         "failed": 0,
         "skipped": 1
       },
@@ -141,7 +141,7 @@
         {
           "file": "backend/src/__tests__/contracts/aiAdapter.v1.test.ts",
           "status": "passed",
-          "passed": 15,
+          "passed": 24,
           "failed": 0,
           "skipped": 0
         },
@@ -184,6 +184,55 @@
           "file": "backend/src/__tests__/crashRecoveryActiveSegment.test.ts",
           "status": "passed",
           "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropCaptureRealDb.test.ts",
+          "status": "passed",
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropEmbedderRealDb.test.ts",
+          "status": "passed",
+          "passed": 17,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropEmbeddingStoreRealDb.test.ts",
+          "status": "passed",
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropPolicyApiRealDb.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropPurgeRealDb.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropPurgeScheduling.test.ts",
+          "status": "passed",
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cropSearchApiRealDb.test.ts",
+          "status": "passed",
+          "passed": 8,
           "failed": 0,
           "skipped": 0
         },
@@ -363,9 +412,23 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/explanationExportRealDb.test.ts",
+          "status": "passed",
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/explanationTemplateParity.test.ts",
           "status": "passed",
           "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/explanationWiringRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
           "failed": 0,
           "skipped": 0
         },
@@ -400,7 +463,7 @@
         {
           "file": "backend/src/__tests__/featureFlags.test.ts",
           "status": "passed",
-          "passed": 23,
+          "passed": 27,
           "failed": 0,
           "skipped": 0
         },
@@ -574,6 +637,13 @@
         },
         {
           "file": "backend/src/__tests__/migrationPhase4Redaction.test.ts",
+          "status": "passed",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/migrationPhase5Wave.test.ts",
           "status": "passed",
           "passed": 3,
           "failed": 0,
@@ -885,17 +955,17 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 23,
-        "passed": 17,
-        "failed": 1
+        "total": 25,
+        "passed": 24,
+        "failed": 0
       },
       "tests": {
-        "total": 175,
-        "passed": 139,
-        "failed": 2,
-        "skipped": 34
+        "total": 181,
+        "passed": 176,
+        "failed": 0,
+        "skipped": 5
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -906,10 +976,10 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/anprAdapter.test.ts",
-          "status": "other",
-          "passed": 0,
+          "status": "passed",
+          "passed": 6,
           "failed": 0,
-          "skipped": 6
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/classScopedNms.test.ts",
@@ -922,6 +992,13 @@
           "file": "services/ai-worker/src/__tests__/coordinateTransformer.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/cropExtractor.test.ts",
+          "status": "passed",
+          "passed": 3,
           "failed": 0,
           "skipped": 0
         },
@@ -948,10 +1025,10 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenAnpr.test.ts",
-          "status": "other",
-          "passed": 0,
+          "status": "passed",
+          "passed": 8,
           "failed": 0,
-          "skipped": 8
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenRfdetr.test.ts",
@@ -962,23 +1039,23 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenYolox.test.ts",
-          "status": "other",
-          "passed": 0,
+          "status": "passed",
+          "passed": 8,
           "failed": 0,
-          "skipped": 8
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenYunet.test.ts",
-          "status": "other",
-          "passed": 2,
+          "status": "passed",
+          "passed": 4,
           "failed": 0,
-          "skipped": 2
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/inferenceEngine.test.ts",
-          "status": "failed",
-          "passed": 6,
-          "failed": 2,
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
           "skipped": 0
         },
         {
@@ -1004,10 +1081,10 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/redactionAdapter.test.ts",
-          "status": "other",
-          "passed": 0,
+          "status": "passed",
+          "passed": 5,
           "failed": 0,
-          "skipped": 5
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/rtspUrlBuilder.test.ts",
@@ -1057,16 +1134,23 @@
           "passed": 7,
           "failed": 0,
           "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/workerCrops.test.ts",
+          "status": "passed",
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
         }
       ]
     }
   ],
   "totals": {
-    "suites": 146,
-    "tests": 1013,
-    "passed": 976,
-    "failed": 2,
-    "skipped": 35
+    "suites": 158,
+    "tests": 1121,
+    "passed": 1115,
+    "failed": 0,
+    "skipped": 6
   },
-  "allPassed": false
+  "allPassed": true
 }
