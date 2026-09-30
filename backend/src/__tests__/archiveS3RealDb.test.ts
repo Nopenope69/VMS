@@ -1,8 +1,10 @@
 /**
- * Phase 6 off-site archive against a REAL S3-compatible server: S3_TEST_ENDPOINT (MinIO in CI; moto locally).
- * Skipped without it unless VIGILONE_REQUIRE_S3=1. The checks that need a server which verifies signatures and
- * payload hashes (wrong keys, a body that differs from its signed SHA-256) run only when
- * S3_TEST_VERIFIES_AUTH=1 (MinIO does; moto does not). Segment files are SIMULATED random bytes.
+ * Phase 6 off-site archive against a REAL S3-compatible server: S3_TEST_ENDPOINT (moto in CI and locally).
+ * Skipped without it unless VIGILONE_REQUIRE_S3=1. The wrong-key check runs only when S3_TEST_VERIFIES_AUTH=1
+ * (moto started with INITIAL_NO_AUTH_ACTION_COUNT, see tools/sim/moto_s3_with_auth.py, verifies signatures).
+ * The check that the server refuses a body differing from its signed SHA-256 runs only when
+ * S3_TEST_VERIFIES_PAYLOAD=1: moto does not verify payload hashes, so CI does not run it (MinIO and AWS do).
+ * Segment files are SIMULATED random bytes.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -15,6 +17,7 @@ import { S3Client } from '../services/storage/s3Client';
 
 const endpoint = process.env.S3_TEST_ENDPOINT;
 const verifiesAuth = process.env.S3_TEST_VERIFIES_AUTH === '1';
+const verifiesPayload = process.env.S3_TEST_VERIFIES_PAYLOAD === '1';
 const keyId = process.env.S3_TEST_ACCESS_KEY || 'testkey';
 const secret = process.env.S3_TEST_SECRET_KEY || 'testsecret';
 const required = process.env.VIGILONE_REQUIRE_S3 === '1';
@@ -155,9 +158,14 @@ describe('S3 test server', () => {
     expect(await post({ segmentId: mine.seg.id })).toBe(201);
   });
 
-  (verifiesAuth ? it : it.skip)('the server refuses wrong keys and a body that differs from its signed SHA-256', async () => {
+  (verifiesAuth ? it : it.skip)('the server refuses wrong keys', async () => {
     const wrong = new S3Client({ endpoint, region: 'us-east-1', bucket, accessKeyId: keyId, secretAccessKey: 'not-the-secret' });
     await expect(wrong.head('anything')).rejects.toThrow(/403|SignatureDoesNotMatch|HTTP403/);
+    await expect(wrong.putFile('wrong-key.bin', __filename, sha(fs.readFileSync(__filename)), fs.statSync(__filename).size)).rejects.toThrow(/403|SignatureDoesNotMatch/);
+    expect(await client.head('wrong-key.bin')).toBeNull();
+  });
+
+  (verifiesPayload ? it : it.skip)('the server refuses a body that differs from its signed SHA-256', async () => {
     const f = path.join(tmp, 'lie.bin');
     fs.writeFileSync(f, 'actual bytes');
     await expect(client.putFile('lie.bin', f, sha(Buffer.from('other bytes!')), 12)).rejects.toThrow(/XAmzContentSHA256Mismatch|BadDigest|400/);

@@ -91,8 +91,9 @@ plain text and `GET /archive/config` returned them.
   recomputation at headquarters (111 records, contiguous, intact). Mutation checks: removing the chain check or
   the takeover guard fails tests.
 * `s3Client.test.ts`: SigV4 signatures equal botocore's on five reference cases.
-* `archiveS3RealDb.test.ts`: real uploads to moto here and to MinIO in CI (MinIO also checks signatures and
-  signed payload hashes); pinned-first, off-peak deferral, identical bytes read back, duplicate recognised,
+* `archiveS3RealDb.test.ts`: real uploads to moto (locally and in CI) with signatures enforced, so a wrong
+  secret is refused; moto does not check signed payload hashes, so that check runs only with
+  `S3_TEST_VERIFIES_PAYLOAD=1` against MinIO or AWS; pinned-first, off-peak deferral, identical bytes read back, duplicate recognised,
   a changed local file never uploaded, retries, queue API limits.
 
 ## Not done

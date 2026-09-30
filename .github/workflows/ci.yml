@@ -110,20 +110,24 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-      # A real S3-compatible server for the off-site archive tests (Phase 6). MinIO verifies SigV4 signatures and
-      # signed payload hashes, which the tests rely on (S3_TEST_VERIFIES_AUTH).
-      - name: Start MinIO (S3-compatible, test only)
+      # An S3-compatible server for the off-site archive tests (Phase 6): moto, started so that after its setup
+      # calls every request needs a valid SigV4 signature (S3_TEST_VERIFIES_AUTH). moto does not verify payload
+      # hashes, so S3_TEST_VERIFIES_PAYLOAD stays off here.
+      - name: Start S3 test server (moto, test only)
         run: |
-          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=vigilone-ci -e MINIO_ROOT_PASSWORD=vigilone-ci-secret-2026 minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
-          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
-          docker inspect --format '{{index .RepoDigests 0}}' minio/minio:RELEASE.2025-04-22T22-12-26Z
+          python3 -m venv /tmp/testsrv
+          /tmp/testsrv/bin/pip install --quiet -r tools/sim/requirements-test-servers.txt
+          INITIAL_NO_AUTH_ACTION_COUNT=3 nohup /tmp/testsrv/bin/moto_server -H 127.0.0.1 -p 9000 > /tmp/moto.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:9000/moto-api/ && break; sleep 1; done
+          read AK SK < <(/tmp/testsrv/bin/python tools/sim/moto_s3_with_auth.py http://127.0.0.1:9000)
+          echo "::add-mask::$SK"
+          echo "S3_TEST_ACCESS_KEY=$AK" >> "$GITHUB_ENV"
+          echo "S3_TEST_SECRET_KEY=$SK" >> "$GITHUB_ENV"
 
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
           S3_TEST_ENDPOINT: http://127.0.0.1:9000
-          S3_TEST_ACCESS_KEY: vigilone-ci
-          S3_TEST_SECRET_KEY: vigilone-ci-secret-2026
           S3_TEST_VERIFIES_AUTH: '1'
           VIGILONE_REQUIRE_S3: '1'
           DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
