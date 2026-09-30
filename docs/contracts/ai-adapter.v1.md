@@ -30,8 +30,12 @@ depends on a model directly.
     `dim * 4` bytes and that `dim` is a size it stores, rejects NaN, infinity and a zero vector, and
     normalises the vector itself. Existing v1 adapters and consumers are unaffected: the field is
     optional and ignored by anything that does not use it. The request for an embedding is an
-    ordinary `InferenceRequestV1` with `task: 'embedding'` and a `jpeg` frame (a crop). There is no
-    text-embedding request yet (needs the text tower and tokenizer; ADR 0005).
+    ordinary `InferenceRequestV1` with `task: 'embedding'` and a `jpeg` frame (a crop).
+  - Text embedding (v1.1, additive and optional): `POST /v1/embed-text` with
+    `TextEmbeddingRequestV1` = `{ contract, requestId, tenantId, modelId, text (1 to 512 characters),
+    deadlineMs }`. The answer is an ordinary `ok` result with `embedding` set, empty `detections` and
+    provenance naming the same model that embeds images, so the two vectors are comparable. An adapter
+    without a text tower answers 404. Errors use the same codes and HTTP statuses as `/v1/infer`.
   - `error`: `errorCode` (`MODEL_NOT_LOADED`, `MODEL_INTEGRITY_FAILED`, `LICENSE_REJECTED`,
     `UNSUPPORTED_TASK`, `INVALID_FRAME`, `DEADLINE_EXCEEDED`, `RUNTIME_ERROR`, `OVERLOADED`),
     `message`, `retryable`. An error never carries detections.

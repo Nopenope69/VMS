@@ -86,6 +86,16 @@ export interface InferenceRequestV1 {
   deadlineMs: number;
 }
 
+/** v1.1, optional: `POST /v1/embed-text` (docs/contracts/ai-adapter.v1.md). */
+export interface TextEmbeddingRequestV1 {
+  contract: typeof AI_ADAPTER_CONTRACT;
+  requestId: string;
+  tenantId: string;
+  modelId: string;
+  text: string;
+  deadlineMs: number;
+}
+
 export interface DetectionV1 {
   objectClass: string;
   classId: number;

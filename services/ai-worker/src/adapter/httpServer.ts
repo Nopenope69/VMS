@@ -29,6 +29,7 @@ function send(res: http.ServerResponse, status: number, body: unknown, correlati
  *   GET  /v1/descriptor  -> AdapterDescriptorV1
  *   GET  /v1/health      -> AdapterHealthV1 (HTTP 200 when READY/DEGRADED, 503 otherwise)
  *   POST /v1/infer       -> InferenceResultV1 (HTTP status mirrors the error code; 429 carries Retry-After)
+ *   POST /v1/embed-text  -> InferenceResultV1 (v1.1, only adapters with a text tower; otherwise 404)
  *   GET  /metrics        -> Prometheus text
  * Every response echoes X-Correlation-Id (generated when the caller sends none).
  */
@@ -38,6 +39,8 @@ export interface AdapterCoreLike {
   describe(): ReturnType<AiAdapterCore['describe']>;
   health(): ReturnType<AiAdapterCore['health']>;
   handleInferRequest(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
+  /** v1.1, optional: only an adapter with a text tower serves POST /v1/embed-text. */
+  handleTextEmbedRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
 }
 
 export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOptions = {}): http.Server {
@@ -48,7 +51,7 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
     const correlationId =
       typeof incoming === 'string' && /^[\w.:-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
     const url = (req.url || '/').split('?')[0];
-    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url.startsWith('/v1/') || url === '/metrics' ? url : 'other', method: req.method || '' });
+    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url === '/v1/descriptor' || url === '/v1/health' || url === '/v1/infer' || url === '/v1/embed-text' || url === '/metrics' ? url : 'other', method: req.method || '' });
 
     if (req.method === 'GET' && url === '/v1/descriptor') return send(res, 200, core.describe(), correlationId);
     if (req.method === 'GET' && url === '/v1/health') {
@@ -58,7 +61,9 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
     if (req.method === 'GET' && url === '/metrics') {
       return send(res, 200, core.metrics.render() + (opts.extraMetrics ? opts.extraMetrics() : ''), correlationId);
     }
-    if (req.method === 'POST' && url === '/v1/infer') {
+    const textEmbed = req.method === 'POST' && url === '/v1/embed-text' && core.handleTextEmbedRequest ? core.handleTextEmbedRequest.bind(core) : null;
+    if (req.method === 'POST' && (url === '/v1/infer' || textEmbed)) {
+      const handle = textEmbed ?? core.handleInferRequest.bind(core);
       const chunks: Buffer[] = [];
       let size = 0;
       let aborted = false;
@@ -86,7 +91,7 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
             errorCode: 'INVALID_FRAME', message: 'request body is not valid JSON', retryable: false,
           }, correlationId);
         }
-        const result = await core.handleInferRequest(body);
+        const result = await handle(body);
         if (result.status === 'ok') return send(res, 200, result, correlationId);
         const status = ERROR_HTTP_STATUS[result.errorCode] ?? 500;
         return send(res, status, result, correlationId, result.errorCode === 'OVERLOADED' ? { 'Retry-After': '1' } : {});

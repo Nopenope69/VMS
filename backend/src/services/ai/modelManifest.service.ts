@@ -106,7 +106,7 @@ export const REJECTED_COPYLEFT_LICENSES = [
 ] as const;
 
 /** modelSignature.decoder values of multi-model pipelines whose components are candidate models. */
-const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline']);
+const PIPELINE_DECODERS = new Set(['anpr_pipeline', 'redaction_pipeline', 'embedding_pipeline']);
 
 export class ModelManifestService {
   private prisma: PrismaClient;
@@ -315,7 +315,7 @@ export class ModelManifestService {
       }
     }
 
-    // 5b. Pipelines of candidate models (P4.1 ANPR, P4.4 redaction regions): the training-data
+    // 5b. Pipelines of candidate models (P4.1 ANPR, P4.4 redaction regions, Phase 5 embeddings): the training-data
     // declaration comes from human approvals, so every component must have one for its exact
     // SHA-256 in the approvals file this backend reads. The worker's claim alone is not enough.
     const sig: any = input.modelSignature;

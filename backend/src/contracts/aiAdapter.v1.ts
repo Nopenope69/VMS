@@ -107,6 +107,24 @@ export const InferenceRequestV1 = z
   })
   .strict();
 
+/**
+ * v1.1 (additive, optional): a text embedding request, `POST /v1/embed-text`. The answer is an ordinary
+ * ok InferenceResultV1 with `embedding` set and empty `detections`, its provenance naming the same model
+ * that embeds images, so a text vector and a crop vector are comparable. An adapter without a text tower
+ * answers 404. Text is at most 512 characters.
+ */
+export const TextEmbeddingRequestV1 = z
+  .object({
+    contract: z.literal(AI_ADAPTER_CONTRACT),
+    requestId: NonEmptyId,
+    tenantId: NonEmptyId,
+    modelId: NonEmptyId,
+    text: z.string().min(1).max(512),
+    deadlineMs: z.number().int().positive().max(60000),
+  })
+  .strict();
+export type TextEmbeddingRequestV1 = z.infer<typeof TextEmbeddingRequestV1>;
+
 export const DetectionV1 = z
   .object({
     objectClass: z.string().min(1),
