@@ -32,6 +32,7 @@ describe('Feature flags: typed registry', () => {
         'OBJECT_STORAGE_ARCHIVE',
         'OIDC_SSO',
         'REDACTION',
+        'SEMANTIC_SEARCH',
         'SMART_SEARCH',
       ].sort()
     );
@@ -84,6 +85,7 @@ describe('Feature flags: real HTTP routing table (app.ts)', () => {
     [FeatureFlag.REDACTION, 'POST', '/api/v1/privacy/jobs'],
     [FeatureFlag.FLOORPLANS, 'GET', '/api/v1/floorplans'],
     [FeatureFlag.OBJECT_CROPS, 'GET', '/api/v1/crop-policy/any-site'],
+    [FeatureFlag.SEMANTIC_SEARCH, 'POST', '/api/v1/search/crops'],
   ];
 
   it.each(gatedProbes)('%s off: %s %s answers 501 FEATURE_DISABLED', async (flag, method, path) => {

@@ -24,6 +24,14 @@ depends on a model directly.
 - **`InferenceResultV1`**: discriminated on `status`.
   - `ok`: `detections[]` (`objectClass`, `classId`, `confidence`, normalized `bbox`, `trackId?`,
     `attributes?`), **`provenance`** (the events.v1 AI provenance block), `latencyMs`.
+  - `ok` for the `embedding` task (v1.1, additive and optional): the result also carries
+    `embedding` = `{ dim, encoding: 'float32_base64', vector, normalized }` (little-endian float32
+    array, base64) and `detections` is empty. A consumer checks that the decoded length is
+    `dim * 4` bytes and that `dim` is a size it stores, rejects NaN, infinity and a zero vector, and
+    normalises the vector itself. Existing v1 adapters and consumers are unaffected: the field is
+    optional and ignored by anything that does not use it. The request for an embedding is an
+    ordinary `InferenceRequestV1` with `task: 'embedding'` and a `jpeg` frame (a crop). There is no
+    text-embedding request yet (needs the text tower and tokenizer; ADR 0005).
   - `error`: `errorCode` (`MODEL_NOT_LOADED`, `MODEL_INTEGRITY_FAILED`, `LICENSE_REJECTED`,
     `UNSUPPORTED_TASK`, `INVALID_FRAME`, `DEADLINE_EXCEEDED`, `RUNTIME_ERROR`, `OVERLOADED`),
     `message`, `retryable`. An error never carries detections.

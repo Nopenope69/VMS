@@ -8,9 +8,11 @@ import { RetentionPurger } from './services/privacy/dataProtection.service';
 const retentionPurger = new RetentionPurger(prisma);
 import { CropPurger } from './services/crops/cropPurge.service';
 import { startCropWorkers } from './services/crops/cropWorkers';
+import { startEmbeddingWorkers } from './services/search/embeddingWorkers';
 
 const cropPurger = new CropPurger(prisma);
 let cropWorkers: { stop(): void } | null = null;
+let embeddingWorkers: { stop(): void } | null = null;
 import { dispatcher } from './routes/notification.routes';
 import { alarmWorkflow } from './routes/alarm.routes';
 import { cameraEventManager } from './routes/cameraEvents.routes';
@@ -58,6 +60,7 @@ export const server = app.listen(config.PORT, () => {
       .catch((err) => console.error('[Redaction] recovery failed:', err.message));
     if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
     cropWorkers = startCropWorkers(cropPurger);
+    embeddingWorkers = startEmbeddingWorkers(prisma);
 
     // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
     StartupReconcilerService.reconcile().catch((err) => {
@@ -82,6 +85,7 @@ process.on('SIGTERM', async () => {
   alarmWorkflow.stop();
   retentionPurger.stop();
   cropWorkers?.stop();
+  embeddingWorkers?.stop();
   await cameraEventManager.stop();
   server.close(() => {
     prisma.$disconnect();

@@ -26,7 +26,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:0.8.0-pg16
         env:
           POSTGRES_USER: vigilone
           POSTGRES_PASSWORD: vigilone_ci_secret_password_2026!

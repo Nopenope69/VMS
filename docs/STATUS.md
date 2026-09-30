@@ -6,6 +6,48 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 5 (2026-09-29): Phase 5 Wave B (semantic search), partly blocked
+
+Branch `feat/phase5-wave-b`, stacked on `feat/phase5-wave-a-wiring` (PR 6). Decisions:
+`docs/adr/0005-phase5-search-and-explain.md`. Operations: `docs/operations/SEMANTIC_SEARCH.md`.
+Flags: `VIGILONE_FEATURE_SEMANTIC_SEARCH` (default OFF), and crops need `VIGILONE_FEATURE_OBJECT_CROPS`.
+
+**Blocked: the SigLIP 2 model.** This environment's network policy denies `huggingface.co` (the proxy
+answers 403 to CONNECT; `hf-mirror.com` and `modelscope.cn` are unreachable too; npm and PyPI work). So
+the model weights, the tokenizer files and the Python reference token IDs cannot be fetched here, and I
+will not invent hashes or expected IDs. To unblock (BLOCKED_HUMAN):
+
+1. In the cloud environment's settings, allow Network access to `huggingface.co` (and the hosts it
+   redirects to for large files, which the proxy log will name), or provide the files another way with
+   their SHA-256.
+2. Decide the exact variant. The database column is 768 dimensions, the SigLIP 2 base size; another
+   size needs a migration.
+3. Licence decisions per `docs/STATUS.md` list: SigLIP 2 code and weights are Apache-2.0 by the model
+   card as I remember it (unverified here); the training data is a question for your legal call, as with
+   COCO. An approved model needs an entry with its exact SHA-256 in `scripts/models/model-license-exceptions.json`.
+
+Then remaining work: the image-tower adapter (`ai-adapter.v1.1`, task `embedding`), the pinned lock
+entry, the text tower and `@huggingface/tokenizers` tests against reference IDs, and text search.
+
+Local runs: backend **133/133 suites, 939 passed, 1 skipped** (was 130/130, 892 passed); the docs
+hygiene, licence, fail-loud, feature-flag-docs and status-docs gates exit 0; verifier tests 12/12; eval
+tests 8/8. The local database was a native PostgreSQL 16 with pgvector **0.6.0** from apt; CI and compose
+use `pgvector/pgvector:0.8.0-pg16` (the tag exists on Docker Hub; the CI run is the first time the
+migration and tests run on 0.8.0, and on the Debian image). Nothing here uses a feature newer than 0.6.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| pgvector image in CI, compose and the DR drill; migration `20261003000000_phase5_crop_embeddings`; `CropEmbedding` | DONE_VERIFIED locally (pgvector 0.6.0); CI pending | Migration deploys to the local and a fresh database. `cropEmbeddingStoreRealDb.test.ts` 11/11: the database refuses a wrong vector size, a wrong recorded size and a bad model hash, and rows follow their crop. **The image change is not safe for an existing alpine volume** (glibc vs musl ordering); the ADR's earlier "data directory is compatible" claim was wrong and is corrected. `scripts/dr-drill.sh` uses the new image but was not run (no Docker daemon here). |
+| Existing test changed: `migrationPhase2.test.ts` drift guard | note | Prisma has no syntax for the HNSW index, so the diff reports it as an index to drop. The guard now runs `--script` and allows exactly that one statement; any other difference still fails (checked by adding a bogus column: it fails). |
+| Storing and searching (`cropEmbeddingStore.ts`) | DONE_VERIFIED on SYNTHETIC vectors | Only 768 finite non-zero components are stored, L2-normalised; the model must be a registered active `embedding` model (name, version, SHA-256); a repeat write keeps the first; search is per tenant and per model; person crops are excluded unless asked for; results equal a brute-force cosine ranking; filters work; a selective filter falls back to an exact scan and says `exact`. The HNSW index is shown to be the query plan (EXPLAIN) and its recall@10 against the exact answer is at least 0.9 on 300 synthetic vectors (a threshold, not a measured figure to quote). Mutation checks: removing the fallback, the tenant filter or the person exclusion each fails a test. **This says nothing about a real model.** |
+| Adapter contract v1.1: optional `embedding` result | DONE_VERIFIED | Backend schema, worker type, docs, 71/71 contract tests including refusals; v1 results unchanged. |
+| Embedder worker, adapter client, startup | DONE_VERIFIED against a SIMULATED stub adapter | `cropEmbedderRealDb.test.ts` 17/17 with a stub that validates every request against the contract: unexpired crops embedded, bytes verified first, missing and tampered files reported and not retried, a person crop embedded only while its site allows it (switching off stops it), an unreachable, not-ready or unregistered adapter stops the run, a wrong-size, wrong-model, NaN, zero or off-contract answer is refused, a repeatedly failing crop is set aside, overlapping runs do not both work, startup refuses a missing or bad URL or interval. Mutation checks: skipping the person re-check or the provenance check fails a test. Not run against a real adapter. |
+| Search API `POST /api/v1/search/crops`, image endpoint, permission `CROP_PERSON_QUERY` | DONE_VERIFIED | `cropSearchApiRealDb.test.ts` 8/8 on the real Express app: 501 when off; the licence feature is required; query by crop or vector; tenant isolation; text query refused 501 `TEXT_QUERY_NOT_AVAILABLE`; bad input 400; person queries need the permission (viewers refused), a declared allowed purpose (and a reference where required) and are audited with it, and a person example must set `includePersons`; images are hash-checked (tampered: 500, removed: 404) and person images audited. Mutation checks: skipping the person gate or the image tenant check fails a test. |
+| Retrieval scorer `tools/eval/retrieval-eval.mjs` | DONE_VERIFIED as a tool | `node --test tools/eval/__tests__/*.test.mjs` 8/8 against hand-computed values; refuses missing results, self-matches and duplicates; says NOT EVALUATED without `--real-site-data` and at least 100 queries. **Retrieval quality on site data: NOT MEASURED (BLOCKED_HUMAN: needs a model and labelled site queries).** |
+| SigLIP 2 adapter, pinned hash and licence entry, tokenizer reference tests, text search | BLOCKED_HUMAN | See above. |
+| CI on `feat/phase5-wave-b` | see the PR | Filled in once the run finished. |
+| Wave C (VLM sidecar) | NOT_STARTED | Unchanged. |
+
 ## Session 4 (2026-09-29): Phase 5 Wave A wiring
 
 Branch `feat/phase5-wave-a-wiring`. Every new behaviour sits behind a flag that is OFF by default
