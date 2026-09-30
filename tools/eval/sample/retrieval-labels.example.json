@@ -1,0 +1,8 @@
+{
+  "$comment": "PLACEHOLDERS ONLY. The crop ids below do not exist. Copy this file, replace them with real crop ids from your site, and follow docs/operations/RETRIEVAL_LABELLING.md. At least 100 labelled queries are needed for the scorer to say EVALUATED.",
+  "schema": "vigilone.retrieval-labels.v1",
+  "queries": [
+    { "id": "q001", "queryCropId": "00000000-0000-4000-8000-000000000001", "relevant": ["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000003"] },
+    { "id": "q002", "queryCropId": "00000000-0000-4000-8000-000000000004", "relevant": ["00000000-0000-4000-8000-000000000005"] }
+  ]
+}
