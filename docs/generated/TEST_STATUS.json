@@ -1,21 +1,21 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T22:02:39.039Z",
-  "commit": "1c5d3e73e5c8cd3b10be61f04ea69675e3b8b3ad",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36782847273",
+  "generatedAt": "2026-09-30T22:21:15.173Z",
+  "commit": "28588230f5891edd9e1e20799ec848483cfd4c2a",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36784231760",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 137,
-        "passed": 137,
+        "total": 140,
+        "passed": 140,
         "failed": 0
       },
       "tests": {
-        "total": 977,
-        "passed": 970,
+        "total": 1006,
+        "passed": 992,
         "failed": 0,
-        "skipped": 7
+        "skipped": 14
       },
       "success": true,
       "suiteDetails": [
@@ -60,6 +60,13 @@
           "passed": 6,
           "failed": 0,
           "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/archiveS3RealDb.test.ts",
+          "status": "other",
+          "passed": 1,
+          "failed": 0,
+          "skipped": 7
         },
         {
           "file": "backend/src/__tests__/audit.test.ts",
@@ -489,6 +496,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/federationSyncRealDb.test.ts",
+          "status": "passed",
+          "passed": 11,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/ffmpeg.test.ts",
           "status": "passed",
           "passed": 3,
@@ -839,6 +853,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/s3Client.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/sceneChange.test.ts",
           "status": "passed",
           "passed": 3,
@@ -932,7 +953,7 @@
         {
           "file": "backend/src/__tests__/storeAndForwardSync.test.ts",
           "status": "passed",
-          "passed": 6,
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -1209,11 +1230,11 @@
     }
   ],
   "totals": {
-    "suites": 167,
-    "tests": 1261,
-    "passed": 1206,
+    "suites": 170,
+    "tests": 1290,
+    "passed": 1228,
     "failed": 28,
-    "skipped": 27
+    "skipped": 34
   },
   "allPassed": false
 }
