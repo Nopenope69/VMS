@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Radio, Lock, Mail, ShieldAlert, KeyRound, Building2, User, Zap } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { DEMO_FORM_PREFILL, DEMO_TOKEN, DEMO_USER } from '../demo/fixtures';
+
+const SSO_ERRORS: Record<string, string> = {
+  NO_ACCOUNT: 'Your identity was verified, but there is no VigilOne account for it. Ask an administrator.',
+  EMAIL_NOT_VERIFIED: 'Your identity provider did not confirm your email address, so it cannot be matched to an account.',
+  EMAIL_DOMAIN_NOT_ALLOWED: 'Your email domain is not allowed to sign in through this provider.',
+  ACCOUNT_DISABLED: 'Your VigilOne account is disabled.',
+  ACCOUNT_IN_OTHER_TENANT: 'Your account belongs to another organisation on this system.',
+  SUPER_ADMIN_NOT_VIA_SSO: 'Super administrators sign in with their password.',
+  LOGIN_EXPIRED_OR_REPLAYED: 'The sign-in took too long or was already used. Please try again.',
+};
 
 interface LoginProps {
   onLoginSuccess: (user: any, token: string) => void;
@@ -24,6 +34,35 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [ssoProviders, setSsoProviders] = useState<{ id: string; name: string }[]>([]);
+
+  // Phase 8 single sign-on. Providers are listed only when OIDC_SSO is on (otherwise the call fails and none show).
+  // The provider sends the browser back through the backend to /sso/complete#code=... (or #error=...); the one-time
+  // code is exchanged for a session here and removed from the address bar.
+  useEffect(() => {
+    api
+      .get('/sso/login-options')
+      .then((res) => setSsoProviders(res.data?.providers || []))
+      .catch(() => setSsoProviders([]));
+    if (window.location.pathname !== '/sso/complete') return;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    window.history.replaceState(null, '', '/');
+    const code = params.get('code');
+    const ssoError = params.get('error');
+    if (ssoError) {
+      setError(SSO_ERRORS[ssoError] || `Single sign-on failed (${ssoError}).`);
+      return;
+    }
+    if (!code) return;
+    setLoading(true);
+    api
+      .post('/sso/exchange', { code })
+      .then((res) => onLoginSuccess(res.data.user, res.data.token))
+      .catch((err) => setError(err.response?.data?.error || 'Single sign-on failed.'))
+      .finally(() => setLoading(false));
+    // Once per page load: the one-time code must not be exchanged twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Demo-only helpers: compiled out of production builds (__DEMO_MODE__ === false).
   const handleBypassDemo = () => {
@@ -249,6 +288,20 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               {isBootstrap ? 'Initialize First-Run Tenant' : 'Sign In to Console'}
             </Button>
           </form>
+
+          {!isBootstrap && ssoProviders.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {ssoProviders.map((p) => (
+                <a
+                  key={p.id}
+                  href={`/api/v1/sso/authorize/${encodeURIComponent(p.id)}`}
+                  className="block w-full text-center border border-vms-border rounded py-2 text-xs text-vms-text hover:border-vms-accent transition"
+                >
+                  Sign in with {p.name}
+                </a>
+              ))}
+            </div>
+          )}
 
           <div className="mt-5 pt-4 text-center border-t border-vms-border">
             <button

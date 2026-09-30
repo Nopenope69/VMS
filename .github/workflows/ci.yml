@@ -116,6 +116,9 @@ jobs:
           python3 -m venv /tmp/modbussim
           /tmp/modbussim/bin/pip install --quiet -r tools/sim/requirements-modbus-sim.txt
 
+      # A real OpenID Connect provider (oidc-provider, test only) for the SSO tests (Phase 8).
+      - name: Install OIDC test provider
+        run: npm ci --prefix tools/sim/oidc
       # An S3-compatible server for the off-site archive tests (Phase 6): moto, started so that after its setup
       # calls every request needs a valid SigV4 signature (S3_TEST_VERIFIES_AUTH). moto does not verify payload
       # hashes, so S3_TEST_VERIFIES_PAYLOAD stays off here.
@@ -135,6 +138,7 @@ jobs:
         env:
           MODBUS_SIM_PYTHON: /tmp/modbussim/bin/python
           VIGILONE_REQUIRE_MODBUS_SIM: '1'
+          VIGILONE_REQUIRE_OIDC_SIM: '1'
           S3_TEST_ENDPOINT: http://127.0.0.1:9000
           S3_TEST_VERIFIES_AUTH: '1'
           VIGILONE_REQUIRE_S3: '1'
@@ -225,6 +229,15 @@ jobs:
           VLM_LLAMA_SERVER_BIN: /tmp/llama.cpp/build/bin/llama-server
         run: npm test
 
+      # Phase 8: the public adapter SDK. Its contract copy must match the backend, its server passes the
+      # conformance kit, and its YOLOX-tiny example matches the official YOLOX code on the golden images.
+      - name: AI adapter SDK (contract drift, build, tests with the real model)
+        working-directory: ./sdk/ai-adapter
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+          VIGILONE_REQUIRE_MODEL_TESTS: '1'
+        run: npm ci && npm run check-contract && npm run build && npm test
+
       - name: ai-adapter.v1 conformance against the real worker
         run: |
           AI_WORKER_MODE=adapter-only AI_MODEL_KEY=yolox-tiny AI_ADAPTER_PORT=7010 node services/ai-worker/dist/main.js > /tmp/adapter.log 2>&1 &
@@ -291,6 +304,9 @@ jobs:
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
           scripts/e2e/anpr-lpr-scenario.sh /tmp/anpr-e2e-report.json
 
+      - name: Run high-availability failover scenario (two backend processes, one database)
+        run: scripts/e2e/ha-failover.sh /tmp/ha-e2e-report.json
+
       - name: Run redaction scenario (SIMULATED recording, real detectors, TEST-ONLY model approval)
         run: |
           scripts/models/fetch-model.sh yunet-2023mar
@@ -325,6 +341,7 @@ jobs:
             /tmp/e2e-report.json
             /tmp/anpr-e2e-report.json
             /tmp/redaction-e2e-report.json
+            /tmp/ha-e2e-report.json
           if-no-files-found: ignore
 
   governance-gates:
@@ -369,6 +386,16 @@ jobs:
       - name: Dependency licence gate (backend, frontend, ai-worker lockfiles)
         working-directory: ./backend
         run: npm run check:dependency-licenses
+
+      # Phase 8 certification preparation: CycloneDX SBOM of npm packages, pinned AI models and container images.
+      - name: Release SBOM (CycloneDX)
+        run: node scripts/release/generate-sbom.mjs dist-sbom
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: vigilone-sbom
+          path: dist-sbom/
 
   field-tooling-checks:
     name: Field Validation Tooling (bench, fault, soak, acceptance)

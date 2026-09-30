@@ -24,7 +24,7 @@ function getCookie(req: Request, name: string): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
-async function createAuthSession(
+export async function createAuthSession(
   user: { id: string; email: string; role: string; tenantId: string },
   res: Response
 ) {

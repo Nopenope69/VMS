@@ -29,6 +29,11 @@ export interface OidcTokenClaims {
   roles?: string[];
 }
 
+/**
+ * Session helpers (lock, unlock, revoke) used by /api/v1/sso/sessions. The SSO login itself is in
+ * services/auth/oidcClient.ts and routes/sso.routes.ts (Phase 8): the claim and role helpers below check claims
+ * without a signature and may map to SUPER_ADMIN, so they must not be used to sign anyone in.
+ */
 export class OidcService {
   private prisma: PrismaClient;
 

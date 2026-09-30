@@ -31,6 +31,36 @@ Local runs: backend **136/136 suites, 976 passed, 7 skipped** with the simulator
 | Existing tests changed | note | `incidentOrchestrator.test.ts` ACK_ONLY test relied on acknowledging without a driver; it now supplies one and checks it was called. One fail-loud allowlist entry for the removed pulse code was deleted. |
 | Real hardware (module, strike, contact), card-reader doors, intrusion, POS, BMS, camera alarm-input binding, console page | NOT_STARTED / BLOCKED_HUMAN | Needs a bench module and a door. Unlocks outside VigilOne read as `FORCED_OPEN`; an access-control integration is not built. |
 
+## Session 11 (2026-09-30): Phase 8, platform (SSO, high availability, adapter SDK, certification preparation)
+
+Branch `feat/phase8-platform` (from `master` `50c6b0b`; Sessions 8 to 10 are on the Phase 5 Wave C, 6 and 7
+branches). Operations: `docs/operations/SSO.md`, `HIGH_AVAILABILITY.md`, `CERTIFICATION_READINESS.md`;
+SDK: `sdk/ai-adapter/README.md`.
+
+Legacy bugs found and fixed in single sign-on:
+* The client secret was stored in plain text in a column named `clientSecretEncrypted`, and the API returned it.
+* The PKCE state lived in process memory.
+* The callback was a 501 stub, so SSO had never worked.
+* An unused helper mapped groups to SUPER_ADMIN without checking any signature. It is documented as unsafe;
+  login does not use it.
+
+Local runs:
+* backend: **137/137 suites, 978 passed, 7 skipped**, with the OIDC provider required
+  (`VIGILONE_REQUIRE_OIDC_SIM=1`);
+* SDK: 16/16 with the real YOLOX-tiny model required;
+* `scripts/e2e/ha-failover.sh`: PASS;
+* governance gates exit 0 (the dependency-licence gate now also covers `tools/sim/oidc` and
+  `sdk/ai-adapter`);
+* frontend build clean.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| OIDC single sign-on (code + PKCE, ID token verified, userinfo, account linking, one-time login code, login page) | DONE_VERIFIED against oidc-provider 9.12.2 | `ssoOidcRealIdp.test.ts` 18/18. Covers: the real provider driven like a browser; linking by verified email; replayed and tampered state; unverified email; unknown user; other tenant; disabled user; provisioning with role mapping and a domain allow-list; wrong client secret (invalid_client at the provider); secret never returned; disabled provider. Crafted tokens are rejected for wrong nonce, audience, issuer or key, for expiry, for HS256, for `alg: none`, and for several audiences without `azp`. **Not tried with Entra ID, Okta, Keycloak or Google.** |
+| Backend high availability (leader lease) | DONE_VERIFIED on one machine | `leaderLeaseRealDb.test.ts` 7/7; removing the lease condition fails 5 of them. `scripts/e2e/ha-failover.sh` with two real processes: `kill -9` of the leader, takeover after 5.4 s with a 6 s lease; the restarted node comes back as a follower; graceful handover in 1.4 s. **PostgreSQL replication and recording failover are not built.** |
+| AI adapter SDK (`sdk/ai-adapter`) | DONE_VERIFIED | Server guarantees with test doubles (11 tests, including the full conformance kit and a blocking-model deadline; removing that deadline guard fails its test). The YOLOX-tiny example matches the official YOLOX post-processing on 4 golden images and passes conformance. The contract copy is checked for drift in CI. **Private and unpublished: the repository has no licence (owner decision).** |
+| SBOM (CycloneDX 1.5) | DONE_VERIFIED as a tool | `scripts/release/generate-sbom.mjs`: 257 npm packages, 8 AI models (SHA-256, licences, training data), 4 container images; uploaded by CI. |
+| Certification | BLOCKED_HUMAN | `CERTIFICATION_READINESS.md`. Open questions for BIS (is an appliance a "recorder"?) and STQC (is VMS certification required?); ONVIF membership; penetration test; disclosure policy. No certification applied for. |
+
 ## Session 9 (2026-09-30): Phase 6, multi-site sync and off-site archive
 
 Branch `feat/phase6-multisite` (from `master`; the Wave C VLM branch is separate). Operations:
