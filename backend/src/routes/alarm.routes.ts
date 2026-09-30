@@ -10,6 +10,8 @@ import { AlarmWorkflowService, WorkflowError, workflowConfigFromEnv } from '../s
 import { EvidenceArchive } from '../services/evidence/archive';
 import { AlarmFeedbackService } from '../services/incident/workflow/alarmFeedback.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
+import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
+import { vlmAgreement } from '../services/vlm/vlmAgreement.service';
 
 const router = Router();
 export const alarmWorkflow = new AlarmWorkflowService(prisma);
@@ -178,6 +180,44 @@ router.get('/feedback/stats', authorize(Permission.ALARM_FEEDBACK), async (req: 
   } catch (err: any) {
     return fail(res, err);
   }
+});
+
+function vlmEnabled(res: Response): boolean {
+  if (isFeatureEnabled(FeatureFlag.VLM_VERIFICATION)) return true;
+  res.status(501).json({ error: 'The alarm second opinion is disabled on this appliance', code: 'FEATURE_DISABLED' });
+  return false;
+}
+
+/**
+ * How the VLM second opinion compares with operator verdicts (default: last 30 days, latest model).
+ */
+router.get('/second-opinion/agreement', authorize(Permission.ALARM_FEEDBACK), async (req: Request, res: Response) => {
+  if (!vlmEnabled(res)) return;
+  const to = req.query.to ? new Date(String(req.query.to)) : new Date();
+  const from = req.query.from ? new Date(String(req.query.from)) : new Date(to.getTime() - 30 * 86400_000);
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || from >= to) return res.status(400).json({ error: 'from and to must be ISO timestamps with from < to' });
+  const model = typeof req.query.modelSha256 === 'string' ? req.query.modelSha256 : undefined;
+  if (model !== undefined && !/^[a-f0-9]{64}$/.test(model)) return res.status(400).json({ error: 'modelSha256 must be a SHA-256' });
+  try {
+    return res.json(await vlmAgreement(prisma, req.user!.tenantId, from, to, model));
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * The advisory second opinion(s) recorded for one alarm. Never part of the alarm's state.
+ */
+router.get('/:id/second-opinion', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  if (!vlmEnabled(res)) return;
+  const alarm = await prisma.alarm.findUnique({ where: { id: req.params.id }, select: { tenantId: true } });
+  if (!alarm || alarm.tenantId !== req.user!.tenantId) return res.status(404).json({ error: 'alarm not found' });
+  const rows = await prisma.vlmVerification.findMany({
+    where: { alarmId: req.params.id, tenantId: req.user!.tenantId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, targetClass: true, answer: true, reason: true, imageSource: true, imageSha256: true, promptSha256: true, modelName: true, modelVersion: true, modelSha256: true, latencyMs: true, createdAt: true },
+  });
+  return res.json({ advisory: true, note: 'A local AI model\'s opinion on whether the detected object is in the picture. It does not change the alarm.', secondOpinions: rows });
 });
 
 /**

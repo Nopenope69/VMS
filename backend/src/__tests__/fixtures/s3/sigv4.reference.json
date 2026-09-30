@@ -1,0 +1,69 @@
+{
+ "generatedBy": "tools/reference/s3_sigv4_reference.py",
+ "botocore": "1.43.105",
+ "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+ "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+ "cases": [
+  {
+   "name": "head path-style",
+   "method": "HEAD",
+   "host": "127.0.0.1:9000",
+   "path": "/vigilone-archive/archive/t1/cam1/abc.fmp4",
+   "region": "us-east-1",
+   "headers": {},
+   "payload": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "expectedAuthorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260930/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=a5c8efef3932258e16007ca2f1b81655c500cd5e7505ed8f96cc06087f7dc1d0",
+   "expectedAmzDate": "20260930T122716Z"
+  },
+  {
+   "name": "put with metadata",
+   "method": "PUT",
+   "host": "minio.example:9000",
+   "path": "/vigilone-archive/archive/t1/cam1/abc.fmp4",
+   "region": "ap-south-1",
+   "headers": {
+    "content-length": "33000",
+    "content-type": "application/octet-stream",
+    "x-amz-meta-vigilone-sha256": "fc97c84ea9001b5ddf3f8be5c343a121f3366599e696a34cce36ecaaae5d2ca0"
+   },
+   "payload": "fc97c84ea9001b5ddf3f8be5c343a121f3366599e696a34cce36ecaaae5d2ca0",
+   "expectedAuthorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260930/ap-south-1/s3/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-vigilone-sha256, Signature=9031eb31ae0ef3e77cb40913c2a3d895c78bf1061503fb408d1e563d391e6de3",
+   "expectedAmzDate": "20260930T122716Z"
+  },
+  {
+   "name": "virtual-hosted get",
+   "method": "GET",
+   "host": "examplebucket.s3.us-east-1.amazonaws.com",
+   "path": "/test.txt",
+   "region": "us-east-1",
+   "headers": {
+    "range": "bytes=0-9"
+   },
+   "payload": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "expectedAuthorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260930/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=5ff440ba44bb106e99bd0f33e7e28acb24b7d16c86a13f3616d90942e359e484",
+   "expectedAmzDate": "20260930T122716Z"
+  },
+  {
+   "name": "key with spaces and unicode",
+   "method": "DELETE",
+   "host": "127.0.0.1:9000",
+   "path": "/b-1/dir/file name ü+&=.fmp4",
+   "region": "us-east-1",
+   "headers": {},
+   "payload": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "expectedAuthorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260930/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=d3b97e47586cbf9aed4a8e6bb790ee65774e82b8c2a38dec32934501c82919bc",
+   "expectedAmzDate": "20260930T122716Z"
+  },
+  {
+   "name": "bucket create",
+   "method": "PUT",
+   "host": "127.0.0.1:9000",
+   "path": "/vigilone-archive/",
+   "region": "us-east-1",
+   "headers": {},
+   "payload": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "expectedAuthorization": "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20260930/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=a49bb6c56e5a27c1cce4268b72f9a0de419860e171b37f18d3a82c70c4866edd",
+   "expectedAmzDate": "20260930T122716Z"
+  }
+ ]
+}

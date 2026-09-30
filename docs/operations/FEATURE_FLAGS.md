@@ -25,8 +25,8 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 
 | Flag | Env var | Gated prefix |
 | --- | --- | --- |
-| `FEDERATION` | `VIGILONE_FEATURE_FEDERATION` | `/api/v1/federation` |
-| `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` |
+| `FEDERATION` | `VIGILONE_FEATURE_FEDERATION` | `/api/v1/federation` and the site `federationUplink` (hash-chained site-to-headquarters sync; `docs/operations/MULTI_SITE.md`) |
+| `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` and the `archiveWorker` (S3-compatible off-site archive; `docs/operations/MULTI_SITE.md`) |
 | `OIDC_SSO` | `VIGILONE_FEATURE_OIDC_SSO` | `/api/v1/sso` |
 | `DIO_RELAY` | `VIGILONE_FEATURE_DIO_RELAY` | `/api/v1/relays` |
 | `ANPR` | `VIGILONE_FEATURE_ANPR` | `/api/v1/anpr`, `/api/v1/internal/anpr/*` (501 `FEATURE_DISABLED`); see ANPR.md |
@@ -36,6 +36,7 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `CAMERA_EVENTS` | `VIGILONE_FEATURE_CAMERA_EVENTS` | `/api/v1/camera-events` (and the `cameraEventManager` worker; see `docs/operations/CAMERA_EVENTS.md`) |
 | `EXPLANATIONS` | `VIGILONE_FEATURE_EXPLANATIONS` | no routes: an explanation is generated for each new alarm and written into evidence packages (ADR 0005) |
 | `SEMANTIC_SEARCH` | `VIGILONE_FEATURE_SEMANTIC_SEARCH` | `/api/v1/search/crops` and the `cropEmbedder` worker (needs `EMBEDDING_ADAPTER_URL`; ADR 0005) |
+| `VLM_VERIFICATION` | `VIGILONE_FEATURE_VLM_VERIFICATION` | the `vlmVerifier` worker and `GET /api/v1/alarms/:id/second-opinion`, `/alarms/second-opinion/agreement` (needs `VLM_ADAPTER_URL`; ADR 0005; advisory only) |
 | `OBJECT_CROPS` | `VIGILONE_FEATURE_OBJECT_CROPS` | `/api/v1/crop-policy` (per-site person-crop switch and retention), crop capture on the detection path and the `cropPurger` worker (ADR 0005); person crops also need the per-site switch |
 
 Note: the ANPR router also checks the licence entitlement (`requireFeature('ANPR')` in

@@ -61,3 +61,10 @@ Phase 5 adds explanation records, semantic search over object crops, and local V
 - The pinned ONNX towers were compared with the official PyTorch checkpoint (cosine at least 0.9999998), and the worker reproduces the official embeddings, so the export is not an unexamined third-party conversion.
 - The tokenizer decision held: `@huggingface/tokenizers` reproduced the official IDs on every fixture, so no Python sidecar is needed. Emoji was in the planned fixture list and was not tested.
 - Licence: the owner approved both towers on 30 Sept 2026 as a business decision (training data unpublished, not reviewed by counsel); the entry records that the coding agent entered it at the owner's instruction. Still unmeasured: retrieval quality on site footage.
+
+## Implementation notes (Wave C, VLM second opinion, 30 Sept 2026)
+- Built as decided: llama.cpp `llama-server` (tag b11277, pinned commit) as a child process of the ai-worker in `vlm` mode, SmolVLM2 2.2B Instruct GGUF (Q4_K_M plus Q8_0 projector) pinned by SHA-256. The worker starts the server itself with files it verified and checks the build and model path it reports, rather than trusting a separate container.
+- SmolVLM2 500M was tried first and rejected: 5/8 on the labelled test questions, with answers contradicting their own reasons. The 2.2B model answered 8/8.
+- Grammar-constrained output was verified: llama-server's `json_schema` response format holds the answer to `{answer: yes|no|unclear, reason}`, and the worker still refuses anything else. Answer-before-reason was kept; reason-first gave one-word reasons with the same answers.
+- The answer is advisory and stored separately (`VlmVerification`); nothing reads it to change an alarm. The exit-gate number (agreement with operator verdicts) has an endpoint but no data yet.
+- The models are candidates (mixed training-data licences) and need a human approval like the others.

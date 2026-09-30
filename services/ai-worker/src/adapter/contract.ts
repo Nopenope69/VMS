@@ -6,7 +6,7 @@
  */
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'plate_detection_for_redaction' | 'embedding';
+export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'plate_detection_for_redaction' | 'embedding' | 'vlm_verification';
 
 export type AdapterErrorCode =
   | 'MODEL_NOT_LOADED'
@@ -50,7 +50,7 @@ export interface ModelCardV1 {
   codeLicense: string;
   weightsLicense: string;
   weightsSource: string;
-  runtime: 'onnxruntime' | 'openvino';
+  runtime: 'onnxruntime' | 'openvino' | 'llama.cpp';
   input: { width: number; height: number; colorSpace: 'RGB' | 'BGR'; letterbox: boolean; resizeMode?: 'fixed' | 'min_side' };
   components?: Array<{ role: string; name: string; version: string; sha256: string; weightsLicense: string }>;
   evaluation: { dataset: string; metric: string; value: number; reportRef: string } | null;
@@ -84,6 +84,21 @@ export interface InferenceRequestV1 {
   modelId: string;
   frame: FrameRefV1;
   deadlineMs: number;
+  /** v1.1, optional: required for `vlm_verification`. */
+  vlmQuery?: VlmQueryV1;
+}
+
+/** v1.1: the question of a `vlm_verification` request (an object class; the adapter owns the prompt). */
+export interface VlmQueryV1 {
+  targetClass: string;
+}
+
+/** v1.1: the answer a `vlm_verification` result carries. Advisory only. */
+export interface VerificationV1 {
+  targetClass: string;
+  answer: 'yes' | 'no' | 'unclear';
+  reason: string;
+  promptSha256: string;
 }
 
 /** v1.1, optional: `POST /v1/embed-text` (docs/contracts/ai-adapter.v1.md). */
@@ -113,6 +128,8 @@ export type InferenceResultV1 =
       detections: DetectionV1[];
       /** v1.1, optional: present for the `embedding` task (little-endian float32, base64). */
       embedding?: { dim: number; encoding: 'float32_base64'; vector: string; normalized: boolean };
+      /** v1.1, optional: present for the `vlm_verification` task. */
+      verification?: VerificationV1;
       provenance: AiProvenanceV1;
       latencyMs: number;
     }

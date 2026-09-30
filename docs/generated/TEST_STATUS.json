@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T08:16:27.020Z",
-  "commit": "46433ff0a436b7600fee7432dec8a20aeb5a0c41",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36688424227",
+  "generatedAt": "2026-09-30T22:02:39.039Z",
+  "commit": "1c5d3e73e5c8cd3b10be61f04ea69675e3b8b3ad",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36782847273",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 135,
-        "passed": 135,
+        "total": 137,
+        "passed": 137,
         "failed": 0
       },
       "tests": {
-        "total": 960,
-        "passed": 953,
+        "total": 977,
+        "passed": 970,
         "failed": 0,
         "skipped": 7
       },
@@ -177,6 +177,13 @@
           "file": "backend/src/__tests__/contracts/recordingIndex.v1.test.ts",
           "status": "passed",
           "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/contracts/vlmAdapterConformance.test.ts",
+          "status": "passed",
+          "passed": 3,
           "failed": 0,
           "skipped": 0
         },
@@ -958,6 +965,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/vlmVerifierRealDb.test.ts",
+          "status": "passed",
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/webhookIngestion.test.ts",
           "status": "passed",
           "passed": 8,
@@ -969,15 +983,15 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 28,
-        "passed": 25,
-        "failed": 2
+        "total": 30,
+        "passed": 26,
+        "failed": 3
       },
       "tests": {
-        "total": 239,
-        "passed": 203,
-        "failed": 27,
-        "skipped": 9
+        "total": 284,
+        "passed": 236,
+        "failed": 28,
+        "skipped": 20
       },
       "success": false,
       "suiteDetails": [
@@ -1073,6 +1087,13 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/goldenVlm.test.ts",
+          "status": "failed",
+          "passed": 0,
+          "failed": 1,
+          "skipped": 11
+        },
+        {
           "file": "services/ai-worker/src/__tests__/goldenYolox.test.ts",
           "status": "passed",
           "passed": 8,
@@ -1164,6 +1185,13 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/vlmAdapter.test.ts",
+          "status": "passed",
+          "passed": 33,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "services/ai-worker/src/__tests__/worker.test.ts",
           "status": "passed",
           "passed": 7,
@@ -1181,11 +1209,11 @@
     }
   ],
   "totals": {
-    "suites": 163,
-    "tests": 1199,
-    "passed": 1156,
-    "failed": 27,
-    "skipped": 16
+    "suites": 167,
+    "tests": 1261,
+    "passed": 1206,
+    "failed": 28,
+    "skipped": 27
   },
   "allPassed": false
 }

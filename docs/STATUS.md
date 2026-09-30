@@ -36,6 +36,64 @@ Local runs:
 | SBOM (CycloneDX 1.5) | DONE_VERIFIED as a tool | `scripts/release/generate-sbom.mjs`: 257 npm packages, 8 AI models (SHA-256, licences, training data), 4 container images; uploaded by CI. |
 | Certification | BLOCKED_HUMAN | `CERTIFICATION_READINESS.md`. Open questions for BIS (is an appliance a "recorder"?) and STQC (is VMS certification required?); ONVIF membership; penetration test; disclosure policy. No certification applied for. |
 
+## Session 9 (2026-09-30): Phase 6, multi-site sync and off-site archive
+
+Branch `feat/phase6-multisite` (from `master`; the Wave C VLM branch is separate). Operations:
+`docs/operations/MULTI_SITE.md`. Flags `VIGILONE_FEATURE_FEDERATION` and
+`VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` (both default OFF).
+
+**Found and fixed in the existing code (verified by tests that fail when the fix is undone):** the sync
+endpoint's EVENT stream wrote site events into headquarters' own DetectionEvent table under a camera id the site
+chose, with no tenant check; AUDIT and ALARM streams advanced the cursor and stored nothing; any valid pairing
+token could re-register another tenant's node id with a new key; the deprovision check read a field that does
+not exist; pairing tokens were in memory only; the archive "uploaded" to an in-memory map, stored the bucket keys
+in plain text, returned them from `GET /archive/config`, and its queue endpoint accepted any file path. No site
+or bucket ever used this code.
+
+Local runs: backend **138/138 suites, 981 passed, 8 skipped** (6 real-model search tests whose model files were
+not in this run, the payload-hash check, and the long-standing skip) with `S3_TEST_ENDPOINT` pointing at a local moto server
+that enforces signatures (as in CI); governance gates exit 0. `scripts/e2e/federation-scenario.sh`
+PASS locally.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Record chain, site outbox and uplink, headquarters storage and views | DONE_VERIFIED on one machine | `federationSyncRealDb.test.ts` 11/11 (run twice): pairing (hashed single-use tokens, https-only, key file 0600), sync of events, alarm changes and audit entries in order, chain recomputed, headquarters tables untouched, cross-site alarm view, cut link (queue, backoff, catch-up), lost reply (no duplicate), altered record, unsigned and replayed requests, retired streams, deprovisioned node, takeover refused. Mutations: removing the chain check fails 1 test, removing the takeover guard fails 7. |
+| Two-process scenario (two databases, relay cut, `kill -9` of the site) | DONE_VERIFIED locally; CI pending | `scripts/e2e/federation-scenario.sh`: link cut 15 s (nothing arrives, 17 records queued, 4 backoffs), restored (caught up in 5 s, acknowledgements applied), site killed mid-sync and restarted (35/35 alarms, no gap), 111 records recomputed at headquarters, contiguous from 1. **Loopback, not a WAN.** |
+| S3 client (SigV4) | DONE_VERIFIED | `s3Client.test.ts`: signatures equal botocore 1.43.105 on 5 cases (path-style, virtual-hosted, metadata, unicode key, bucket). |
+| Archive worker, encrypted credentials, queue by segment id | DONE_VERIFIED against moto (locally and in CI) | `archiveS3RealDb.test.ts` 7/7 against moto 5.1.0 started with signatures enforced (`tools/sim/moto_s3_with_auth.py`): pinned first outside the window, rest inside, bytes read back identical, duplicate recognised, changed file never uploaded, retries then FAILED, queue API refuses paths and other tenants, wrong secret refused (SignatureDoesNotMatch). **Not verified:** that a server refuses a body differing from its signed SHA-256 (moto does not check it; the test exists behind `S3_TEST_VERIFIES_PAYLOAD=1` for MinIO or AWS). CI first used MinIO, but `minio/minio` is no longer on Docker Hub, so CI uses moto. |
+| Existing tests changed | note | `storeAndForwardSync.test.ts` tested the retired EVENT stream (the security bug) and now tests the new input rules; `federationAuth.test.ts` pairing tests use the database-backed tokens; `objectStorageArchive.test.ts`, `fakeSuccessHardening.test.ts` and `failLoudHardening.test.ts` asserted that the in-memory S3 stub refused; they now assert that no job completes without a store that confirmed it. Three fail-loud allowlist entries for the removed stub were deleted; one entry was added for the record chain's genesis hash (same role as the audit chain's). |
+| Real WAN, customer bucket, live video across sites, config push to sites, console pages | NOT_STARTED / BLOCKED_HUMAN | A WAN and a bucket need a second site and credentials. The reverse video tunnel and config push are not built. |
+
+## Session 8 (2026-09-30): Phase 5 Wave C, the alarm second opinion (local VLM)
+
+Branch `feat/phase5-wave-c-vlm`. Operations: `docs/operations/VLM_VERIFICATION.md`. Flag
+`VIGILONE_FEATURE_VLM_VERIFICATION` (default OFF). With this, every Phase 5 item is built; the Phase 5 exit
+gate (retrieval recall on labelled site queries, VLM agreement with operators) still needs site data.
+
+Pinned: SmolVLM2 2.2B Instruct GGUF Q4_K_M `0cf76814555b8665149075b74ab6b5c1d428ea1d3d01c1918c12012e8d7c9f58`
+and Q8_0 projector `ae07ea1facd07dd3230c4483b63e8cda96c6944ad2481f33d531f79e892dd024` (ggml-org repository commit
+`1bc3c9f74cea`; both equal the Hugging Face LFS SHA-256), llama.cpp tag `b11277` commit
+`eae11d2217fe9225d1aaba48773b6cca45ae4de9`, built from source here.
+
+Local runs: ai-worker **25 suites passed, 5 skipped (249 tests passed, 34 skipped)**, now run serially
+(`--runInBand`) because the SigLIP 2 and VLM suites timed out loading when run side by side on 4 cores; the
+skips are the ANPR and redaction suites whose files were not in the local models directory (CI requires them).
+Backend **137/137 suites, 976 passed, 1 skipped** after the feature-flag list test was updated for the new flag.
+Hygiene, model-licence, fail-loud, feature-flag-docs, status-docs and dependency-licence gates exit 0; the
+frontend builds.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Model choice | DONE_VERIFIED on 8 questions | SmolVLM2 500M: 5/8, answering "yes" while its reason said "no"; rejected. 2.2B: 8/8. |
+| Worker adapter (`vlm` mode, llama-server child process) | DONE_VERIFIED | `vlmAdapter.test.ts` 33/33 with a SIMULATED llama-server: approvals, file hashes, the server's reported build and model path, vision input, the exact prompt, schema and settings sent, refusals, malformed or truncated output (RUNTIME_ERROR, never an answer), backpressure, a dying server (FAILED health). `goldenVlm.test.ts` 12/12 with the real model and a llama-server built from the pinned commit: 8/8 answers, the same answer twice, refused without approval. |
+| Contract v1.1 `vlm_verification` | DONE_VERIFIED | Backend schema, worker types, docs; `contracts/vlmAdapterConformance.test.ts` validates the real adapter core's messages and refuses a free-text prompt. |
+| Backend worker, storage, API, agreement report | DONE_VERIFIED against a SIMULATED adapter | `vlmVerifierRealDb.test.ts` 14/14 on the real database: asks about the detected class with the snapshot (crop fallback, a tampered crop is never sent), stores hashes and provenance, **leaves the alarm row unchanged**, asks once per alarm and model, skips alarms with no recorded detection, image or supported class, and old ones; an unready, unregistered, wrong-model, wrong-class or failing adapter stores nothing; the database refuses bad answers and hashes; agreement counts and Wilson intervals checked by hand; API tenant isolation and permissions. Mutation check: removing the provenance or class check fails two tests. |
+| Console | DONE_UNVERIFIED | The resolve dialog shows the advisory answer; the frontend builds; not tested in a browser. |
+| Container image `Dockerfile.vlm`, compose `vlm-worker` (`--profile vlm`), CI | DONE_UNVERIFIED | `docker compose config` accepts it; no Docker daemon here. CI now builds llama-server from the pinned commit (cached) and runs the real-model VLM tests; that run is pending. |
+| Speed and memory | measured once, build machine | 11 to 16 s for a new picture on 4 threads; about 3.0 GB peak RSS for llama-server. Not measured on reference hardware. |
+| Licence approval for SmolVLM2 | BLOCKED_HUMAN | Candidate model (mixed training-data licences); refused in the product until approved. |
+| Agreement with operators on real alarms | BLOCKED_HUMAN | Needs a pilot with operator verdicts; the endpoint reports it once there are 100. |
+
 ## Session 7 (2026-09-30): Phase 5, SigLIP 2 adapter and text search
 
 Branch `feat/phase5-siglip2` (from `master` `00a1786`). The Hugging Face hosts (`huggingface.co` and

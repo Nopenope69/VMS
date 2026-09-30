@@ -74,7 +74,7 @@ export async function loadCropPolicy(prisma: PrismaClient, siteId: string, env: 
 }
 
 /** The snapshot must be a real file under an allowed snapshot root (symlinks resolved), never an arbitrary path. */
-function resolveSnapshot(snapshotPath: string): string {
+export function resolveSnapshot(snapshotPath: string): string {
   let real: string;
   try {
     real = fs.realpathSync(path.resolve(snapshotPath));

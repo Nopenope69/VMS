@@ -18,25 +18,33 @@ const withNodeEnv = async (value: string, fn: () => Promise<void>) => {
 
 describe('P0.4 fail-loud hardening', () => {
   describe('object storage archive', () => {
+    // The in-memory "store" that used to stand in for S3 is gone. A job is COMPLETED only after the configured
+    // store confirmed the object; with credentials that cannot be read it must never be marked COMPLETED.
     const prismaMock: any = {
       archiveJob: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'job-1',
           objectKey: 'k',
+          segmentPath: '/nonexistent',
           sha256Checksum: 'a'.repeat(64),
           sizeBytes: 1,
+          attempts: 0,
+          maxAttempts: 3,
           priority: true,
-          tenant: { objectStorageConfig: { enabled: true, offPeakStartUtc: '00:00', offPeakEndUtc: '23:59' } },
+          status: 'QUEUED',
+          tenant: { objectStorageConfig: { enabled: true, offPeakStartUtc: '00:00', offPeakEndUtc: '23:59', accessKeyEncrypted: 'not-encrypted', secretKeyEncrypted: 'not-encrypted', bucket: 'b-1', region: 'us-east-1', endpoint: null, bandwidthLimitKbps: 0 } },
         }),
         update: jest.fn(),
       },
     };
 
-    it.each(['development', 'production'])('refuses to mark a job COMPLETED in %s (no S3 client)', async (env) => {
+    it.each(['development', 'production'])('never marks a job COMPLETED without a store that confirmed it (%s)', async (env) => {
       await withNodeEnv(env, async () => {
         const svc = new ObjectStorageArchiveService(prismaMock);
-        await expect(svc.processArchiveJob('job-1')).rejects.toThrow(/FEATURE_DEFERRED_FOR_V1/);
-        expect(prismaMock.archiveJob.update).not.toHaveBeenCalled();
+        const r = await svc.processArchiveJob('job-1');
+        expect(r.status).not.toBe('COMPLETED');
+        expect(r.error).toMatch(/cannot be decrypted/);
+        for (const call of prismaMock.archiveJob.update.mock.calls) expect(call[0].data.status).not.toBe('COMPLETED');
       });
     });
   });

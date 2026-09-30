@@ -27,6 +27,7 @@ export enum FeatureFlag {
   EXPLANATIONS = 'EXPLANATIONS',
   OBJECT_CROPS = 'OBJECT_CROPS',
   SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
+  VLM_VERIFICATION = 'VLM_VERIFICATION',
 }
 
 export interface FeatureFlagDefinition {
@@ -49,17 +50,17 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     envVar: envVarFor(FeatureFlag.FEDERATION),
     title: 'Multi-site federation',
     routePrefixes: ['/api/v1/federation'],
-    workers: [],
+    workers: ['federationUplink'],
     status:
-      'Pairing, control-tunnel protocol and sync engine exist; no outbound WAN client runs, so appliances do not sync across sites.',
+      'A paired site sends its events, alarm changes and audit entries to headquarters as a hash-chained, signed log that survives link outages; headquarters stores them per site and shows cross-site alarms. Tested with two apps and a cut network link on one machine; not yet run across a real WAN. No live video across sites (reverse tunnel not built).',
   },
   [FeatureFlag.OBJECT_STORAGE_ARCHIVE]: {
     flag: FeatureFlag.OBJECT_STORAGE_ARCHIVE,
     envVar: envVarFor(FeatureFlag.OBJECT_STORAGE_ARCHIVE),
     title: 'S3 / object-storage archive',
     routePrefixes: ['/api/v1/archive'],
-    workers: [],
-    status: 'Scheduling and checksum logic exist; no S3 client is attached and uploads fail closed.',
+    workers: ['archiveWorker'],
+    status: 'Finalized segments of enabled tenants are uploaded to S3-compatible storage (SigV4, payload signed with the SHA-256, verified by HEAD) in the off-peak window, pinned evidence first and at any time. Credentials are encrypted and never returned. Tested against a local S3-compatible server (moto) here and MinIO in CI; not yet against a customer bucket.',
   },
   [FeatureFlag.OIDC_SSO]: {
     flag: FeatureFlag.OIDC_SSO,
@@ -142,7 +143,16 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/search/crops'],
     workers: ['cropEmbedder'],
     status:
-      'Crop embeddings are stored in pgvector and searched by example (a stored crop or a vector); results are audited and person crops are purpose-limited. There is no embedding model yet (the SigLIP 2 adapter and text queries are not built), so nothing is embedded until an adapter is configured, and retrieval quality on site data is not measured.',
+      'Crops are embedded by the SigLIP 2 adapter (EMBEDDING_ADAPTER_URL) into pgvector and searched by example or by text; results are audited and person searches are admin-only and purpose-limited. The model is owner-approved and matches the official checkpoint; retrieval quality on site data is not measured.',
+  },
+  [FeatureFlag.VLM_VERIFICATION]: {
+    flag: FeatureFlag.VLM_VERIFICATION,
+    envVar: envVarFor(FeatureFlag.VLM_VERIFICATION),
+    title: 'Alarm second opinion (local VLM)',
+    routePrefixes: [],
+    workers: ['vlmVerifier'],
+    status:
+      'A local SmolVLM2 model (llama.cpp, VLM_ADAPTER_URL) is asked whether the detected object is visible in each new alarm\'s snapshot; the yes/no/unclear answer is stored and shown as advisory and never changes the alarm. Answers eight labelled test questions correctly; agreement with operator verdicts on real alarms is not measured. The model needs a human licence approval before it runs.',
   },
 });
 

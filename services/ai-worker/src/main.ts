@@ -10,6 +10,9 @@
  *  - redaction / redaction-adapter-only: face and plate regions for redaction (P4.4), default
  *    port 7012. 'redaction' registers the pipeline manifest with the backend; the backend's
  *    redaction jobs call this adapter over HTTP. No cameras are read in this mode.
+ *  - vlm / vlm-adapter-only: alarm second opinion (Phase 5 Wave C), SmolVLM2 via a llama-server child
+ *    process the worker starts with verified files, default port 7014. 'vlm' registers the pipeline.
+ *    Needs VLM_LLAMA_SERVER_BIN (llama-server built from the pinned llama.cpp commit); VLM_THREADS.
  *  - embedding / embedding-adapter-only: SigLIP 2 crop and text embeddings (Phase 5), default port
  *    7013. 'embedding' registers the pipeline manifest with the backend; the backend's crop embedder
  *    and text search call this adapter over HTTP. No cameras are read in this mode.
@@ -48,6 +51,8 @@ import { loadRedactionPipeline, LoadedRedactionPipeline } from './redaction/reda
 import { RedactionAdapterCore } from './redaction/redactionAdapterCore';
 import { loadEmbeddingPipeline, LoadedEmbeddingPipeline } from './embedding/embeddingPipeline';
 import { EmbeddingAdapterCore } from './embedding/embeddingAdapterCore';
+import { loadVlmPipeline, LoadedVlmPipeline } from './vlm/vlmPipeline';
+import { VlmAdapterCore } from './vlm/vlmAdapterCore';
 import { AuthenticatedInternalApiClient as ApiClient } from './apiClient';
 import { ortRuntimeVersion } from './runtimeInfo';
 
@@ -75,6 +80,7 @@ export async function boot(): Promise<BootResult> {
   if (mode === 'anpr' || mode === 'anpr-adapter-only') return bootAnpr(mode);
   if (mode === 'redaction' || mode === 'redaction-adapter-only') return bootRedaction(mode);
   if (mode === 'embedding' || mode === 'embedding-adapter-only') return bootEmbedding(mode);
+  if (mode === 'vlm' || mode === 'vlm-adapter-only') return bootVlm(mode);
   const lock = readModelLock();
   const key = env('AI_MODEL_KEY', lock.default)!;
   const localEntry = findLockEntry(key, lock);
@@ -438,5 +444,67 @@ async function bootEmbedding(mode: 'embedding' | 'embedding-adapter-only'): Prom
   });
   core.setModelId(registered.id);
   log('info', 'embedding pipeline registered', { modelId: registered.id });
+  return { worker: null as any, close, port: boundPort };
+}
+
+/**
+ * Alarm second opinion (Phase 5 Wave C). Candidate models: without a human approval for each SHA-256 it
+ * refuses (LICENSE_REJECTED) and serves FAILED health, so the backend records no second opinions.
+ */
+async function bootVlm(mode: 'vlm' | 'vlm-adapter-only'): Promise<BootResult> {
+  const adapterId = env('AI_ADAPTER_ID', 'vigilone-vlm')!;
+  let loaded: LoadedVlmPipeline | null = null;
+  let failure: string | undefined;
+  try {
+    loaded = await loadVlmPipeline();
+    log('info', 'VLM pipeline loaded', { pipeline: `${loaded.definition.name}@${loaded.definition.version}`, sha256: loaded.definitionSha256, llamaServer: loaded.runtime.buildInfo });
+  } catch (e: any) {
+    failure = e.message;
+    log('error', 'VLM pipeline refused', { error: e.message });
+  }
+  const core = new VlmAdapterCore(loaded, { adapterId, adapterVersion: '1.0.0-phase5', failure });
+  const server = createAdapterServer(core, { maxBodyBytes: 16 * 1024 * 1024 });
+  const host = env('AI_ADAPTER_HOST', '127.0.0.1')!;
+  const port = Number(env('AI_ADAPTER_PORT', '7014'));
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  const boundPort = (server.address() as any).port as number;
+  log('info', 'ai-adapter.v1 (vlm) listening', { host, port: boundPort, mode });
+  const close = async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await loaded?.close();
+  };
+  if (!loaded) {
+    if (env('AI_EXIT_ON_REFUSAL', 'true') === 'true') {
+      await close();
+      process.exit(EXIT_MODEL_REFUSED);
+    }
+    return { worker: null as any, close, port: boundPort };
+  }
+  if (mode === 'vlm-adapter-only') return { worker: null as any, close, port: boundPort };
+
+  if (!env('INTERNAL_API_SECRET')) throw new Error('INTERNAL_API_SECRET is required in vlm mode');
+  const api = new ApiClient({ baseUrl: env('BACKEND_INTERNAL_URL', 'http://127.0.0.1:4000/api/v1/internal')!, internalSecret: env('INTERNAL_API_SECRET')! });
+  const l = loaded;
+  const approvals = l.components.map((c) => c.approval!).filter(Boolean);
+  const registered = await api.registerPipelineManifest({
+    name: l.definition.name,
+    version: l.definition.version,
+    sha256: l.definitionSha256,
+    task: 'vlm_verification',
+    codeLicense: 'MIT AND Apache-2.0',
+    weightLicense: [...new Set(l.components.map((c) => c.entry.weightLicense))].join(' AND '),
+    weightsSource: l.components.map((c) => `${c.role}: ${c.entry.weightsSource}`).join('; '),
+    trainingData: {
+      source: l.components.map((c) => `${c.role}: ${c.entry.trainingData.source}`).join('; '),
+      license: 'HUMAN-APPROVED EXCEPTION',
+      provenance: approvals.map((a) => `${a.key} approved by ${a.approvedBy} on ${a.approvedAt}: ${a.reason}`).join('; '),
+      commercialUse: true,
+    },
+    runtimeConfig: { runtime: 'llama.cpp', runtimeVersion: `${l.definition.llamaCpp.tag} (${l.definition.llamaCpp.commit})`, executionProvider: 'cpu', inputWidth: 384, inputHeight: 384, colorSpace: 'RGB', modelFormat: 'GGUF' },
+    modelSignature: { decoder: 'vlm_pipeline', components: l.definition.components, targetClasses: l.definition.targetClasses, promptTemplate: l.definition.prompt.templateVersion },
+    classes: Object.fromEntries(l.definition.targetClasses.map((c, i) => [String(i), c])),
+  });
+  core.setModelId(registered.id);
+  log('info', 'VLM pipeline registered', { modelId: registered.id });
   return { worker: null as any, close, port: boundPort };
 }
