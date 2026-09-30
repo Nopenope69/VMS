@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T22:45:41.811Z",
-  "commit": "96d1a13c45d8a747145617545d1387db36162858",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36787125478",
+  "generatedAt": "2026-09-30T23:13:16.481Z",
+  "commit": "6c66437ea88d2bab8061eb6c9690b75cb8a44821",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36789712624",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 143,
-        "passed": 143,
+        "total": 144,
+        "passed": 144,
         "failed": 0
       },
       "tests": {
-        "total": 1054,
-        "passed": 1012,
+        "total": 1072,
+        "passed": 1030,
         "failed": 0,
         "skipped": 42
       },
@@ -548,6 +548,13 @@
           "file": "backend/src/__tests__/generateStatus.test.ts",
           "status": "passed",
           "passed": 4,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/goLiveCheck.test.ts",
+          "status": "passed",
+          "passed": 18,
           "failed": 0,
           "skipped": 0
         },
@@ -1251,9 +1258,9 @@
     }
   ],
   "totals": {
-    "suites": 173,
-    "tests": 1338,
-    "passed": 1248,
+    "suites": 174,
+    "tests": 1356,
+    "passed": 1266,
     "failed": 28,
     "skipped": 62
   },
