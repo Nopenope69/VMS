@@ -181,6 +181,15 @@ jobs:
           VIGILONE_REQUIRE_MODEL_TESTS: '1'
         run: npm test
 
+      # Phase 8: the public adapter SDK. Its contract copy must match the backend, its server passes the
+      # conformance kit, and its YOLOX-tiny example matches the official YOLOX code on the golden images.
+      - name: AI adapter SDK (contract drift, build, tests with the real model)
+        working-directory: ./sdk/ai-adapter
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+          VIGILONE_REQUIRE_MODEL_TESTS: '1'
+        run: npm ci && npm run check-contract && npm run build && npm test
+
       - name: ai-adapter.v1 conformance against the real worker
         run: |
           AI_WORKER_MODE=adapter-only AI_MODEL_KEY=yolox-tiny AI_ADAPTER_PORT=7010 node services/ai-worker/dist/main.js > /tmp/adapter.log 2>&1 &
