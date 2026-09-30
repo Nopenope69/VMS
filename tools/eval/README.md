@@ -26,5 +26,9 @@ node tools/eval/model-card.mjs --model yolox-tiny --metrics /tmp/metrics.json \
   It refuses missing results, the query crop inside its own ranking and duplicates, and says
   NOT EVALUATED unless `--real-site-data` is given with at least 100 labelled queries.
   `__tests__/retrieval-eval.test.mjs` checks it against hand-computed values.
+- `retrieval-collect.mjs` runs a labelled query set through the search API and writes the rankings
+  `retrieval-eval.mjs` scores. It stops without writing a file if any query fails, is refused, or is
+  answered by a different model. `__tests__/retrieval-collect.test.mjs` runs it against a local stub of
+  the API. Procedure: `docs/operations/RETRIEVAL_LABELLING.md`.
 - Real numbers need labelled frames from real Indian sites (action plan P2.10, HUMAN-REQUIRED):
   at least 500 instances per v1 class, captured with consent and signage (DPDP).

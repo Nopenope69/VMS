@@ -44,6 +44,25 @@ dependency-licence gates exit 0. The one skipped backend test was already skippe
 | Licence entry for the towers | BLOCKED_HUMAN | See above. |
 | Retrieval quality on site data | BLOCKED_HUMAN | Needs labelled site queries (`docs/operations/RETRIEVAL_LABELLING.md`). |
 
+## Session 6 (2026-09-30): DPDP record, retrieval collection tooling, person-search permission
+
+Branch `feat/dpdp-record-and-retrieval-tools`. The product owner asked the agent to decide the open
+items it could and to leave out real-hardware tests for now. Local runs: backend **133/133 suites,
+939 passed, 1 skipped**; gates exit 0; `node --test tools/eval/__tests__/*.test.mjs
+tools/vigilone-verify/*.test.mjs` 25/25.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| DPDP lawful basis and retention for person crops and appearance search | **PROPOSED, BLOCKED_HUMAN for sign-off** | `docs/operations/DPDP_DECISION_RECORD.md`: recommended positions (off by default per site, written purpose and internal record, notice at the site, 14/7 day retention with a 30 day policy cap for people, embeddings die with their crop, administrators only, data stays local), the code that enforces each, the gaps, and five questions for counsel. The agent cannot make a legal determination; **no production site should enable person crops until a named person signs it.** No default in the code changed. |
+| Gaps the record lists | NOT_STARTED | Erasure and access requests per person (no tool), a code cap on person-crop retention (the database allows up to 3650 days), site signage and notice text, crop-specific breach handling. |
+| Person-appearance permission narrowed to administrators | DONE_VERIFIED | `CROP_PERSON_QUERY` had been granted to `OPERATOR` alongside plate lookup; it is now `SUPER_ADMIN` and `TENANT_ADMIN` only. `cropSearchApiRealDb.test.ts` gains operator refusals for person search and person images; restoring the permission to operators fails that test. |
+| Retrieval collection tool `tools/eval/retrieval-collect.mjs` | DONE_VERIFIED as a tool | `retrieval-collect.test.mjs` 5/5 against a local stub of the API: one POST per labelled query, purpose headers and person flag only when asked, stops without writing a file if any query fails, is refused, is answered by a different model or is malformed; its output scores with `retrieval-eval.mjs`. Mutation check: removing the mixed-model refusal fails a test. Not run against a live appliance. |
+| Labelling procedure and template | DONE_UNVERIFIED (documentation) | `docs/operations/RETRIEVAL_LABELLING.md` and `tools/eval/sample/retrieval-labels.example.json` (placeholder ids). |
+| Labelled site queries and the retrieval numbers | BLOCKED_HUMAN | Needs real crops from a real site and people to label them; not something the agent can do. |
+| The model approval line in `scripts/models/model-license-exceptions.json` | NOT_STARTED, waiting for the model | The file says the coding agent must never add entries. The product owner has now explicitly instructed the agent to add it, so it will be added when the model is pinned (it needs the exact SHA-256), recorded as entered by the agent at that instruction and not as a legal clearance. |
+| SigLIP 2 files | BLOCKED_HUMAN | `huggingface.co` is reachable, but the large files redirect to `us.aws.cdn.hf.co`, which the environment's network policy still denies (checked 30 Sept). Add that host (or `*.cdn.hf.co`) under Network access. |
+| Real-camera and clean-VM tests | Deferred by the product owner | Not started. |
+
 ## Session 5 (2026-09-29): Phase 5 Wave B (semantic search), partly blocked
 
 Branch `feat/phase5-wave-b`, stacked on `feat/phase5-wave-a-wiring` (PR 6). Decisions:

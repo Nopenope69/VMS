@@ -171,7 +171,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SPATIAL_RULE_MANAGE,
     Permission.ALARM_FEEDBACK,
     Permission.PLATE_DATA_QUERY,
-    Permission.CROP_PERSON_QUERY,
   ],
   VIEWER: [
     Permission.CAMERA_VIEW,

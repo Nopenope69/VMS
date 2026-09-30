@@ -81,10 +81,13 @@ in `docker-compose.yml` (512 MB) may need raising once the index holds many vect
 
 Not done: it needs labelled queries from a real site.
 
-1. Pick crops from the site and label, for each query crop, which other crops show the same
-   object (labels file, `vigilone.retrieval-labels.v1`; see `tools/eval/retrieval-eval.mjs`).
-2. Run each query through `POST /api/v1/search/crops` with `{"cropId": ..., "limit": 20}` and save the
-   crop ids in the order returned, with the model's SHA-256 (`vigilone.retrieval-results.v1`).
+The full procedure is in `docs/operations/RETRIEVAL_LABELLING.md`. In short:
+
+1. Pick crops from the site and label, for each query crop, which other crops are relevant (labels
+   file, `vigilone.retrieval-labels.v1`; a template is `tools/eval/sample/retrieval-labels.example.json`).
+2. `node tools/eval/retrieval-collect.mjs --labels l.json --url ... --token ... --out r.json` runs each
+   query through `POST /api/v1/search/crops` and saves the crop ids in the order returned, with the
+   model's SHA-256. It writes nothing if any query fails or a different model answers.
 3. `node tools/eval/retrieval-eval.mjs --labels l.json --results r.json --real-site-data --dataset "..."`
    prints recall@k, hit rate with a 95% interval and MRR. It only says EVALUATED with real site
    data and at least 100 labelled queries (a proposal, not a standard). Publish the output next to the

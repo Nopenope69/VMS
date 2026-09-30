@@ -169,6 +169,9 @@ describe('P5.3 crop search API', () => {
     process.env[FLAG] = 'true';
     const body = { cropId: crops.person1.id, includePersons: true, personsOnly: true };
     expect((await call(viewer, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    // Appearance search over people is limited to administrators; operators can search other crops but not people.
+    expect((await call(operator, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    expect((await call(operator, 'GET', `/${crops.person1.id}/image`, undefined, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
     const noPurpose = await call(admin, 'POST', '', body);
     expect([noPurpose.status, noPurpose.json.code]).toEqual([400, 'PURPOSE_REQUIRED']);
     const badPurpose = await call(admin, 'POST', '', body, { 'x-vigilone-purpose': 'MARKETING' });
@@ -305,6 +308,7 @@ describe('P5.3 text queries (stand-in embedding adapter over HTTP; vectors are S
   it('text that matches people is person access: permission, purpose, audit with the text', async () => {
     const body = { text: 'a person in a red jacket', includePersons: true, personsOnly: true };
     expect((await call(viewer, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN');
+    expect((await call(operator, 'POST', '', body, purpose)).json.code).toBe('PERSON_CROP_FORBIDDEN'); // administrators only
     expect((await call(admin, 'POST', '', body)).json.code).toBe('PURPOSE_REQUIRED');
     const before = await prisma.auditEvent.count({ where: { tenantId, action: 'CROP_PERSON_SEARCH_QUERY' } });
     const ok = await call(admin, 'POST', '', body, purpose);

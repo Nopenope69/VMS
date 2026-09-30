@@ -106,5 +106,9 @@ Off unless `VIGILONE_FEATURE_SEMANTIC_SEARCH=true`. Details, setup and limits ar
   entry records the query text itself, so an operator's free text is stored in the tamper-evident chain.
 * Results never cross tenants, and a search names exactly one embedding model.
 * Appearance search over people can behave like profiling even without face recognition. Whether and
-  where a deployment may turn it on is its own DPDP decision; this is not legal advice.
+  where a deployment may turn it on is its own DPDP decision; this is not legal advice. A proposed
+  position, its gaps and the questions for counsel are in `DPDP_DECISION_RECORD.md` (unsigned;
+  it is a recommendation until a named person signs it).
+* Only administrators (`SUPER_ADMIN`, `TENANT_ADMIN`) hold `CROP_PERSON_QUERY`; operators can search
+  other crops but not people.
 
