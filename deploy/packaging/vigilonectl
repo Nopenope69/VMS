@@ -5,9 +5,10 @@
 
 set -euo pipefail
 
-INSTALL_DIR="/opt/vigilone"
-CONFIG_DIR="/etc/vigilone"
-DATA_DIR="/var/lib/vigilone"
+# Overridable for tests (scripts/__tests__/backup-restore.test.sh); the appliance uses the defaults.
+INSTALL_DIR="${VIGILONE_INSTALL_DIR:-/opt/vigilone}"
+CONFIG_DIR="${VIGILONE_CONFIG_DIR:-/etc/vigilone}"
+DATA_DIR="${VIGILONE_DATA_DIR:-/var/lib/vigilone}"
 RECORDINGS_DIR="${DATA_DIR}/recordings"
 POSTGRES_DIR="${DATA_DIR}/postgres"
 
@@ -37,6 +38,7 @@ usage() {
     echo "  backup <action>      Manage atomic appliance backups (create, restore)"
     echo "  support-bundle       Generate a sanitized diagnostics archive for technical support"
     echo "  acceptance [zip]     Run the automatable installation acceptance checks; lists manual items"
+    echo "  golive [--json]      Go-live readiness: BLOCK / WARN / MANUAL / PASS per item (exit 1 when blocked)"
     echo "  reset-factory        Factory reset database and appliance state (destructive)"
     echo "  version              Display VigilOne software and appliance version"
     echo "  help                 Display this help menu"
@@ -253,62 +255,48 @@ cmd_reset_factory() {
     log_info "Factory reset complete. New Setup PIN: ${NEW_TOKEN}"
 }
 
+# OTA runs in the backend container, which holds only compiled code (dist/) and production dependencies:
+# snippets use node and require('./dist/...') (ts-node and src/ do not exist there), and files from the host are
+# copied in first. Applying a full update this way has not been proven on a real appliance (GO_LIVE_RUNBOOK.md).
+backend_node() {
+    docker compose exec -T backend node -e "
+      const { OtaUpdateService } = require('./dist/services/appliance/otaUpdate.service');
+      const prisma = require('./dist/config/database').default;
+      const ota = new OtaUpdateService(prisma);
+      $1"
+}
+
 cmd_ota() {
     local SUB="${1:-status}"
     shift || true
+    cd "${INSTALL_DIR}" || fatal "Install directory ${INSTALL_DIR} not found"
     case "$SUB" in
         apply)
             local BUNDLE="${1:-}"
-            [[ -z "$BUNDLE" ]] && { log_err "Usage: vigilonectl ota apply <path-to-bundle.tar.gz>"; exit 1; }
-            log_info "Applying signed cryptographic OTA update: $BUNDLE"
-            cd "${INSTALL_DIR}" 2>/dev/null || true
-            docker compose exec -T backend npx ts-node -e "
-              import { OtaUpdateService } from './src/services/appliance/otaUpdate.service';
-              import prisma from './src/config/database';
-              const ota = new OtaUpdateService(prisma);
-              ota.applyUpdate('$BUNDLE').then(res => {
-                console.log(JSON.stringify(res, null, 2));
-                process.exit(res.success ? 0 : 1);
-              }).catch(err => {
-                console.error(err);
-                process.exit(1);
-              });
-            "
+            [[ -z "$BUNDLE" || ! -f "$BUNDLE" ]] && { log_err "Usage: vigilonectl ota apply <path-to-bundle.tar.gz>"; exit 1; }
+            log_info "Applying signed OTA update: $BUNDLE"
+            docker compose cp "$BUNDLE" backend:/tmp/vigilone-ota-bundle.tar.gz || fatal "Could not copy the bundle into the backend container."
+            backend_node "ota.applyUpdate('/tmp/vigilone-ota-bundle.tar.gz').then((r) => { console.log(JSON.stringify(r, null, 2)); process.exit(r.success ? 0 : 1); }).catch((e) => { console.error(e.message); process.exit(1); });"
             ;;
         rollback)
-            log_info "Triggering appliance rollback to pre-update snapshot..."
-            cd "${INSTALL_DIR}" 2>/dev/null || true
-            docker compose exec -T backend npx ts-node -e "
-              import { OtaUpdateService } from './src/services/appliance/otaUpdate.service';
-              import prisma from './src/config/database';
-              const ota = new OtaUpdateService(prisma);
-              ota.triggerRollback().then(res => {
-                console.log(JSON.stringify(res, null, 2));
-                process.exit(res.success ? 0 : 1);
-              }).catch(err => {
-                console.error(err);
-                process.exit(1);
-              });
-            "
+            log_info "Rolling back to the pre-update snapshot..."
+            backend_node "ota.triggerRollback().then((r) => { console.log(JSON.stringify(r, null, 2)); process.exit(r.success ? 0 : 1); }).catch((e) => { console.error(e.message); process.exit(1); });"
             ;;
         status)
-            log_info "Inspecting appliance release version and update state..."
-            cd "${INSTALL_DIR}" 2>/dev/null || true
-            docker compose exec -T backend npx ts-node -e "
-              import { OtaUpdateService } from './src/services/appliance/otaUpdate.service';
-              import prisma from './src/config/database';
-              const ota = new OtaUpdateService(prisma);
-              console.log('Current Release Version:', ota.getCurrentVersion());
-              console.log('Release Epoch:', ota.getCurrentEpoch());
-              console.log('Rollback Available:', ota.hasRollbackSnapshot());
-            " 2>/dev/null || log_warn "Backend container offline or starting up."
+            backend_node "console.log('Current Release Version:', ota.getCurrentVersion()); console.log('Release Epoch:', ota.getCurrentEpoch()); console.log('Rollback Available:', ota.hasRollbackSnapshot()); process.exit(0);" \
+                || fatal "Could not read the OTA state (is the backend running? vigilonectl status)"
             ;;
         *)
             echo "Usage: vigilonectl ota <apply|rollback|status>"
+            exit 1
             ;;
     esac
 }
 
+# Backups must never report success without a usable copy of the database: the dump is checked for
+# pg_dump's completion marker, every file is listed in a SHA-256 manifest, and the archive is written under a
+# temporary name and renamed only when complete. A restore checks the manifest first and loads the dump in ONE
+# transaction (schema replaced and data loaded together), so a failed restore leaves the database as it was.
 cmd_backup() {
     local SUB="${1:-create}"
     shift || true
@@ -317,55 +305,115 @@ cmd_backup() {
             local OUT_DIR="${DATA_DIR}/backups"
             mkdir -p "$OUT_DIR"
             local OUT_FILE="${1:-${OUT_DIR}/vigilone-backup-$(date +%Y%m%d%H%M%S).tar.gz}"
-            log_info "Creating atomic appliance backup archive at ${OUT_FILE}..."
+            log_info "Creating appliance backup at ${OUT_FILE}..."
             local TMP_BACKUP
             TMP_BACKUP="$(mktemp -d /tmp/vigilone-backup-XXXXXX)"
-            
-            # Dump database
-            cd "${INSTALL_DIR}" 2>/dev/null || true
-            docker compose exec -T postgres pg_dump -U vigilone vigilone_db > "${TMP_BACKUP}/database.sql" 2>/dev/null || log_warn "Postgres container offline or dump skipped."
-            
-            # Copy host appliance config
-            if [[ -d "${CONFIG_DIR}" ]]; then
-                cp -r "${CONFIG_DIR}" "${TMP_BACKUP}/config" 2>/dev/null || true
+            cd "${INSTALL_DIR}" || fatal "Install directory ${INSTALL_DIR} not found"
+
+            if ! docker compose exec -T postgres pg_dump -U vigilone --no-owner vigilone_db > "${TMP_BACKUP}/database.sql"; then
+                rm -rf "${TMP_BACKUP}"
+                fatal "Database dump failed: NO backup was written. Is the postgres container running? (vigilonectl status)"
             fi
-            
-            tar -czf "${OUT_FILE}" -C "${TMP_BACKUP}" .
+            if ! tail -n 5 "${TMP_BACKUP}/database.sql" | grep -q -- '-- PostgreSQL database dump complete'; then
+                rm -rf "${TMP_BACKUP}"
+                fatal "Database dump is incomplete (no completion marker): NO backup was written."
+            fi
+
+            # Appliance configuration, including the credential key: keep backups as secret as the appliance.
+            if [[ -d "${CONFIG_DIR}" ]]; then
+                cp -r "${CONFIG_DIR}" "${TMP_BACKUP}/config" || { rm -rf "${TMP_BACKUP}"; fatal "Copying ${CONFIG_DIR} failed: NO backup was written."; }
+            else
+                log_warn "${CONFIG_DIR} not found: the backup holds the database only (no credential key, licence or OTA state)."
+            fi
+
+            # The install's .env holds the secrets, possibly including CREDENTIAL_ENCRYPTION_KEY: without that key the
+            # camera, S3 and SSO secrets in the database cannot be decrypted on another machine.
+            if [[ -f "${INSTALL_DIR}/.env" ]]; then
+                mkdir -p "${TMP_BACKUP}/install" && cp "${INSTALL_DIR}/.env" "${TMP_BACKUP}/install/.env" \
+                    || { rm -rf "${TMP_BACKUP}"; fatal "Copying ${INSTALL_DIR}/.env failed: NO backup was written."; }
+            fi
+
+            (cd "${TMP_BACKUP}" && find . -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256) \
+                || { rm -rf "${TMP_BACKUP}"; fatal "Writing the backup manifest failed: NO backup was written."; }
+            tar -czf "${OUT_FILE}.partial" -C "${TMP_BACKUP}" . || { rm -rf "${TMP_BACKUP}" "${OUT_FILE}.partial"; fatal "Writing the archive failed: NO backup was written."; }
+            mv "${OUT_FILE}.partial" "${OUT_FILE}"
             rm -rf "${TMP_BACKUP}"
-            log_info "Appliance backup created successfully: ${OUT_FILE}"
+            chmod 600 "${OUT_FILE}"
+            log_info "Backup created: ${OUT_FILE} ($(du -h "${OUT_FILE}" | cut -f1), $(tar -xzOf "${OUT_FILE}" ./database.sql | wc -l) lines of SQL)"
+            log_warn "The backup contains the credential key. Store it as securely as the appliance itself."
             ;;
         restore)
             local ARCHIVE="${1:-}"
             [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]] && { log_err "Usage: vigilonectl backup restore <path-to-backup.tar.gz>"; exit 1; }
-            log_info "Restoring appliance from backup archive: ${ARCHIVE}..."
+            log_info "Restoring appliance from ${ARCHIVE}..."
             local TMP_RESTORE
             TMP_RESTORE="$(mktemp -d /tmp/vigilone-restore-XXXXXX)"
-            tar -xzf "${ARCHIVE}" -C "${TMP_RESTORE}"
-            
-            # Restore database
-            if [[ -f "${TMP_RESTORE}/database.sql" ]]; then
-                log_info "Restoring PostgreSQL database..."
-                cd "${INSTALL_DIR}" 2>/dev/null || true
-                docker compose exec -T postgres psql -U vigilone vigilone_db < "${TMP_RESTORE}/database.sql" 2>/dev/null || log_warn "Database restore warning."
+            tar -xzf "${ARCHIVE}" -C "${TMP_RESTORE}" || { rm -rf "${TMP_RESTORE}"; fatal "Cannot read ${ARCHIVE}: nothing was restored."; }
+            if [[ -f "${TMP_RESTORE}/MANIFEST.sha256" ]]; then
+                (cd "${TMP_RESTORE}" && sha256sum --quiet -c MANIFEST.sha256) || { rm -rf "${TMP_RESTORE}"; fatal "Backup archive is damaged or was altered (checksum mismatch): nothing was restored."; }
+            else
+                rm -rf "${TMP_RESTORE}"
+                fatal "Backup has no MANIFEST.sha256 (made by an older vigilonectl): it cannot be verified, nothing was restored."
             fi
-            
-            # Restore security monotonic state
-            docker compose exec -T backend npx ts-node -e "
-              import { DisasterRecoveryService } from './src/services/appliance/disasterRecovery.service';
-              import prisma from './src/config/database';
-              const dr = new DisasterRecoveryService(prisma);
-              dr.restoreSecurityMonotonicState('${TMP_RESTORE}/config').then(res => {
-                console.log('Security Monotonic State Restored:', JSON.stringify(res, null, 2));
-              }).catch(console.error);
-            " 2>/dev/null || log_warn "Monotonic security state check completed."
-            
+            [[ -f "${TMP_RESTORE}/database.sql" ]] || { rm -rf "${TMP_RESTORE}"; fatal "Backup has no database.sql: nothing was restored."; }
+
+            cd "${INSTALL_DIR}" || fatal "Install directory ${INSTALL_DIR} not found"
+            log_info "Stopping the backend so nothing writes during the restore..."
+            docker compose stop backend || { rm -rf "${TMP_RESTORE}"; fatal "Could not stop the backend: nothing was restored."; }
+            log_info "Restoring PostgreSQL (one transaction: the old data stays if anything fails)..."
+            if ! docker compose exec -T postgres psql -U vigilone -d vigilone_db -q -v ON_ERROR_STOP=1 --single-transaction \
+                    -c 'DROP SCHEMA public CASCADE' -c 'CREATE SCHEMA public' -f - < "${TMP_RESTORE}/database.sql" > /dev/null; then
+                docker compose start backend || true
+                rm -rf "${TMP_RESTORE}"
+                fatal "Database restore FAILED and was rolled back: the database is unchanged."
+            fi
+
+            if [[ -d "${TMP_RESTORE}/config" ]]; then
+                log_info "Restoring appliance configuration to ${CONFIG_DIR}..."
+                mkdir -p "${CONFIG_DIR}"
+                cp -a "${TMP_RESTORE}/config/." "${CONFIG_DIR}/" || { rm -rf "${TMP_RESTORE}"; fatal "Database restored, but copying the configuration to ${CONFIG_DIR} failed."; }
+            fi
+
+            # The current .env is kept (it belongs to this machine). If the backup's credential key differs, the restored
+            # secrets cannot be decrypted: say so rather than let camera logins fail later.
+            if [[ -f "${TMP_RESTORE}/install/.env" ]]; then
+                local old_key new_key
+                old_key="$(grep -E '^CREDENTIAL_ENCRYPTION_KEY=' "${TMP_RESTORE}/install/.env" | tail -n1 | cut -d= -f2- || true)"
+                new_key="$(grep -E '^CREDENTIAL_ENCRYPTION_KEY=' "${INSTALL_DIR}/.env" 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+                if [[ -n "$old_key" && "$old_key" != "$new_key" ]]; then
+                    log_warn "The backup was made with a different CREDENTIAL_ENCRYPTION_KEY. Stored camera, S3 and SSO secrets will NOT decrypt"
+                    log_warn "until ${INSTALL_DIR}/.env uses the backup's key (it is in the archive at install/.env)."
+                fi
+            fi
+
+            docker compose start backend || { rm -rf "${TMP_RESTORE}"; fatal "Database restored, but the backend did not start: check vigilonectl logs backend."; }
+            if [[ -d "${TMP_RESTORE}/config" ]]; then
+                # Anti-rollback state (clock guard, pins, OTA floor) may only move forward.
+                docker compose cp "${TMP_RESTORE}/config" backend:/tmp/vigilone-restore-config \
+                    && docker compose exec -T backend node -e "
+                      const { DisasterRecoveryService } = require('./dist/services/appliance/disasterRecovery.service');
+                      const prisma = require('./dist/config/database').default;
+                      new DisasterRecoveryService(prisma).restoreSecurityMonotonicState('/tmp/vigilone-restore-config')
+                        .then((r) => { console.log(JSON.stringify(r)); process.exit(0); })
+                        .catch((e) => { console.error(e.message); process.exit(1); });" \
+                    || { rm -rf "${TMP_RESTORE}"; fatal "Database and configuration restored, but the anti-rollback state was NOT restored (see the error above)."; }
+            fi
             rm -rf "${TMP_RESTORE}"
-            log_info "Appliance restore completed successfully."
+            log_info "Restore complete and verified. Run 'vigilonectl golive' to check the restored system."
             ;;
         *)
             echo "Usage: vigilonectl backup <create [out_file]|restore <backup.tar.gz>>"
+            exit 1
             ;;
     esac
+}
+
+cmd_golive() {
+    # docs/operations/GO_LIVE_RUNBOOK.md. The container cannot see the host clock's NTP state, so pass it in.
+    local ntp="unknown"
+    if command -v timedatectl >/dev/null 2>&1; then ntp="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo unknown)"; fi
+    cd "${INSTALL_DIR}" || fatal "Install directory ${INSTALL_DIR} not found"
+    docker compose exec -T -e VIGILONE_HOST_NTP_SYNC="${ntp}" backend node dist/ops/goLiveCheckCli.js "$@"
 }
 
 cmd_version() {
@@ -400,6 +448,7 @@ case "$COMMAND" in
     backup)          cmd_backup "$@" ;;
     support-bundle)  cmd_support_bundle "$@" ;;
     acceptance)      cmd_acceptance "$@" ;;
+    golive)          cmd_golive "$@" ;;
     reset-factory)   cmd_reset_factory "$@" ;;
     version)         cmd_version "$@" ;;
     help|--help|-h)  usage ;;

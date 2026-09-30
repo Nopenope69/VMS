@@ -150,6 +150,13 @@ jobs:
           VIGILONE_REQUIRE_MAILHOG: '1'
         run: npm test
 
+      # Live deployment: vigilonectl backup / restore against the real PostgreSQL service (only the docker compose
+      # wrapper is simulated); a failing, truncated or altered backup must never pass.
+      - name: vigilonectl backup and restore (real PostgreSQL)
+        env:
+          TEST_DB_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_backup_test
+        run: bash scripts/__tests__/backup-restore.test.sh
+
   ai-worker-checks:
     name: AI Worker Typecheck & Tests
     runs-on: ubuntu-latest

@@ -6,6 +6,41 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 12 (2026-09-30): live-deployment readiness
+
+Branch `feat/live-deployment-readiness` (from `master` `96d1a13`, with Phases 5 to 8 merged). Runbook:
+`docs/operations/GO_LIVE_RUNBOOK.md`.
+
+Bugs found and fixed in the appliance tooling (`deploy/packaging/vigilonectl`), all of which would have
+surfaced only at the worst moment:
+* **`backup create`** reported "backup created successfully" when the database dump failed or was truncated,
+  leaving an archive with no usable database. It now checks the dump's completion marker, writes a SHA-256
+  manifest, and writes the archive under a temporary name that is renamed only when complete. It also includes
+  the install's `.env`, which may hold the credential key.
+* **`backup restore`** ignored SQL errors and reported success. It now checks the manifest, stops the backend,
+  and loads the dump in one transaction, so a failed restore changes nothing. It warns when the backup's
+  credential key differs from this machine's.
+* **`backup restore` (anti-rollback step), `ota apply`, `ota rollback` and `ota status`** ran `npx ts-node`
+  against `./src` inside the backend container. The production image has neither (compiled `dist/` only,
+  without development dependencies), so they could never have worked. `ota apply` also passed a host path
+  into the container. They now run the compiled code, and the bundle is copied in first.
+* **The backup runbook** described a manifest, `.env` handling and container restarts that the code did not
+  do. It now describes the code.
+
+Local runs:
+* backend: 1064 passed, 8 skipped (full suite below);
+* `backup-restore.test.sh`: 25/25 against local PostgreSQL 16;
+* `installer.test.sh`: 43/43;
+* gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| `vigilonectl golive` (go-live readiness: BLOCK / WARN / MANUAL / PASS, exit 1 when blocked) | DONE_VERIFIED | `goLiveCheck.test.ts` 18/18: each of 12 blocking rules alone, the warnings, the manual sign-offs, and the snapshot against the real database (a new continuous camera with no segment is caught; a missing recordings directory is reported, not guessed). Run locally against the development system: correctly NOT READY with 5 blocking items. |
+| Backup and restore | DONE_VERIFIED against real PostgreSQL | `scripts/__tests__/backup-restore.test.sh` 25/25: round trip (rows, dropped tables, configuration, `.env`); failing dump; truncated dump; altered archive; SQL error half-way (rolled back, data unchanged); no manifest; credential-key mismatch warning. Removing the dump check fails 5. **Only the `docker compose` wrapper is simulated**: Docker Hub rate-limited image pulls here (HTTP 429), so no containerised run. |
+| OTA commands and the restore anti-rollback step | DONE_UNVERIFIED on an appliance | The snippets run against the compiled backend locally. An update applied from inside the backend container has not been proven on a real appliance. |
+| Go-live runbook | DONE (document) | Not yet used on a real site. |
+| First real go-live | BLOCKED_HUMAN | Needs a site, hardware, the owner's model licence approvals and the DPDP sign-off. |
+
 ## Session 10 (2026-09-30): Phase 7, relays, door strikes and door contacts
 
 Branch `feat/phase7-physical-security` (from `master` `46433ff`; Sessions 8 and 9 are on the Phase 5 Wave C and

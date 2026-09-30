@@ -44,15 +44,21 @@ If no path is specified, the archive is saved to:
 `/var/lib/vigilone/backups/vigilone-backup-YYYYMMDDHHmmss.tar.gz`
 
 ### 2.2 What is Included in the Backup:
-1. Full PostgreSQL database dump (`database.sql`) via `pg_dump`.
-2. Host configuration directory tree (`/etc/vigilone/*`):
-   - Setup token
-   - ClockGuard state
-   - OTA release state
-   - Pinned segments state mirror
-   - Commercial license file
-3. Environment secrets configuration (`/opt/vigilone/.env`).
-4. Automated backup manifest (`backup_manifest.json`) containing cryptographic SHA-256 hashes of all components.
+1. Full PostgreSQL dump (`database.sql`, `pg_dump --no-owner`). The dump must end with pg_dump's completion
+   marker, otherwise **no** archive is written and the command fails.
+2. The host configuration directory (`/etc/vigilone/`): appliance key, ClockGuard state, OTA release state,
+   pinned-segment mirror, licence file.
+3. The install's secrets (`/opt/vigilone/.env`, stored as `install/.env`). It may hold
+   `CREDENTIAL_ENCRYPTION_KEY`, without which stored camera, S3 and SSO secrets cannot be decrypted on another
+   machine.
+4. `MANIFEST.sha256`: the SHA-256 of every file. A restore checks it first.
+
+The archive is written as `<name>.partial` and renamed only when complete, with mode 600. **It contains the
+appliance's secrets: store it as securely as the appliance itself.** Recordings are not in the archive; see
+Procedure B.
+
+A failed dump, a truncated dump or a failed copy makes the command exit non-zero with "NO backup was written".
+A cron job therefore fails visibly (check `/var/log/vigilone-backup.log`, or alert on a non-zero exit).
 
 ### 2.3 Automating Daily Backups (Cron Example):
 Add to root crontab (`sudo crontab -e`):
@@ -74,16 +80,24 @@ Use this procedure when restoring an appliance to a previous known-good backup s
    ```bash
    sudo vigilonectl backup restore /mnt/backup/vigilone-backup-20260910.tar.gz
    ```
-3. **What the Restore Executes Automatically:**
-   - Shuts down application containers (`caddy`, `backend`, `mediamtx`).
-   - Restores PostgreSQL database from `database.sql`.
-   - Restores `/etc/vigilone/` configuration tree.
-   - **Enforces Monotonic Safety:** Computes the mathematical maximum of current host clock floor vs backup clock floor; preserves current `highestAcceptedOtaEpoch` and revoked license IDs.
-   - Restarts Docker compose services and waits for healthchecks to pass.
+3. **What the restore does:**
+   - Checks `MANIFEST.sha256`. A damaged or altered archive, or one made by an older vigilonectl without a
+     manifest, is refused before anything changes.
+   - Stops the backend so nothing writes during the restore.
+   - Replaces the database schema and loads `database.sql` in **one transaction**. If anything fails, it is
+     rolled back and the database is unchanged.
+   - Restores `/etc/vigilone/`. It keeps this machine's `/opt/vigilone/.env`, and warns if the backup was made
+     with a different `CREDENTIAL_ENCRYPTION_KEY` (the backup's copy is at `install/.env` in the archive).
+   - Starts the backend and applies the anti-rollback state (clock floor, pins, OTA floor may only move
+     forward). If that step fails, the command fails and says so.
 4. **Post-Restore Verification:**
    ```bash
    vigilonectl status
+   vigilonectl golive
    ```
+   Tested: `scripts/__tests__/backup-restore.test.sh` covers a round trip against a real PostgreSQL, a failing
+   dump, a truncated dump, an altered archive, a restore that fails half-way (rolled back), a missing manifest,
+   and a credential-key mismatch. Only the `docker compose` wrapper is simulated in that test.
 
 ---
 
