@@ -53,6 +53,8 @@ export class RuleEngine {
         return RuleTriggerType.SCENE_CHANGE;
       case 'CAMERA_ANALYTIC':
         return RuleTriggerType.CAMERA_ANALYTIC;
+      case 'DOOR_EVENT':
+        return RuleTriggerType.DOOR_EVENT;
       default:
         return null;
     }
@@ -238,6 +240,12 @@ export class RuleEngine {
       const di = event.payload;
       if (config.pinNumber !== undefined && config.pinNumber !== di.pinNumber) return false;
       if (config.targetState && config.targetState !== di.state) return false;
+    }
+
+    if (event.payload.kind === 'DOOR_EVENT') {
+      const d = event.payload;
+      if (config.doorIds && config.doorIds.length > 0 && !config.doorIds.includes(d.doorId)) return false;
+      if (config.doorActions && config.doorActions.length > 0 && !config.doorActions.includes(d.action)) return false;
     }
 
     // AI objects: class, confidence floor and minimum dwell (P3.5 / P3.7). A rule without a

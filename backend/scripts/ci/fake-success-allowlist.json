@@ -98,12 +98,6 @@
       "justification": "Genesis anchor of the chain-of-custody ledger: documented constant previous-hash for the first entry, not a digest of any data."
     },
     {
-      "file": "backend/src/services/incident/orchestrator/adapters/relayAdapter.ts",
-      "patternId": "HARDCODED_CONFIRMATION",
-      "text": "return { confirmed: true };",
-      "justification": "Returned only after the driver confirmed both the HIGH and LOW transitions of a pulse; either failure returns the driver error. The default driver fails closed with NO_PHYSICAL_RELAY_DRIVER_ATTACHED."
-    },
-    {
       "file": "backend/src/services/storage/storageEpoch.service.ts",
       "patternId": "INVENTED_HASH",
       "text": "const genesisPrevHash = '0'.repeat(64);",

@@ -30,6 +30,8 @@ export const VIGILONE_EVENT_TO_V1: Record<VigilOneEvent['type'], string> = {
   AI_OBJECT_DETECTED: 'ai.object_detected',
   // Analytics computed by the camera: VigilOne has no provenance for them, so never ai.*.
   CAMERA_ANALYTIC: 'system.camera_analytic',
+  // Resolved per door action in toEventV1.
+  DOOR_EVENT: 'access.door_opened',
 };
 
 const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
@@ -120,6 +122,9 @@ function mapPayload(ev: VigilOneEvent): Record<string, unknown> {
         details,
       };
     }
+    case 'DOOR_EVENT':
+      if (p.action === 'OPENED' || p.action === 'FORCED_OPEN') return { doorId: p.doorId, forced: p.action === 'FORCED_OPEN' };
+      return { doorId: p.doorId, ...(p.openSeconds !== undefined ? { openSeconds: p.openSeconds } : {}) };
     case 'SYSTEM_ALERT':
       return {
         code: p.alertCode,
@@ -139,6 +144,9 @@ export function toEventV1(ev: VigilOneEvent, ctx: MappingContext = {}): EventEnv
     if (!type) {
       throw new EventMappingError('UNMAPPABLE_EVENT', `object class '${ev.payload.objectClass}' has no events.v1 type`);
     }
+  }
+  if (ev.payload.kind === 'DOOR_EVENT') {
+    type = ev.payload.action === 'CLOSED' ? 'access.door_closed' : ev.payload.action === 'HELD_OPEN' ? 'access.door_held_open' : 'access.door_opened';
   }
   // Events that carry their own provenance (AI worker output) need no caller-supplied context.
   if (!ctx.provenance && ev.provenance) ctx = { ...ctx, provenance: ev.provenance };

@@ -74,9 +74,9 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     flag: FeatureFlag.DIO_RELAY,
     envVar: envVarFor(FeatureFlag.DIO_RELAY),
     title: 'DI/DO relays and access-control I/O',
-    routePrefixes: ['/api/v1/relays'],
-    workers: [],
-    status: 'Handshake state machine exists; no GPIO/serial/Modbus driver is attached (NO_PHYSICAL_RELAY_DRIVER_ATTACHED).',
+    routePrefixes: ['/api/v1/relays', '/api/v1/access'],
+    workers: ['DoorMonitor'],
+    status: 'Relays and door contacts on Modbus TCP I/O modules: honest handshake (acknowledged by the module, confirmed by coil read-back), door unlock, OPENED / FORCED_OPEN / HELD_OPEN / CLOSED events. Tested against a SIMULATED module (pymodbus), not on real hardware; pins without a module still fail with NO_PHYSICAL_RELAY_DRIVER_ATTACHED.',
   },
   [FeatureFlag.ANPR]: {
     flag: FeatureFlag.ANPR,

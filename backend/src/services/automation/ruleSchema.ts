@@ -30,7 +30,7 @@ export const TimeWindowSchema = z
 
 export const EVENT_TYPES = [
   'MOTION', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'STREAM_DEGRADED',
-  'DI_TRIGGER', 'SCENE_CHANGE', 'SYSTEM_ALERT', 'AI_OBJECT_DETECTED', 'CAMERA_ANALYTIC',
+  'DI_TRIGGER', 'SCENE_CHANGE', 'SYSTEM_ALERT', 'AI_OBJECT_DETECTED', 'CAMERA_ANALYTIC', 'DOOR_EVENT',
 ] as const;
 
 const SeverityCondition = z
@@ -102,6 +102,9 @@ const TRIGGER_CONFIG: Record<RuleTriggerType, z.ZodTypeAny> = {
   ANPR_WATCHLIST: z.object({ ...base, watchlistCategories: z.array(z.string().min(1)).max(20).optional(), minConfidence: confidence }).strict(),
   DIGITAL_INPUT_STATE: z.object({ ...base, pinNumber: z.number().int().min(0).max(255).optional(), targetState: z.string().min(1).optional() }).strict(),
   MOTION_ZONE: z.object({ ...base, minConfidence: confidence }).strict(),
+  DOOR_EVENT: z
+    .object({ ...base, doorIds: z.array(z.string().uuid()).max(50).optional(), doorActions: z.array(z.enum(['OPENED', 'CLOSED', 'FORCED_OPEN', 'HELD_OPEN'])).max(4).optional() })
+    .strict(),
   CAMERA_OFFLINE: z.object({ ...base }).strict(),
   SCENE_CHANGE: z.object({ ...base }).strict(),
   CAMERA_ANALYTIC: z

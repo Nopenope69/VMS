@@ -94,6 +94,14 @@ const DoorPayload = z
   })
   .strict();
 
+/** v1.1 (additive): a door closed, or has been held open too long. */
+const DoorStatePayload = z
+  .object({
+    doorId: NonEmptyId,
+    openSeconds: z.number().nonnegative().optional(),
+  })
+  .strict();
+
 const FirePayload = z
   .object({
     panelId: NonEmptyId,
@@ -138,6 +146,8 @@ export const EVENT_PAYLOADS_V1 = {
   'ai.loitering': LoiteringPayload,
   'ai.plate_detected': PlatePayload,
   'access.door_opened': DoorPayload,
+  'access.door_closed': DoorStatePayload,
+  'access.door_held_open': DoorStatePayload,
   'alarm.fire': FirePayload,
   'pos.transaction': PosPayload,
 } as const;

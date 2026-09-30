@@ -35,6 +35,7 @@ import federationRoutes from './routes/federation.routes';
 import automationRoutes from './routes/automation.routes';
 import spatialAnalyticsRoutes from './routes/spatialAnalytics.routes';
 import relayRoutes from './routes/relay.routes';
+import accessRoutes from './routes/access.routes';
 import archiveRoutes from './routes/archive.routes';
 import ssoRoutes from './routes/sso.routes';
 import privacyRoutes from './routes/privacy.routes';
@@ -148,6 +149,7 @@ app.use('/api/v1/federation', requireFeatureFlag(FeatureFlag.FEDERATION), federa
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/v1/spatial-rules', spatialAnalyticsRoutes);
 app.use('/api/v1/relays', requireFeatureFlag(FeatureFlag.DIO_RELAY), relayRoutes);
+app.use('/api/v1/access', requireFeatureFlag(FeatureFlag.DIO_RELAY), accessRoutes);
 app.use('/api/v1/archive', requireFeatureFlag(FeatureFlag.OBJECT_STORAGE_ARCHIVE), archiveRoutes);
 app.use('/api/v1/sso', requireFeatureFlag(FeatureFlag.OIDC_SSO), ssoRoutes);
 app.use('/api/v1/privacy/jobs', requireFeatureFlag(FeatureFlag.REDACTION));

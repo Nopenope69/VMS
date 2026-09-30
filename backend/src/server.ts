@@ -32,12 +32,14 @@ import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
 import { incidentOrchestrator } from './services/incident/orchestrator/incidentOrchestrator.service';
+import { DoorMonitor } from './services/access/doorMonitor';
 import { LeaderLease } from './services/cluster/leaderLease';
 import { setClusterRoleSource } from './services/cluster/clusterRole';
 
 // Background Services
 export const recordingCatalog = new RecordingCatalog(prisma);
 const storageSentinel = new StorageSentinelService(prisma);
+const doorMonitor = new DoorMonitor(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
 
 
 /**
@@ -67,6 +69,7 @@ function startBackgroundServices(): void {
     .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
     .catch((err) => console.error('[Redaction] recovery failed:', err.message));
   if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
+  if (isFeatureEnabled(FeatureFlag.DIO_RELAY)) doorMonitor.start(Number(process.env.DOOR_POLL_INTERVAL_MS || 500));
   cropWorkers = startCropWorkers(cropPurger);
   embeddingWorkers = startEmbeddingWorkers(prisma);
   if (isFeatureEnabled(FeatureFlag.OBJECT_STORAGE_ARCHIVE)) {
@@ -128,6 +131,7 @@ process.on('SIGTERM', async () => {
   SegmentJobWorkerService.stop();
   recordingCatalog.stop();
   storageSentinel.stop();
+  doorMonitor.stop();
   recordingScheduleService.stop();
   streamWatchdogService.stop();
   recordingWatchdogService.stop();

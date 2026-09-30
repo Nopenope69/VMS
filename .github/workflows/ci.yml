@@ -110,6 +110,12 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+      # A SIMULATED Modbus TCP I/O module for the relay and door tests (Phase 7), built on pymodbus.
+      - name: Install Modbus simulator (test only)
+        run: |
+          python3 -m venv /tmp/modbussim
+          /tmp/modbussim/bin/pip install --quiet -r tools/sim/requirements-modbus-sim.txt
+
       # A real OpenID Connect provider (oidc-provider, test only) for the SSO tests (Phase 8).
       - name: Install OIDC test provider
         run: npm ci --prefix tools/sim/oidc
@@ -130,6 +136,8 @@ jobs:
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
+          MODBUS_SIM_PYTHON: /tmp/modbussim/bin/python
+          VIGILONE_REQUIRE_MODBUS_SIM: '1'
           VIGILONE_REQUIRE_OIDC_SIM: '1'
           S3_TEST_ENDPOINT: http://127.0.0.1:9000
           S3_TEST_VERIFIES_AUTH: '1'

@@ -1,4 +1,23 @@
+/**
+ * Relay commands with an honest confirmation handshake (Phase 7).
+ *
+ *   COMMAND_SENT     the command was logged before anything was sent;
+ *   COMMAND_ACK      the device acknowledged it (a Modbus module echoes the coil write);
+ *   STATE_CONFIRMED  the device then reported the output in the commanded state (coil read back), or, for a
+ *                    pulse, reported it on and then off again after the full pulse;
+ *   COMMAND_FAILED   anything else, with the reason.
+ *
+ * A pin is driven by its I/O module (IoDevice, Modbus TCP) when it has one. Otherwise an injected driver is used
+ * (simulators and tests); with neither, every command fails with NO_PHYSICAL_RELAY_DRIVER_ATTACHED. Nothing is
+ * marked acknowledged before a device answered, and the pin's stored state changes only on an acknowledgement
+ * (ACK_ONLY) or a confirmation.
+ *
+ * ACK_ONLY never reports STATE_CONFIRMED: the module echoed the command, but its output was not read back. A
+ * read-back reports the module's output register, not the physical contact; a door contact (Door) is what shows
+ * whether a door actually opened.
+ */
 import { PrismaClient, RelayCommandState, RelayConfirmationMode } from '@prisma/client';
+import { readCoils, writeSingleCoil, ModbusTarget } from '../../../hardware/modbusTcp';
 
 export interface RelayExecuteParams {
   tenantId: string;
@@ -18,210 +37,119 @@ export interface RelayExecuteResult {
   error?: string;
 }
 
-export type HardwareDriver = (
-  pinNumber: number,
-  targetState: string
-) => Promise<{ confirmed: boolean; error?: string }>;
+/** Injected driver (simulators, tests): sets the pin and says whether the hardware confirmed it. */
+export type HardwareDriver = (pinNumber: number, targetState: string) => Promise<{ confirmed: boolean; error?: string }>;
+
+/** A driver for one output pin: write resolves when the device acknowledged, read returns the output state. */
+interface PinDriver {
+  write(on: boolean): Promise<void>;
+  read(): Promise<boolean> | null;
+}
+
+export const MAX_PULSE_MS = 30_000;
+const POLL_MS = 100;
 
 export class RelayAdapter {
-  private prisma: PrismaClient;
-  private hardwareDriver: HardwareDriver = async () => ({
-    confirmed: false,
-    error: 'NO_PHYSICAL_RELAY_DRIVER_ATTACHED',
-  });
+  private injected: HardwareDriver | null = null;
 
-  constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
+  constructor(private readonly prisma: PrismaClient, private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))) {}
+
+  /** Simulators and tests only: drive pins that have no I/O module. */
+  public setHardwareDriver(driver: HardwareDriver): void {
+    this.injected = driver;
   }
 
-  public setHardwareDriver(driver: HardwareDriver): void {
-    this.hardwareDriver = driver;
+  private driverFor(pin: { pinNumber: number; activeLow: boolean; address: number | null; device: { kind: string; host: string; port: number; unitId: number; enabled: boolean } | null }): PinDriver {
+    if (pin.device) {
+      if (!pin.device.enabled) throw new Error('the I/O module of this pin is disabled');
+      if (pin.device.kind !== 'MODBUS_TCP') throw new Error(`unsupported I/O module kind ${pin.device.kind}`);
+      if (pin.address === null) throw new Error('the pin has an I/O module but no address');
+      const t: ModbusTarget = { host: pin.device.host, port: pin.device.port, unitId: pin.device.unitId, timeoutMs: 2000 };
+      const addr = pin.address;
+      const coil = (on: boolean) => (pin.activeLow ? !on : on);
+      return {
+        write: (on) => writeSingleCoil(t, addr, coil(on)),
+        read: () => readCoils(t, addr, 1).then(([v]) => coil(v)),
+      };
+    }
+    const injected = this.injected;
+    if (!injected) throw new Error('NO_PHYSICAL_RELAY_DRIVER_ATTACHED');
+    // An injected driver acknowledges and confirms in one call; it has no separate read-back.
+    return {
+      write: async (on) => {
+        const r = await injected(pin.pinNumber, on ? 'HIGH' : 'LOW');
+        if (!r.confirmed) throw new Error(r.error || 'the relay driver did not confirm');
+      },
+      read: () => null,
+    };
+  }
+
+  /** Waits until the read-back shows `on`, or throws when the pin's timeout passes. */
+  private async confirm(d: PinDriver, on: boolean, timeoutMs: number): Promise<void> {
+    const first = d.read();
+    if (first === null) return; // injected driver: its write already confirmed
+    const until = Date.now() + timeoutMs;
+    let seen = await first;
+    while (seen !== on) {
+      if (Date.now() >= until) throw new Error(`the module still reports the output ${seen ? 'on' : 'off'} ${timeoutMs} ms after it acknowledged turning it ${on ? 'on' : 'off'} (stuck relay?)`);
+      await this.sleep(POLL_MS);
+      seen = await d.read()!;
+    }
   }
 
   public async execute(params: RelayExecuteParams): Promise<RelayExecuteResult> {
     const pin = await this.prisma.digitalIoPin.findUnique({
-      where: {
-        tenantId_pinNumber: {
-          tenantId: params.tenantId,
-          pinNumber: params.pinNumber,
-        },
-      },
+      where: { tenantId_pinNumber: { tenantId: params.tenantId, pinNumber: params.pinNumber } },
+      include: { device: true },
     });
+    if (!pin) throw new Error(`Digital I/O Pin ${params.pinNumber} not configured`);
+    if (pin.direction !== 'OUTPUT') throw new Error(`Pin ${params.pinNumber} is an INPUT sensor pin and cannot be triggered as an output`);
+    if (pin.device && pin.device.tenantId !== params.tenantId) throw new Error('the pin is bound to another tenant’s I/O module');
 
-    if (!pin) {
-      throw new Error(`Digital I/O Pin ${params.pinNumber} not configured`);
-    }
-
-    if (pin.direction !== 'OUTPUT') {
-      throw new Error(`Pin ${params.pinNumber} is an INPUT sensor pin and cannot be triggered as an output`);
-    }
-
-    const targetState = params.command === 'SET_LOW' ? 'LOW' : 'HIGH';
-    const confirmationMode = pin.confirmationMode || RelayConfirmationMode.STATE_FEEDBACK;
+    const mode = pin.confirmationMode || RelayConfirmationMode.STATE_FEEDBACK;
     const timeoutMs = pin.timeoutMs || 3000;
-
-    // 1. Stage 1: COMMAND_SENT
-    const commandLog = await this.prisma.relayCommandLog.create({
-      data: {
-        pinId: pin.id,
-        command: params.command,
-        targetState,
-        lifecycleState: RelayCommandState.COMMAND_SENT,
-        issuedBy: params.issuedBy,
-        sentAt: new Date(),
-      },
+    const targetState = params.command === 'SET_LOW' ? 'LOW' : 'HIGH';
+    const log = await this.prisma.relayCommandLog.create({
+      data: { pinId: pin.id, command: params.command, targetState, lifecycleState: RelayCommandState.COMMAND_SENT, issuedBy: params.issuedBy, sentAt: new Date() },
     });
-
+    const base = { logId: log.id, pinNumber: params.pinNumber, command: params.command, confirmationMode: mode };
+    let energised = false;
     try {
-      // 2. Stage 2: COMMAND_ACK (Controller / Driver acknowledged receipt)
-      const ackTime = new Date();
-      await this.prisma.relayCommandLog.update({
-        where: { id: commandLog.id },
-        data: {
-          lifecycleState: RelayCommandState.COMMAND_ACK,
-          acknowledgedAt: ackTime,
-        },
-      });
+      const d = this.driverFor(pin);
+      const on = params.command !== 'SET_LOW';
+      await d.write(on);
+      energised = on;
+      const ackAt = new Date();
+      await this.prisma.relayCommandLog.update({ where: { id: log.id }, data: { lifecycleState: RelayCommandState.COMMAND_ACK, acknowledgedAt: ackAt } });
 
-      // 3. Evaluate confirmation semantics per mode
-      if (confirmationMode === RelayConfirmationMode.ACK_ONLY) {
-        // In ACK_ONLY mode, transmission is confirmed, but physical contact is NOT verified.
-        // Invariant: NEVER report STATE_CONFIRMED.
-        await this.prisma.digitalIoPin.update({
-          where: { id: pin.id },
-          data: { state: targetState },
-        });
-
-        return {
-          logId: commandLog.id,
-          pinNumber: params.pinNumber,
-          command: params.command,
-          lifecycleState: RelayCommandState.COMMAND_ACK,
-          confirmationMode,
-          confirmedAt: ackTime,
-        };
-      }
-
-      if (confirmationMode === RelayConfirmationMode.PULSE_COMPLETION) {
-        // PULSE_COMPLETION mode: Wait for pulse cycle to execute
-        const pulseMs = params.pulseDurationMs || pin.pulseDurationMs || 1000;
-
-        const pulsePromise: Promise<{ confirmed: boolean; error?: string }> = (async () => {
-          const highRes = await this.hardwareDriver(params.pinNumber, 'HIGH');
-          if (!highRes.confirmed) {
-            return highRes;
-          }
-          await new Promise((r) => setTimeout(r, Math.min(pulseMs, 500))); // bounded wait in test/production
-          const lowRes = await this.hardwareDriver(params.pinNumber, 'LOW');
-          if (!lowRes.confirmed) {
-            return lowRes;
-          }
-          return { confirmed: true };
-        })();
-
-        const timeoutPromise = new Promise<{ confirmed: boolean; error?: string }>((_, reject) =>
-          setTimeout(() => reject(new Error(`Pulse completion timed out after ${timeoutMs}ms`)), timeoutMs)
-        );
-
-        const result = await Promise.race([pulsePromise, timeoutPromise]);
-        if (!result.confirmed) {
-          throw new Error(result.error || 'Pulse execution failed');
-        }
-
-        const confirmedTime = new Date();
-        await this.prisma.$transaction([
-          this.prisma.relayCommandLog.update({
-            where: { id: commandLog.id },
-            data: {
-              lifecycleState: RelayCommandState.STATE_CONFIRMED,
-              confirmedAt: confirmedTime,
-            },
-          }),
-          this.prisma.digitalIoPin.update({
-            where: { id: pin.id },
-            data: { state: 'LOW' },
-          }),
-        ]);
-
-        return {
-          logId: commandLog.id,
-          pinNumber: params.pinNumber,
-          command: params.command,
-          lifecycleState: RelayCommandState.STATE_CONFIRMED,
-          confirmationMode,
-          confirmedAt: confirmedTime,
-        };
-      }
-
-      // Default: STATE_FEEDBACK mode (physical loopback contact required)
-      const hardwarePromise = this.hardwareDriver(params.pinNumber, targetState);
-      const timeoutPromise = new Promise<{ confirmed: boolean; error?: string }>((_, reject) =>
-        setTimeout(() => reject(new Error(`Hardware confirmation timed out after ${timeoutMs}ms`)), timeoutMs)
-      );
-
-      const hardwareResult = await Promise.race([hardwarePromise, timeoutPromise]);
-
-      if (!hardwareResult.confirmed) {
-        throw new Error(hardwareResult.error || 'Physical relay confirmation failed (no feedback match)');
-      }
-
-      // Confirmed by physical contact feedback
-      const confirmedTime = new Date();
-      await this.prisma.$transaction([
-        this.prisma.relayCommandLog.update({
-          where: { id: commandLog.id },
-          data: {
-            lifecycleState: RelayCommandState.STATE_CONFIRMED,
-            confirmedAt: confirmedTime,
-          },
-        }),
-        this.prisma.digitalIoPin.update({
-          where: { id: pin.id },
-          data: { state: targetState },
-        }),
-      ]);
-
-      // If command was PULSE in STATE_FEEDBACK mode, schedule low reset
       if (params.command === 'PULSE') {
-        const pulseMs = params.pulseDurationMs || pin.pulseDurationMs || 3000;
-        setTimeout(async () => {
-          try {
-            await this.hardwareDriver(params.pinNumber, 'LOW');
-            await this.prisma.digitalIoPin.update({
-              where: { id: pin.id },
-              data: { state: 'LOW' },
-            });
-          } catch {}
-        }, pulseMs);
+        if (mode !== RelayConfirmationMode.ACK_ONLY) await this.confirm(d, true, timeoutMs);
+        const pulseMs = Math.min(params.pulseDurationMs || pin.pulseDurationMs || 1000, MAX_PULSE_MS);
+        await this.sleep(pulseMs);
+        await d.write(false);
+        if (mode === RelayConfirmationMode.ACK_ONLY) {
+          await this.prisma.digitalIoPin.update({ where: { id: pin.id }, data: { state: 'LOW' } });
+          return { ...base, lifecycleState: RelayCommandState.COMMAND_ACK, confirmedAt: ackAt };
+        }
+        // Still counted as energised until the read-back shows it off.
+        await this.confirm(d, false, timeoutMs);
+        energised = false;
+      } else if (mode === RelayConfirmationMode.ACK_ONLY) {
+        await this.prisma.digitalIoPin.update({ where: { id: pin.id }, data: { state: targetState } });
+        return { ...base, lifecycleState: RelayCommandState.COMMAND_ACK, confirmedAt: ackAt };
+      } else {
+        await this.confirm(d, on, timeoutMs);
       }
-
-      return {
-        logId: commandLog.id,
-        pinNumber: params.pinNumber,
-        command: params.command,
-        lifecycleState: RelayCommandState.STATE_CONFIRMED,
-        confirmationMode,
-        confirmedAt: confirmedTime,
-      };
+      const confirmedAt = new Date();
+      await this.prisma.$transaction([
+        this.prisma.relayCommandLog.update({ where: { id: log.id }, data: { lifecycleState: RelayCommandState.STATE_CONFIRMED, confirmedAt } }),
+        this.prisma.digitalIoPin.update({ where: { id: pin.id }, data: { state: params.command === 'PULSE' ? 'LOW' : targetState } }),
+      ]);
+      return { ...base, lifecycleState: RelayCommandState.STATE_CONFIRMED, confirmedAt };
     } catch (err: any) {
-      // 4. Failure Stage: COMMAND_FAILED
-      await this.prisma.relayCommandLog.update({
-        where: { id: commandLog.id },
-        data: {
-          lifecycleState: RelayCommandState.COMMAND_FAILED,
-          failedAt: new Date(),
-          errorMessage: err.message,
-        },
-      });
-
-      return {
-        logId: commandLog.id,
-        pinNumber: params.pinNumber,
-        command: params.command,
-        lifecycleState: RelayCommandState.COMMAND_FAILED,
-        confirmationMode,
-        error: err.message,
-      };
+      const message = params.command === 'PULSE' && energised ? `${err.message}; THE RELAY MAY STILL BE ENERGISED (turning it off failed or was not confirmed)` : err.message;
+      await this.prisma.relayCommandLog.update({ where: { id: log.id }, data: { lifecycleState: RelayCommandState.COMMAND_FAILED, failedAt: new Date(), errorMessage: String(message).slice(0, 1000) } });
+      return { ...base, lifecycleState: RelayCommandState.COMMAND_FAILED, error: message };
     }
   }
 }
