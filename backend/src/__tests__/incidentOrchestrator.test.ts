@@ -583,12 +583,21 @@ describe('Candidate 04: Authoritative IncidentOrchestrator Deep-Module', () => {
         timeoutMs: 1000,
       });
 
+      // Phase 7: an acknowledgement needs a driver that answered (the old code acknowledged without calling one).
+      const calls: string[] = [];
+      orchestrator.setHardwareDriver(async (pinNumber, targetState) => {
+        calls.push(`${pinNumber}:${targetState}`);
+        return { confirmed: true };
+      });
+
       const res = await orchestrator.executeRelayCommand({
         tenantId,
         pinNumber: 4,
         command: 'SET_HIGH',
         issuedBy: 'admin',
       });
+
+      expect(calls).toEqual(['4:HIGH']);
 
       expect(res.lifecycleState).toBe(RelayCommandState.COMMAND_ACK);
       expect(res.lifecycleState).not.toBe(RelayCommandState.STATE_CONFIRMED);

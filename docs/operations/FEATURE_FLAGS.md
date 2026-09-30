@@ -28,7 +28,7 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `FEDERATION` | `VIGILONE_FEATURE_FEDERATION` | `/api/v1/federation` |
 | `OBJECT_STORAGE_ARCHIVE` | `VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` | `/api/v1/archive` |
 | `OIDC_SSO` | `VIGILONE_FEATURE_OIDC_SSO` | `/api/v1/sso` |
-| `DIO_RELAY` | `VIGILONE_FEATURE_DIO_RELAY` | `/api/v1/relays` |
+| `DIO_RELAY` | `VIGILONE_FEATURE_DIO_RELAY` | `/api/v1/relays`, `/api/v1/access` (doors, I/O modules); also starts the door monitor; see PHYSICAL_ACCESS.md |
 | `ANPR` | `VIGILONE_FEATURE_ANPR` | `/api/v1/anpr`, `/api/v1/internal/anpr/*` (501 `FEATURE_DISABLED`); see ANPR.md |
 | `REDACTION` | `VIGILONE_FEATURE_REDACTION` | `/api/v1/privacy/jobs` (privacy policies stay available) |
 | `SMART_SEARCH` | `VIGILONE_FEATURE_SMART_SEARCH` | `/api/v1/search` |

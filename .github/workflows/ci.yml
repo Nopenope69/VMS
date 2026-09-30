@@ -110,9 +110,17 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+      # A SIMULATED Modbus TCP I/O module for the relay and door tests (Phase 7), built on pymodbus.
+      - name: Install Modbus simulator (test only)
+        run: |
+          python3 -m venv /tmp/modbussim
+          /tmp/modbussim/bin/pip install --quiet -r tools/sim/requirements-modbus-sim.txt
+
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
+          MODBUS_SIM_PYTHON: /tmp/modbussim/bin/python
+          VIGILONE_REQUIRE_MODBUS_SIM: '1'
           DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
           JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=

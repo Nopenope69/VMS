@@ -1,0 +1,2 @@
+# Test-only: the SIMULATED Modbus TCP relay / door-contact module (tools/sim/modbus_io_sim.py). Never shipped.
+pymodbus==3.8.6

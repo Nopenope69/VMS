@@ -111,6 +111,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | `rapidocr_onnxruntime` 1.4.4 (Python) | **Apache-2.0** | Reference DB text-detection post-processing for the ANPR golden tests |
 | `fast-plate-ocr` 1.1.0 (Python) | **MIT** | Reference plate OCR decoding for the ANPR golden tests |
 | `torch` 2.14.0, `transformers` 5.17.0, `tokenizers`, `safetensors`, `sentencepiece`, `pillow` (Python) | **BSD-3-Clause**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **Apache-2.0**, **MIT-CMU (HPND)** | Reference embeddings and token IDs for the SigLIP 2 tests (`tools/reference/requirements-siglip2.txt`); never shipped |
+| `pymodbus` 3.8.6 (Python) | **BSD-3-Clause** | SIMULATED Modbus TCP relay / door-contact module for the Phase 7 tests (`tools/sim/modbus_io_sim.py`, `tools/sim/requirements-modbus-sim.txt`); never shipped |
 | `pyclipper`, `shapely`, `Pillow`, `PyYAML` | **MIT**, **BSD-3-Clause**, **MIT-CMU (HPND)**, **MIT** | Reference-tool dependencies; synthetic plate rendering |
 | DejaVu fonts | **Bitstream Vera / public-domain derivative** | Rendering SYNTHETIC plate fixtures only; the fonts are not committed |
 | NASA portrait of Eileen Collins (`skimage/data/astronaut.png` from scikit-image 0.26.0, BSD-3-Clause package) | **Public domain** ("No known copyright restrictions, released into the public domain", scikit-image docs) | The only real-world image in the redaction test fixture; pinned by SHA-256 in `tools/redaction/make_fixtures.py` |

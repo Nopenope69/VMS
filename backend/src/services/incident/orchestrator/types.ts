@@ -11,7 +11,8 @@ export type VigilOneEventType =
   | 'SCENE_CHANGE'
   | 'SYSTEM_ALERT'
   | 'AI_OBJECT_DETECTED'
-  | 'CAMERA_ANALYTIC';
+  | 'CAMERA_ANALYTIC'
+  | 'DOOR_EVENT';
 
 export interface SpatialRef {
   zoneId?: string;
@@ -149,6 +150,17 @@ export interface AiProvenance {
   frameTimestampUtc: string;
 }
 
+/** Phase 7: a door contact changed (see services/access/doorMonitor.ts). */
+export interface DoorEventPayload {
+  kind: 'DOOR_EVENT';
+  doorId: string;
+  doorName: string;
+  /** OPENED after an authorised unlock; FORCED_OPEN without one; HELD_OPEN when open too long. */
+  action: 'OPENED' | 'CLOSED' | 'FORCED_OPEN' | 'HELD_OPEN';
+  /** Seconds the door has been open (HELD_OPEN, CLOSED). */
+  openSeconds?: number;
+}
+
 export type VigilOneEventPayload =
   | MotionEventPayload
   | TripwireEventPayload
@@ -160,7 +172,8 @@ export type VigilOneEventPayload =
   | SceneChangePayload
   | SystemAlertPayload
   | AiObjectDetectedPayload
-  | CameraAnalyticPayload;
+  | CameraAnalyticPayload
+  | DoorEventPayload;
 
 export type EventSource =
   | 'VISION_AI'
@@ -222,6 +235,9 @@ export interface RuleTriggerConfig {
   minDwellSeconds?: number;
   /** TRIPWIRE_CROSS / LOITERING_DWELL: only this spatial rule. */
   spatialRuleId?: string;
+  /** DOOR_EVENT: only these doors / actions (empty or absent = any). */
+  doorIds?: string[];
+  doorActions?: Array<'OPENED' | 'CLOSED' | 'FORCED_OPEN' | 'HELD_OPEN'>;
 }
 
 /** Validated by services/automation/ruleSchema.ts; evaluated by ruleConditions.ts. */

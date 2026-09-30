@@ -45,8 +45,24 @@ describe('contract events.v1', () => {
 
     it('has a mapping for every internal event type', () => {
       expect(Object.keys(VIGILONE_EVENT_TO_V1).sort()).toEqual(
-        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
+        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'DOOR_EVENT', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS'].sort()
       );
+    });
+
+    it('maps door events by action to access.door_opened (forced flag), access.door_held_open and access.door_closed', () => {
+      const door = (action: 'OPENED' | 'FORCED_OPEN' | 'HELD_OPEN' | 'CLOSED', openSeconds?: number) =>
+        toEventV1(createVigilOneEvent({ tenantId: t, cameraId: 'cam-1', source: 'HARDWARE_IO', type: 'DOOR_EVENT', payload: { kind: 'DOOR_EVENT', doorId: 'door-1', doorName: 'Front', action, openSeconds } }));
+      for (const [action, type, payload] of [
+        ['OPENED', 'access.door_opened', { doorId: 'door-1', forced: false }],
+        ['FORCED_OPEN', 'access.door_opened', { doorId: 'door-1', forced: true }],
+        ['HELD_OPEN', 'access.door_held_open', { doorId: 'door-1', openSeconds: 45 }],
+        ['CLOSED', 'access.door_closed', { doorId: 'door-1', openSeconds: 45 }],
+      ] as const) {
+        const v1 = door(action, action === 'HELD_OPEN' || action === 'CLOSED' ? 45 : undefined);
+        expect(v1.type).toBe(type);
+        expect(v1.payload).toEqual(payload);
+        expect(EventEnvelopeV1.safeParse(v1).success).toBe(true);
+      }
     });
 
     it('maps camera analytics to system.camera_analytic, never ai.*, and needs no provenance', () => {

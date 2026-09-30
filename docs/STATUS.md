@@ -6,6 +6,31 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 10 (2026-09-30): Phase 7, relays, door strikes and door contacts
+
+Branch `feat/phase7-physical-security` (from `master` `46433ff`; Sessions 8 and 9 are on the Phase 5 Wave C and
+Phase 6 branches). Operations: `docs/operations/PHYSICAL_ACCESS.md`. Everything is behind `DIO_RELAY` (OFF).
+**Nothing here has run on real relays, strikes or door contacts.** The module used is SIMULATED
+(`tools/sim/modbus_io_sim.py`, pymodbus 3.8.6).
+
+Legacy bugs found and fixed: the relay adapter wrote `COMMAND_ACK` before any driver was called; `ACK_ONLY`
+never called a driver at all; pulses were capped at 500 ms; no physical driver existed. Found by the new tests:
+after a pulse the relay was counted as off as soon as the module acknowledged the off command, so a relay stuck
+on was not reported as possibly energised (fixed). pymodbus answers a device failure with function code 0x80
+(the spec says request | 0x80); the client now treats any reply with the high bit as an exception.
+
+Local runs: backend **136/136 suites, 976 passed, 7 skipped** with the simulator required
+(`VIGILONE_REQUIRE_MODBUS_SIM=1`); governance gates exit 0; frontend typecheck clean.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Modbus TCP client (FC 1, 2, 5) | DONE_VERIFIED against pymodbus | `modbusRelayRealIo.test.ts`: echo-checked coil writes, coil and input reads, exception, connection and timeout errors. Not tried against a real module. |
+| Relay handshake (`COMMAND_SENT` → `COMMAND_ACK` on the module's echo → `STATE_CONFIRMED` on read-back) | DONE_VERIFIED against the simulator | Confirm on/off, active-low, stuck relay (acknowledged, never confirmed), failing module (never acknowledged), `ACK_ONLY` stops at ACK, full-length pulse, relay stuck on after a pulse says it may still be energised, no driver, disabled module. **Read-back is the module's register, not the physical contact.** |
+| Doors, unlock API, audit | DONE_VERIFIED against the simulator | Module, pin and door configuration with validation, tenant isolation and roles; `POST /access/doors/:id/unlock` pulses the strike while the simulated door swings open, reads as `OPENED`, writes `DOOR_UNLOCK` audit entries (also for a failed unlock, which does not count as an unlock). |
+| Door monitor (`OPENED`, `FORCED_OPEN`, `HELD_OPEN`, `CLOSED`, `DOOR_CONTACT_UNREADABLE`) | DONE_VERIFIED against the simulator | Forced vs authorised by unlock window, held open once, inverted contact, unreadable module goes UNKNOWN with one alert and no invented event on recovery, two monitors report one change under one event id; `DOOR_EVENT` rules and events.v1 mapping tested. |
+| Existing tests changed | note | `incidentOrchestrator.test.ts` ACK_ONLY test relied on acknowledging without a driver; it now supplies one and checks it was called. One fail-loud allowlist entry for the removed pulse code was deleted. |
+| Real hardware (module, strike, contact), card-reader doors, intrusion, POS, BMS, camera alarm-input binding, console page | NOT_STARTED / BLOCKED_HUMAN | Needs a bench module and a door. Unlocks outside VigilOne read as `FORCED_OPEN`; an access-control integration is not built. |
+
 ## Session 7 (2026-09-30): Phase 5, SigLIP 2 adapter and text search
 
 Branch `feat/phase5-siglip2` (from `master` `00a1786`). The Hugging Face hosts (`huggingface.co` and

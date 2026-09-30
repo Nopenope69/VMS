@@ -203,6 +203,7 @@ enum RuleTriggerType {
   CAMERA_OFFLINE
   SCENE_CHANGE
   DIGITAL_INPUT_STATE
+  DOOR_EVENT
 }
 
 enum RuleActionType {
@@ -302,6 +303,8 @@ model Tenant {
   retentionPolicies     RetentionPolicy[]
   dataProtection        DataProtectionSettings?
   explanations          Explanation[]
+  ioDevices             IoDevice[]
+  doors                 Door[]
   objectCrops           ObjectCrop[]
   cropEmbeddings        CropEmbedding[]
   detectionEvents       DetectionEvent[]
@@ -468,6 +471,7 @@ model Camera {
   spatialAnalyticsRules   SpatialAnalyticsRule[]
   spatialPlacement        CameraSpatialPlacement?
   incidents               Incident[]
+  doors                   Door[]
   eventSources            CameraEventSource[]
 
   @@index([tenantId, siteId])
@@ -1374,6 +1378,13 @@ model DigitalIoPin {
   timeoutMs        Int                   @default(3000)
   pulseDurationMs  Int                   @default(3000)
   commandLogs      RelayCommandLog[]
+  /// Phase 7: the I/O module this pin lives on and its coil (output) or discrete-input (input) address.
+  /// A pin without a device has no driver: commands to it fail (NO_PHYSICAL_RELAY_DRIVER_ATTACHED).
+  deviceId         String?
+  device           IoDevice?             @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  address          Int?
+  strikeOfDoor     Door?                 @relation("DoorStrike")
+  contactOfDoor    Door?                 @relation("DoorContact")
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
@@ -1799,4 +1810,53 @@ model CropEmbedding {
 
   @@unique([cropId, modelSha256])
   @@index([tenantId, modelSha256])
+}
+
+/// Phase 7: a networked I/O module (relay outputs and digital inputs). kind MODBUS_TCP (CHECK in the migration).
+model IoDevice {
+  id         String         @id @default(uuid())
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  kind       String
+  host       String
+  port       Int            @default(502)
+  unitId     Int            @default(1)
+  enabled    Boolean        @default(true)
+  lastSeenAt DateTime?
+  lastError  String?
+  pins       DigitalIoPin[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([tenantId, name])
+}
+
+/// Phase 7: a door: an optional strike relay (output pin) and an optional door contact (input pin). The contact
+/// makes OPENED / CLOSED / FORCED_OPEN (opened without a recent unlock) / HELD_OPEN events.
+model Door {
+  id                  String        @id @default(uuid())
+  tenantId            String
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  cameraId            String?
+  camera              Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  strikePinId         String?       @unique
+  strikePin           DigitalIoPin? @relation("DoorStrike", fields: [strikePinId], references: [id], onDelete: SetNull)
+  contactPinId        String?       @unique
+  contactPin          DigitalIoPin? @relation("DoorContact", fields: [contactPinId], references: [id], onDelete: SetNull)
+  /// True when the contact input reads ON while the door is open (the usual wiring); false for the inverse.
+  contactOpenWhenOn   Boolean       @default(true)
+  unlockPulseMs       Int           @default(5000)
+  heldOpenSeconds     Int           @default(30)
+  unlockGraceSeconds  Int           @default(10)
+  /// OPEN | CLOSED | UNKNOWN (CHECK in the migration)
+  state               String        @default("UNKNOWN")
+  stateChangedAt      DateTime?
+  lastUnlockAt        DateTime?
+  heldOpenAlertedAt   DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([tenantId, name])
 }
