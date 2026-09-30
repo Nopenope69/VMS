@@ -247,6 +247,9 @@ jobs:
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2
           scripts/e2e/anpr-lpr-scenario.sh /tmp/anpr-e2e-report.json
 
+      - name: Run high-availability failover scenario (two backend processes, one database)
+        run: scripts/e2e/ha-failover.sh /tmp/ha-e2e-report.json
+
       - name: Run redaction scenario (SIMULATED recording, real detectors, TEST-ONLY model approval)
         run: |
           scripts/models/fetch-model.sh yunet-2023mar
@@ -277,6 +280,7 @@ jobs:
             /tmp/e2e-report.json
             /tmp/anpr-e2e-report.json
             /tmp/redaction-e2e-report.json
+            /tmp/ha-e2e-report.json
           if-no-files-found: ignore
 
   governance-gates:
