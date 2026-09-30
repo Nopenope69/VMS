@@ -16,7 +16,7 @@ import { AiProvenanceV1 } from './events.v1';
 
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding']);
+export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding', 'vlm_verification']);
 
 export const ModelCardV1 = z
   .object({
@@ -30,7 +30,7 @@ export const ModelCardV1 = z
     weightsLicense: PermissiveLicenseExpression,
     /** Where the weights came from (URL or document reference), for licence audit. */
     weightsSource: z.string().min(1),
-    runtime: z.enum(['onnxruntime', 'openvino']),
+    runtime: z.enum(['onnxruntime', 'openvino', 'llama.cpp']),
     input: z
       .object({
         width: z.number().int().positive(),
@@ -104,8 +104,37 @@ export const InferenceRequestV1 = z
     modelId: NonEmptyId,
     frame: FrameRefV1,
     deadlineMs: z.number().int().positive().max(60000),
+    /** v1.1, optional: required for `vlm_verification`, refused for every other task (by the adapter). */
+    vlmQuery: z.lazy(() => VlmQueryV1).optional(),
   })
   .strict();
+
+/**
+ * v1.1 (additive, optional): the question a `vlm_verification` request asks. The adapter builds the
+ * prompt itself from a fixed, versioned template; the caller only names the object class to check,
+ * which must be one the adapter lists. No free-text prompt crosses the contract.
+ */
+export const VlmQueryV1 = z
+  .object({
+    targetClass: z.string().regex(/^[a-z][a-z_ ]{0,39}$/),
+  })
+  .strict();
+export type VlmQueryV1 = z.infer<typeof VlmQueryV1>;
+
+/**
+ * v1.1 (additive, optional): what a `vlm_verification` result carries. `answer` is whether the model sees
+ * the target class in the frame. Advisory only: consumers must never change an alarm because of it.
+ */
+export const VerificationV1 = z
+  .object({
+    targetClass: z.string().min(1),
+    answer: z.enum(['yes', 'no', 'unclear']),
+    reason: z.string().max(400),
+    /** SHA-256 of the exact prompt sent to the model (template version, question, generation settings). */
+    promptSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type VerificationV1 = z.infer<typeof VerificationV1>;
 
 /**
  * v1.1 (additive, optional): a text embedding request, `POST /v1/embed-text`. The answer is an ordinary
@@ -173,6 +202,8 @@ export const InferenceResultV1 = z.discriminatedUnion('status', [
       detections: z.array(DetectionV1),
       /** v1.1, optional: present for the `embedding` task. */
       embedding: EmbeddingV1.optional(),
+      /** v1.1, optional: present for the `vlm_verification` task. */
+      verification: VerificationV1.optional(),
       provenance: AiProvenanceV1,
       latencyMs: z.number().nonnegative(),
     })

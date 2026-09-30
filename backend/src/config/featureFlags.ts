@@ -27,6 +27,7 @@ export enum FeatureFlag {
   EXPLANATIONS = 'EXPLANATIONS',
   OBJECT_CROPS = 'OBJECT_CROPS',
   SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
+  VLM_VERIFICATION = 'VLM_VERIFICATION',
 }
 
 export interface FeatureFlagDefinition {
@@ -142,7 +143,16 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/search/crops'],
     workers: ['cropEmbedder'],
     status:
-      'Crop embeddings are stored in pgvector and searched by example (a stored crop or a vector); results are audited and person crops are purpose-limited. There is no embedding model yet (the SigLIP 2 adapter and text queries are not built), so nothing is embedded until an adapter is configured, and retrieval quality on site data is not measured.',
+      'Crops are embedded by the SigLIP 2 adapter (EMBEDDING_ADAPTER_URL) into pgvector and searched by example or by text; results are audited and person searches are admin-only and purpose-limited. The model is owner-approved and matches the official checkpoint; retrieval quality on site data is not measured.',
+  },
+  [FeatureFlag.VLM_VERIFICATION]: {
+    flag: FeatureFlag.VLM_VERIFICATION,
+    envVar: envVarFor(FeatureFlag.VLM_VERIFICATION),
+    title: 'Alarm second opinion (local VLM)',
+    routePrefixes: [],
+    workers: ['vlmVerifier'],
+    status:
+      'A local SmolVLM2 model (llama.cpp, VLM_ADAPTER_URL) is asked whether the detected object is visible in each new alarm\'s snapshot; the yes/no/unclear answer is stored and shown as advisory and never changes the alarm. Answers eight labelled test questions correctly; agreement with operator verdicts on real alarms is not measured. The model needs a human licence approval before it runs.',
   },
 });
 

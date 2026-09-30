@@ -84,6 +84,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | `global-agent` | **BSD-3-Clause** | onnxruntime-node proxy support |
 | `semver` | **ISC** | onnxruntime-node |
 | `@huggingface/tokenizers` 0.2.0 | **Apache-2.0** | SigLIP 2 text tokenizer (pure TypeScript, no dependencies) |
+| llama.cpp `llama-server` (tag b11277, commit eae11d2) | **MIT** | Runs the VLM second opinion; built from source in `services/ai-worker/Dockerfile.vlm`, started by the worker as a child process |
 | `type-fest` | **MIT OR CC0-1.0** (used under MIT) | type definitions |
 
 ### 3.2b AI models (weights are fetched by `scripts/models/fetch-model.sh`, pinned by SHA-256 in `scripts/models/models.lock.json`; not committed)
@@ -99,6 +100,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | PP-OCRv4 text detection (`ppocrv4-det`) | **Apache-2.0** | PaddleOCR, ONNX from the `rapidocr_onnxruntime` 1.4.4 wheel (Apache-2.0) | Training datasets not fully published; some public text datasets are research-only |
 | fast-plate-ocr `cct_s_v2_global` (`fast-plate-ocr-cct-s-v2`) | **MIT** | github.com/ankandrew/cnn-ocr-lp release `arg-plates` | Training data unpublished; India is not a listed region |
 | YuNet 2023mar (`yunet-2023mar`) | **MIT** | opencv/opencv_zoo | Trained on WIDER FACE, whose terms forbid commercial use of derived data |
+| SmolVLM2 2.2B Instruct GGUF Q4_K_M and Q8_0 projector (`smolvlm2-2.2b-instruct-q4km`, `-mmproj-q8`) | **Apache-2.0** | HuggingFaceTB/SmolVLM2-2.2B-Instruct, GGUF by ggml-org, pinned commit `1bc3c9f74cea` | Training mix has mixed or unclear licences (model-generated instruction data, video sources) |
 | SigLIP 2 base patch16-224 vision and text towers (`siglip2-base-p16-224-vision`, `-text`) | **Apache-2.0** (upstream `google/siglip2-base-patch16-224`; the ONNX repository's own card states no licence) | ONNX export by `onnx-community/siglip2-base-patch16-224-ONNX`, pinned commit `ba1f3b0843f2`; tokenizer file identical to the official one | Training data (WebLI) unpublished. **Approved by the owner on 30 Sept 2026** (business decision, not a legal clearance) |
 
 ### 3.2c Test and evaluation tools (never shipped in the appliance)

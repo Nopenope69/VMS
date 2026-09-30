@@ -22,6 +22,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluationBanner';
+import { AlarmSecondOpinion } from '../components/AlarmSecondOpinion';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
 const describeError = (err: any): string =>
@@ -968,6 +969,8 @@ export const Events: React.FC = () => {
                 <span className="text-vms-accent">{resolvingAlarm.camera?.name || 'Facility Appliance'}</span>
               </div>
             </div>
+
+            {!__DEMO_MODE__ && <AlarmSecondOpinion alarmId={resolvingAlarm.id} />}
 
             <div>
               <label className="block text-xs font-medium text-vms-text mb-1.5 flex items-center gap-1.5">
