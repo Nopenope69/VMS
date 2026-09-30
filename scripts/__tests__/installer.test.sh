@@ -154,6 +154,11 @@ assert_contains "install.sh strictly exits non-zero on mount failure" "fatal \"F
 assert_contains "install.sh strictly exits non-zero on healthcheck failure" "fatal \"Appliance healthcheck verification failed!" "$INSTALL_CONTENT"
 assert_contains "vigilonectl supports ota subcommand" "cmd_ota" "$CLI_CONTENT"
 assert_contains "vigilonectl supports backup subcommand" "cmd_backup" "$CLI_CONTENT"
+assert_contains "vigilonectl supports the go-live check" "cmd_golive" "$CLI_CONTENT"
+# The backend image holds only dist/ and production dependencies: in-container snippets must not use ts-node or src/.
+assert_eq "vigilonectl never runs ts-node in the backend container" "0" "$(grep -c 'npx ts-node' <<< "$CLI_CONTENT" | tr -d ' ' || true)"
+assert_eq "vigilonectl never requires ./src in the backend container" "0" "$(grep -c "'./src/" <<< "$CLI_CONTENT" | tr -d ' ' || true)"
+assert_contains "backup create fails loudly when the dump fails" "NO backup was written" "$CLI_CONTENT"
 
 echo ""
 echo "Summary: $((TOTAL - FAILED))/$TOTAL tests passed."
