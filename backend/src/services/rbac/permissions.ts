@@ -49,6 +49,8 @@ export enum Permission {
   ALARM_POLICY_MANAGE = 'ALARM_POLICY_MANAGE',
   /** P4.6: read plate data (plate reads, known-plate lists, plate search). Always with a declared purpose. */
   PLATE_DATA_QUERY = 'PLATE_DATA_QUERY',
+  /** Search by appearance over PERSON crops or view a person crop (purpose-limited and audited). */
+  CROP_PERSON_QUERY = 'CROP_PERSON_QUERY',
 }
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -96,6 +98,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.ALARM_FEEDBACK,
     Permission.ALARM_POLICY_MANAGE,
     Permission.PLATE_DATA_QUERY,
+    Permission.CROP_PERSON_QUERY,
   ],
   TENANT_ADMIN: [
     Permission.CAMERA_VIEW,
@@ -140,6 +143,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.ALARM_FEEDBACK,
     Permission.ALARM_POLICY_MANAGE,
     Permission.PLATE_DATA_QUERY,
+    Permission.CROP_PERSON_QUERY,
   ],
   OPERATOR: [
     Permission.CAMERA_VIEW,
@@ -167,6 +171,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     Permission.SPATIAL_RULE_MANAGE,
     Permission.ALARM_FEEDBACK,
     Permission.PLATE_DATA_QUERY,
+    Permission.CROP_PERSON_QUERY,
   ],
   VIEWER: [
     Permission.CAMERA_VIEW,

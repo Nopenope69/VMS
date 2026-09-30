@@ -119,6 +119,22 @@ export const DetectionV1 = z
   })
   .strict();
 
+/**
+ * v1.1 (additive, optional): the vector an `embedding` task returns. `detections` stays present (empty).
+ * The vector is little-endian float32, base64. A consumer checks that the decoded length is dim * 4 bytes
+ * and that dim is the size it stores; a producer never sends NaN or infinity.
+ */
+export const EmbeddingV1 = z
+  .object({
+    dim: z.number().int().positive().max(4096),
+    encoding: z.literal('float32_base64'),
+    vector: z.string().min(1),
+    /** True when the adapter already scaled the vector to unit length. Consumers normalise regardless. */
+    normalized: z.boolean(),
+  })
+  .strict();
+export type EmbeddingV1 = z.infer<typeof EmbeddingV1>;
+
 export const AI_ADAPTER_ERROR_CODES = [
   'MODEL_NOT_LOADED',
   'MODEL_INTEGRITY_FAILED',
@@ -137,6 +153,8 @@ export const InferenceResultV1 = z.discriminatedUnion('status', [
       status: z.literal('ok'),
       requestId: NonEmptyId,
       detections: z.array(DetectionV1),
+      /** v1.1, optional: present for the `embedding` task. */
+      embedding: EmbeddingV1.optional(),
       provenance: AiProvenanceV1,
       latencyMs: z.number().nonnegative(),
     })

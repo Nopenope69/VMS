@@ -34,18 +34,23 @@ describe('Phase 2 migration', () => {
     const shadow = `vigilone_shadow_${suffix}`;
     await prisma.$executeRawUnsafe(`CREATE DATABASE "${shadow}"`);
     try {
-      // --exit-code: 0 = no difference, 2 = difference (execFileSync throws on non-zero).
-      execFileSync(
+      const diff = execFileSync(
         path.join(BACKEND, 'node_modules', '.bin', 'prisma'),
         [
           'migrate', 'diff',
           '--from-migrations', 'prisma/migrations',
           '--to-schema-datamodel', 'prisma/schema.prisma',
           '--shadow-database-url', shadowUrl(shadow),
-          '--exit-code',
+          '--script',
         ],
-        { cwd: BACKEND, stdio: 'pipe', env: process.env }
+        { cwd: BACKEND, stdio: 'pipe', env: process.env, encoding: 'utf8' }
       );
+      // Prisma has no syntax for pgvector's HNSW index, so it is created in the migration and reported by the
+      // diff as an index to drop. Exactly these statements are allowed; anything else is real drift.
+      const KNOWN_UNREPRESENTABLE = ['-- DropIndex\nDROP INDEX "CropEmbedding_embedding_hnsw";'];
+      let remaining = diff.replace('-- This is an empty migration.', '');
+      for (const known of KNOWN_UNREPRESENTABLE) remaining = remaining.replace(known, '');
+      expect(remaining.trim()).toBe('');
     } finally {
       await prisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${shadow}" WITH (FORCE)`);
     }

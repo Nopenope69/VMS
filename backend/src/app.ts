@@ -39,6 +39,7 @@ import archiveRoutes from './routes/archive.routes';
 import ssoRoutes from './routes/sso.routes';
 import privacyRoutes from './routes/privacy.routes';
 import cropPolicyRoutes from './routes/cropPolicy.routes';
+import cropSearchRoutes from './routes/cropSearch.routes';
 import floorplanRoutes from './routes/floorplan.routes';
 import webrtcRoutes from './routes/webrtc.routes';
 import storageRoutes from './routes/storage.routes';
@@ -135,6 +136,8 @@ app.use('/api/v1/internal', internalRoutes);
 app.use('/api/v1/layouts', layoutRoutes);
 app.use('/api/v1/alarms', alarmRoutes);
 app.use('/api/v1/anpr', requireFeatureFlag(FeatureFlag.ANPR), anprRoutes);
+// Crop search sits under /search but has its own flag; mounted first so the plate-search flag does not govern it.
+app.use('/api/v1/search/crops', requireFeatureFlag(FeatureFlag.SEMANTIC_SEARCH), cropSearchRoutes);
 app.use('/api/v1/search', requireFeatureFlag(FeatureFlag.SMART_SEARCH), smartSearchRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/camera-events', requireFeatureFlag(FeatureFlag.CAMERA_EVENTS), cameraEventsRoutes);

@@ -26,6 +26,7 @@ export enum FeatureFlag {
   CAMERA_EVENTS = 'CAMERA_EVENTS',
   EXPLANATIONS = 'EXPLANATIONS',
   OBJECT_CROPS = 'OBJECT_CROPS',
+  SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
 }
 
 export interface FeatureFlagDefinition {
@@ -133,6 +134,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: ['cropPurger'],
     status:
       'Crops (a JPEG the ai-worker attaches when AI_ATTACH_CROPS is on, or a cut from a detection\'s snapshot image) are stored in CROPS_DIR with a hash, a free-space floor and a hold-aware retention purge. Person crops need a per-site switch with a recorded purpose and are off by default. Not exercised on a live camera site.',
+  },
+  [FeatureFlag.SEMANTIC_SEARCH]: {
+    flag: FeatureFlag.SEMANTIC_SEARCH,
+    envVar: envVarFor(FeatureFlag.SEMANTIC_SEARCH),
+    title: 'Semantic crop search',
+    routePrefixes: ['/api/v1/search/crops'],
+    workers: ['cropEmbedder'],
+    status:
+      'Crop embeddings are stored in pgvector and searched by example (a stored crop or a vector); results are audited and person crops are purpose-limited. There is no embedding model yet (the SigLIP 2 adapter and text queries are not built), so nothing is embedded until an adapter is configured, and retrieval quality on site data is not measured.',
   },
 });
 

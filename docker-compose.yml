@@ -93,7 +93,7 @@ services:
       - vigilone-net
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.0-pg16
     container_name: vigilone-postgres
     restart: unless-stopped
     security_opt:
@@ -164,6 +164,9 @@ services:
       - VIGILONE_FEATURE_CAMERA_EVENTS=${VIGILONE_FEATURE_CAMERA_EVENTS:-false}
       - VIGILONE_FEATURE_EXPLANATIONS=${VIGILONE_FEATURE_EXPLANATIONS:-false}
       - VIGILONE_FEATURE_OBJECT_CROPS=${VIGILONE_FEATURE_OBJECT_CROPS:-false}
+      - VIGILONE_FEATURE_SEMANTIC_SEARCH=${VIGILONE_FEATURE_SEMANTIC_SEARCH:-false}
+      # Required when SEMANTIC_SEARCH is on: an ai-adapter.v1.1 endpoint serving the embedding task.
+      - EMBEDDING_ADAPTER_URL=${EMBEDDING_ADAPTER_URL:-}
       - VIGILONE_MODEL_EXCEPTIONS=/run/vigilone/model-license-exceptions.json
       - VIGILONE_AIR_GAPPED=${VIGILONE_AIR_GAPPED:-false}
       - INCIDENT_HOLD_PRE_SECONDS=${INCIDENT_HOLD_PRE_SECONDS:-60}

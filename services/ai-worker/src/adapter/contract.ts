@@ -101,6 +101,8 @@ export type InferenceResultV1 =
       status: 'ok';
       requestId: string;
       detections: DetectionV1[];
+      /** v1.1, optional: present for the `embedding` task (little-endian float32, base64). */
+      embedding?: { dim: number; encoding: 'float32_base64'; vector: string; normalized: boolean };
       provenance: AiProvenanceV1;
       latencyMs: number;
     }

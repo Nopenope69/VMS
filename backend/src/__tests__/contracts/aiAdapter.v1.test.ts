@@ -60,3 +60,35 @@ describe('contract ai-adapter.v1', () => {
     expect(Object.keys(ai.DETECTION_CLASS_TO_EVENT_V1).sort()).toEqual(['bicycle', 'bus', 'car', 'motorcycle', 'person', 'truck']);
   });
 });
+
+describe('contract ai-adapter.v1.1: optional embedding result', () => {
+  const okResult = () => ({ ...examples.valid.InferenceResultV1_ok });
+  const withEmbedding = (e: unknown) => ({ ...okResult(), detections: [], embedding: e });
+  const vec = Buffer.alloc(8).toString('base64');
+
+  it('an existing v1 ok result (no embedding) is still valid', () => {
+    expect(ai.InferenceResultV1.safeParse(okResult()).success).toBe(true);
+  });
+
+  it('an ok result may carry an embedding, and the embedding task is declarable', () => {
+    const r = ai.InferenceResultV1.safeParse(withEmbedding({ dim: 2, encoding: 'float32_base64', vector: vec, normalized: true }));
+    expect(r.success ? [] : r.error.issues).toEqual([]);
+    expect(ai.AiTaskV1.safeParse('embedding').success).toBe(true);
+  });
+
+  it.each<[string, unknown]>([
+    ['another encoding', { dim: 2, encoding: 'float64_base64', vector: 'AAAA', normalized: true }],
+    ['a zero dimension', { dim: 0, encoding: 'float32_base64', vector: 'AAAA', normalized: true }],
+    ['an absurd dimension', { dim: 100000, encoding: 'float32_base64', vector: 'AAAA', normalized: true }],
+    ['an empty vector', { dim: 2, encoding: 'float32_base64', vector: '', normalized: true }],
+    ['a missing normalized flag', { dim: 2, encoding: 'float32_base64', vector: 'AAAA' }],
+    ['an extra field', { dim: 2, encoding: 'float32_base64', vector: 'AAAA', normalized: true, label: 'x' }],
+  ])('rejects an embedding with %s', (_why, e) => {
+    expect(ai.InferenceResultV1.safeParse(withEmbedding(e)).success).toBe(false);
+  });
+
+  it('an error result still carries no embedding', () => {
+    expect(ai.InferenceResultV1.safeParse({ ...examples.valid.InferenceResultV1_error, embedding: { dim: 2, encoding: 'float32_base64', vector: vec, normalized: true } }).success).toBe(false);
+  });
+});
+
