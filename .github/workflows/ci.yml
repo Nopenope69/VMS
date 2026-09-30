@@ -110,9 +110,22 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+      # A real S3-compatible server for the off-site archive tests (Phase 6). MinIO verifies SigV4 signatures and
+      # signed payload hashes, which the tests rely on (S3_TEST_VERIFIES_AUTH).
+      - name: Start MinIO (S3-compatible, test only)
+        run: |
+          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=vigilone-ci -e MINIO_ROOT_PASSWORD=vigilone-ci-secret-2026 minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          docker inspect --format '{{index .RepoDigests 0}}' minio/minio:RELEASE.2025-04-22T22-12-26Z
+
       - name: Run Backend Regression Test Suite
         working-directory: ./backend
         env:
+          S3_TEST_ENDPOINT: http://127.0.0.1:9000
+          S3_TEST_ACCESS_KEY: vigilone-ci
+          S3_TEST_SECRET_KEY: vigilone-ci-secret-2026
+          S3_TEST_VERIFIES_AUTH: '1'
+          VIGILONE_REQUIRE_S3: '1'
           DATABASE_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public
           JWT_SECRET: vigilone_dev_jwt_signing_key_32bytes_min!
           CREDENTIAL_ENCRYPTION_KEY: eGlhOHBqa2w4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
@@ -263,12 +276,16 @@ jobs:
           ../scripts/models/fetch-model.sh siglip2-base-p16-224-vision && ../scripts/models/fetch-model.sh siglip2-base-p16-224-text
           npx jest --runInBand src/__tests__/semanticSearchRealModels.test.ts
 
+      - name: Multi-site scenario (two backend processes, two databases, cut link, site crash)
+        run: scripts/e2e/federation-scenario.sh /tmp/federation-e2e-report.json
+
       - name: Upload scenario report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ai-e2e-report
           path: |
+            /tmp/federation-e2e-report.json
             /tmp/e2e-report.json
             /tmp/anpr-e2e-report.json
             /tmp/redaction-e2e-report.json

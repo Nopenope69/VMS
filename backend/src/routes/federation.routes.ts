@@ -5,7 +5,7 @@ import { authorize, Permission } from '../services/rbac/permissions';
 import { FederationError, FederationService } from '../services/federation/federation.service';
 import { SyncEngineService, SyncError } from '../services/federation/syncEngine.service';
 import { RECORD_KINDS } from '../services/federation/recordLog';
-import { FederationUplink, registerWithHeadquarters, uplinkStatus } from '../services/federation/uplink';
+import { FederationUplink, registerWithHeadquarters, startFederationUplink, uplinkStatus } from '../services/federation/uplink';
 import { ConfigSyncService } from '../services/federation/configSync.service';
 import { createRequireNodeSignature } from '../middleware/federationAuth';
 
@@ -219,6 +219,7 @@ router.post('/upstream/register', requireAuth, authorize(Permission.FEDERATION_M
   try {
     const { hqUrl, pairingToken, name } = req.body || {};
     const out = await registerWithHeadquarters(prisma, { hqUrl, pairingToken, name, localTenantId: req.user!.tenantId });
+    await startFederationUplink(prisma); // sync starts now, not at the next restart
     res.status(201).json(out);
   } catch (err: any) {
     res.status(err.status || 400).json({ error: err.message, code: err.code });

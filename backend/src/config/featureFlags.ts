@@ -58,8 +58,8 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     envVar: envVarFor(FeatureFlag.OBJECT_STORAGE_ARCHIVE),
     title: 'S3 / object-storage archive',
     routePrefixes: ['/api/v1/archive'],
-    workers: [],
-    status: 'Scheduling and checksum logic exist; no S3 client is attached and uploads fail closed.',
+    workers: ['archiveWorker'],
+    status: 'Finalized segments of enabled tenants are uploaded to S3-compatible storage (SigV4, payload signed with the SHA-256, verified by HEAD) in the off-peak window, pinned evidence first and at any time. Credentials are encrypted and never returned. Tested against a local S3-compatible server (moto) here and MinIO in CI; not yet against a customer bucket.',
   },
   [FeatureFlag.OIDC_SSO]: {
     flag: FeatureFlag.OIDC_SSO,

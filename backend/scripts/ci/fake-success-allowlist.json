@@ -104,24 +104,6 @@
       "justification": "Returned only after the driver confirmed both the HIGH and LOW transitions of a pulse; either failure returns the driver error. The default driver fails closed with NO_PHYSICAL_RELAY_DRIVER_ATTACHED."
     },
     {
-      "file": "backend/src/services/storage/objectStorageArchive.service.ts",
-      "patternId": "IN_MEMORY_EXTERNAL_STORE",
-      "text": "private s3Store: Map<string, { checksum: string; sizeBytes: bigint; data?: Buffer }> = new Map();",
-      "justification": "In-memory object store test double. processArchiveJob throws FEATURE_DEFERRED_FOR_V1 before touching it unless NODE_ENV=test, and the route is behind the OBJECT_STORAGE_ARCHIVE flag (tested)."
-    },
-    {
-      "file": "backend/src/services/storage/objectStorageArchive.service.ts",
-      "patternId": "IN_MEMORY_EXTERNAL_STORE",
-      "text": "const existing = this.s3Store.get(job.objectKey);",
-      "justification": "In-memory object store test double. processArchiveJob throws FEATURE_DEFERRED_FOR_V1 before touching it unless NODE_ENV=test, and the route is behind the OBJECT_STORAGE_ARCHIVE flag (tested)."
-    },
-    {
-      "file": "backend/src/services/storage/objectStorageArchive.service.ts",
-      "patternId": "IN_MEMORY_EXTERNAL_STORE",
-      "text": "this.s3Store.set(job.objectKey, {",
-      "justification": "In-memory object store test double. processArchiveJob throws FEATURE_DEFERRED_FOR_V1 before touching it unless NODE_ENV=test, and the route is behind the OBJECT_STORAGE_ARCHIVE flag (tested)."
-    },
-    {
       "file": "backend/src/services/storage/storageEpoch.service.ts",
       "patternId": "INVENTED_HASH",
       "text": "const genesisPrevHash = '0'.repeat(64);",
@@ -276,6 +258,12 @@
       "patternId": "HARDCODED_MODEL_NAME",
       "text": "export type ModelDecoderKind = 'generic' | 'yolox' | 'rfdetr';",
       "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
+    },
+    {
+      "file": "backend/src/services/federation/recordLog.ts",
+      "patternId": "INVENTED_HASH",
+      "text": "export const GENESIS_HASH = '0'.repeat(64);",
+      "justification": "Genesis anchor of the site-to-headquarters record chain: the documented previous-hash of record 1, not a claimed digest of any data (same role as the audit chain's GENESIS_HASH)."
     }
   ]
 }

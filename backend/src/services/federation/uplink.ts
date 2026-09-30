@@ -334,9 +334,15 @@ export class FederationUplink {
   }
 }
 
-/** Starts the uplink when federation is on and this appliance is paired. A bad interval stops startup. */
+let active: FederationUplink | null = null;
+
+/**
+ * Starts the uplink when federation is on and this appliance is paired (at boot, and again right after pairing),
+ * once per process. A bad interval stops startup.
+ */
 export async function startFederationUplink(prisma: PrismaClient, env: NodeJS.ProcessEnv = process.env): Promise<FederationUplink | null> {
   if (!isFeatureEnabled(FeatureFlag.FEDERATION, env)) return null;
+  if (active) return active;
   const raw = env.FEDERATION_SYNC_INTERVAL_MS;
   const interval = raw === undefined || raw.trim() === '' ? 10_000 : Number(raw);
   if (!Number.isInteger(interval) || interval < 1000) throw new Error(`FEDERATION_SYNC_INTERVAL_MS must be a whole number of at least 1000 milliseconds, got "${raw}"`);
@@ -344,5 +350,12 @@ export async function startFederationUplink(prisma: PrismaClient, env: NodeJS.Pr
   if (!paired) return null;
   const u = new FederationUplink(prisma, env, interval);
   u.start();
+  active = u;
   return u;
+}
+
+/** Test hook: stop and forget the process-wide uplink. */
+export function stopFederationUplink() {
+  active?.stop();
+  active = null;
 }

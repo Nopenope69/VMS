@@ -6,6 +6,34 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 9 (2026-09-30): Phase 6, multi-site sync and off-site archive
+
+Branch `feat/phase6-multisite` (from `master`; the Wave C VLM branch is separate). Operations:
+`docs/operations/MULTI_SITE.md`. Flags `VIGILONE_FEATURE_FEDERATION` and
+`VIGILONE_FEATURE_OBJECT_STORAGE_ARCHIVE` (both default OFF).
+
+**Found and fixed in the existing code (verified by tests that fail when the fix is undone):** the sync
+endpoint's EVENT stream wrote site events into headquarters' own DetectionEvent table under a camera id the site
+chose, with no tenant check; AUDIT and ALARM streams advanced the cursor and stored nothing; any valid pairing
+token could re-register another tenant's node id with a new key; the deprovision check read a field that does
+not exist; pairing tokens were in memory only; the archive "uploaded" to an in-memory map, stored the bucket keys
+in plain text, returned them from `GET /archive/config`, and its queue endpoint accepted any file path. No site
+or bucket ever used this code.
+
+Local runs: backend **138/138 suites, 980 passed, 8 skipped** (6 real-model search tests whose model files were
+not in this run, the MinIO-only signature check, and the long-standing skip) with `S3_TEST_ENDPOINT` pointing at a local moto server (the signature and payload-hash checks
+are skipped there and run against MinIO in CI); governance gates exit 0. `scripts/e2e/federation-scenario.sh`
+PASS locally.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Record chain, site outbox and uplink, headquarters storage and views | DONE_VERIFIED on one machine | `federationSyncRealDb.test.ts` 11/11 (run twice): pairing (hashed single-use tokens, https-only, key file 0600), sync of events, alarm changes and audit entries in order, chain recomputed, headquarters tables untouched, cross-site alarm view, cut link (queue, backoff, catch-up), lost reply (no duplicate), altered record, unsigned and replayed requests, retired streams, deprovisioned node, takeover refused. Mutations: removing the chain check fails 1 test, removing the takeover guard fails 7. |
+| Two-process scenario (two databases, relay cut, `kill -9` of the site) | DONE_VERIFIED locally; CI pending | `scripts/e2e/federation-scenario.sh`: link cut 15 s (nothing arrives, 17 records queued, 4 backoffs), restored (caught up in 5 s, acknowledgements applied), site killed mid-sync and restarted (35/35 alarms, no gap), 111 records recomputed at headquarters, contiguous from 1. **Loopback, not a WAN.** |
+| S3 client (SigV4) | DONE_VERIFIED | `s3Client.test.ts`: signatures equal botocore 1.43.105 on 5 cases (path-style, virtual-hosted, metadata, unicode key, bucket). |
+| Archive worker, encrypted credentials, queue by segment id | DONE_VERIFIED against moto; MinIO in CI pending | `archiveS3RealDb.test.ts` 6/6 against moto 5.1.0 (pinned first outside the window, rest inside, bytes read back identical, duplicate recognised, changed file never uploaded, retries then FAILED, queue API refuses paths and other tenants). The wrong-key and wrong-payload checks need a server that verifies them (MinIO, CI). The CI MinIO tag is pinned from memory (Docker Hub is not reachable here); CI will show whether it exists. |
+| Existing tests changed | note | `storeAndForwardSync.test.ts` tested the retired EVENT stream (the security bug) and now tests the new input rules; `federationAuth.test.ts` pairing tests use the database-backed tokens; `objectStorageArchive.test.ts`, `fakeSuccessHardening.test.ts` and `failLoudHardening.test.ts` asserted that the in-memory S3 stub refused; they now assert that no job completes without a store that confirmed it. Three fail-loud allowlist entries for the removed stub were deleted; one entry was added for the record chain's genesis hash (same role as the audit chain's). |
+| Real WAN, customer bucket, live video across sites, config push to sites, console pages | NOT_STARTED / BLOCKED_HUMAN | A WAN and a bucket need a second site and credentials. The reverse video tunnel and config push are not built. |
+
 ## Session 7 (2026-09-30): Phase 5, SigLIP 2 adapter and text search
 
 Branch `feat/phase5-siglip2` (from `master` `00a1786`). The Hugging Face hosts (`huggingface.co` and
