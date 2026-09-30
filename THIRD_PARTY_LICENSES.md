@@ -99,7 +99,7 @@ because the common Node mail libraries are MIT-0, which is not on the allowlist.
 | PP-OCRv4 text detection (`ppocrv4-det`) | **Apache-2.0** | PaddleOCR, ONNX from the `rapidocr_onnxruntime` 1.4.4 wheel (Apache-2.0) | Training datasets not fully published; some public text datasets are research-only |
 | fast-plate-ocr `cct_s_v2_global` (`fast-plate-ocr-cct-s-v2`) | **MIT** | github.com/ankandrew/cnn-ocr-lp release `arg-plates` | Training data unpublished; India is not a listed region |
 | YuNet 2023mar (`yunet-2023mar`) | **MIT** | opencv/opencv_zoo | Trained on WIDER FACE, whose terms forbid commercial use of derived data |
-| SigLIP 2 base patch16-224 vision and text towers (`siglip2-base-p16-224-vision`, `-text`) | **Apache-2.0** (upstream `google/siglip2-base-patch16-224`; the ONNX repository's own card states no licence) | ONNX export by `onnx-community/siglip2-base-patch16-224-ONNX`, pinned commit `ba1f3b0843f2`; tokenizer file identical to the official one | Training data (WebLI) unpublished |
+| SigLIP 2 base patch16-224 vision and text towers (`siglip2-base-p16-224-vision`, `-text`) | **Apache-2.0** (upstream `google/siglip2-base-patch16-224`; the ONNX repository's own card states no licence) | ONNX export by `onnx-community/siglip2-base-patch16-224-ONNX`, pinned commit `ba1f3b0843f2`; tokenizer file identical to the official one | Training data (WebLI) unpublished. **Approved by the owner on 30 Sept 2026** (business decision, not a legal clearance) |
 
 ### 3.2c Test and evaluation tools (never shipped in the appliance)
 | Tool | License | Use |

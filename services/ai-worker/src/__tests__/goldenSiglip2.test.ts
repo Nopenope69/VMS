@@ -6,6 +6,7 @@
  * Skipped when the model files are absent unless VIGILONE_REQUIRE_MODEL_TESTS=1.
  */
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { Image3 } from '../anpr/imageOps';
@@ -60,6 +61,19 @@ d('SigLIP 2 pipeline equals the official checkpoint', () => {
   }
 
   it('refuses to run in the product path without a human approval', async () => {
-    await expect(loadEmbeddingPipeline()).rejects.toThrow(/LICENSE_REJECTED/);
+    // An empty approvals file, independent of what the repository's own file approves.
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'siglip2-approvals-')), 'approvals.json');
+    fs.writeFileSync(file, JSON.stringify({ approvals: [] }));
+    process.env.VIGILONE_MODEL_EXCEPTIONS = file;
+    try {
+      await expect(loadEmbeddingPipeline()).rejects.toThrow(/LICENSE_REJECTED/);
+    } finally {
+      delete process.env.VIGILONE_MODEL_EXCEPTIONS;
+    }
   });
+
+  it('runs in the product path with the approvals in scripts/models/model-license-exceptions.json', async () => {
+    const approved = await loadEmbeddingPipeline();
+    expect(approved.components.map((c) => c.approval?.key)).toEqual(['siglip2-base-p16-224-vision', 'siglip2-base-p16-224-text']);
+  }, 120000);
 });
