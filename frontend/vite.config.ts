@@ -14,7 +14,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        // `vite preview` uses the same proxy (preview.proxy defaults to server.proxy); the browser tests point it
+        // at their own backend with VIGILONE_API_TARGET.
+        target: process.env.VIGILONE_API_TARGET || 'http://localhost:4000',
         changeOrigin: true,
       },
       '/whep': {
@@ -32,5 +34,13 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
   },
 });

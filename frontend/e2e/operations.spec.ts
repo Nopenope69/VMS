@@ -107,9 +107,11 @@ test.describe('VigilOne Core Operator Workflows', () => {
     await page.click('button[type="submit"]');
 
     // Navigate to Events tab
-    await page.getByRole('button', { name: /Events/i }).click();
+    await page.getByRole('button', { name: /Events|Alarms/i }).click();
 
     // Verify event/alarm list renders
     await expect(page.getByText(/Active Alarms|Security Events|Alarm Feed/i).first()).toBeVisible();
   });
+
+  // Flows 7-9 were replaced by e2e/redaction-dpdp.spec.ts, which runs against the real backend.
 });

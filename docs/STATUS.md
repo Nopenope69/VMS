@@ -6,6 +6,22 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 19 (2026-10-01): redaction console and DPDP settings (Antigravity commit 4482397, reviewed and fixed)
+
+Branch `feat/redaction-console`, from `master`. It carries the Antigravity commit, which was pushed to `main`, 91
+commits behind `master`, and fixes on top of it.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Redaction job creation | DONE_VERIFIED | Before: the modal sent `redactionMode` `BLUR`/`SOLID_BLACK`, which the backend rejects with 400, and the export id instead of the manifest id. Its source list also stayed empty because it was mounted before the list loaded. It now sends `FACE`/`LICENSE_PLATE` with the matching `detectKinds` and the manifest id. The invented blur choice is removed: masking is solid black only. Browser test: the job is stored QUEUED for the seeded manifest. A second test checks that the refusal for faces while face processing is off is shown. |
+| DPDP settings save and purge report | DONE_VERIFIED | Before: the save sent `retentionDays` and `faceAcknowledgement`, which the strict schema rejects with 400, and the purge message read fields that do not exist, so it always said 0. It now sends `plateRetentionDays`, `detectionSnapshotRetentionDays` and `acknowledgeBiometricProcessing`. Browser tests: saved values persist and reload; the purge reports 1 deleted read, then 0. |
+| Downloads | DONE_VERIFIED | Plain `<a href>` links got 401: the token is in memory, not a cookie. All three (MP4, package ZIP, evidence ZIP) now download through the authenticated client (`services/download.ts`). Browser test: the MP4 arrives byte for byte (SHA-256 checked), and a refused download is shown, not swallowed. |
+| Evidence page crash | DONE_VERIFIED | Found by the browser tests. The rewritten packages table read `timeWindowStart`, `cameraName` and `cameraIp`, which do not exist. With any real evidence export, `toISOString` threw and the whole app went blank. It now uses `startTime`/`endTime`/`camera.name`, a date formatter that cannot throw, and shows non-COMPLETED status instead of a green tick. |
+| Browser test setup | DONE_VERIFIED | The repository had never been able to run Playwright: no dependency, no config. Added `@playwright/test` 1.56.1 (pinned to the installed Chromium build), `playwright.config.ts`, `scripts/e2e/frontend-browser.sh` (scratch DB, seed, real backend, `vite preview`) and the CI job `frontend-browser-tests`. Six tests pass. Against Antigravity's original files the job, settings and purge tests fail. |
+| Documents | DONE_VERIFIED | `GDPR_DPDP_COMPLIANCE_AUDIT_2026-10-01.md` was rewritten: every claim was checked against the code, eight false statements are listed and corrected, there are no "fully compliant" verdicts, and the self-assessment marker is added. `PHASE_5_PGVECTOR_SCHEMA_ARCHITECTURE.md` now describes the `CropEmbedding` schema that exists, not the unbuilt `VisualEmbedding` design. |
+| `e2e/operations.spec.ts` | NOT_DONE | Flows 1 to 6 predate this work, log in as `admin`/`admin123` (no such user exists) and have never run; they are not wired into the config. Antigravity's flows 7 to 9 are removed, replaced by `redaction-dpdp.spec.ts`. |
+| Code-splitting | DONE_VERIFIED | Antigravity's `React.lazy` routes and `manualChunks` are kept: the largest chunk is 202 kB (55 kB gzip), with no Vite size warning. `tsc`, the build and `check:no-demo` pass. |
+
 ## Session 18 (2026-10-01): architecture review, item 6 (one declaration of settings)
 
 Branch `refactor/typed-settings`. ADR 0010 has the details.
