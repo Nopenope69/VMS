@@ -6,6 +6,18 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 17 (2026-10-01): architecture review, item 5 (camera registry)
+
+Branch `refactor/camera-registry`. ADR 0009 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Cross-tenant writes on camera sub-resources fixed | DONE_VERIFIED | A real-database reproduction against the old `camera.routes.ts` showed an admin of another tenant getting HTTP 200 on six routes: zone update, zone delete, zone test, tour stop, tour delete and the diagnostic probe. The zone and the tour were really deleted. Through `CameraRegistry` every one of them is now 404 and nothing changes. Tour start and preset routes also check that the tour or preset belongs to the camera. `cameraRegistryRealDb.test.ts` 8/8. |
+| Onboarding all or nothing | DONE_VERIFIED | When the media engine refuses the stream, the camera row is removed and the call fails with 502. Tested with the real database and an unreachable MediaMTX. A guessed RTSP URI is now returned and audited as a warning. |
+| No invented diagnostics or presets | DONE_VERIFIED | `GET /:id/diagnostic` returns `diagnostic: null` without a measurement; the modal says "no measurement yet" instead of showing "OPTIMAL". A preset the camera refused is a 502, and no row is stored. Both are tested. Frontend `tsc`, build and `check:no-demo` pass. |
+| `Camera.isOnline` misuse | NOT_DONE (finding) | The field is set at onboarding and never updated, and the watchdogs and scheduler select on it. It is kept as it is (see ADR 0009); a rename or a real liveness writer is separate work. |
+| Suites | DONE_VERIFIED | Backend 145/145 suites, 1068 passed, 8 skipped (real PostgreSQL, simulated Modbus); `tsc` passes. |
+
 ## Session 16 (2026-10-01): architecture review, item 4 (composition root)
 
 Branch `refactor/composition-root`, stacked on item 3. ADR 0008 has the details.
