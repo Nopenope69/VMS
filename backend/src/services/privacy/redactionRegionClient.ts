@@ -1,12 +1,11 @@
 /**
- * Client for the redaction regions adapter (ai-adapter.v1, P4.4). Every response is validated
- * against the contract and its provenance is checked against the model registry: a region is used
- * only if it came from a registered, active redaction pipeline with the same SHA-256.
+ * Client for the redaction regions adapter (ai-adapter.v1, P4.4). The contract checks are AiAdapterClient's;
+ * this module checks provenance against the model registry: a region is used only if it came from a
+ * registered, active redaction pipeline with the same SHA-256, and the detector does not change mid-job.
  * Any failure is thrown as RedactionError; the job then fails instead of exporting unmasked video.
  */
-import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
-import { AdapterDescriptorV1, AdapterHealthV1, InferenceResultV1 } from '../../contracts/aiAdapter.v1';
+import { AiAdapterClient } from '../ai/aiAdapterClient';
 import { RedactionError } from './redactionErrors';
 
 export type RegionTask = 'face_detection_for_redaction' | 'plate_detection_for_redaction';
@@ -27,36 +26,27 @@ export interface DetectorProvenance {
   components: Array<{ role: string; modelName: string; modelVersion: string; modelSha256: string }>;
 }
 
+const CODES = { unavailable: 'REDACTION_DETECTOR_UNAVAILABLE', invalid: 'REDACTION_DETECTOR_INVALID', unregistered: 'REDACTION_PROVENANCE_INVALID' } as const;
+
 export class RedactionRegionClient {
   private modelId: string | null = null;
   private provenance: DetectorProvenance | null = null;
+  private readonly adapter: AiAdapterClient;
+  private current: { task: RegionTask; seq: number } | null = null;
 
-  constructor(private prisma: PrismaClient, private baseUrl: string, private timeoutMs = 20000) {}
-
-  private async getJson(path: string): Promise<unknown> {
-    let r: Response;
-    try {
-      r = await fetch(`${this.baseUrl}${path}`, { signal: AbortSignal.timeout(this.timeoutMs) });
-    } catch (e: any) {
-      throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', `redaction adapter at ${this.baseUrl} is unreachable: ${e.message}`);
-    }
-    if (!r.ok) throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', `GET ${path} returned HTTP ${r.status}`);
-    return r.json();
+  constructor(private prisma: PrismaClient, baseUrl: string, private timeoutMs = 20000) {
+    this.adapter = new AiAdapterClient(baseUrl, {
+      name: 'redaction adapter',
+      timeoutMs,
+      fail: (kind, m) => new RedactionError(CODES[kind], m),
+      onErrorResult: (res) => new RedactionError('REDACTION_DETECTOR_FAILED', `${this.current?.task} failed on frame ${this.current?.seq}: ${res.errorCode}: ${res.message}`),
+    });
   }
 
   /** Health READY and a model serving both redaction tasks; remembers its model id. */
   async connect(tasks: RegionTask[]): Promise<void> {
-    const health = AdapterHealthV1.safeParse(await this.getJson('/v1/health'));
-    if (!health.success) throw new RedactionError('REDACTION_DETECTOR_INVALID', `health does not match ai-adapter.v1: ${health.error.issues[0].message}`);
-    if (health.data.status !== 'READY') {
-      throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', `redaction adapter is ${health.data.status}: ${health.data.lastError ?? 'no detail'}`);
-    }
-    const desc = AdapterDescriptorV1.safeParse(await this.getJson('/v1/descriptor'));
-    if (!desc.success) throw new RedactionError('REDACTION_DETECTOR_INVALID', `describe does not match ai-adapter.v1: ${desc.error.issues[0].message}`);
-    for (const t of tasks) {
-      if (!desc.data.tasks.includes(t)) throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', `adapter ${desc.data.adapterId} does not serve ${t}`);
-    }
-    const model = desc.data.models[0];
+    const desc = await this.adapter.probe(tasks);
+    const model = desc.models[0];
     if (!model) throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', 'redaction adapter has no model loaded');
     this.modelId = model.modelId;
   }
@@ -64,28 +54,17 @@ export class RedactionRegionClient {
   /** Runs one task on one JPEG frame; returns pixel boxes. */
   async detect(task: RegionTask, jpeg: Buffer, width: number, height: number, frameTimestampUtc: string, seq: number): Promise<RegionDetection[]> {
     if (!this.modelId) throw new Error('connect() first');
-    const body = {
-      contract: 'ai-adapter.v1',
-      requestId: crypto.randomUUID(),
+    this.current = { task, seq };
+    const res = await this.adapter.call('/v1/infer', {
       tenantId: 'redaction',
       task,
       modelId: this.modelId,
       deadlineMs: this.timeoutMs,
-      frame: { cameraId: 'redaction', streamSessionId: 'redaction', sequenceNumber: seq, timestampUtc: frameTimestampUtc, width, height, format: 'jpeg', data: { kind: 'inline_base64', value: jpeg.toString('base64') } },
-    };
-    let json: unknown;
-    try {
-      const r = await fetch(`${this.baseUrl}/v1/infer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs + 5000) });
-      json = await r.json();
-    } catch (e: any) {
-      throw new RedactionError('REDACTION_DETECTOR_UNAVAILABLE', `inference request failed: ${e.message}`);
-    }
-    const res = InferenceResultV1.safeParse(json);
-    if (!res.success) throw new RedactionError('REDACTION_DETECTOR_INVALID', `inference result does not match ai-adapter.v1: ${res.error.issues[0].path.join('.')}: ${res.error.issues[0].message}`);
-    if (res.data.status !== 'ok') throw new RedactionError('REDACTION_DETECTOR_FAILED', `${task} failed on frame ${seq}: ${res.data.errorCode}: ${res.data.message}`);
-    await this.checkProvenance(res.data.provenance as any);
+      frame: AiAdapterClient.jpegFrame(jpeg, { width, height }, { cameraId: 'redaction', timestampUtc: frameTimestampUtc, sequenceNumber: seq }),
+    });
+    await this.checkProvenance(res.provenance as any);
     const want = task === 'face_detection_for_redaction' ? 'face' : 'license_plate';
-    return res.data.detections
+    return res.detections
       .filter((d) => d.objectClass === want)
       .map((d) => ({
         kind: want === 'face' ? ('FACE' as const) : ('LICENSE_PLATE' as const),
