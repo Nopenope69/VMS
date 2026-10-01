@@ -368,7 +368,7 @@ The `improve-codebase-architecture` review found six deepening candidates. Statu
 | 5 | Camera registry module | PR #25 | ADR 0009. Fixes cross-tenant writes: another tenant could edit and delete zones, stop and delete guard tours, and run the diagnostic probe. Also makes onboarding all or nothing and stops inventing diagnostics and presets. Finding kept as is: `Camera.isOnline` is never updated after onboarding, and the watchdogs select on it, so it works as "monitored". |
 | 6 | One declaration of settings | PR #26 | ADR 0010, `config/settings.ts`. A bad setting stops start-up, naming the variable; before, `DOOR_POLL_INTERVAL_MS=5s` became a 1 ms timer. `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` still have two readers. |
 
-**Known gap, fixed in PR #23:** the generated status showed the ai-worker red (28 failures in `goldenSiglip2`, `goldenVlm` and `embeddingAdapter`). The cause was not the code. `status.yml` required the model tests but never fetched the SigLIP 2 and SmolVLM2 models or built `llama-server`. The PR checks in `ci.yml` do, and are green.
+**Known gap, fixed in PR #23:** the generated status showed the ai-worker red (28 failures in `goldenSiglip2`, `goldenVlm` and `embeddingAdapter`). The cause was not the code. `status.yml` required the model tests but never fetched the SigLIP 2 and SmolVLM2 models or built `llama-server`. The PR checks in `ci.yml` do, and are green. Verified after merge: status run 36855674301 passed, the first green run of that workflow since Phase 5.
 
 **Working rules carried between sessions:**
 - Skills and `.claude` setup files are never committed to this repository.
