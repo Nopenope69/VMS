@@ -7,6 +7,7 @@ import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { VENDOR_OTA_PUBLIC_KEY, OTA_KEY_ID } from '../../config/otaKeys';
 import ClockGuard from '../../utils/clockGuard';
+import { setting } from '../../config/settings';
 
 export interface OtaPayloadFile {
   path: string;
@@ -84,7 +85,7 @@ export class OtaUpdateService {
     this.versionFilePath = options.versionFilePath || '/opt/vigilone/version.json';
     this.backupsDir = options.backupsDir || '/var/lib/vigilone/backups';
     this.otaReleaseStatePath =
-      options.otaReleaseStatePath || process.env.OTA_RELEASE_STATE_PATH || '/etc/vigilone/ota_release.state';
+      options.otaReleaseStatePath || setting('OTA_RELEASE_STATE_PATH') || '/etc/vigilone/ota_release.state';
     this.configDir = options.configDir || '/etc/vigilone';
     this.dbHandlers = options.dbHandlers;
     this.currentVersion = options.currentVersion || '1.0.0';
@@ -482,7 +483,7 @@ export class OtaUpdateService {
       failedCameraIds: [],
     };
 
-    if (options.mockHealthCheck && process.env.NODE_ENV !== 'test') {
+    if (options.mockHealthCheck && setting('NODE_ENV') !== 'test') {
       throw new Error('OTA_TEST_HOOK_FORBIDDEN: mockHealthCheck is only permitted under NODE_ENV=test');
     }
 
@@ -680,7 +681,7 @@ export class OtaUpdateService {
       mockHealthCheck?: () => Promise<HealthCheckResult>;
     } = {}
   ): Promise<{ success: boolean; version?: string; error?: string }> {
-    if ((options.skipHealthCheck || options.mockHealthCheck) && process.env.NODE_ENV !== 'test') {
+    if ((options.skipHealthCheck || options.mockHealthCheck) && setting('NODE_ENV') !== 'test') {
       // Reporting a successful OTA without a real post-update health check is fake success.
       return {
         success: false,
@@ -746,7 +747,7 @@ export class OtaUpdateService {
       const snapshot = await this.createPreUpdateSnapshot();
 
       // 5. Deploy verified payload files if targetInstallDir specified
-      const targetDir = options.targetInstallDir || process.env.VIGILONE_INSTALL_DIR || '/opt/vigilone';
+      const targetDir = options.targetInstallDir || setting('VIGILONE_INSTALL_DIR');
       for (const file of manifest.files) {
         const srcPath = path.join(stagingDir, file.path);
         const destPath = path.join(targetDir, file.path);

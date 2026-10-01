@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { setting } from '../../../config/settings';
 
 /**
  * WhatsApp Business Cloud API client (P3.3).
@@ -31,7 +32,8 @@ export class WhatsAppError extends Error {
 }
 
 export function whatsappBaseUrl(): string {
-  if (process.env.NODE_ENV === 'test' && process.env.WHATSAPP_API_BASE_URL) return process.env.WHATSAPP_API_BASE_URL;
+  const testBase = setting('WHATSAPP_API_BASE_URL');
+  if (setting('NODE_ENV') === 'test' && testBase) return testBase;
   return 'https://graph.facebook.com';
 }
 

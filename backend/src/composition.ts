@@ -35,6 +35,7 @@ import recordingScheduleService from './services/schedule/recordingSchedule.serv
 import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
+import { setting } from './config/settings';
 
 // --- Modules shared by routes and background services ---------------------------------------------------
 export const recordingCatalog = new RecordingCatalog(prisma);
@@ -82,13 +83,13 @@ export function startBackgroundServices(): void {
   notificationDispatcher.start();
   incidentOrchestrator.start();
   alarmWorkflow.start(15000);
-  retentionPurger.start(Number(process.env.DPDP_PURGE_INTERVAL_MS || 3_600_000));
+  retentionPurger.start(setting('DPDP_PURGE_INTERVAL_MS'));
   redactionQueue
     .recoverInterrupted()
     .then((n) => n && console.warn(`[Redaction] ${n} job(s) interrupted by a restart were marked FAILED`))
     .catch((err) => console.error('[Redaction] recovery failed:', err.message));
   if (isFeatureEnabled(FeatureFlag.CAMERA_EVENTS)) cameraEventManager.start(15000);
-  if (isFeatureEnabled(FeatureFlag.DIO_RELAY)) doorMonitor.start(Number(process.env.DOOR_POLL_INTERVAL_MS || 500));
+  if (isFeatureEnabled(FeatureFlag.DIO_RELAY)) doorMonitor.start(setting('DOOR_POLL_INTERVAL_MS'));
   cropWorkers = startCropWorkers(cropPurger);
   embeddingWorkers = startEmbeddingWorkers(prisma);
   if (isFeatureEnabled(FeatureFlag.OBJECT_STORAGE_ARCHIVE)) {

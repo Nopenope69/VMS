@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { setting } from '../config/settings';
 
 export interface ClockSanityCheckResult {
   valid: boolean;
@@ -13,12 +14,12 @@ export interface ClockSanityCheckResult {
 export class ClockGuard {
   // Hardcoded build epoch: 2026-09-01T00:00:00Z
   private static readonly BUILD_EPOCH = new Date('2026-09-01T00:00:00.000Z');
-  private static stateFilePath: string = process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+  private static stateFilePath: string = setting('CLOCK_GUARD_STATE_PATH');
   private static lastKnownGoodTime: Date = ClockGuard.loadPersistedState();
 
   private static loadPersistedState(): Date {
     try {
-      const filePath = this.stateFilePath || process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+      const filePath = this.stateFilePath || setting('CLOCK_GUARD_STATE_PATH');
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf8').trim();
         const parsed = new Date(raw);
@@ -34,7 +35,7 @@ export class ClockGuard {
 
   private static persistState() {
     try {
-      const filePath = this.stateFilePath || process.env.CLOCK_GUARD_STATE_PATH || '/etc/vigilone/clock_guard.state';
+      const filePath = this.stateFilePath || setting('CLOCK_GUARD_STATE_PATH');
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

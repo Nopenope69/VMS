@@ -21,6 +21,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { setting } from '../config/settings';
 
 const router = Router();
 const privacyService = new PrivacyPolicyService(prisma);
@@ -202,7 +203,7 @@ router.post('/jobs/:id/execute', authorize(Permission.REDACTION_EXECUTE), async 
 router.get('/jobs/:id/download', authorize(Permission.REDACTION_EXECUTE), async (req: Request, res: Response) => {
   const job = await prisma.redactionJob.findFirst({ where: { id: req.params.id, tenantId: req.user!.tenantId } });
   if (!job || job.status !== 'COMPLETED' || !job.outputObjectKey || !job.outputSha256) return res.status(404).json({ error: 'No completed derivative for this job' });
-  const file = path.join(process.env.EXPORTS_DIR || '/recordings/exports', job.outputObjectKey);
+  const file = path.join(setting('EXPORTS_DIR'), job.outputObjectKey);
   if (!fs.existsSync(file)) return res.status(410).json({ error: 'The derivative file is no longer on disk', code: 'REDACTION_OUTPUT_MISSING' });
   const h = crypto.createHash('sha256');
   await new Promise<void>((resolve, reject) => fs.createReadStream(file).on('data', (c) => h.update(c)).on('end', () => resolve()).on('error', reject));

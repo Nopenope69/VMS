@@ -103,6 +103,7 @@ export function verifyLicenseArtifact(
 
 import fs from 'fs';
 import ClockGuard from './clockGuard';
+import { setting } from '../config/settings';
 
 export interface HardwareBindingInfo {
   dmiUuid: string | null;
@@ -117,8 +118,8 @@ export interface HardwareBindingInfo {
  * Also supports environment variable overrides for testing or containerized deployments.
  */
 export function getApplianceHardwareFingerprint(): HardwareBindingInfo {
-  let dmiUuid: string | null = process.env.APPLIANCE_HARDWARE_UUID || null;
-  let machineId: string | null = process.env.APPLIANCE_MACHINE_ID || null;
+  let dmiUuid: string | null = setting('APPLIANCE_HARDWARE_UUID') || null;
+  let machineId: string | null = setting('APPLIANCE_MACHINE_ID') || null;
 
   if (!dmiUuid) {
     try {

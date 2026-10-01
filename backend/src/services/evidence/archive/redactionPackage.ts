@@ -17,6 +17,7 @@ import { CustodyLedger } from './custodyLedger';
 import { MerkleTree, MerkleLeafEntry } from './merkleTree';
 import { PackageAssembler } from './packageAssembler';
 import { collectAiProvenance } from './aiProvenance';
+import { settingIfSet } from '../../../config/settings';
 
 export const DERIVATION_SCHEMA = 'vigilone.derivation.v1';
 
@@ -32,7 +33,7 @@ export async function buildRedactionPackage(prisma: PrismaClient, tenantId: stri
   if (job.status !== 'COMPLETED' || !job.outputObjectKey || !job.outputSha256 || !job.cameraId) {
     throw new RedactionPackageError('REDACTION_NOT_COMPLETED', `job ${jobId} is ${job.status}`, 409);
   }
-  const exportsDir = process.env.EXPORTS_DIR || config.EXPORTS_DIR;
+  const exportsDir = settingIfSet('EXPORTS_DIR') ?? config.EXPORTS_DIR;
   const derivativePath = path.join(exportsDir, job.outputObjectKey);
   if (!fs.existsSync(derivativePath)) throw new RedactionPackageError('REDACTION_OUTPUT_MISSING', derivativePath, 410);
   const derivativeSha256 = await computeFileSha256(derivativePath);

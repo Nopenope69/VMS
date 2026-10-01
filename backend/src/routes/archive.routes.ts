@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { ObjectStorageArchiveService } from '../services/storage/objectStorageArchive.service';
 import { encryptCredential } from '../utils/crypto';
+import { setting } from '../config/settings';
 
 /** The stored configuration without its credentials: they are write-only. */
 function publicConfig(c: any) {
@@ -72,7 +73,7 @@ router.post(
       if (endpoint) {
         try {
           const u = new URL(endpoint);
-          if (u.protocol !== 'https:' && !(u.protocol === 'http:' && process.env.ARCHIVE_ALLOW_INSECURE_ENDPOINT === 'true')) throw new Error();
+          if (u.protocol !== 'https:' && !(u.protocol === 'http:' && setting('ARCHIVE_ALLOW_INSECURE_ENDPOINT'))) throw new Error();
         } catch {
           res.status(400).json({ error: 'endpoint must be an https URL (http only with ARCHIVE_ALLOW_INSECURE_ENDPOINT=true, for a lab)' });
           return;

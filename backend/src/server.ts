@@ -4,13 +4,22 @@ import app from './app';
 import { startBackgroundServices, stopBackgroundServices } from './composition';
 import { LeaderLease } from './services/cluster/leaderLease';
 import { setClusterRoleSource } from './services/cluster/clusterRole';
+import { setting, settingProblems } from './config/settings';
 
 // Every long-lived module is built in composition.ts; this file runs the HTTP server, the HA lease and shutdown.
-const haNodeId = process.env.VIGILONE_HA_NODE_ID?.trim();
+
+// A setting that does not parse (an interval of "5s", a flag of "yes") stops the start here, naming the variable,
+// instead of running with NaN timers or a silently ignored value.
+const badSettings = settingProblems();
+if (badSettings.length > 0) {
+  console.error(`[VigilOne] Refusing to start: invalid settings:\n  ${badSettings.join('\n  ')}`);
+  process.exit(1);
+}
+const haNodeId = setting('VIGILONE_HA_NODE_ID')?.trim();
 export const leaderLease = haNodeId
   ? new LeaderLease(prisma, {
       nodeId: haNodeId,
-      ttlMs: Number(process.env.VIGILONE_HA_LEASE_TTL_MS || 15_000),
+      ttlMs: setting('VIGILONE_HA_LEASE_TTL_MS'),
       onLeader: () => startBackgroundServices(),
       // Background services must not keep running without the lease: exit, and let the supervisor restart this
       // node as a follower.

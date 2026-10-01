@@ -27,6 +27,7 @@ import { authorizationUrl, discover, exchangeCode, fetchUserinfo, OidcError, pro
 import { encryptCredential, decryptCredential } from '../utils/crypto';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { createAuthSession } from './auth.routes';
+import { setting } from '../config/settings';
 
 const router = Router();
 const oidcService = new OidcService(prisma);
@@ -73,9 +74,9 @@ const providerView = (p: any) => ({
 
 /** Base URL users reach VigilOne at. Required in production; elsewhere the request's own host is used. */
 function publicBase(req: Request): string {
-  const configured = process.env.VIGILONE_PUBLIC_URL;
-  if (configured) return configured.replace(/\/$/, '');
-  if (process.env.NODE_ENV === 'production') throw new OidcError('NO_PUBLIC_URL', 'set VIGILONE_PUBLIC_URL to the address users open VigilOne at');
+  const configured = setting('VIGILONE_PUBLIC_URL');
+  if (configured) return configured;
+  if (setting('NODE_ENV') === 'production') throw new OidcError('NO_PUBLIC_URL', 'set VIGILONE_PUBLIC_URL to the address users open VigilOne at');
   return `${req.protocol}://${req.get('host')}`;
 }
 const redirectUri = (req: Request) => `${publicBase(req)}/api/v1/sso/callback`;

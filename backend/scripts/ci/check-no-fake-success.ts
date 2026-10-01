@@ -48,7 +48,8 @@ export const PATTERN_RULES: PatternRule[] = [
   {
     id: 'NON_TEST_ENV_FALLBACK',
     description: "behaviour switched on 'not production' or 'development' instead of NODE_ENV=test",
-    regex: /NODE_ENV\s*!==?\s*['"]production['"]|NODE_ENV\s*===?\s*['"]development['"]/,
+    // Matches process.env.NODE_ENV and setting('NODE_ENV') (config/settings.ts) alike.
+    regex: /NODE_ENV(?:['"]\))?\s*!==?\s*['"]production['"]|NODE_ENV(?:['"]\))?\s*===?\s*['"]development['"]/,
   },
   {
     id: 'HARDCODED_CONFIRMATION',

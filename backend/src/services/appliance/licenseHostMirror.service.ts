@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { verifyLicenseArtifact, isLicenseActive } from '../../utils/license';
+import { setting } from '../../config/settings';
 
 export interface LicenseMirrorPayload {
   signedPayload: string;
@@ -10,7 +11,7 @@ export interface LicenseMirrorPayload {
 }
 
 export class LicenseHostMirrorService {
-  private static defaultPath: string = process.env.LICENSE_MIRROR_PATH || '/etc/vigilone/license.json';
+  private static defaultPath: string = setting('LICENSE_MIRROR_PATH');
 
   public static setDefaultPath(newPath: string) {
     this.defaultPath = newPath;

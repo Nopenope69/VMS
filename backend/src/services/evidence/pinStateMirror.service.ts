@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import { setting } from '../../config/settings';
 
-const DEFAULT_MIRROR_PATH = process.env.PIN_STATE_MIRROR_PATH || '/etc/vigilone/pinned_segments.state';
+const DEFAULT_MIRROR_PATH = setting('PIN_STATE_MIRROR_PATH');
 
 export interface PinRecord {
   sha256: string;
@@ -49,7 +50,7 @@ export class PinStateMirrorService {
   }
 
   public static reset(): void {
-    this.mirrorPath = process.env.PIN_STATE_MIRROR_PATH || DEFAULT_MIRROR_PATH;
+    this.mirrorPath = setting('PIN_STATE_MIRROR_PATH') || DEFAULT_MIRROR_PATH;
   }
 
   public static recordPin(rec: PinRecord): void {

@@ -27,6 +27,7 @@ import { buildMaskFilter, planMasks, PlannedMask, SampledDetection } from './mas
 import { RedactionError } from './redactionErrors';
 import { isFaceProcessingEnabled } from './dataProtection.service';
 import { DetectorProvenance, RedactionRegionClient, RegionTask } from './redactionRegionClient';
+import { setting } from '../../config/settings';
 
 export { RedactionError } from './redactionErrors';
 
@@ -146,9 +147,9 @@ export class VideoRedactorService {
   constructor(private prisma: PrismaClient, chainOfCustody?: ChainOfCustodyService, opts: VideoRedactorOptions = {}) {
     this.chainOfCustody = chainOfCustody || new ChainOfCustodyService(prisma);
     this.renderer = opts.renderer ?? ffmpegRenderer;
-    this.makeClient = opts.regionClient ?? ((p) => new RedactionRegionClient(p, process.env.REDACTION_ADAPTER_URL || 'http://127.0.0.1:7012'));
-    this.exportsDir = opts.exportsDir ?? (() => process.env.EXPORTS_DIR || '/recordings/exports');
-    this.maxClipSeconds = opts.maxClipSeconds ?? Number(process.env.REDACTION_MAX_CLIP_SECONDS || 1800);
+    this.makeClient = opts.regionClient ?? ((p) => new RedactionRegionClient(p, setting('REDACTION_ADAPTER_URL')!));
+    this.exportsDir = opts.exportsDir ?? (() => setting('EXPORTS_DIR'));
+    this.maxClipSeconds = opts.maxClipSeconds ?? setting('REDACTION_MAX_CLIP_SECONDS');
   }
 
   /** Queues a redaction job. The source manifest must belong to the tenant. */

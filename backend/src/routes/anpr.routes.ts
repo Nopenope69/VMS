@@ -10,6 +10,7 @@ import { compilePattern, MatchType, WatchlistPatternError } from '../services/an
 import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v1';
 import { z } from 'zod';
 import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
+import { setting } from '../config/settings';
 
 const router = Router();
 
@@ -264,7 +265,7 @@ router.put('/cameras/:id/lpr', authorize(Permission.ANPR_MANAGE), async (req: Re
  * VIGILONE_ANPR_TEST_ENDPOINT=true): production plate reads come only from the ANPR adapter
  * with provenance (POST /internal/anpr/observations).
  */
-if (process.env.NODE_ENV === 'test' && process.env.VIGILONE_ANPR_TEST_ENDPOINT === 'true') router.post('/detect', authorize(Permission.ANPR_MANAGE), async (req: Request, res: Response) => {
+if (setting('NODE_ENV') === 'test' && setting('VIGILONE_ANPR_TEST_ENDPOINT')) router.post('/detect', authorize(Permission.ANPR_MANAGE), async (req: Request, res: Response) => {
   const tenantId = req.user!.tenantId;
   const { cameraId, plateText, confidence = 0.85, vehicleCategory, trackId, snapshotPath } = req.body;
 

@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { setting } from '../../config/settings';
 
-const DEFAULT_MANIFEST_PATH = process.env.APPLIANCE_MANIFEST_PATH || '/etc/vigilone/appliance_manifest.json';
+const DEFAULT_MANIFEST_PATH = setting('APPLIANCE_MANIFEST_PATH');
 
 export interface CameraTopologyRecord {
   id: string;
@@ -32,7 +33,7 @@ export class ControlPlaneManifestService {
   }
 
   public static reset(): void {
-    this.manifestPath = process.env.APPLIANCE_MANIFEST_PATH || DEFAULT_MANIFEST_PATH;
+    this.manifestPath = setting('APPLIANCE_MANIFEST_PATH') || DEFAULT_MANIFEST_PATH;
   }
 
   /**

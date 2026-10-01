@@ -9,6 +9,7 @@ import { extractStreamPathAndFilename, calculateSegmentBounds, SegmentBounds } f
 import ControlPlaneManifestService from '../appliance/controlPlaneManifest.service';
 import PinStateMirrorService from '../evidence/pinStateMirror.service';
 import config from '../../config/env';
+import { setting } from '../../config/settings';
 
 export interface CrashRecoveryReport {
   timestamp: Date;
@@ -32,9 +33,7 @@ export interface CrashRecoveryReport {
  * from CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS (default 120).
  */
 export function activeWriteGraceMs(): number {
-  const raw = process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS;
-  const n = raw === undefined ? 120 : Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n * 1000 : 120000;
+  return setting('CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS') * 1000;
 }
 
 /**
