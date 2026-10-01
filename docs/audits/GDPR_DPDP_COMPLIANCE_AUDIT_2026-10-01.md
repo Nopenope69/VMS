@@ -1,78 +1,131 @@
-# GDPR & DPDP Statutory Privacy Audit: VigilOne Surveillance Platform
+# GDPR and DPDP: technical controls review (VigilOne)
 
-> **Audit Type:** GDPR / India DPDP Act 2023 DPO 6-Question Forcing Interrogation  
-> **Date:** 2026-10-01  
-> **Target Scope:** Edge Surveillance Ingest, ANPR Plate Recognition, Facial Redaction Subsystem, Evidence Packages & Cloud Archival  
-> **Governing Standards:** EU GDPR (Regulation (EU) 2016/679), India DPDP Act 2023, Bharatiya Sakshya Adhiniyam 2023 (BSA Section 63)
-
----
-
-## 1. Article 30 RoPA — Record of Processing Activities
-
-### Status: PARTIALLY MET (Technical Register Implemented; Formal Document Missing)
-- **Codebase Evidence:**
-  - `backend/src/services/privacy/dataProtection.service.ts` maintains canonical `DATA_PURPOSES` (`SECURITY`, `INVESTIGATION`, `COMPLIANCE`, `ANALYTICS`, `MAINTENANCE`) and enforces purpose-tagging on plate searches and forensic queries.
-  - Multi-tenant data segregation is strictly enforced by `tenantId` database scoping across all camera registries and video segment indexes.
-- **Article 30(1)(c) Finding:**
-  - Automated video decimation and ANPR plate observations lack a statically compiled machine-readable RoPA export covering categories of data subjects (employees, visitors, public pedestrians, vehicle owners).
-- **Mandatory Corrective Action:**
-  - Provide an exportable `/api/v1/privacy/dpdp/ropa` endpoint consolidating tenant camera counts, storage retention periods, enabled AI models (`ModelManifest`), and categories of personal data captured.
+> **Date:** 2026-10-01 (corrected the same day: the first version had claims the code does not support; see the
+> end of this document).
+> **Scope:** recording, ANPR, redaction, evidence packages, the off-site archive and federation.
+> **INTERNAL SELF-ASSESSMENT.** Written by the engineering team, not by a data protection officer, lawyer or
+> auditor.
+> **What this is:** an engineering review of the technical controls in the code, with file references, against
+> the questions a data protection officer asks under the EU GDPR and India's DPDP Act 2023.
+> **What this is not:** a legal opinion or a certification. VigilOne supports a lawful deployment; whether a
+> particular site complies depends on how it is configured and operated, and on its own records and legal basis
+> (`docs/operations/DPDP_DECISION_RECORD.md`). No section below states that a site "is compliant".
 
 ---
 
-## 2. Article 6 & Article 9 Lawful Basis (Biometric Face & ANPR)
+## 1. Record of processing (GDPR Art. 30)
 
-### Status: FULLY COMPLIANT (Strict Technological Gates Enforced)
-- **Article 6(1) Basis:**
-  - Primary processing relies on *Article 6(1)(f) Legitimate Interests* (commercial physical perimeter protection) or *Article 6(1)(e) Public Task* (municipal transit and critical infrastructure).
-- **Article 9(1) Special Category Biometric Data:**
-  - Facial recognition features are governed under **Article 9(2)(g) Substantial Public Interest** and DPDP Section 4.
-  - **Technological Safeguard:** In `backend/src/services/privacy/dataProtection.service.ts`, `faceProcessingEnabled` defaults to `false`. Enabling it requires explicit statutory attestation (`faceAcknowledgement: true`). When disabled, both camera-level face detection and YuNet model loading are blocked at the kernel/process boundary.
-- **Purpose Specification (DPDP Section 4 / GDPR Article 5(1)(b)):**
-  - Plate searches requiring high sensitivity (`INVESTIGATION`, `COMPLIANCE`) strictly require a statutory incident case ID (`statutoryReference`) before query execution is permitted.
+**Technical controls present**
+- Purposes are a fixed list (`DATA_PURPOSES` in `backend/src/services/privacy/dataProtection.service.ts`):
+  `SECURITY_INCIDENT_INVESTIGATION`, `LAW_ENFORCEMENT_REQUEST`, `ACCESS_CONTROL`, `SAFETY_EMERGENCY`,
+  `LEGAL_CLAIM`, `AUDIT_REVIEW`. Each tenant chooses which are allowed (`allowedPurposes`).
+- `requirePurpose` gates plate and biometric queries: plate searches (`routes/anpr.routes.ts`,
+  `routes/smartSearch.routes.ts`) and crop search (`routes/cropSearch.routes.ts`). A query without a purpose, or
+  with one the tenant has not allowed, is refused. `LAW_ENFORCEMENT_REQUEST` and `LEGAL_CLAIM` also need a case
+  or request reference (`PURPOSES_NEEDING_REFERENCE`). Each such query is written to the audit chain with its
+  purpose (`recordSensitiveQuery`).
+- Tenant data is separated by `tenantId` on every query.
+
+**Gaps**
+- There is no exportable record of processing. The site must keep its own Art. 30 record; the DPDP decision
+  record is the starting point. A `GET /privacy/dpdp/ropa` export (cameras, retention periods, enabled models,
+  categories of data) would help; it does not exist.
+
+## 2. Lawful basis and special-category data (GDPR Art. 6 and 9, DPDP s.4)
+
+**Technical controls present**
+- Face processing is off by default (`faceProcessingEnabled`, default `false`). Switching it on requires the
+  administrator to send `acknowledgeBiometricProcessing: true`, which is recorded in the audit chain
+  (`DPDP_SETTINGS_UPDATE`).
+- While it is off:
+  - redaction jobs that ask for face detection are refused (`videoRedactor.service.ts`,
+    `REDACTION_FACE_PROCESSING_DISABLED`);
+  - face analytics events from cameras are not ingested (`cameraEvents/cameraEventManager.service.ts`).
+- VigilOne has no face recognition: faces are only detected, to be masked.
+- Person appearance search (crop search, `routes/cropSearch.routes.ts`, feature `SEMANTIC_SEARCH`) is treated as
+  biometric. Searching person crops needs the `CROP_PERSON_QUERY` permission and an allowed purpose, and each
+  query is audited.
+
+**Gaps**
+- The lawful basis itself (legitimate interest, consent, legal obligation) is the site's decision, recorded
+  outside the software. The acknowledgement is a record that someone confirmed it, not a check of it.
+
+## 3. Impact assessment (GDPR Art. 35)
+
+Continuous surveillance of publicly accessible areas and ANPR are processing types that normally require a DPIA.
+The DPIA is the site's document. The software provides these mitigations to cite in it:
+
+- **Redaction:** faces (YuNet detector) and license plates (PP-OCRv4 text detection) are covered with opaque
+  black boxes (`maskPlanner.ts`, ffmpeg `drawbox`). There is no blur option. Each redacted derivative has its
+  own SHA-256. Its signed package (`derivation.json`, AI provenance, custody) links it to the parent evidence
+  manifest (`evidence/archive/redactionPackage.ts`).
+- **Separation:** AI inference runs in a separate process (`services/ai-worker`). It reads camera streams from
+  the local media server (`rtsp://127.0.0.1:8554`), never from the cameras directly.
+- **Retention:** retention periods are enforced by an automatic purge (section 4).
+
+## 4. Data subject rights and erasure (GDPR Art. 15–22, DPDP s.11–13)
+
+**Technical controls present**
+- **Retention purge:** the purge runs hourly (`DPDP_PURGE_INTERVAL_MS`, default one hour) and on demand
+  (`POST /privacy/dpdp/purge`). It deletes:
+  - plate reads (`vehicleObservation`) older than `plateRetentionDays` (default 30);
+  - detection snapshots older than `detectionSnapshotRetentionDays` (default 30).
+- **Legal holds:** items covered by an incident hold or a legal-hold evidence manifest are kept, and counted as
+  held. Each purge run is written to the audit chain (`DPDP_RETENTION_PURGE`) with its counts.
+
+**Gaps**
+- There is no workflow for an individual's access or erasure request: no intake, no identity check, no targeted
+  export or deletion. `docs/BACKLOG.md` lists it ("Data-principal requests"), and the DPDP decision record
+  explains why it is not built. Such requests must be handled by a documented manual procedure.
+
+## 5. Transfers outside the site (GDPR Chapter V)
+
+**What leaves the appliance, and only when configured**
+- **Off-site archive** (`storage/objectStorageArchive.service.ts`, feature `OBJECT_STORAGE_ARCHIVE`): recording
+  segments are uploaded to the S3/MinIO bucket the site configures.
+  - The connection must be https unless `ARCHIVE_ALLOW_INSECURE_ENDPOINT=true`.
+  - The segments are **not** encrypted by VigilOne before upload. Encryption at rest depends on the bucket's own
+    settings.
+  - Uploads are content-addressed (SHA-256), rate-limited and scheduled off-peak; legally pinned segments go
+    first.
+- **Federation to a headquarters** (`federation/uplink.ts`): event, alarm and audit records are sent to the
+  configured headquarters. Event payloads include ANPR plate reads.
+- **Notifications** (WhatsApp, e-mail and others): alarm text leaves the site. `VIGILONE_AIR_GAPPED=true`
+  refuses channels that need the internet.
+
+**Gaps**
+- Where the bucket, the headquarters or a notification provider is in another country, the transfer needs its
+  own legal basis (adequacy, SCCs or another mechanism). That is outside the software.
+
+## 6. Breach detection and custody (GDPR Art. 33)
+
+**Technical controls present**
+- **Audit chain:** administrative and data-access actions are recorded in a hash chain (`AuditChainService`).
+  Each record's hash covers the previous one, so a changed or deleted record breaks verification. The go-live
+  check blocks on a broken chain.
+- **Evidence custody:** evidence custody has its own chain (`CustodyHashChain`).
+- **Tampered derivatives:** a redacted derivative whose file no longer matches its recorded SHA-256 is refused,
+  on download (HTTP 409, `REDACTION_OUTPUT_TAMPERED`) and when building its package. The job record is not
+  changed, and no alarm is raised.
+
+**Gaps**
+- There is no breach register or notification workflow. The 72-hour notification (GDPR Art. 33) and the DPDP
+  Board notification are the site's procedure.
 
 ---
 
-## 3. Article 35 DPIA (Data Protection Impact Assessment)
+## Corrections to the first version of this document
 
-### Status: COMPLIANT WITH INTRINSIC RISK MITIGATIONS
-- **High-Risk Processing Triggers (Article 35(3)(c)):**
-  - Continuous surveillance of publicly accessible areas and automated ANPR observation matching trigger mandatory DPIA requirements.
-- **Mitigations Built Directly into System Architecture:**
-  1. **Automated Dual-Target Redaction (`videoRedactor.service.ts`):** Implements dynamic Gaussian blur or solid blackout over human faces (YuNet) and vehicle plates (PP-OCRv4), fulfilling the Article 5(1)(c) *Data Minimization* mandate prior to evidence release.
-  2. **Decoupled AI Plane Invariant:** AI inferences and telemetry operate in a separate unprivileged process (`services/ai-worker`) connecting exclusively to local loopback RTSP (`127.0.0.1:8554`).
-  3. **Derivative Lineage Binding (P4.5):** Redacted derivative files strictly link back to parent evidence manifests via cryptographically signed `derivation.json` packages, eliminating untracked media manipulation.
+The first version (commit `4482397` on `main`) stated several things the code does not do:
 
----
-
-## 4. Articles 15–22 Data Subject Rights (DSAR & Right to Erasure)
-
-### Status: DEFECT IDENTIFIED & BOUNDED BY LEGAL CLAIMS EXCEPTION
-- **Right to Erasure (Article 17) & DPDP Section 12:**
-  - `POST /api/v1/privacy/dpdp/purge` prunes unpinned plate observations and telemetry records older than `retentionDays` (default 30 days).
-- **Article 17(3)(e) Statutory Exemption (Establishment, Exercise or Defence of Legal Claims):**
-  - Segments pinned under active legal leases (`LegalHoldPin` or `TemporaryExportPin`) strictly veto automated pruning and cannot be deleted via tenant purge commands until authorized release.
-- **Remaining Open Backlog Item (BACKLOG.md Item 48):**
-  - Individual data-principal access and erasure workflows (request intake, verification of individual presence, targeted snippet export/deletion) are currently managed via manual administrative procedures. Automated DSAR ticketing remains on the roadmap.
-
----
-
-## 5. Chapter V International Transfers (Schrems II Compliance)
-
-### Status: FULLY COMPLIANT (Air-Gapped Edge Architecture)
-- **Local Sovereignty:**
-  - VigilOne is designed as an air-gapped on-premise NVR appliance. Raw video footage, media segments, and encryption keys never transit third-country boundaries by default.
-- **Cloud Archival Safeguards (`objectStorageArchive.service.ts`):**
-  - Where S3/MinIO archival is configured by the tenant, pre-flight content-addressed checks (`SHA-256`) prevent redundant transfers, bandwidth rate limiting restricts off-peak transmission, and Section 63 BSA evidence packages remain end-to-end encrypted with appliance-resident Ed25519 signatures.
-
----
-
-## 6. Article 33(5) Breach Log & Forensic Custody Chain
-
-### Status: FULLY COMPLIANT (Cryptographically Tamper-Evident)
-- **Continuous Audit Chain (`CustodyHashChain` & `AuditChainService`):**
-  - Every administrative action, redaction execution, export download, camera modification, and permission change is recorded in an immutable PostgreSQL append-only hash chain:
-    $$E_n = \text{SHA-256}(E_{n-1}.\text{eventHash} \parallel \text{eventId} \parallel \text{action} \parallel \text{userId} \parallel \text{timestamp} \parallel \text{payloadHash})$$
-  - Any out-of-band record tampering or deletion immediately breaks the cryptographic root verification (`verifyChain`).
-- **Fail-Closed Security Posture:**
-  - Missing output derivative files or hash mismatches automatically transition jobs to `FAILED` with `REDACTION_OUTPUT_TAMPERED` alerts logged directly to the security incident outbox.
+| First version said | The code |
+| --- | --- |
+| Purposes `SECURITY`, `INVESTIGATION`, `COMPLIANCE`, `ANALYTICS`, `MAINTENANCE` | The six purposes listed in section 1 |
+| A reference is required for `INVESTIGATION` / `COMPLIANCE` | Required for `LAW_ENFORCEMENT_REQUEST` and `LEGAL_CLAIM` |
+| Face processing needs `faceAcknowledgement: true` | The field is `acknowledgeBiometricProcessing` |
+| Redaction uses "Gaussian blur or solid blackout" | Solid black boxes only |
+| Purge removes data older than `retentionDays` | Two settings: `plateRetentionDays` and `detectionSnapshotRetentionDays` |
+| Archived evidence is "end-to-end encrypted" | No encryption by VigilOne; it depends on the bucket |
+| Data "never transits" off-site | Archive, federation and notifications send data when configured |
+| A tampered derivative moves the job to `FAILED` and alerts the incident outbox | The download or package is refused; no state change or alert |
+| "FULLY COMPLIANT" verdicts | Removed: software can support compliance, not certify it |

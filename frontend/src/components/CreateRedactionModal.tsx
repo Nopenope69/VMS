@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Sparkles, AlertCircle } from 'lucide-react';
@@ -7,7 +7,8 @@ import api from '../services/api';
 interface CreateRedactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  evidenceList: Array<{ id: string; title?: string; sha256Hash?: string }>;
+  /** Evidence exports as GET /evidence returns them; only those with a sealed manifest can be redacted. */
+  evidenceList: Array<{ id: string; title?: string; camera?: { id: string; name: string } | null; manifest?: { id: string } | null }>;
   onCreated: (jobId: string) => void;
 }
 
@@ -17,18 +18,24 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
   evidenceList,
   onCreated,
 }) => {
-  const [sourceManifestId, setSourceManifestId] = useState(evidenceList[0]?.id || '');
-  const [redactionMode, setRedactionMode] = useState<'BLUR' | 'SOLID_BLACK'>('BLUR');
-  const [detectFace, setDetectFace] = useState(true);
+  // A redaction job is made from an evidence *manifest*, not from the export row that lists it.
+  const sources = evidenceList.filter((e) => e.manifest?.id);
+  const [sourceExportId, setSourceExportId] = useState(sources[0]?.id || '');
+  // The modal is mounted before the evidence list loads: pick the first package once it arrives.
+  useEffect(() => {
+    if (!sources.some((e) => e.id === sourceExportId)) setSourceExportId(sources[0]?.id || '');
+  }, [evidenceList]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [detectFace, setDetectFace] = useState(false);
   const [detectPlate, setDetectPlate] = useState(true);
-  const [sampleFps, setSampleFps] = useState(1);
+  const [sampleFps, setSampleFps] = useState(4);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sourceManifestId) {
-      setError('Please select a source evidence manifest.');
+    const source = sources.find((e) => e.id === sourceExportId);
+    if (!source?.manifest?.id) {
+      setError('Select a sealed evidence package.');
       return;
     }
 
@@ -45,11 +52,14 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
     setError(null);
 
     try {
+      // The backend's redaction modes name what is detected (FACE, LICENSE_PLATE); detectKinds adds the other.
+      // Masking is always an opaque black box (maskPlanner.ts): there is no blur option.
       const res = await api.post('/privacy/jobs', {
-        sourceManifestId,
-        redactionMode,
+        sourceManifestId: source.manifest.id,
+        redactionMode: detectFace ? 'FACE' : 'LICENSE_PLATE',
         detectKinds,
         sampleFps,
+        ...(source.camera?.id ? { cameraId: source.camera.id } : {}),
       });
       onCreated(res.data.id);
       onClose();
@@ -65,7 +75,7 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Create Privacy Redaction Job"
-      description="Apply AI-guided neural face and license plate masking to generate a Section 63 BSA derivative package."
+      description="Mask faces and license plates in a sealed evidence clip, producing a hashed derivative linked to the original."
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,17 +91,18 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
             Source Evidence Manifest
           </label>
           <select
-            value={sourceManifestId}
-            onChange={(e) => setSourceManifestId(e.target.value)}
+            aria-label="Source evidence package"
+            value={sourceExportId}
+            onChange={(e) => setSourceExportId(e.target.value)}
             className="w-full bg-vms-panel border border-vms-border rounded px-3 py-2 text-xs text-vms-text font-mono focus:border-vms-accent focus:outline-none"
             required
           >
-            {evidenceList.length === 0 ? (
+            {sources.length === 0 ? (
               <option value="" disabled>No sealed evidence packages found</option>
             ) : (
-              evidenceList.map((exp) => (
+              sources.map((exp) => (
                 <option key={exp.id} value={exp.id}>
-                  EV_{exp.id.slice(0, 8).toUpperCase()} {exp.title ? `— ${exp.title}` : ''}
+                  EV_{exp.id.slice(0, 8).toUpperCase()} {exp.camera?.name ? `— ${exp.camera.name}` : ''} {exp.title ? `— ${exp.title}` : ''}
                 </option>
               ))
             )}
@@ -100,39 +111,7 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
 
         <div>
           <label className="block text-xs font-mono uppercase tracking-wider text-vms-muted mb-1.5">
-            Redaction Mode
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setRedactionMode('BLUR')}
-              className={`px-3 py-2 text-xs rounded border text-left font-mono transition-colors ${
-                redactionMode === 'BLUR'
-                  ? 'border-vms-accent bg-vms-accent/20 text-vms-text font-bold'
-                  : 'border-vms-border bg-vms-panel text-vms-muted hover:text-vms-text'
-              }`}
-            >
-              <div className="font-semibold">GaussianBlur</div>
-              <div className="text-[10px] text-vms-dim mt-0.5">Natural visual blurring</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setRedactionMode('SOLID_BLACK')}
-              className={`px-3 py-2 text-xs rounded border text-left font-mono transition-colors ${
-                redactionMode === 'SOLID_BLACK'
-                  ? 'border-vms-accent bg-vms-accent/20 text-vms-text font-bold'
-                  : 'border-vms-border bg-vms-panel text-vms-muted hover:text-vms-text'
-              }`}
-            >
-              <div className="font-semibold">Solid Black</div>
-              <div className="text-[10px] text-vms-dim mt-0.5">Opaque blackout box</div>
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-mono uppercase tracking-wider text-vms-muted mb-1.5">
-            Target Detect Kinds
+            What to redact
           </label>
           <div className="space-y-2 bg-vms-panel p-3 rounded border border-vms-border">
             <label className="flex items-center gap-2 text-xs text-vms-text cursor-pointer">
@@ -142,7 +121,7 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
                 onChange={(e) => setDetectFace(e.target.checked)}
                 className="rounded border-vms-border text-vms-accent focus:ring-0 bg-vms-bg"
               />
-              <span className="font-medium">Human Faces (YuNet Detector)</span>
+              <span className="font-medium">Faces (needs face processing on in DPDP settings)</span>
             </label>
             <label className="flex items-center gap-2 text-xs text-vms-text cursor-pointer">
               <input
@@ -151,28 +130,33 @@ export const CreateRedactionModal: React.FC<CreateRedactionModalProps> = ({
                 onChange={(e) => setDetectPlate(e.target.checked)}
                 className="rounded border-vms-border text-vms-accent focus:ring-0 bg-vms-bg"
               />
-              <span className="font-medium">License Plates (PP-OCRv4 Text DB)</span>
+              <span className="font-medium">License plates</span>
             </label>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-mono uppercase tracking-wider text-vms-muted mb-1.5">
-            Detection Sample Rate (FPS)
+            Detection sample rate (frames per second)
           </label>
           <input
             type="number"
             min={0.5}
-            max={5}
+            max={10}
             step={0.5}
             value={sampleFps}
-            onChange={(e) => setSampleFps(parseFloat(e.target.value) || 1)}
+            aria-label="Detection sample rate"
+            onChange={(e) => setSampleFps(parseFloat(e.target.value) || 4)}
             className="w-full bg-vms-panel border border-vms-border rounded px-3 py-2 text-xs text-vms-text font-mono focus:border-vms-accent focus:outline-none"
           />
           <span className="text-[10px] text-vms-dim block mt-1">
-            Recommended: 1 FPS for balanced speed and accuracy across standard CCTV clips.
+            0.5 to 10, default 4. A higher rate finds more regions and takes longer.
           </span>
         </div>
+
+        <p className="text-[11px] text-vms-dim">
+          Every detected region is covered with an opaque black box. The job is queued; start it from the jobs table.
+        </p>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-vms-border">
           <Button variant="secondary" type="button" onClick={onClose} disabled={loading}>

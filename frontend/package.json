@@ -11,6 +11,7 @@
     "build:demo": "VITE_DEMO_MODE=true tsc && VITE_DEMO_MODE=true vite build"
   },
   "dependencies": {
+    "@playwright/test": "1.56.1",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",

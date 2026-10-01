@@ -1,0 +1,22 @@
+import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * Browser tests against the real backend and a seeded scratch database. Run them with
+ * scripts/e2e/frontend-browser.sh, which starts the backend and `vite preview` and writes the seed file.
+ * Only redaction-dpdp.spec.ts is wired in: e2e/operations.spec.ts predates this setup, logs in with
+ * credentials no database has, and has never run.
+ */
+export default defineConfig({
+  testDir: './e2e',
+  testMatch: [process.env.E2E_ONLY || 'redaction-dpdp.spec.ts'],
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  timeout: 60_000,
+  reporter: [['list']],
+  use: {
+    baseURL: process.env.VIGILONE_BASE_URL || 'http://127.0.0.1:4173',
+    trace: 'retain-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+});

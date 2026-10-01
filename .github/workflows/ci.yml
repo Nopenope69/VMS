@@ -157,6 +157,50 @@ jobs:
           TEST_DB_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_backup_test
         run: bash scripts/__tests__/backup-restore.test.sh
 
+  # The redaction console and DPDP settings driven in a real browser (Chromium, Playwright 1.56.1) against the
+  # real backend and a seeded scratch database. Each test checks what the backend stored, not only the screen.
+  frontend-browser-tests:
+    name: Frontend Browser Tests (real backend)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: vigilone
+          POSTGRES_PASSWORD: vigilone_ci_secret_password_2026!
+          POSTGRES_DB: vigilone_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vigilone -d vigilone_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          (cd backend && npm ci && npx prisma generate)
+          (cd frontend && npm ci && npx playwright install --with-deps chromium)
+
+      - name: Browser tests
+        env:
+          TEST_DB_URL: postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_frontend_e2e
+        run: scripts/e2e/frontend-browser.sh
+
   ai-worker-checks:
     name: AI Worker Typecheck & Tests
     runs-on: ubuntu-latest

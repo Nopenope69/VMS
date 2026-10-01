@@ -9,13 +9,26 @@ interface DpdpSettingsModalProps {
   onClose: () => void;
 }
 
+/** The purge endpoint answers { result: PurgeResult } (dataProtection.service.ts). */
+interface PurgeResult {
+  plateReadsDeleted: number;
+  plateReadsHeld: number;
+  plateSnapshotsDeleted: number;
+  detectionSnapshotsDeleted: number;
+  detectionSnapshotsHeld: number;
+}
+const purgeResultOf = (res: { data: { result: PurgeResult } }): PurgeResult => res.data.result;
+
 export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, onClose }) => {
   const [, setSettings] = useState<any>(null);
   const [purposes, setPurposes] = useState<string[]>([]);
   const [needReference, setNeedReference] = useState<string[]>([]);
   const [faceProcessingEnabled, setFaceProcessingEnabled] = useState(false);
   const [faceAck, setFaceAck] = useState(false);
-  const [retentionDays, setRetentionDays] = useState(30);
+  // The backend keeps two retention periods (dataProtection.service.ts SettingsPatch).
+  const [plateRetentionDays, setPlateRetentionDays] = useState(30);
+  const [snapshotRetentionDays, setSnapshotRetentionDays] = useState(30);
+  const [faceWasEnabled, setFaceWasEnabled] = useState(false);
   const [allowedPurposes, setAllowedPurposes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,7 +45,10 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
       setPurposes(res.data.purposes || []);
       setNeedReference(res.data.needReference || []);
       setFaceProcessingEnabled(!!s.faceProcessingEnabled);
-      setRetentionDays(s.retentionDays || 30);
+      setFaceWasEnabled(!!s.faceProcessingEnabled);
+      setFaceAck(false);
+      setPlateRetentionDays(s.plateRetentionDays);
+      setSnapshotRetentionDays(s.detectionSnapshotRetentionDays);
       setAllowedPurposes(s.allowedPurposes || []);
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.response?.data?.error || err.message || 'Failed to load DPDP settings' });
@@ -52,17 +68,29 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
     setSaving(true);
     setStatusMessage(null);
 
+    if (allowedPurposes.length === 0) {
+      setStatusMessage({ type: 'error', text: 'Allow at least one purpose.' });
+      setSaving(false);
+      return;
+    }
+
     try {
-      await api.put('/privacy/dpdp/settings', {
+      // Field names exactly as the backend's strict schema expects; it rejects any other key.
+      const res = await api.put('/privacy/dpdp/settings', {
         faceProcessingEnabled,
-        faceAcknowledgement: faceProcessingEnabled ? faceAck : undefined,
-        retentionDays,
+        // Only needed (and only sent) when face processing is being switched on.
+        ...(faceProcessingEnabled && !faceWasEnabled ? { acknowledgeBiometricProcessing: faceAck } : {}),
+        plateRetentionDays,
+        detectionSnapshotRetentionDays: snapshotRetentionDays,
         allowedPurposes,
       });
-      setStatusMessage({ type: 'success', text: 'DPDP compliance settings updated successfully.' });
-      setTimeout(() => {
-        fetchSettings();
-      }, 1000);
+      const saved = res.data.settings;
+      setFaceProcessingEnabled(!!saved.faceProcessingEnabled);
+      setFaceWasEnabled(!!saved.faceProcessingEnabled);
+      setPlateRetentionDays(saved.plateRetentionDays);
+      setSnapshotRetentionDays(saved.detectionSnapshotRetentionDays);
+      setAllowedPurposes(saved.allowedPurposes || []);
+      setStatusMessage({ type: 'success', text: 'DPDP settings saved.' });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.response?.data?.error || err.message || 'Failed to save settings' });
     } finally {
@@ -71,17 +99,19 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
   };
 
   const handlePurge = async () => {
-    if (!window.confirm('Execute immediate statutory retention purge? Expired ANPR reads and temporary files older than the retention threshold will be permanently deleted.')) {
+    if (!window.confirm('Run the retention purge now? Plate reads and snapshots older than their retention period are permanently deleted, except those under a legal hold.')) {
       return;
     }
 
     setPurging(true);
     setStatusMessage(null);
     try {
-      const res = await api.post('/privacy/dpdp/purge');
+      const r = purgeResultOf(await api.post('/privacy/dpdp/purge'));
       setStatusMessage({
         type: 'success',
-        text: `Purge executed: ${res.data.deletedObservations || 0} reads deleted, ${res.data.deletedFiles || 0} files purged.`,
+        text:
+          `Purge done: ${r.plateReadsDeleted} plate reads, ${r.plateSnapshotsDeleted} plate snapshots and ` +
+          `${r.detectionSnapshotsDeleted} detection snapshots deleted; ${r.plateReadsHeld + r.detectionSnapshotsHeld} kept under a legal hold.`,
       });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.response?.data?.error || err.message || 'Purge failed' });
@@ -133,7 +163,7 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
                   Biometric Face Analytics & Redaction
                 </span>
                 <span className="text-[11px] text-vms-muted block mt-0.5">
-                  DPDP Section 4 lawful processing switch. Disabling immediately halts camera face detection and YuNet redaction.
+                  While off, face detection for redaction is refused; plate redaction and manual masks still work.
                 </span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -150,7 +180,7 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
               </label>
             </div>
 
-            {faceProcessingEnabled && (
+            {faceProcessingEnabled && !faceWasEnabled && (
               <div className="p-2.5 bg-amber-950/30 border border-amber-500/40 rounded space-y-2 mt-2">
                 <div className="flex items-start gap-2 text-xs text-amber-200">
                   <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -182,25 +212,46 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
                   ANPR & Forensic Data Retention
                 </span>
                 <span className="text-[11px] text-vms-muted block mt-0.5">
-                  Maximum storage lifespan for plate queries and telemetry before automated purge.
+                  How long plate reads and detection snapshots are kept before the hourly purge deletes them.
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={retentionDays}
-                  onChange={(e) => setRetentionDays(parseInt(e.target.value) || 30)}
-                  className="w-20 bg-vms-bg border border-vms-border rounded px-2.5 py-1 text-xs text-vms-text font-mono text-center focus:border-vms-accent focus:outline-none"
-                />
-                <span className="text-xs text-vms-muted font-mono">Days</span>
-              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="flex items-center justify-between gap-2 text-xs text-vms-text">
+                <span>Plate reads</span>
+                <span className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={3650}
+                    aria-label="Plate read retention days"
+                    value={plateRetentionDays}
+                    onChange={(e) => setPlateRetentionDays(parseInt(e.target.value, 10) || 1)}
+                    className="w-20 bg-vms-bg border border-vms-border rounded px-2.5 py-1 text-xs text-vms-text font-mono text-center focus:border-vms-accent focus:outline-none"
+                  />
+                  <span className="text-vms-muted font-mono">days</span>
+                </span>
+              </label>
+              <label className="flex items-center justify-between gap-2 text-xs text-vms-text">
+                <span>Detection snapshots</span>
+                <span className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={3650}
+                    aria-label="Detection snapshot retention days"
+                    value={snapshotRetentionDays}
+                    onChange={(e) => setSnapshotRetentionDays(parseInt(e.target.value, 10) || 1)}
+                    className="w-20 bg-vms-bg border border-vms-border rounded px-2.5 py-1 text-xs text-vms-text font-mono text-center focus:border-vms-accent focus:outline-none"
+                  />
+                  <span className="text-vms-muted font-mono">days</span>
+                </span>
+              </label>
             </div>
 
             <div className="pt-2 border-t border-vms-border flex items-center justify-between">
               <span className="text-[11px] text-vms-dim">
-                Statutory Purge Engine: Permanently removes expired reads not held under active legal pin.
+                Permanently deletes expired plate reads and snapshots, except those under a legal hold.
               </span>
               <Button
                 type="button"

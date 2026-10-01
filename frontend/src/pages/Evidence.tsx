@@ -14,6 +14,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import api from '../services/api';
+import { downloadFile } from '../services/download';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -21,6 +22,12 @@ import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import CreateRedactionModal from '../components/CreateRedactionModal';
 import DpdpSettingsModal from '../components/DpdpSettingsModal';
+
+/** "YYYY-MM-DD HH:MM:SS" in UTC, or "—" for a missing or bad value (never throws while rendering a row). */
+const utcText = (v: unknown): string => {
+  const d = new Date(v as string);
+  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 19).replace('T', ' ');
+};
 
 export const Evidence: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'PACKAGES' | 'REDACTION'>('PACKAGES');
@@ -32,14 +39,26 @@ export const Evidence: React.FC = () => {
   const [executingJobId, setExecutingJobId] = useState<string | null>(null);
   const [showCreateRedaction, setShowCreateRedaction] = useState(false);
   const [showDpdpSettings, setShowDpdpSettings] = useState(false);
+  // Load, execute and download failures are shown, never only logged: an empty list must mean "no data".
+  const [pageError, setPageError] = useState<string | null>(null);
+  const errorText = (err: any) => err?.response?.data?.error || err?.message || String(err);
+
+  const handleDownload = async (path: string, fallbackName: string) => {
+    setPageError(null);
+    try {
+      await downloadFile(path, fallbackName);
+    } catch (err: any) {
+      setPageError(`Download failed: ${errorText(err)}`);
+    }
+  };
 
   const fetchExports = async () => {
     setLoading(true);
     try {
       const res = await api.get('/evidence');
       setExportsList(res.data.exports || []);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setPageError(`Could not load evidence packages: ${errorText(err)}`);
     } finally {
       setLoading(false);
     }
@@ -49,8 +68,8 @@ export const Evidence: React.FC = () => {
     try {
       const res = await api.get('/privacy/jobs');
       setRedactionJobs(res.data.jobs || []);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setPageError(`Could not load redaction jobs: ${errorText(err)}`);
     }
   };
 
@@ -82,7 +101,7 @@ export const Evidence: React.FC = () => {
       await api.post(`/privacy/jobs/${jobId}/execute`);
       await fetchRedactionJobs();
     } catch (err: any) {
-      alert(`Execute failed: ${err.response?.data?.error || err.message}`);
+      setPageError(`Could not start the job: ${errorText(err)}`);
     } finally {
       setExecutingJobId(null);
     }
@@ -143,6 +162,15 @@ export const Evidence: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {pageError && (
+        <div role="alert" className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-red-500/50 bg-red-950/40 text-xs text-red-200">
+          <span>{pageError}</span>
+          <button type="button" className="text-red-300 hover:text-red-100" onClick={() => setPageError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Horizontal Telemetry Bar */}
       <div className="flex flex-wrap items-center gap-4 sm:gap-6 px-3 py-2 bg-vms-surface border border-vms-border rounded text-xs font-mono">
@@ -239,7 +267,11 @@ export const Evidence: React.FC = () => {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-vms-text flex items-center gap-1.5">
                           <span>EV_{exp.id.slice(0, 8).toUpperCase()}</span>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          {exp.status === 'COMPLETED' ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <span className="text-[10px] text-amber-400">{exp.status}</span>
+                          )}
                         </div>
                         <div className="text-[10px] text-vms-dim mt-0.5">
                           {new Date(exp.createdAt).toLocaleString()}
@@ -248,15 +280,12 @@ export const Evidence: React.FC = () => {
                       <td className="px-4 py-3">
                         <div className="text-vms-text flex items-center gap-1.5">
                           <Video className="w-3.5 h-3.5 text-vms-muted" />
-                          <span>{exp.cameraName || 'Multi-Camera / System'}</span>
-                        </div>
-                        <div className="text-[10px] text-vms-dim mt-0.5">
-                          {exp.cameraIp || 'Local Storage Vault'}
+                          <span>{exp.camera?.name || 'Unknown camera'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-[11px] text-vms-muted">
-                        <div>{new Date(exp.timeWindowStart).toISOString().slice(0, 19).replace('T', ' ')}</div>
-                        <div>{new Date(exp.timeWindowEnd).toISOString().slice(0, 19).replace('T', ' ')}</div>
+                        <div>{utcText(exp.startTime)}</div>
+                        <div>{utcText(exp.endTime)}</div>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant="neutral" size="sm">
@@ -298,18 +327,14 @@ export const Evidence: React.FC = () => {
                           >
                             Audit
                           </Button>
-                          <a
-                            href={`/api/v1/evidence/download/Evidence_${exp.id}.zip`}
-                            download
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={<Download className="w-3 h-3" />}
+                            onClick={() => handleDownload(`/evidence/download/Evidence_${exp.id}.zip`, `Evidence_${exp.id}.zip`)}
                           >
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              icon={<Download className="w-3 h-3" />}
-                            >
-                              ZIP
-                            </Button>
-                          </a>
+                            ZIP
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -450,33 +475,25 @@ export const Evidence: React.FC = () => {
 
                           {job.status === 'COMPLETED' && (
                             <>
-                              <a
-                                href={`/api/v1/privacy/jobs/${job.id}/download`}
-                                download
-                                title="Download redacted derivative MP4"
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                title="Download the redacted MP4"
+                                icon={<Video className="w-3 h-3" />}
+                                onClick={() => handleDownload(`/privacy/jobs/${job.id}/download`, `redacted-${job.id}.mp4`)}
                               >
-                                <Button
-                                  size="sm"
-                                  variant="primary"
-                                  icon={<Video className="w-3 h-3" />}
-                                >
-                                  MP4
-                                </Button>
-                              </a>
+                                MP4
+                              </Button>
 
-                              <a
-                                href={`/api/v1/privacy/jobs/${job.id}/package`}
-                                download
-                                title="Download signed verification package (derivation.json + AI provenance)"
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                title="Download the signed package (derivative, derivation.json, provenance, custody)"
+                                icon={<FileCheck className="w-3 h-3" />}
+                                onClick={() => handleDownload(`/privacy/jobs/${job.id}/package`, `redaction-${job.id}.zip`)}
                               >
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  icon={<FileCheck className="w-3 h-3" />}
-                                >
-                                  ZIP
-                                </Button>
-                              </a>
+                                ZIP
+                              </Button>
                             </>
                           )}
                         </div>
