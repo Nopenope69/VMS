@@ -8,7 +8,7 @@ import { ModelRegistryService, ModelRegistryError } from '../services/ai/modelRe
 import { DetectionIngestionService, DetectionIngestionError } from '../services/ai/detectionIngestion.service';
 import { spatialEngine } from '../services/spatial/engine';
 import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
-import { aggregator as anprAggregator } from './anpr.routes';
+import { plateAggregator as anprAggregator } from '../composition';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 
 let currentSpatialEngine = spatialEngine;

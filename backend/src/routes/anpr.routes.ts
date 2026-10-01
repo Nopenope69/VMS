@@ -5,17 +5,13 @@ import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
-import PlateTrackAggregatorService from '../services/anpr/plateTrackAggregator.service';
-import EdgeAiRuntimeService from '../services/ai/edgeAiRuntime.service';
-import { incidentOrchestrator } from '../services/incident/orchestrator/incidentOrchestrator.service';
+import { incidentOrchestrator, plateAggregator as aggregator, edgeAiRuntime as aiRuntime } from '../composition';
 import { compilePattern, MatchType, WatchlistPatternError } from '../services/anpr/watchlistMatcher';
 import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v1';
 import { z } from 'zod';
 import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 
 const router = Router();
-const aggregator = new PlateTrackAggregatorService(prisma);
-const aiRuntime = new EdgeAiRuntimeService(prisma);
 
 // Plate reads become ANPR_MATCH events in the orchestrator (rules: ANPR_WATCHLIST); list entries
 // with alertOnMatch raise an audited alarm linked to that event.
@@ -330,5 +326,4 @@ router.get('/health', authorize(Permission.ANPR_VIEW), async (req: Request, res:
   }
 });
 
-export { aggregator, aiRuntime };
 export default router;

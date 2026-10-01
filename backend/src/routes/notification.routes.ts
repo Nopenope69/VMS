@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
 import { authorize, assertTenantBoundary, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
-import NotificationDispatcherService from '../services/notification/notificationDispatcher.service';
+import { notificationDispatcher as dispatcher } from '../composition';
 import {
   prepareChannelConfig,
   redactChannel,
@@ -18,7 +18,6 @@ import { MetricsService } from '../services/observability/metrics.service';
 import crypto from 'crypto';
 
 const router = Router();
-const dispatcher = new NotificationDispatcherService(prisma);
 
 // Queue worker managed by server lifecycle (server.ts)
 
@@ -374,5 +373,4 @@ router.post('/jobs/:id/retry', authorize(Permission.NOTIFICATION_MANAGE), async 
   }
 });
 
-export { dispatcher };
 export default router;

@@ -4,14 +4,12 @@ import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
-import { CameraEventManager } from '../services/cameraEvents/cameraEventManager.service';
-import { incidentOrchestrator } from '../services/incident/orchestrator/incidentOrchestrator.service';
+import { cameraEventManager } from '../composition';
 
 /**
  * Camera-native event sources (P3.1/P3.2). Mounted behind VIGILONE_FEATURE_CAMERA_EVENTS.
  */
 const router = Router();
-export const cameraEventManager = new CameraEventManager(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
 
 router.use(requireAuth);
 

@@ -6,6 +6,15 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 16 (2026-10-01): architecture review, item 4 (composition root)
+
+Branch `refactor/composition-root`, stacked on item 3. ADR 0008 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| `composition.ts` builds the long-lived modules once | DONE_VERIFIED | It owns one `RecordingCatalog` (shared by evidence, playback and the alarm workflow), one `RelayAdapter` (the orchestrator's, shared by the relay and door routes) and every background worker that route files used to build. It also starts and stops them. `server.ts` keeps only the HTTP server, the HA lease and shutdown. Three test files that took instances from route files, or read `server.ts` source, now read `composition.ts`, with the same assertions. Backend 144/144 suites (the full run passed 142; the 2 retargeted files then passed alone). The built `dist/server.js` booted, answered `/api/v1/health` and shut down on SIGTERM. Gates exit 0. |
+| Orchestrator instance built in the composition root | NOT_DONE | Four services import the `incidentOrchestrator` instance directly. Injecting it is the next step (ADR 0008). |
+
 ## Session 15 (2026-10-01): architecture review, item 3 (one ai-adapter.v1 seam on each side)
 
 Branch `refactor/ai-adapter-seam`, stacked on item 2. ADR 0007 has the details.

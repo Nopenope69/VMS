@@ -4,18 +4,15 @@ import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense } from '../middleware/license';
 import { authorize, Permission } from '../services/rbac/permissions';
 import path from 'path';
-import incidentOrchestrator from '../services/incident/orchestrator/incidentOrchestrator.service';
 import prisma from '../config/database';
-import { AlarmWorkflowService, WorkflowError, workflowConfigFromEnv } from '../services/incident/workflow/alarmWorkflow.service';
-import { EvidenceArchive } from '../services/evidence/archive';
+import { WorkflowError, workflowConfigFromEnv } from '../services/incident/workflow/alarmWorkflow.service';
+import { alarmWorkflow, evidenceArchive, incidentOrchestrator } from '../composition';
 import { AlarmFeedbackService } from '../services/incident/workflow/alarmFeedback.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 import { vlmAgreement } from '../services/vlm/vlmAgreement.service';
 
 const router = Router();
-export const alarmWorkflow = new AlarmWorkflowService(prisma);
-const evidenceArchive = new EvidenceArchive(prisma);
 const feedback = new AlarmFeedbackService(prisma);
 
 function fail(res: Response, err: any) {

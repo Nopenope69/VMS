@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
-import { RelayAdapter } from '../services/incident/orchestrator/adapters/relayAdapter';
+import { relayAdapter as relay } from '../composition';
 
 const router = Router();
-const relay = new RelayAdapter(prisma);
 
 /**
  * GET /api/v1/relays
