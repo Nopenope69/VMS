@@ -6,10 +6,11 @@
  */
 import prisma from '../config/database';
 import { collectSnapshot, evaluate, render } from './goLiveCheck';
+import { setting } from '../config/settings';
 
 async function main() {
   const snapshot = await collectSnapshot(prisma);
-  const host = process.env.VIGILONE_HOST_NTP_SYNC;
+  const host = setting('VIGILONE_HOST_NTP_SYNC');
   if (host === 'yes' || host === 'no') snapshot.ntpSynchronized = host === 'yes';
   const results = evaluate(snapshot);
   const blocked = results.some((r) => r.verdict === 'BLOCK');

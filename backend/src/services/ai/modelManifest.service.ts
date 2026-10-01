@@ -1,4 +1,5 @@
 import { ModelManifest, PrismaClient } from '@prisma/client';
+import { setting } from '../../config/settings';
 
 export interface TrainingDataProvenance {
   source: string;
@@ -49,7 +50,7 @@ export interface CreateModelManifestInput {
 /** Human approvals for candidate models; see scripts/models/model-license-exceptions.json. */
 export function readModelLicenseApprovals(): Array<{ key: string; sha256: string; approvedBy: string; approvedAt: string; reason: string }> {
   const candidates = [
-    process.env.VIGILONE_MODEL_EXCEPTIONS,
+    setting('VIGILONE_MODEL_EXCEPTIONS'),
     '/etc/vigilone/model-license-exceptions.json',
     require('path').resolve(__dirname, '../../../../scripts/models/model-license-exceptions.json'),
   ].filter(Boolean) as string[];

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Prisma } from '@prisma/client';
+import { setting } from '../config/settings';
 
 export interface SoftwareVersionInfo {
   version: string;
@@ -15,7 +16,7 @@ const DEFAULT_OTA_VERSION_FILE = '/opt/vigilone/version.json';
  * installed), otherwise the version declared by the running build's package.json. Never a literal.
  */
 export function getInstalledSoftwareVersion(
-  versionFilePath: string = process.env.VIGILONE_VERSION_FILE || DEFAULT_OTA_VERSION_FILE
+  versionFilePath: string = setting('VIGILONE_VERSION_FILE') || DEFAULT_OTA_VERSION_FILE
 ): SoftwareVersionInfo {
   try {
     if (fs.existsSync(versionFilePath)) {

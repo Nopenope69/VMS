@@ -2,6 +2,7 @@ import { PrismaClient, EventSeverity, AlarmState, RetentionPriority } from '@pri
 import { SegmentRepository } from './segmentRepository';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { StorageAdapter } from './storageAdapter';
+import { setting } from '../../../config/settings';
 
 export interface RetentionPolicyConfig {
   maxRetentionDays?: number;
@@ -73,7 +74,7 @@ export class RetentionPolicyEngine {
 
     // Non-atomic path for in-memory test doubles only. A real Prisma client always has $executeRaw;
     // anything else outside NODE_ENV=test is a wiring error and must not delete footage.
-    if (process.env.NODE_ENV !== 'test') {
+    if (setting('NODE_ENV') !== 'test') {
       throw new Error(
         'RETENTION_ATOMIC_DELETE_UNAVAILABLE: Prisma client without $executeRaw; refusing non-atomic segment deletion'
       );

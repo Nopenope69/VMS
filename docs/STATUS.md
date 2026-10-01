@@ -6,6 +6,17 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 18 (2026-10-01): architecture review, item 6 (one declaration of settings)
+
+Branch `refactor/typed-settings`. ADR 0010 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| `config/settings.ts` declares every non-boot setting | DONE_VERIFIED | `setting(NAME)` parses with limits, and a bad value is an error naming the variable. 50 direct `process.env` reads in 29 files now go through it. A guard test fails on any new direct read outside `config/`, two CLI scripts, a redaction listing and the self-checking subsystems. `settings.test.ts` 17/17; the guard was shown to catch a planted read. |
+| NaN timers from bad intervals | DONE_VERIFIED | Measured on the old code: `DOOR_POLL_INTERVAL_MS=5s` gave about 180 timer ticks in 200 ms. The built `dist/server.js` now refuses to start with that value, or with `VIGILONE_AIR_GAPPED=yes`, naming both and exiting 1. With valid settings it booted, answered `/api/v1/health` 200 and shut down with exit 0. |
+| Fail-loud gate | DONE_VERIFIED | The `NON_TEST_ENV_FALLBACK` pattern also recognises `setting('NODE_ENV')`, so the gate does not go blind. Four allowlist entries were updated to the new line text after re-review; the logic is unchanged. `check:no-fake-success` and `noFakeSuccessGate.test.ts` pass. |
+| `RECORDINGS_DIR` / `EXPORTS_DIR` / `COTURN_*` single reader | NOT_DONE | These are still also loaded by `config/env.ts`, which about ten tests patch. Their live readers use `settingIfSet(...) ?? config.X`, and a test pins that both places declare the same defaults (ADR 0010). |
+| Suites | DONE_VERIFIED | Backend 144/145 suites in the full run. The failing one was `noFakeSuccessGate`, fixed above and re-run alone (14/14). `tsc`, the build and the gates pass. |
 ## Session 17 (2026-10-01): architecture review, item 5 (camera registry)
 
 Branch `refactor/camera-registry`. ADR 0009 has the details.

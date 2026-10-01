@@ -9,6 +9,7 @@ import { LicenseClaims } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
 import { getInstalledSoftwareVersion } from '../utils/softwareVersion';
+import { setting } from '../config/settings';
 
 const router = Router();
 let prisma = prismaInstance;
@@ -71,7 +72,7 @@ export async function createAuthSession(
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: setting('NODE_ENV') === 'production',
     sameSite: 'strict',
     path: '/api/v1/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -465,7 +466,7 @@ router.post('/logout', async (req: Request, res: Response) => {
 
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: setting('NODE_ENV') === 'production',
       sameSite: 'strict',
       path: '/api/v1/auth',
     });

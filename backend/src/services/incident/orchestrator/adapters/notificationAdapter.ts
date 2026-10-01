@@ -14,6 +14,7 @@ import { sendMail, SmtpError } from '../../../notification/smtp/smtpClient';
 import { sendWhatsAppTemplate, WhatsAppError } from '../../../notification/channels/whatsappCloud';
 import { GenericHttpSmsProvider, SmsProvider, SmsError } from '../../../notification/channels/smsProvider';
 import { resolveChannelConfig, validateTargets } from '../../../notification/channels/channelConfig';
+import { setting } from '../../../../config/settings';
 
 export async function validateWebhookUrl(urlString: string): Promise<void> {
   let parsed: URL;
@@ -145,7 +146,7 @@ export interface DispatchResult {
 const EXTERNAL_CHANNEL_TYPES = new Set<string>(['WHATSAPP', 'SMS', 'SLACK', 'WEBHOOK']);
 
 export function isAirGapped(): boolean {
-  return process.env.VIGILONE_AIR_GAPPED === 'true';
+  return setting('VIGILONE_AIR_GAPPED');
 }
 
 const DEFAULT_RATE_PER_MINUTE = 10;

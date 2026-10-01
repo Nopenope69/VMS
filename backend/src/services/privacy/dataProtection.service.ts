@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { AuditChainService } from '../audit/auditChain.service';
 import { MetricsService } from '../observability/metrics.service';
 import { loadHoldChecker } from './holds';
+import { setting } from '../../config/settings';
 
 export const DATA_PURPOSES = ['SECURITY_INCIDENT_INVESTIGATION', 'LAW_ENFORCEMENT_REQUEST', 'ACCESS_CONTROL', 'SAFETY_EMERGENCY', 'LEGAL_CLAIM', 'AUDIT_REVIEW'] as const;
 export type DataPurpose = (typeof DATA_PURPOSES)[number];
@@ -144,7 +145,7 @@ export interface PurgeResult {
 
 /** Snapshot files may be deleted only under these roots (never an arbitrary path from the DB). */
 export function snapshotRoots(): string[] {
-  return [process.env.RECORDINGS_DIR || '/recordings', process.env.SNAPSHOTS_DIR || '/recordings/snapshots'].map((p) => path.resolve(p) + path.sep);
+  return [setting('RECORDINGS_DIR'), setting('SNAPSHOTS_DIR')].map((p) => path.resolve(p) + path.sep);
 }
 
 function deleteSnapshot(file: string, r: PurgeResult): void {

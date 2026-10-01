@@ -7,6 +7,7 @@
  * (OIDC Discovery 1.0, section 4.3), so a provider cannot hand out tokens under another issuer.
  */
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
+import { setting } from '../../config/settings';
 
 export interface OidcDiscovery {
   issuer: string;
@@ -29,7 +30,7 @@ const DISCOVERY_TTL_MS = 10 * 60_000;
 const ALGORITHMS = ['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'ES256', 'ES384', 'ES512', 'EdDSA'];
 
 /** Returns an error message, or null when the URL may be used for a provider. */
-export function providerUrlProblem(raw: string, env = process.env.NODE_ENV): string | null {
+export function providerUrlProblem(raw: string, env: string = setting('NODE_ENV')): string | null {
   let u: URL;
   try {
     u = new URL(raw);

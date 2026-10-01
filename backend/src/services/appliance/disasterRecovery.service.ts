@@ -6,6 +6,7 @@ import PinStateMirrorService from '../evidence/pinStateMirror.service';
 import ControlPlaneManifestService from './controlPlaneManifest.service';
 import { CrashRecoveryService } from '../reconciliation/crashRecovery.service';
 import { getInstalledSoftwareVersion } from '../../utils/softwareVersion';
+import { setting } from '../../config/settings';
 
 export interface DisasterRecoveryMetadata {
   backupId: string;
@@ -103,7 +104,7 @@ export class DisasterRecoveryService {
     if (fs.existsSync(backupOtaFloor)) {
       try {
         const otaData = JSON.parse(fs.readFileSync(backupOtaFloor, 'utf8'));
-        const liveOtaPath = process.env.OTA_RELEASE_STATE_PATH || path.join(this.configDir, 'ota_release.state');
+        const liveOtaPath = setting('OTA_RELEASE_STATE_PATH') || path.join(this.configDir, 'ota_release.state');
         let currentEpoch = 1;
         let currentVersion = getInstalledSoftwareVersion().version;
         if (fs.existsSync(liveOtaPath)) {

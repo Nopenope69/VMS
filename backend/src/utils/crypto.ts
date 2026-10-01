@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import config from '../config/env';
+import { setting } from '../config/settings';
 
 /**
  * Encrypts arbitrary plaintext (e.g. camera credentials) using AES-256-GCM.
@@ -65,7 +66,7 @@ export async function computeFileSha256(filePath: string): Promise<string> {
 /**
  * Ed25519 Key Management & Manifest Signing for Section 63 BSA Evidence.
  */
-const APPLIANCE_KEY_DIR = process.env.NODE_ENV === 'test' ? '/tmp/vigilone_test_keys' : '/etc/vigilone';
+const APPLIANCE_KEY_DIR = setting('NODE_ENV') === 'test' ? '/tmp/vigilone_test_keys' : '/etc/vigilone';
 const ED25519_PRIV_PATH = path.join(APPLIANCE_KEY_DIR, 'appliance_ed25519.key');
 const ED25519_PUB_PATH = path.join(APPLIANCE_KEY_DIR, 'appliance_ed25519.pub');
 

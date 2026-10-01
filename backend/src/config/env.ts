@@ -6,7 +6,8 @@ import { z } from 'zod';
 
 dotenv.config();
 
-const envSchema = z.object({
+/** Boot configuration schema (exported so tests can compare its defaults with config/settings.ts). */
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
   LAN_IP: z.string().default('127.0.0.1'),

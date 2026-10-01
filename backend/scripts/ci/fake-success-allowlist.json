@@ -4,13 +4,13 @@
     {
       "file": "backend/src/config/database.ts",
       "patternId": "NON_TEST_ENV_FALLBACK",
-      "text": "process.env.NODE_ENV === 'development'",
+      "text": "setting('NODE_ENV') === 'development'",
       "justification": "Only selects Prisma log verbosity and dev hot-reload singleton caching; no success value or data path depends on it."
     },
     {
       "file": "backend/src/config/database.ts",
       "patternId": "NON_TEST_ENV_FALLBACK",
-      "text": "if (process.env.NODE_ENV !== 'production') {",
+      "text": "if (setting('NODE_ENV') !== 'production') {",
       "justification": "Only selects Prisma log verbosity and dev hot-reload singleton caching; no success value or data path depends on it."
     },
     {
@@ -40,7 +40,7 @@
     {
       "file": "backend/src/services/appliance/otaUpdate.service.ts",
       "patternId": "MOCK_OR_STUB_IDENTIFIER",
-      "text": "if (options.mockHealthCheck && process.env.NODE_ENV !== 'test') {",
+      "text": "if (options.mockHealthCheck && setting('NODE_ENV') !== 'test') {",
       "justification": "Test hook for the post-update health check. applyUpdate and verifyOtaHealthOrRollback refuse skipHealthCheck/mockHealthCheck unless NODE_ENV=test (OTA_TEST_HOOK_FORBIDDEN, covered by failLoudHardening.test.ts)."
     },
     {
@@ -70,7 +70,7 @@
     {
       "file": "backend/src/services/appliance/otaUpdate.service.ts",
       "patternId": "MOCK_OR_STUB_IDENTIFIER",
-      "text": "if ((options.skipHealthCheck || options.mockHealthCheck) && process.env.NODE_ENV !== 'test') {",
+      "text": "if ((options.skipHealthCheck || options.mockHealthCheck) && setting('NODE_ENV') !== 'test') {",
       "justification": "Test hook for the post-update health check. applyUpdate and verifyOtaHealthOrRollback refuse skipHealthCheck/mockHealthCheck unless NODE_ENV=test (OTA_TEST_HOOK_FORBIDDEN, covered by failLoudHardening.test.ts)."
     },
     {

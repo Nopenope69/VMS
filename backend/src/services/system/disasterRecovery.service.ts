@@ -3,6 +3,7 @@ import { getPrismaClientVersion } from '../../utils/softwareVersion';
 import crypto from 'crypto';
 import { encryptCredential, decryptCredential } from '../../utils/crypto';
 import { AuditChainService } from '../audit/auditChain.service';
+import { setting } from '../../config/settings';
 
 export interface BackupArchive {
   format: 'VIGILONE_BACKUP_V1';
@@ -109,7 +110,7 @@ export class DisasterRecoveryService {
       version: 1,
       // Prisma client version of the build that produced this backup (runtime value).
       schemaVersion: `prisma-client@${getPrismaClientVersion()}`,
-      applianceId: process.env.APPLIANCE_ID || 'vigilone-edge-appliance-01',
+      applianceId: setting('APPLIANCE_ID'),
       tenantId,
       createdAt: new Date().toISOString(),
       checksumSha256,

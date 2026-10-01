@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import config from '../../config/env';
+import { settingIfSet } from '../../config/settings';
 
 export interface IceServerConfig {
   urls: string | string[];
@@ -13,9 +14,9 @@ export class TurnAuthService {
   private turnPort: number;
 
   constructor(secret?: string, host?: string, port?: number) {
-    this.turnSecret = secret || process.env.COTURN_SECRET || config.COTURN_SECRET;
-    this.turnServerHost = host || process.env.COTURN_HOST || config.COTURN_HOST;
-    this.turnPort = port || Number(process.env.COTURN_PORT || config.COTURN_PORT);
+    this.turnSecret = secret || (settingIfSet('COTURN_SECRET') ?? config.COTURN_SECRET);
+    this.turnServerHost = host || (settingIfSet('COTURN_HOST') ?? config.COTURN_HOST);
+    this.turnPort = port || (settingIfSet('COTURN_PORT') ?? config.COTURN_PORT);
   }
 
   /**
