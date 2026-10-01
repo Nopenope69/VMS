@@ -66,6 +66,30 @@ _Avoid_: AlertMessage, RawNotification, TriggerPayload
 The authoritative module evaluating incoming events against rule matrices, driving alarm lifecycle states, executing hardware relay actions, and dispatching notifications.
 _Avoid_: EventActionManager, AlarmRouter, WorkflowService
 
+**EventKind**:
+One kind of `VigilOneEvent` (MOTION, DOOR_EVENT, AI_OBJECT_DETECTED and so on) as described by its single entry in the event-kind table (`eventKinds.ts`). The entry holds the rule trigger types the kind feeds, the trigger config schema, the trigger match, and the events.v1 mapping.
+_Avoid_: EventType map, trigger switch
+
+**RuleEngine**:
+The one evaluator of automation rules, owned by the IncidentOrchestrator. The rule preview and the automation dry run use it too; the legacy `EventActionMatrixService` was retired (ADR 0004 follow-up).
+_Avoid_: EventActionMatrix, AutomationMatrix
+
+### AI Adapters
+
+**AiAdapterClient**:
+The backend's one connection to an ai-adapter.v1 adapter (embedding, redaction regions, VLM second opinion). It probes, checks the model registry, calls, and validates results (ADR 0007).
+_Avoid_: EmbeddingClient, VlmClient (as separate protocol implementations)
+
+**PipelineAdapterCore**:
+The ai-worker module holding the ai-adapter.v1 rules (validation, busy limit, deadline, error results, health, provenance) for every model pipeline adapter (ADR 0007).
+_Avoid_: AdapterServer, per-pipeline core
+
+### Composition
+
+**CompositionRoot**:
+`backend/src/composition.ts`: builds each long-lived backend module once, wires the shared ones, and starts and stops background services (ADR 0008).
+_Avoid_: ServiceLocator, bootstrap, server.ts wiring
+
 ### Spatial Intelligence
 
 **SpatialEngine**:

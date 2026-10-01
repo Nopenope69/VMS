@@ -17,6 +17,17 @@ Branch `refactor/typed-settings`. ADR 0010 has the details.
 | Fail-loud gate | DONE_VERIFIED | The `NON_TEST_ENV_FALLBACK` pattern also recognises `setting('NODE_ENV')`, so the gate does not go blind. Four allowlist entries were updated to the new line text after re-review; the logic is unchanged. `check:no-fake-success` and `noFakeSuccessGate.test.ts` pass. |
 | `RECORDINGS_DIR` / `EXPORTS_DIR` / `COTURN_*` single reader | NOT_DONE | These are still also loaded by `config/env.ts`, which about ten tests patch. Their live readers use `settingIfSet(...) ?? config.X`, and a test pins that both places declare the same defaults (ADR 0010). |
 | Suites | DONE_VERIFIED | Backend 144/145 suites in the full run. The failing one was `noFakeSuccessGate`, fixed above and re-run alone (14/14). `tsc`, the build and the gates pass. |
+## Session 17 (2026-10-01): architecture review, item 5 (camera registry)
+
+Branch `refactor/camera-registry`. ADR 0009 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Cross-tenant writes on camera sub-resources fixed | DONE_VERIFIED | A real-database reproduction against the old `camera.routes.ts` showed an admin of another tenant getting HTTP 200 on six routes: zone update, zone delete, zone test, tour stop, tour delete and the diagnostic probe. The zone and the tour were really deleted. Through `CameraRegistry` every one of them is now 404 and nothing changes. Tour start and preset routes also check that the tour or preset belongs to the camera. `cameraRegistryRealDb.test.ts` 8/8. |
+| Onboarding all or nothing | DONE_VERIFIED | When the media engine refuses the stream, the camera row is removed and the call fails with 502. Tested with the real database and an unreachable MediaMTX. A guessed RTSP URI is now returned and audited as a warning. |
+| No invented diagnostics or presets | DONE_VERIFIED | `GET /:id/diagnostic` returns `diagnostic: null` without a measurement; the modal says "no measurement yet" instead of showing "OPTIMAL". A preset the camera refused is a 502, and no row is stored. Both are tested. Frontend `tsc`, build and `check:no-demo` pass. |
+| `Camera.isOnline` misuse | NOT_DONE (finding) | The field is set at onboarding and never updated, and the watchdogs and scheduler select on it. It is kept as it is (see ADR 0009); a rename or a real liveness writer is separate work. |
+| Suites | DONE_VERIFIED | Backend 145/145 suites, 1068 passed, 8 skipped (real PostgreSQL, simulated Modbus); `tsc` passes. |
 
 ## Session 16 (2026-10-01): architecture review, item 4 (composition root)
 
