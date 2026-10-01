@@ -90,7 +90,7 @@
    - CMS bundles tenant desired state (`version`, `cameras`, `schedules`, `zones`, `watchlists`, `automationRules`).
    - Push-based distribution via `ConfigSyncRecord` tracking `desiredVersion` vs `appliedVersion`.
    - Edge transactional application with versioned `CONFIG_ACK` and schema compatibility verification.
-4. **Typed Event-Action Automation Matrix:**
+4. **Typed Event-Action Automation Matrix:** (Since 2026-10-01 the rules are evaluated only by the IncidentOrchestrator's `RuleEngine`; the legacy `EventActionMatrixService`, `AlarmService` and `GpioRelayService` are deleted. See section 7.)
    - Strongly typed rule DSL matching triggers (`TRIPWIRE_CROSS`, `LOITERING_DWELL`, `ANPR_WATCHLIST`, `MOTION_ZONE`, `DIGITAL_INPUT_STATE`, `CAMERA_OFFLINE`, `SCENE_CHANGE`).
    - Multi-action execution pipeline: `FIRE_DO_RELAY`, `TRIGGER_ALARM`, `PTZ_PRESET_GOTO`, `DISPATCH_NOTIFICATION`, `START_HIGH_RES_RECORDING`, `BOOKMARK_SEGMENT`.
    - Cooldown timers suppressing cascading feedback loops.
@@ -222,13 +222,16 @@
     - **Bounded Track State Ledger:** LRU and TTL eviction bounds memory with per-camera caps (500), global caps (5000), and observable telemetry metrics.
     - **Exclusion Precedence:** High-priority exclusion zones have absolute veto over detections.
 20. **Unified Incident Orchestrator & Action Outbox Invariant (ADR 0004):** `IncidentOrchestrator` (`src/services/incident/orchestrator/`) is the single authoritative deep module for sensor/vision event ingestion, automation rule evaluation, persistent action outbox dispatch, hardware relay execution, alarm state machines, and outbound notification delivery.
-    - **Strongly Typed Canonical Event Contract:** Standardized discriminated union `VigilOneEvent` with strict typing across all 9 event types (`MOTION`, `TRIPWIRE_CROSS`, `LOITERING_DWELL`, `ANPR_MATCH`, `CAMERA_OFFLINE`, `STREAM_DEGRADED`, `DI_TRIGGER`, `SCENE_CHANGE`, `SYSTEM_ALERT`), explicit spatial refs, and evidence refs. Zero untyped `any` payload usage.
+    - **Strongly Typed Canonical Event Contract:** Standardized discriminated union `VigilOneEvent` with strict typing across 12 event kinds (`MOTION`, `TRIPWIRE_CROSS`, `LOITERING_DWELL`, `ANPR_MATCH`, `CAMERA_OFFLINE`, `STREAM_DEGRADED`, `DI_TRIGGER`, `SCENE_CHANGE`, `SYSTEM_ALERT`, `AI_OBJECT_DETECTED`, `CAMERA_ANALYTIC`, `DOOR_EVENT`), explicit spatial refs, and evidence refs.
+    - **One Entry per Event Kind (ADR 0006):** `eventKinds.ts` is the only place a kind is described: its rule trigger types, trigger config schemas, trigger match and events.v1 mapping. The rule engine, rule schema, rule preview, dry run and events.v1 mapping derive from it. The compiler refuses a kind without an entry; a load-time check refuses a `RuleTriggerType` that no kind feeds.
     - **Cascade Loop & Depth Protection:** Hard recursion limits `MAX_EVENT_ACTION_DEPTH = 5` and `MAX_ACTIONS_PER_CORRELATION = 25`. Breaching cascades are terminated safely with `CASCADE_TERMINATED` and security alert logging.
     - **Multi-Level Database-Enforced Idempotency:** Canonical event deduplication key `event.id`, unique `(ruleId, triggerEventId)` on `RuleExecutionRecord`, and unique `(ruleExecutionId, actionId)` on `ActionExecutionRecord`.
     - **Persistent Action Outbox:** Ingestion durably commits events and pending execution records before background outbox claiming. Process crashes resume cleanly without lost or duplicated actions.
     - **Adapter-Specific Relay Confirmation Semantics:** Digital I/O execution enforces explicit `RelayConfirmationMode`: `ACK_ONLY` (confirms command transmission only, never claims `STATE_CONFIRMED`), `STATE_FEEDBACK` (requires physical feedback contact), and `PULSE_COMPLETION` (timed pulse cycle completion) with device-level configurable timeouts.
     - **Atomic Alarm & Audit Serialization:** Mutations consume `CommandContext` (`tenantId`, `actorUserId`, `correlationId`, `permissions`), enforcing tenant boundaries and committing atomic `AuditChainService` records.
     - **Event $\neq$ Alarm Mental Model:** Sensor events never spontaneously become alarms. Alarms are created strictly via explicit rule actions (including built-in system critical policies).
+21. **One ai-adapter.v1 Seam per Side (ADR 0007):** On the backend, `AiAdapterClient` (`src/services/ai/aiAdapterClient.ts`) is the only code that speaks ai-adapter.v1. The embedding, redaction and VLM clients add task-specific checks only. In the ai-worker, `PipelineAdapterCore` holds the contract rules for the ANPR, redaction, embedding and VLM adapters. The object-detection core keeps its own queue, shared with the camera stream pipeline. The SDK `createAdapter` server is not yet used by the worker (see ADR 0007, "Not done").
+22. **Composition Root (ADR 0008):** `backend/src/composition.ts` builds each long-lived backend module once and owns starting and stopping background services. It provides one `RecordingCatalog` and one `RelayAdapter` (the orchestrator's). Routes take instances from it and never construct long-lived modules or background workers. `server.ts` runs only HTTP, the HA lease and shutdown.
 
 ---
 
@@ -350,5 +353,26 @@ Per-suite detail: [`docs/generated/TEST_STATUS.md`](docs/generated/TEST_STATUS.m
 - **Database-Level Incident Uniqueness & Cooldown Deduplication**: `Incident` model enforces `@@unique([cameraId, ruleId, trackId, cooldownBucket])` with `cooldownBucket = BigInt(Math.floor(currentTimeMs / (cooldownSeconds * 1000)))`, providing atomic database-level concurrency protection against duplicate alerts during race conditions.
 - **Strict Evidence Plane Isolation**: Spatial analytics evaluation and incident creation operate strictly asynchronously or decoupled from recording, retaining zero coupling to MediaMTX streaming, fMP4 segmenting, or Section 63 BSA evidence manifests.
 
+---
 
+## 7. Architecture Review Follow-Through (2026-10-01)
 
+The `improve-codebase-architecture` review found six deepening candidates. Status:
+
+| # | Item | State | Where |
+| --- | --- | --- | --- |
+| 1 | Retire the legacy rule engine | Merged (PR #19) | ADR 0004 follow-up. Fixed a real bug: `POST /automation/dry-run` crashed with HTTP 500 after writing a stray `RuleExecutionRecord`. It now evaluates with the live `RuleEngine` and writes nothing. |
+| 2 | One entry per event kind | Merged (PR #20) | ADR 0006, `eventKinds.ts` |
+| 3 | One ai-adapter.v1 seam per side | Merged (PR #21) | ADR 0007. Worker on the SDK server: not done. |
+| 4 | Composition root | Merged (PR #22) | ADR 0008. The orchestrator instance is still created in its own module; four services import it directly. |
+| 5 | Camera registry module out of `camera.routes.ts` (837 lines, 24 handlers) | In progress | Known bug: onboarding saves `isOnline: true` before any stream is seen. |
+| 6 | Typed configuration module (53 `process.env` reads in 29 files) | Pending | |
+
+**Known gap, fixed in PR #23:** the generated status showed the ai-worker red (28 failures in `goldenSiglip2`, `goldenVlm` and `embeddingAdapter`). The cause was not the code. `status.yml` required the model tests but never fetched the SigLIP 2 and SmolVLM2 models or built `llama-server`. The PR checks in `ci.yml` do, and are green.
+
+**Working rules carried between sessions:**
+- Skills and `.claude` setup files are never committed to this repository.
+- Merge only when the owner asks.
+- Fail loud, and use honest STATUS labels.
+- Run the full suites and gates before every push.
+- Use one PR per item and drive its CI to green.
