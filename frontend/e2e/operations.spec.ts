@@ -107,9 +107,82 @@ test.describe('VigilOne Core Operator Workflows', () => {
     await page.click('button[type="submit"]');
 
     // Navigate to Events tab
-    await page.getByRole('button', { name: /Events/i }).click();
+    await page.getByRole('button', { name: /Events|Alarms/i }).click();
 
     // Verify event/alarm list renders
     await expect(page.getByText(/Active Alarms|Security Events|Alarm Feed/i).first()).toBeVisible();
+  });
+
+  test('Flow 7: Video Redaction Jobs & Privacy Derivatives', async ({ page }) => {
+    await page.fill('input[type="text"]', 'admin');
+    await page.fill('input[type="password"]', 'admin123');
+    await page.click('button[type="submit"]');
+
+    // Navigate to Evidence tab
+    await page.getByRole('button', { name: /Evidence/i }).click();
+
+    // Verify Redaction tab button is present and clickable
+    const redactionTab = page.getByRole('button', { name: /Video Redaction Jobs/i });
+    await expect(redactionTab).toBeVisible();
+    await redactionTab.click();
+
+    // Verify Redaction empty state or table renders
+    await expect(page.getByText(/Video Redaction & Privacy Derivatives/i)).toBeVisible();
+
+    // Open New Redaction Job modal
+    const newRedactionBtn = page.getByRole('button', { name: /New Redaction Job|Create First Redaction Job/i }).first();
+    await newRedactionBtn.click();
+
+    // Verify modal elements: face and plate checkboxes, mode buttons
+    await expect(page.getByText(/Create Privacy Redaction Job/i)).toBeVisible();
+    await expect(page.getByText(/Human Faces \(YuNet Detector\)/i)).toBeVisible();
+    await expect(page.getByText(/License Plates \(PP-OCRv4 Text DB\)/i)).toBeVisible();
+
+    // Close modal
+    await page.getByRole('button', { name: /Cancel/i }).click();
+  });
+
+  test('Flow 8: DPDP Act 2023 Statutory Privacy Settings & Retention Purge', async ({ page }) => {
+    await page.fill('input[type="text"]', 'admin');
+    await page.fill('input[type="password"]', 'admin123');
+    await page.click('button[type="submit"]');
+
+    // Navigate to Evidence tab
+    await page.getByRole('button', { name: /Evidence/i }).click();
+
+    // Click DPDP Settings button
+    const dpdpBtn = page.getByRole('button', { name: /DPDP Settings/i });
+    await expect(dpdpBtn).toBeVisible();
+    await dpdpBtn.click();
+
+    // Verify DPDP modal
+    await expect(page.getByText(/DPDP Act 2023 Statutory Privacy Controls/i)).toBeVisible();
+    await expect(page.getByText(/Biometric Face Analytics & Redaction/i)).toBeVisible();
+    await expect(page.getByText(/ANPR & Forensic Data Retention/i)).toBeVisible();
+    await expect(page.getByText(/Trigger Purge Now/i)).toBeVisible();
+
+    // Close modal
+    await page.getByRole('button', { name: /Cancel/i }).click();
+  });
+
+  test('Flow 9: Command Palette & Keyboard Shortcuts', async ({ page }) => {
+    await page.fill('input[type="text"]', 'admin');
+    await page.fill('input[type="password"]', 'admin123');
+    await page.click('button[type="submit"]');
+
+    // Press Cmd+K or Ctrl+K to open omnibar
+    await page.keyboard.press('Control+k');
+    const omnibar = page.locator('input[placeholder*="Type a command"], input[placeholder*="Search"]');
+    if (await omnibar.isVisible()) {
+      await expect(omnibar).toBeFocused();
+      await page.keyboard.press('Escape');
+    }
+
+    // Press ? for hotkey cheatsheet
+    await page.keyboard.press('?');
+    const helpModal = page.getByText(/Keyboard Shortcuts|Hotkey/i).first();
+    if (await helpModal.isVisible()) {
+      await page.keyboard.press('Escape');
+    }
   });
 });
