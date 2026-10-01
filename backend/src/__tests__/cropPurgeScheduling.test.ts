@@ -48,8 +48,8 @@ describe('P5.1 crop worker startup (what server.ts calls)', () => {
     expect(startCropWorkers({ start: jest.fn(), stop: jest.fn() }, { CROP_PURGE_INTERVAL_MS: 'abc' })).toBeNull();
   });
 
-  it('server.ts starts the crop worker only through startCropWorkers and stops it on shutdown (static check; server.ts cannot be imported without listening)', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '../server.ts'), 'utf8');
+  it('composition.ts starts the crop worker only through startCropWorkers and stops it on shutdown (static check)', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../composition.ts'), 'utf8');
     expect(src).toContain('startCropWorkers(cropPurger)');
     expect(src).not.toMatch(/cropPurger\.start\(/);
     expect(src).toMatch(/cropWorkers\?\.stop\(\)/);

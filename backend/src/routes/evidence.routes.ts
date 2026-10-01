@@ -5,11 +5,10 @@ import prisma from '../config/database';
 import { ExportStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
-import { EvidenceArchive } from '../services/evidence/archive';
+import { evidenceArchive } from '../composition';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const evidenceArchive = new EvidenceArchive(prisma);
 
 router.use(requireAuth);
 

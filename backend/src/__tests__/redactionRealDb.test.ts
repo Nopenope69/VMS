@@ -261,7 +261,7 @@ describe('P4.4 redaction on the real path', () => {
       const job = (await c.json()) as any;
       const e = await fetch(`${app.url}/api/v1/privacy/jobs/${job.id}/execute`, { method: 'POST', headers: h });
       expect(e.status).toBe(202);
-      const { redactionQueue } = require('../routes/privacy.routes');
+      const { redactionQueue } = require('../composition');
       await redactionQueue.idle();
       const g = (await (await fetch(`${app.url}/api/v1/privacy/jobs/${job.id}`, { headers: h })).json()) as any;
       expect(g.status).toBe('COMPLETED');

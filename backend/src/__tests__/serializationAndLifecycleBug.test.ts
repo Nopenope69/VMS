@@ -100,13 +100,14 @@ describe('Latent Bugs Diagnostic Verification & Defense-in-Depth', () => {
   });
 
   describe('Bug 2: Route Module Lifecycle & Timer Isolation', () => {
-    it('verifies route modules export services without starting un-cleared intervals at import time', async () => {
-      const anprModule = await import('../routes/anpr.routes');
-      const notificationModule = await import('../routes/notification.routes');
+    it('verifies route modules and the composition root build services without starting un-cleared intervals at import time', async () => {
+      await import('../routes/anpr.routes');
+      await import('../routes/notification.routes');
+      const composition = await import('../composition');
 
-      expect(anprModule.aggregator).toBeDefined();
-      expect(anprModule.aiRuntime).toBeDefined();
-      expect(notificationModule.dispatcher).toBeDefined();
+      expect(composition.plateAggregator).toBeDefined();
+      expect(composition.edgeAiRuntime).toBeDefined();
+      expect(composition.notificationDispatcher).toBeDefined();
     });
   });
 });

@@ -308,8 +308,8 @@ describe('P5.3 helpers and startup', () => {
     expect(embeddingAdapterUrl({ EMBEDDING_ADAPTER_URL: ' https://a/b// ' })).toBe('https://a/b');
   });
 
-  it('server.ts starts the embedder only through startEmbeddingWorkers (static check)', () => {
-    const src = fs.readFileSync(path.resolve(__dirname, '../server.ts'), 'utf8');
+  it('composition.ts starts the embedder only through startEmbeddingWorkers (static check)', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../composition.ts'), 'utf8');
     expect(src).toContain('startEmbeddingWorkers(prisma)');
     expect(src).toMatch(/embeddingWorkers\?\.stop\(\)/);
   });

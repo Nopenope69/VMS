@@ -13,11 +13,11 @@ import { z } from 'zod';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
-import { RelayAdapter, MAX_PULSE_MS } from '../services/incident/orchestrator/adapters/relayAdapter';
+import { MAX_PULSE_MS } from '../services/incident/orchestrator/adapters/relayAdapter';
+import { relayAdapter as relay } from '../composition';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const relay = new RelayAdapter(prisma);
 
 const deviceSchema = z
   .object({

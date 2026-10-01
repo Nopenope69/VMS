@@ -4,8 +4,8 @@ import { RedactionMode, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
 import { PrivacyPolicyService } from '../services/privacy/privacyPolicy.service';
-import { VideoRedactorService, RedactionError } from '../services/privacy/videoRedactor.service';
-import { RedactionQueue } from '../services/privacy/redactionQueue';
+import { RedactionError } from '../services/privacy/videoRedactor.service';
+import { redactionQueue, videoRedactor } from '../composition';
 import { buildRedactionPackage, RedactionPackageError } from '../services/evidence/archive/redactionPackage';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import {
@@ -24,8 +24,6 @@ import path from 'path';
 
 const router = Router();
 const privacyService = new PrivacyPolicyService(prisma);
-const videoRedactor = new VideoRedactorService(prisma);
-export const redactionQueue = new RedactionQueue(prisma, videoRedactor);
 
 router.use(requireAuth);
 

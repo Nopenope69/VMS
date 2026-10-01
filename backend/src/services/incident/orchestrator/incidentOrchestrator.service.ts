@@ -25,11 +25,11 @@ export class IncidentOrchestrator {
   private ptzAdapter: PtzAdapter;
   private bookmarkAdapter: BookmarkAdapter;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, deps: { relayAdapter?: RelayAdapter } = {}) {
     this.prisma = prisma;
     this.ruleEngine = new RuleEngine(prisma);
     this.alarmLifecycle = new AlarmLifecycle(prisma);
-    this.relayAdapter = new RelayAdapter(prisma);
+    this.relayAdapter = deps.relayAdapter ?? new RelayAdapter(prisma);
     this.notificationAdapter = new NotificationAdapter(prisma);
     this.ptzAdapter = new PtzAdapter(prisma);
     this.bookmarkAdapter = new BookmarkAdapter(prisma);
@@ -95,6 +95,11 @@ export class IncidentOrchestrator {
       await this.ingestEvent(eventFromRow(r));
     }
     return rows.length;
+  }
+
+  /** The relay adapter rule actions use; the composition root shares it with the relay and door routes. */
+  public get relay(): RelayAdapter {
+    return this.relayAdapter;
   }
 
   public setHardwareDriver(driver: HardwareDriver): void {
