@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-01T11:34:57.458Z",
-  "commit": "114e87a81c2cad90cc5c8ef1e1dc64d976288c5c",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36855674301",
+  "generatedAt": "2026-10-01T12:06:28.719Z",
+  "commit": "f96e89713c6e487a861c81cf4762e7906d70d18e",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36858393127",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 144,
-        "passed": 144,
+        "total": 145,
+        "passed": 145,
         "failed": 0
       },
       "tests": {
-        "total": 1068,
-        "passed": 1032,
+        "total": 1076,
+        "passed": 1040,
         "failed": 0,
         "skipped": 36
       },
@@ -98,6 +98,13 @@
         },
         {
           "file": "backend/src/__tests__/cameraEventsIntegration.test.ts",
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraRegistryRealDb.test.ts",
           "status": "passed",
           "passed": 8,
           "failed": 0,
@@ -1258,9 +1265,9 @@
     }
   ],
   "totals": {
-    "suites": 174,
-    "tests": 1351,
-    "passed": 1310,
+    "suites": 175,
+    "tests": 1359,
+    "passed": 1318,
     "failed": 0,
     "skipped": 41
   },
