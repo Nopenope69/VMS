@@ -365,8 +365,8 @@ The `improve-codebase-architecture` review found six deepening candidates. Statu
 | 2 | One entry per event kind | Merged (PR #20) | ADR 0006, `eventKinds.ts` |
 | 3 | One ai-adapter.v1 seam per side | Merged (PR #21) | ADR 0007. Worker on the SDK server: not done. |
 | 4 | Composition root | Merged (PR #22) | ADR 0008. The orchestrator instance is still created in its own module; four services import it directly. |
-| 5 | Camera registry module | PR #25 | ADR 0009. Fixes cross-tenant writes: another tenant could edit and delete zones, stop and delete guard tours, and run the diagnostic probe. Also makes onboarding all or nothing and stops inventing diagnostics and presets. Finding kept as is: `Camera.isOnline` is never updated after onboarding, and the watchdogs select on it, so it works as "monitored". |
-| 6 | One declaration of settings | PR #26 | ADR 0010, `config/settings.ts`. A bad setting stops start-up, naming the variable; before, `DOOR_POLL_INTERVAL_MS=5s` became a 1 ms timer. `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` still have two readers. |
+| 5 | Camera registry module | Merged (PR #25) | ADR 0009. Fixes cross-tenant writes: another tenant could edit and delete zones, stop and delete guard tours, and run the diagnostic probe. Also makes onboarding all or nothing and stops inventing diagnostics and presets. Finding kept as is: `Camera.isOnline` is never updated after onboarding, and the watchdogs select on it, so it works as "monitored". |
+| 6 | One declaration of settings | Merged (PR #26) | ADR 0010, `config/settings.ts`. A bad setting stops start-up, naming the variable; before, `DOOR_POLL_INTERVAL_MS=5s` became a 1 ms timer. `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` still have two readers. |
 
 **Known gap, fixed in PR #23:** the generated status showed the ai-worker red (28 failures in `goldenSiglip2`, `goldenVlm` and `embeddingAdapter`). The cause was not the code. `status.yml` required the model tests but never fetched the SigLIP 2 and SmolVLM2 models or built `llama-server`. The PR checks in `ci.yml` do, and are green. Verified after merge: status run 36855674301 passed, the first green run of that workflow since Phase 5.
 
@@ -376,3 +376,61 @@ The `improve-codebase-architecture` review found six deepening candidates. Statu
 - Fail loud, and use honest STATUS labels.
 - Run the full suites and gates before every push.
 - Use one PR per item and drive its CI to green.
+- All work starts from `master`. `main` is a stale branch, 91 or more commits behind; do not build on it.
+- Check work from other agents (e.g. Antigravity) against the real backend before trusting it (see section 8).
+
+---
+
+## 8. Redaction Console and DPDP Settings (2026-10-01, PR #27, merged)
+
+Antigravity built a redaction console, DPDP settings, a pgvector doc and a compliance audit, and pushed them to
+`main` as commit `4482397`. The code compiled, but against the real backend it failed in six ways. PR #27 brought
+it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
+
+- **Redaction job:** it sent the wrong mode (`BLUR`/`SOLID_BLACK`) and the wrong id (the export, not the
+  manifest). It now sends `FACE`/`LICENSE_PLATE`. Masking is solid black only; there is no blur.
+- **DPDP save:** it sent the wrong field names, so every save failed with a 400. The purge message always said
+  0. Both are fixed.
+- **Downloads:** plain links got 401. They now go through `frontend/src/services/download.ts`.
+- **Evidence page:** it read fields that do not exist and blanked the whole app when any real export existed.
+  It now uses the real fields.
+- **Docs:** the compliance audit was rewritten so every claim matches the code; it is marked INTERNAL
+  SELF-ASSESSMENT. The pgvector doc now describes the real `CropEmbedding` schema.
+
+**Browser tests (new):**
+- `scripts/e2e/frontend-browser.sh` runs `frontend/e2e/redaction-dpdp.spec.ts`, six tests, using Playwright
+  1.56.1, which matches the Chromium in `/opt/pw-browsers`.
+- It needs `TEST_DB_URL` pointing at a scratch database, which it drops and recreates.
+- It seeds the database (`backend/scripts/e2e/seed-frontend-e2e.ts`), then starts the real backend and
+  `vite preview`.
+- CI job: `frontend-browser-tests`.
+- `frontend/e2e/operations.spec.ts` (flows 1 to 6) has never run: it logs in as `admin`/`admin123`, which does not
+  exist. It is not wired into the Playwright config.
+
+## 9. Where to Pick Up Next
+
+**State:**
+- `master` is green; there are no open PRs.
+- The six architecture items and PR #27 are merged.
+- The generated status run after PR #26 passed (run 36896753713). The run after PR #27 (36902883702) was still in
+  progress at hand-off: **check it first next session**. Its new browser-test job already passed in that PR's CI.
+
+**Open follow-ups, all known and documented, none started:**
+
+| Follow-up | Detail | Recorded in |
+| --- | --- | --- |
+| Incident orchestrator instance | Inject it from the composition root. `detectionIngestion`, `sceneChangeDetector`, `streamWatchdog` and `storageSentinel` still import it directly; the bookmark adapter keeps its own `RecordingCatalog`. | ADR 0008 |
+| `Camera.isOnline` | It is set at onboarding and never updated, and the watchdogs and scheduler select on it, so it works as "monitored". It needs a rename or a real liveness writer. | ADR 0009 |
+| Settings with two readers | `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` are read by both `config/env.ts` and `config/settings.ts`. Merging them means changing how about ten tests patch them. | ADR 0010 |
+| ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. | ADR 0007 |
+| Unused evidence services | `EvidenceExportService` and `EvidenceManifestService` are used only by tests. | ADR 0008 |
+| Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). | `docs/BACKLOG.md`; the compliance audit, section 4 |
+| No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. | Compliance audit, sections 1 and 6 |
+| `operations.spec.ts` flows 1 to 6 | Rewrite them against seeded data and wire them in, or delete them. | Section 8 |
+| `main` branch | Holds the unfixed Antigravity commit. Delete it or reset it to `master` (an owner decision). The stale remote branch `chore/repo-skills` should also be deleted. | Section 8 |
+
+**Local environment notes (cloud sandbox):**
+- PostgreSQL can stop when the container restarts. Run `service postgresql start`.
+- Test database URL: `postgresql://vigilone:vigilone_ci_secret_password_2026!@localhost:5432/vigilone_db?schema=public`.
+- Model files are fetched with `scripts/models/fetch-model.sh <name>`. SigLIP 2 and SmolVLM2 are large; after
+  using them, free the disk space, because `storageVolumeManager` needs more than 5% free.
