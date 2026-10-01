@@ -28,6 +28,8 @@
  *  AI_DETECT_FPS              frames per second sampled per camera (1..5, default 1)
  *  AI_ATTACH_CROPS            'true' sends a JPEG crop with each CONFIRMED detection for the backend crop
  *                             store (default false; the backend also needs VIGILONE_FEATURE_OBJECT_CROPS)
+ *  AI_COLOUR_ATTRIBUTES       'false' stops naming the colours of CONFIRMED detections (default true;
+ *                             colourAttributes.ts; the backend track index reads them)
  *  AI_MAX_STREAMS             cameras processed concurrently (default 16)
  *  AI_INFERENCE_TIMEOUT_MS    per-frame deadline (default 1000)
  *  AI_GATE_MODE               motion gating: 'motion' (default) or 'off' (P2.5)
@@ -92,6 +94,7 @@ export async function boot(): Promise<BootResult> {
       adapterId: env('AI_ADAPTER_ID', 'vigilone-ai-worker'),
       schedulerOptions: { maxConcurrency: 2, timeoutMs: Number(env('AI_INFERENCE_TIMEOUT_MS', '1000')) },
       attachCrops: env('AI_ATTACH_CROPS', 'false') === 'true',
+      colourAttributes: env('AI_COLOUR_ATTRIBUTES', 'true') !== 'false',
     },
     undefined,
     metrics

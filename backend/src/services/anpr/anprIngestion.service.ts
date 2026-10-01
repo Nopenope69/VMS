@@ -4,12 +4,15 @@ import { AiProvenanceV1 } from '../../contracts/events.v1';
 import { NormalizedBox } from '../../contracts/common';
 import { MetricsService } from '../observability/metrics.service';
 import type PlateTrackAggregatorService from './plateTrackAggregator.service';
+import type { TrackIndexService } from '../tracks/trackIndex.service';
+import { FeatureFlag, isFeatureEnabled } from '../../config/featureFlags';
 
 /**
  * Ingestion of plate reads from the ANPR adapter (P4.1). A read is accepted only with valid
  * provenance naming a registered, active plate_recognition pipeline whose SHA-256 matches, from
  * a camera of that tenant that is in LPR mode. Nothing without provenance reaches the
- * aggregator (the synthetic /anpr/detect endpoint exists in test builds only).
+ * aggregator (the synthetic /anpr/detect endpoint exists in test builds only). With the track index on
+ * (feature TRACK_INDEX), each read is then tied to the vehicle track whose box contains the plate.
  */
 export const PlateReadV1 = z
   .object({
@@ -39,7 +42,11 @@ export class AnprIngestionError extends Error {
 }
 
 export class AnprIngestionService {
-  constructor(private prisma: PrismaClient, private aggregator: PlateTrackAggregatorService) {}
+  constructor(
+    private prisma: PrismaClient,
+    private aggregator: Pick<PlateTrackAggregatorService, 'processDetection'>,
+    private trackIndex: Pick<TrackIndexService, 'linkPlateSafely'> | null = null
+  ) {}
 
   async ingest(body: unknown) {
     const p = AnprObservationBatchV1.safeParse(body);
@@ -63,19 +70,21 @@ export class AnprIngestionService {
       throw new AnprIngestionError(409, 'CAMERA_NOT_IN_LPR_MODE', 'camera is not in LPR mode');
     }
     const results = [];
+    const at = new Date(b.frameTimestampUtc);
+    const linkTracks = this.trackIndex && isFeatureEnabled(FeatureFlag.TRACK_INDEX);
     for (const r of b.plates) {
-      results.push(
-        await this.aggregator.processDetection({
-          tenantId: b.tenantId,
-          cameraId: b.cameraId,
-          plateText: r.plateText,
-          rawText: r.rawText,
-          confidence: r.confidence,
-          lines: r.lines,
-          timestamp: new Date(b.frameTimestampUtc),
-          provenance: b.provenance as any,
-        })
-      );
+      const result = await this.aggregator.processDetection({
+        tenantId: b.tenantId,
+        cameraId: b.cameraId,
+        plateText: r.plateText,
+        rawText: r.rawText,
+        confidence: r.confidence,
+        lines: r.lines,
+        timestamp: at,
+        provenance: b.provenance as any,
+      });
+      results.push(result);
+      if (linkTracks) await this.trackIndex!.linkPlateSafely({ tenantId: b.tenantId, cameraId: b.cameraId, at, plateBox: r.bbox, vehicleObservationId: result.observationId });
     }
     MetricsService.incCounter('vigilone_anpr_reads_ingested_total', 'Plate reads accepted', undefined, b.plates.length);
     return results;

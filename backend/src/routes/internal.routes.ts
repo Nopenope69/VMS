@@ -8,7 +8,7 @@ import { ModelRegistryService, ModelRegistryError } from '../services/ai/modelRe
 import { DetectionIngestionService, DetectionIngestionError } from '../services/ai/detectionIngestion.service';
 import { spatialEngine } from '../services/spatial/engine';
 import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
-import { plateAggregator as anprAggregator } from '../composition';
+import { plateAggregator as anprAggregator, trackIndex } from '../composition';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 
 let currentSpatialEngine = spatialEngine;
@@ -144,7 +144,7 @@ export async function handleIngestDetection(req: Request, res: Response) {
 
 let detectionIngestion: DetectionIngestionService | null = null;
 function getDetectionIngestion(): DetectionIngestionService {
-  if (!detectionIngestion) detectionIngestion = new DetectionIngestionService(prisma, () => currentSpatialEngine);
+  if (!detectionIngestion) detectionIngestion = new DetectionIngestionService(prisma, () => currentSpatialEngine, undefined, undefined, trackIndex);
   return detectionIngestion;
 }
 /** Test hook: replace the ingestion service (e.g. with an injected orchestrator). */
@@ -290,7 +290,7 @@ router.get('/anpr/cameras', async (_req: Request, res: Response) => {
 router.post('/anpr/observations', async (req: Request, res: Response) => {
   if (!anprEnabled(res)) return;
   try {
-    const results = await new AnprIngestionService(prisma, anprAggregator).ingest(req.body);
+    const results = await new AnprIngestionService(prisma, anprAggregator, trackIndex).ingest(req.body);
     return res.json({ accepted: results.length, observations: results.map((r) => ({ id: r.observationId, plate: r.normalizedPlate, isNew: r.isNewObservation, watchlist: r.matchedWatchlist.map((m) => m.id) })) });
   } catch (err: any) {
     if (err instanceof AnprIngestionError) return res.status(err.status).json({ error: err.message, code: err.code });

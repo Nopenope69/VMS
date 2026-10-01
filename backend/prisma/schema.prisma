@@ -307,6 +307,7 @@ model Tenant {
   doors                   Door[]
   vlmVerifications        VlmVerification[]
   objectCrops             ObjectCrop[]
+  objectTracks            ObjectTrack[]
   cropEmbeddings          CropEmbedding[]
   detectionEvents         DetectionEvent[]
   vehicleObservations     VehicleObservation[]
@@ -472,6 +473,7 @@ model Camera {
   alarms                Alarm[]
   detectionEvents       DetectionEvent[]
   objectCrops           ObjectCrop[]
+  objectTracks          ObjectTrack[]
   vehicleObservations   VehicleObservation[]
   spatialAnalyticsRules SpatialAnalyticsRule[]
   spatialPlacement      CameraSpatialPlacement?
@@ -994,6 +996,7 @@ model VehicleObservation {
 
   matchedWatchlistId String?
   matchedWatchlist   VehicleWatchlist? @relation(fields: [matchedWatchlistId], references: [id], onDelete: SetNull)
+  objectTracks       ObjectTrack[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2027,4 +2030,52 @@ model VlmVerification {
 
   @@unique([alarmId, modelSha256])
   @@index([tenantId, createdAt])
+}
+
+/// One row per tracked object on one camera (the track index, feature TRACK_INDEX): built from the
+/// confirmed-track detections the ai-worker sends. services/tracks/trackIndex.service.ts.
+model ObjectTrack {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraId             String
+  camera               Camera              @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  /// The worker's track id (a UUID per track).
+  trackId              String
+  /// Majority of the per-detection classes (classVotesJson).
+  objectClass          String
+  classVotesJson       Json
+  firstSeenAt          DateTime
+  lastSeenAt           DateTime
+  /// lastSeenAt - firstSeenAt, kept as a column so it can be filtered and indexed.
+  dwellSeconds         Float               @default(0)
+  observationCount     Int                 @default(0)
+  maxConfidence        Float               @default(0)
+  /// Detection with the highest confidence (its crop and snapshot are the track's best picture).
+  bestDetectionId      String?
+  /// Ground point (bottom centre of the box, normalised 0..1) over time: [{ t: epoch ms, x, y }], thinned.
+  pathJson             Json
+  /// Overall movement in the image from first to last point: UP, UP_RIGHT, RIGHT, ... or STATIONARY.
+  direction            String?
+  /// Visits to the camera's named zones: [{ zoneId, name, enteredAt, exitedAt }].
+  zonesJson            Json
+  zoneIds              String[]            @default([])
+  /// Colour names per region with their counts, from the worker's colour attributes.
+  colourVotesJson      Json
+  upperColour          String?
+  lowerColour          String?
+  bodyColour           String?
+  /// The plate read linked to this vehicle track (deleted with the plate read by the plate retention purge).
+  vehicleObservationId String?
+  vehicleObservation   VehicleObservation? @relation(fields: [vehicleObservationId], references: [id], onDelete: SetNull)
+  /// Detector that produced the track.
+  modelSha256          String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@unique([cameraId, trackId])
+  @@index([tenantId, lastSeenAt])
+  @@index([tenantId, objectClass, lastSeenAt])
+  @@index([vehicleObservationId])
+  @@index([zoneIds], type: Gin)
 }
