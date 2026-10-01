@@ -13,14 +13,16 @@ export const StreamDiagnosticModal: React.FC<StreamDiagnosticModalProps> = ({ ca
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [probing, setProbing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchDiagnostics = async () => {
     setLoading(true);
     try {
       const res = await api.get(`/cameras/${camera.id}/diagnostic`);
       setData(res.data);
-    } catch (err) {
-      console.error('Failed fetching diagnostic:', err);
+      setLoadError(null);
+    } catch (err: any) {
+      setLoadError(`Could not load stream telemetry: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
     }
@@ -35,21 +37,16 @@ export const StreamDiagnosticModal: React.FC<StreamDiagnosticModalProps> = ({ ca
     try {
       await api.post(`/cameras/${camera.id}/diagnostic/probe`);
       await fetchDiagnostics();
-    } catch (err) {
-      console.error('Probe error:', err);
+    } catch (err: any) {
+      setLoadError(`Probe failed: ${err.response?.data?.error || err.message}`);
     } finally {
       setProbing(false);
     }
   };
 
-  const diag = data?.diagnostic || {
-    fps: 25.0,
-    bitrateKbps: 2500,
-    resolution: '1920x1080',
-    videoCodec: 'h264',
-    isDegraded: false,
-    deviationScore: 0.0,
-  };
+  // Only a real measurement is shown; with none, the modal says so instead of showing a healthy stream.
+  const measured = data?.diagnostic ?? null;
+  const diag = measured || {};
 
   const baseline = data?.baseline || {
     expectedFps: 25.0,
@@ -90,6 +87,10 @@ export const StreamDiagnosticModal: React.FC<StreamDiagnosticModalProps> = ({ ca
         <div className="flex items-center justify-center p-8 text-vms-muted font-mono text-xs">
           <RefreshCw className="w-4 h-4 animate-spin mr-2" />
           Probing stream telemetry...
+        </div>
+      ) : loadError || !measured ? (
+        <div className="p-4 rounded border border-amber-800 bg-amber-950/60 text-amber-200 text-xs font-mono">
+          {loadError || 'No stream measurement for this camera yet. Use "Probe Live Stream" to measure it now.'}
         </div>
       ) : (
         <div className="space-y-4">

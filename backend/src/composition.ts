@@ -35,9 +35,11 @@ import recordingScheduleService from './services/schedule/recordingSchedule.serv
 import streamWatchdogService from './services/watchdog/streamWatchdog.service';
 import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
+import { CameraRegistry } from './services/camera/cameraRegistry';
 
 // --- Modules shared by routes and background services ---------------------------------------------------
 export const recordingCatalog = new RecordingCatalog(prisma);
+export const cameraRegistry = new CameraRegistry(prisma);
 export { incidentOrchestrator };
 export const relayAdapter = incidentOrchestrator.relay;
 export const evidenceArchive = new EvidenceArchive(prisma, recordingCatalog);
