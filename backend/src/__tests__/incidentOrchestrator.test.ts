@@ -695,6 +695,12 @@ describe('Candidate 04: Authoritative IncidentOrchestrator Deep-Module', () => {
 
   // --- Requirement 6: Atomic Alarm State and Audit Log Commit ---
   describe('Requirement 6: Atomic Alarm State & Audit Chain Serialization', () => {
+    it('refuses to acknowledge another tenant\'s alarm (moved from the retired AlarmService test)', async () => {
+      alarmsStore.push({ id: 'alarm_other_tenant', tenantId: 'tenant_ALPHA', title: 'Secret Alarm', severity: EventSeverity.CRITICAL, state: AlarmState.ACTIVE });
+      await expect(orchestrator.acknowledgeAlarm('alarm_other_tenant', { tenantId: 'tenant_BRAVO', actorUserId: 'user_spy' })).rejects.toThrow(/Forbidden|tenant/i);
+      expect(alarmsStore.find((a: any) => a.id === 'alarm_other_tenant').state).toBe(AlarmState.ACTIVE);
+    });
+
     it('acknowledges alarm and records AuditChainEvent in transaction', async () => {
       alarmsStore.push({
         id: 'alarm_test_ack',

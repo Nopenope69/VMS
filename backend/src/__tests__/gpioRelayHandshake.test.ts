@@ -1,8 +1,8 @@
-import { GpioRelayService } from '../../src/services/hardware/gpioRelay.service';
+import { RelayAdapter } from '../services/incident/orchestrator/adapters/relayAdapter';
 import { RelayCommandState } from '@prisma/client';
 
-describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)', () => {
-  let service: GpioRelayService;
+describe('RelayAdapter (Physical DI/DO Multi-Stage Confirmation Handshake)', () => {
+  let service: RelayAdapter;
   let mockPrisma: any;
   const tenantId = 'tenant_relay_01';
 
@@ -18,7 +18,7 @@ describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)',
       },
       $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
     };
-    service = new GpioRelayService(mockPrisma);
+    service = new RelayAdapter(mockPrisma);
   });
 
   describe('Pin Direction Safeguards', () => {
@@ -32,7 +32,7 @@ describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)',
       });
 
       await expect(
-        service.executeRelayCommand({
+        service.execute({
           pinNumber: 1,
           tenantId,
           command: 'SET_HIGH',
@@ -44,7 +44,7 @@ describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)',
       mockPrisma.digitalIoPin.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.executeRelayCommand({
+        service.execute({
           pinNumber: 99,
           tenantId,
           command: 'SET_HIGH',
@@ -74,7 +74,7 @@ describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)',
         return { confirmed: true };
       });
 
-      const res = await service.executeRelayCommand({
+      const res = await service.execute({
         pinNumber: 2,
         tenantId,
         command: 'SET_HIGH',
@@ -132,7 +132,7 @@ describe('GpioRelayService (Physical DI/DO Multi-Stage Confirmation Handshake)',
         return { confirmed: false, error: 'Relay coil open circuit' };
       });
 
-      const res = await service.executeRelayCommand({
+      const res = await service.execute({
         pinNumber: 3,
         tenantId,
         command: 'SET_HIGH',

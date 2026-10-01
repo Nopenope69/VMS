@@ -2,10 +2,10 @@ import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
-import { GpioRelayService } from '../services/hardware/gpioRelay.service';
+import { RelayAdapter } from '../services/incident/orchestrator/adapters/relayAdapter';
 
 const router = Router();
-const relayService = new GpioRelayService(prisma);
+const relay = new RelayAdapter(prisma);
 
 /**
  * GET /api/v1/relays
@@ -119,7 +119,7 @@ router.post(
         return;
       }
 
-      const result = await relayService.executeRelayCommand({
+      const result = await relay.execute({
         tenantId,
         pinNumber,
         command,
