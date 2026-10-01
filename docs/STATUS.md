@@ -6,6 +6,16 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 15 (2026-10-01): architecture review, item 3 (one ai-adapter.v1 seam on each side)
+
+Branch `refactor/ai-adapter-seam`, stacked on item 2. ADR 0007 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Backend `AiAdapterClient` | DONE_VERIFIED | The embedding, redaction-region and VLM clients now share one connection: probe, registry check, call and provenance check. Each keeps its own error codes. The stub-based adapter tests pass unmodified: `cropEmbedderRealDb`, `vlmVerifierRealDb`, `redactionRealDb` and `evidencePackageVerifyRealDb`. `semanticSearchRealModels` 7/7 was run with the real SigLIP 2 models. Backend 144/144 suites, 1059 passed. `storageVolumeManager` first failed locally because the sandbox disk dropped below its 5% free floor during the model downloads; with space freed it passes 5/5. |
+| Worker `PipelineAdapterCore` | DONE_VERIFIED | The ANPR, redaction, embedding and VLM adapters now share the contract rules: validation, busy limit, deadline, error results, health, descriptor and provenance. The worker suite was run with every real model: SigLIP 2, PP-OCR/CCT, YuNet, YOLOX, and SmolVLM2 on the pinned llama.cpp build. 281 passed, 2 skipped. |
+| Worker on the SDK `createAdapter` server | NOT_DONE | The SDK lacks VLM answers, component provenance and a liveness hook, and the worker image does not ship the SDK. See ADR 0007, "Not done". |
+
 ## Session 14 (2026-10-01): architecture review, item 2 (one table per event kind)
 
 Branch `refactor/event-kind-registry`, stacked on item 1. ADR 0006 has the details.
