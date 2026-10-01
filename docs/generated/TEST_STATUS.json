@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-01T12:06:28.719Z",
-  "commit": "f96e89713c6e487a861c81cf4762e7906d70d18e",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36858393127",
+  "generatedAt": "2026-10-01T17:39:40.693Z",
+  "commit": "d71c15c08c96347ac3a770278321c6c79f0a98fb",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36896753713",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 145,
-        "passed": 145,
+        "total": 146,
+        "passed": 146,
         "failed": 0
       },
       "tests": {
-        "total": 1076,
-        "passed": 1040,
+        "total": 1093,
+        "passed": 1057,
         "failed": 0,
         "skipped": 36
       },
@@ -916,6 +916,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/settings.test.ts",
+          "status": "passed",
+          "passed": 17,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/smartSearch.test.ts",
           "status": "passed",
           "passed": 4,
@@ -1265,9 +1272,9 @@
     }
   ],
   "totals": {
-    "suites": 175,
-    "tests": 1359,
-    "passed": 1318,
+    "suites": 176,
+    "tests": 1376,
+    "passed": 1335,
     "failed": 0,
     "skipped": 41
   },
