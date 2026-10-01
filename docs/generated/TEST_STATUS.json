@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-09-30T23:13:16.481Z",
-  "commit": "6c66437ea88d2bab8061eb6c9690b75cb8a44821",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36789712624",
+  "generatedAt": "2026-10-01T11:17:59.434Z",
+  "commit": "2fe94fdac5ebb368656755e1e108ef1f770a337b",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36854061492",
   "projects": [
     {
       "name": "backend",
@@ -12,8 +12,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 1072,
-        "passed": 1030,
+        "total": 1068,
+        "passed": 1026,
         "failed": 0,
         "skipped": 42
       },
@@ -30,13 +30,6 @@
           "file": "backend/src/__tests__/aiWorker.test.ts",
           "status": "passed",
           "passed": 8,
-          "failed": 0,
-          "skipped": 0
-        },
-        {
-          "file": "backend/src/__tests__/alarmWorkflow.test.ts",
-          "status": "passed",
-          "passed": 6,
           "failed": 0,
           "skipped": 0
         },
@@ -86,6 +79,13 @@
           "file": "backend/src/__tests__/authSecurity.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/automationDryRunRealDb.test.ts",
+          "status": "passed",
+          "passed": 3,
           "failed": 0,
           "skipped": 0
         },
@@ -342,9 +342,9 @@
           "skipped": 0
         },
         {
-          "file": "backend/src/__tests__/eventActionMatrix.test.ts",
+          "file": "backend/src/__tests__/eventKinds.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -582,7 +582,7 @@
         {
           "file": "backend/src/__tests__/incidentOrchestrator.test.ts",
           "status": "passed",
-          "passed": 15,
+          "passed": 16,
           "failed": 0,
           "skipped": 0
         },
@@ -1259,8 +1259,8 @@
   ],
   "totals": {
     "suites": 174,
-    "tests": 1356,
-    "passed": 1266,
+    "tests": 1352,
+    "passed": 1262,
     "failed": 28,
     "skipped": 62
   },
