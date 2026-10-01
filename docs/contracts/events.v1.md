@@ -45,7 +45,7 @@ producer without real provenance must not emit an `ai.*` event.
 
 ## Mapping from `VigilOneEvent`
 
-Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`.
+Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`; the per-kind type and payload live in the event-kind table, `backend/src/services/incident/orchestrator/eventKinds.ts` (ADR 0006).
 
 | `VigilOneEvent.type` | events.v1 type | Notes |
 | --- | --- | --- |

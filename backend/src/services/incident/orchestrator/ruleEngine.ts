@@ -6,6 +6,7 @@ import {
   RuleActionConfig,
 } from './types';
 import { RuleConditionEvaluator } from '../../automation/ruleConditions';
+import { matchesTriggerConfig, triggerTypeFor } from './eventKinds';
 
 export const MAX_EVENT_ACTION_DEPTH = 5;
 export const MAX_ACTIONS_PER_CORRELATION = 25;
@@ -27,37 +28,9 @@ export class RuleEngine {
     this.conditions = new RuleConditionEvaluator(prisma);
   }
 
-  /**
-   * Maps canonical VigilOneEventType to legacy RuleTriggerType enum when needed
-   */
+  /** The trigger type an event fires (see eventKinds.ts). */
   public static mapEventTypeToTriggerType(eventType: VigilOneEventType, payload?: VigilOneEvent['payload']): RuleTriggerType | null {
-    switch (eventType) {
-      case 'AI_OBJECT_DETECTED': {
-        const cls = payload && payload.kind === 'AI_OBJECT_DETECTED' ? payload.objectClass : undefined;
-        if (!cls) return null;
-        return cls === 'person' ? RuleTriggerType.PERSON_DETECTED : RuleTriggerType.VEHICLE_DETECTED;
-      }
-      case 'MOTION':
-        return RuleTriggerType.MOTION_ZONE;
-      case 'TRIPWIRE_CROSS':
-        return RuleTriggerType.TRIPWIRE_CROSS;
-      case 'LOITERING_DWELL':
-        return RuleTriggerType.LOITERING_DWELL;
-      case 'ANPR_MATCH':
-        return RuleTriggerType.ANPR_WATCHLIST;
-      case 'DI_TRIGGER':
-        return RuleTriggerType.DIGITAL_INPUT_STATE;
-      case 'CAMERA_OFFLINE':
-        return RuleTriggerType.CAMERA_OFFLINE;
-      case 'SCENE_CHANGE':
-        return RuleTriggerType.SCENE_CHANGE;
-      case 'CAMERA_ANALYTIC':
-        return RuleTriggerType.CAMERA_ANALYTIC;
-      case 'DOOR_EVENT':
-        return RuleTriggerType.DOOR_EVENT;
-      default:
-        return null;
-    }
+    return triggerTypeFor(eventType, payload);
   }
 
   /** Enum-valid trigger types that can match this event type (raw name if it is one, plus the mapping). */
@@ -166,7 +139,7 @@ export class RuleEngine {
 
       // 5. Trigger Config Matching
       const triggerConfig = (rule.triggerConfigJson as unknown as RuleTriggerConfig) || {};
-      if (!this.matchesTriggerConfig(triggerConfig, event)) {
+      if (!matchesTriggerConfig(triggerConfig, event)) {
         continue;
       }
 
@@ -231,79 +204,10 @@ export class RuleEngine {
     return { results, cascadeTerminated: false };
   }
 
-  private matchesTriggerConfig(config: RuleTriggerConfig, event: VigilOneEvent): boolean {
-    if (config.cameraId && config.cameraId !== event.cameraId) return false;
-    if (config.zoneId && config.zoneId !== event.spatialRef?.zoneId) return false;
-
-    // Check DI payload specifics if applicable
-    if (event.payload.kind === 'DI_TRIGGER') {
-      const di = event.payload;
-      if (config.pinNumber !== undefined && config.pinNumber !== di.pinNumber) return false;
-      if (config.targetState && config.targetState !== di.state) return false;
-    }
-
-    if (event.payload.kind === 'DOOR_EVENT') {
-      const d = event.payload;
-      if (config.doorIds && config.doorIds.length > 0 && !config.doorIds.includes(d.doorId)) return false;
-      if (config.doorActions && config.doorActions.length > 0 && !config.doorActions.includes(d.action)) return false;
-    }
-
-    // AI objects: class, confidence floor and minimum dwell (P3.5 / P3.7). A rule without a
-    // minimum dwell fires on the track's 'confirmed' event; a rule with minDwellSeconds = N only
-    // on the 'dwell' event for milestone N. Either way, at most once per track.
-    if (event.payload.kind === 'AI_OBJECT_DETECTED') {
-      const ai = event.payload;
-      if (config.objectClasses && config.objectClasses.length > 0 && !config.objectClasses.includes(ai.objectClass)) {
-        return false;
-      }
-      if (config.minConfidence !== undefined && ai.confidence < config.minConfidence) return false;
-      const minDwell = config.minDwellSeconds && config.minDwellSeconds > 0 ? config.minDwellSeconds : 0;
-      if (minDwell === 0 ? ai.stage !== 'confirmed' : ai.stage !== 'dwell' || ai.stageSeconds !== minDwell) {
-        return false;
-      }
-    }
-
-    // Spatial rule scoping for tripwire / loitering events
-    if (config.spatialRuleId) {
-      const p: any = event.payload;
-      const ruleRef = p.kind === 'TRIPWIRE_CROSS' ? p.tripwireId : p.kind === 'LOITERING_DWELL' ? p.zoneId : undefined;
-      if (ruleRef !== config.spatialRuleId) return false;
-    }
-    if (config.minConfidence !== undefined && event.payload.kind !== 'ANPR_MATCH' && event.payload.kind !== 'AI_OBJECT_DETECTED') {
-      const conf = (event.payload as any).confidence;
-      if (typeof conf === 'number' && conf < config.minConfidence) return false;
-    }
-
-    if (event.payload.kind === 'CAMERA_ANALYTIC') {
-      const ca = event.payload;
-      if (config.analyticTypes && config.analyticTypes.length > 0 && !config.analyticTypes.includes(ca.analyticType)) return false;
-      if (config.protocols && config.protocols.length > 0 && !config.protocols.includes(ca.protocol)) return false;
-      // Camera analytics report start and stop; a rule fires on the start (or instantaneous event).
-      if (ca.state === false) return false;
-    }
-
-    // Check ANPR watchlist category
-    if (event.payload.kind === 'ANPR_MATCH') {
-      const anpr = event.payload;
-      if (
-        config.watchlistCategories &&
-        config.watchlistCategories.length > 0 &&
-        (!anpr.watchlistCategory || !config.watchlistCategories.includes(anpr.watchlistCategory))
-      ) {
-        return false;
-      }
-      if (config.minConfidence && anpr.confidence < config.minConfidence) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   /** Stateless rule match (trigger config + conditions), shared with the rule preview. */
   public async matchesRule(rule: { triggerConfigJson: any; conditionsJson: any }, event: VigilOneEvent): Promise<boolean> {
     const triggerConfig = (rule.triggerConfigJson as unknown as RuleTriggerConfig) || {};
-    if (!this.matchesTriggerConfig(triggerConfig, event)) return false;
+    if (!matchesTriggerConfig(triggerConfig, event)) return false;
     return this.conditions.matches(rule.conditionsJson, event);
   }
 }

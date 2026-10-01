@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { RuleTriggerType, RuleActionType, EventSeverity } from '@prisma/client';
-import { DETECTION_CLASS_TO_EVENT_V1 } from '../../contracts/aiAdapter.v1';
+import { EVENT_KIND_NAMES, RULE_TRIGGERS } from '../incident/orchestrator/eventKinds';
+import { VigilOneEventType } from '../incident/orchestrator/types';
 
 /**
  * Validation for automation rules (P3.5 / P3.6). A rule that the engine cannot evaluate exactly
@@ -28,10 +29,7 @@ export const TimeWindowSchema = z
   .strict()
   .refine((w) => w.start !== w.end, 'start and end must differ (use all seven days 00:00-23:59 for always)');
 
-export const EVENT_TYPES = [
-  'MOTION', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'STREAM_DEGRADED',
-  'DI_TRIGGER', 'SCENE_CHANGE', 'SYSTEM_ALERT', 'AI_OBJECT_DETECTED', 'CAMERA_ANALYTIC', 'DOOR_EVENT',
-] as const;
+export const EVENT_TYPES = EVENT_KIND_NAMES as [VigilOneEventType, ...VigilOneEventType[]];
 
 const SeverityCondition = z
   .object({
@@ -76,47 +74,6 @@ const NotPrecededByCondition = z.object({ type: z.literal('NOT_PRECEDED_BY'), va
 export const RuleConditionSchema = z.discriminatedUnion('type', [SeverityCondition, TimeScheduleCondition, PrecededByCondition, NotPrecededByCondition]);
 export type ValidatedCondition = z.infer<typeof RuleConditionSchema>;
 
-const AI_CLASSES = Object.keys(DETECTION_CLASS_TO_EVENT_V1);
-const VEHICLE_CLASSES = AI_CLASSES.filter((c) => DETECTION_CLASS_TO_EVENT_V1[c] === 'ai.vehicle_detected');
-
-const base = {
-  cameraId: z.string().uuid().optional(),
-  zoneId: z.string().min(1).optional(),
-};
-const confidence = z.number().min(0).max(1).optional();
-
-const TRIGGER_CONFIG: Record<RuleTriggerType, z.ZodTypeAny> = {
-  PERSON_DETECTED: z
-    .object({ ...base, objectClasses: z.array(z.literal('person')).max(1).optional(), minConfidence: confidence, minDwellSeconds: z.number().int().min(1).max(3600).optional() })
-    .strict(),
-  VEHICLE_DETECTED: z
-    .object({
-      ...base,
-      objectClasses: z.array(z.string().refine((c) => VEHICLE_CLASSES.includes(c), `vehicle classes are ${VEHICLE_CLASSES.join(', ')}`)).max(10).optional(),
-      minConfidence: confidence,
-      minDwellSeconds: z.number().int().min(1).max(3600).optional(),
-    })
-    .strict(),
-  TRIPWIRE_CROSS: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict(),
-  LOITERING_DWELL: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict(),
-  ANPR_WATCHLIST: z.object({ ...base, watchlistCategories: z.array(z.string().min(1)).max(20).optional(), minConfidence: confidence }).strict(),
-  DIGITAL_INPUT_STATE: z.object({ ...base, pinNumber: z.number().int().min(0).max(255).optional(), targetState: z.string().min(1).optional() }).strict(),
-  MOTION_ZONE: z.object({ ...base, minConfidence: confidence }).strict(),
-  DOOR_EVENT: z
-    .object({ ...base, doorIds: z.array(z.string().uuid()).max(50).optional(), doorActions: z.array(z.enum(['OPENED', 'CLOSED', 'FORCED_OPEN', 'HELD_OPEN'])).max(4).optional() })
-    .strict(),
-  CAMERA_OFFLINE: z.object({ ...base }).strict(),
-  SCENE_CHANGE: z.object({ ...base }).strict(),
-  CAMERA_ANALYTIC: z
-    .object({
-      ...base,
-      /** Normalised camera analytic types (see cameraEvents mapping), e.g. LINE_CROSSING, INTRUSION. */
-      analyticTypes: z.array(z.string().regex(/^[A-Z_]{2,40}$/)).max(20).optional(),
-      protocols: z.array(z.enum(['ONVIF_PULLPOINT', 'HIKVISION_ISAPI', 'DAHUA_EVENT_MANAGER'])).max(3).optional(),
-    })
-    .strict(),
-};
-
 const ActionSchema = z
   .object({
     id: z.string().min(1).max(100),
@@ -149,7 +106,7 @@ function firstIssue(prefix: string, e: z.ZodError): string {
 }
 
 export function validateTriggerConfig(triggerType: RuleTriggerType, cfg: unknown) {
-  const r = TRIGGER_CONFIG[triggerType].safeParse(cfg ?? {});
+  const r = RULE_TRIGGERS[triggerType].configSchema.safeParse(cfg ?? {});
   if (!r.success) throw new RuleValidationError(firstIssue('triggerConfig.', r.error));
   return r.data as Record<string, unknown>;
 }

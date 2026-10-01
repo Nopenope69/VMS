@@ -6,6 +6,7 @@ import { authorize, Permission } from '../services/rbac/permissions';
 import { RuleEngine } from '../services/incident/orchestrator/ruleEngine';
 import { createVigilOneEvent } from '../services/incident/orchestrator/events';
 import { VigilOneEventType } from '../services/incident/orchestrator/types';
+import { EVENT_KIND_NAMES, isEventKind } from '../services/incident/orchestrator/eventKinds';
 import { validateRuleInput, RuleValidationError } from '../services/automation/ruleSchema';
 import { RulePreviewService, PREVIEW_MAX_DAYS } from '../services/automation/rulePreview.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
@@ -205,10 +206,6 @@ router.delete(
   }
 );
 
-const DRY_RUN_EVENT_TYPES: readonly VigilOneEventType[] = [
-  'MOTION', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'STREAM_DEGRADED',
-  'DI_TRIGGER', 'SCENE_CHANGE', 'SYSTEM_ALERT', 'AI_OBJECT_DETECTED', 'CAMERA_ANALYTIC', 'DOOR_EVENT',
-];
 
 /**
  * POST /api/v1/automation/dry-run
@@ -225,8 +222,8 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.user!.tenantId;
     const { type, cameraId, severity, payload } = req.body ?? {};
-    if (!DRY_RUN_EVENT_TYPES.includes(type)) {
-      res.status(400).json({ error: `type must be one of ${DRY_RUN_EVENT_TYPES.join(', ')}` });
+    if (!isEventKind(type)) {
+      res.status(400).json({ error: `type must be one of ${EVENT_KIND_NAMES.join(', ')}` });
       return;
     }
     if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) {
