@@ -51,3 +51,16 @@ We consolidate event ingestion, automation rule evaluation, action queueing, ala
 7. **Unified Event $\neq$ Alarm Mental Model**:
    - Events never spontaneously become alarms.
    - Alarms are created strictly through explicit rule actions (including built-in system rules for critical events).
+
+## Follow-up (1 Oct 2026): legacy modules removed
+
+The 2026-10-01 architecture review found three modules this decision had replaced still in the tree:
+* `EventActionMatrixService`, a second rule engine still serving `POST /automation/dry-run`;
+* `AlarmService`, deprecated and unused, which also held a dead alarm-raising path from `EventRule`;
+* `GpioRelayService`, a pass-through to `RelayAdapter`.
+
+Run against the real database, that dry run crashed with HTTP 500 after writing a stray `RuleExecutionRecord`.
+Had the crash been fixed, it would also have set `lastTriggeredAt`, which this module reads for cooldown.
+
+All three modules are deleted. The dry run now evaluates rules with `RuleEngine.matchesRule` and writes nothing
+(`automationDryRunRealDb.test.ts`). The relay routes use `RelayAdapter` directly.

@@ -3,13 +3,15 @@ import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
-import { EventActionMatrixService } from '../services/automation/eventActionMatrix.service';
+import { RuleEngine } from '../services/incident/orchestrator/ruleEngine';
+import { createVigilOneEvent } from '../services/incident/orchestrator/events';
+import { VigilOneEventType } from '../services/incident/orchestrator/types';
 import { validateRuleInput, RuleValidationError } from '../services/automation/ruleSchema';
 import { RulePreviewService, PREVIEW_MAX_DAYS } from '../services/automation/rulePreview.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
 
 const router = Router();
-const automationService = new EventActionMatrixService(prisma);
+const ruleEngine = new RuleEngine(prisma);
 const previewService = new RulePreviewService(prisma);
 
 function ruleError(res: Response, err: any): void {
@@ -203,22 +205,65 @@ router.delete(
   }
 );
 
+const DRY_RUN_EVENT_TYPES: readonly VigilOneEventType[] = [
+  'MOTION', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'ANPR_MATCH', 'CAMERA_OFFLINE', 'STREAM_DEGRADED',
+  'DI_TRIGGER', 'SCENE_CHANGE', 'SYSTEM_ALERT', 'AI_OBJECT_DETECTED', 'CAMERA_ANALYTIC', 'DOOR_EVENT',
+];
+
 /**
  * POST /api/v1/automation/dry-run
- * Dry-run test event against automation rules
+ * Which enabled rules would fire for a test event, evaluated by the same RuleEngine the IncidentOrchestrator uses.
+ * Nothing is executed or recorded: no rule execution, no action, no change to lastTriggeredAt (an earlier
+ * version ran a separate rule engine that set lastTriggeredAt, which put the real rule into its cooldown).
+ *
+ * Body: { type, cameraId?, severity?, payload: { ...fields of that event kind } }
  */
 router.post(
   '/dry-run',
   requireAuth,
   authorize(Permission.AUTOMATION_MANAGE),
   async (req: Request, res: Response): Promise<void> => {
+    const tenantId = req.user!.tenantId;
+    const { type, cameraId, severity, payload } = req.body ?? {};
+    if (!DRY_RUN_EVENT_TYPES.includes(type)) {
+      res.status(400).json({ error: `type must be one of ${DRY_RUN_EVENT_TYPES.join(', ')}` });
+      return;
+    }
+    if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) {
+      res.status(400).json({ error: 'payload must be an object' });
+      return;
+    }
+    if (severity !== undefined && !['INFO', 'WARNING', 'CRITICAL'].includes(severity)) {
+      res.status(400).json({ error: 'severity must be INFO, WARNING or CRITICAL' });
+      return;
+    }
     try {
-      const tenantId = req.user!.tenantId;
-      const results = await automationService.processEvent({
-        ...req.body,
+      const event = createVigilOneEvent({
         tenantId,
+        cameraId: typeof cameraId === 'string' ? cameraId : undefined,
+        severity,
+        type,
+        payload: { ...(payload ?? {}), kind: type } as any,
       });
-      res.json({ executedRules: results.length, results });
+      const rules = await prisma.automationRule.findMany({
+        where: { tenantId, enabled: true, triggerType: { in: RuleEngine.candidateTriggerTypes(type, event.payload) } },
+        orderBy: { name: 'asc' },
+      });
+      const now = Date.now();
+      const matched = [];
+      for (const rule of rules) {
+        if (!(await ruleEngine.matchesRule(rule as any, event))) continue;
+        const coolingUntil = rule.lastTriggeredAt ? rule.lastTriggeredAt.getTime() + rule.cooldownSeconds * 1000 : 0;
+        matched.push({
+          ruleId: rule.id,
+          name: rule.name,
+          actions: rule.actionsJson,
+          // A real event now would be suppressed by this rule's cooldown.
+          suppressedByCooldown: coolingUntil > now,
+          cooldownEndsAt: coolingUntil > now ? new Date(coolingUntil).toISOString() : null,
+        });
+      }
+      res.json({ evaluatedRules: rules.length, matchedRules: matched, executed: false });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

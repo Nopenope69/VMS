@@ -6,6 +6,16 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 13 (2026-10-01): architecture review, item 1 (retire the legacy rule engine)
+
+Branch `refactor/retire-legacy-rule-engine`. This is the first of six items from the architecture review
+(`improve-codebase-architecture`). The ADR 0004 follow-up has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| `POST /automation/dry-run` writes nothing | DONE_VERIFIED | Before: reproduced on the real database, the endpoint returned **HTTP 500** after writing a stray `RuleExecutionRecord`. Had the crash been fixed, it would also have set `lastTriggeredAt`, the field the live `RuleEngine` reads for cooldown. After: `automationDryRunRealDb.test.ts` 3/3. Matching rules are reported, including whether a real event would be held back by the cooldown. No execution record is written and `lastTriggeredAt` is untouched. |
+| Legacy modules deleted | DONE_VERIFIED | `EventActionMatrixService` (251 lines), `AlarmService` (104 lines, unused, with a dead `EventRule` alarm path) and `GpioRelayService` (64-line pass-through) are gone. The relay routes use `RelayAdapter`. Their tests went too. The one behaviour not covered elsewhere, cross-tenant acknowledge refused, moved to `incidentOrchestrator.test.ts`. The relay handshake test now targets `RelayAdapter`. Backend 143/143 suites, 1028 passed; gates exit 0. |
+
 ## Session 12 (2026-09-30): live-deployment readiness
 
 Branch `feat/live-deployment-readiness` (from `master` `96d1a13`, with Phases 5 to 8 merged). Runbook:
