@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import LiveView from './pages/LiveView';
-import Playback from './pages/Playback';
-import Devices from './pages/Devices';
-import Events from './pages/Events';
-import Evidence from './pages/Evidence';
-import Users from './pages/Users';
-import AuditLogs from './pages/AuditLogs';
-import License from './pages/License';
-import Investigation from './pages/Investigation';
-import FloorplanView from './pages/FloorplanView';
-import StorageManagement from './pages/StorageManagement';
-import ApplianceConsole from './pages/ApplianceConsole';
+const Playback = lazy(() => import('./pages/Playback'));
+const Devices = lazy(() => import('./pages/Devices'));
+const Events = lazy(() => import('./pages/Events'));
+const Evidence = lazy(() => import('./pages/Evidence'));
+const Users = lazy(() => import('./pages/Users'));
+const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+const License = lazy(() => import('./pages/License'));
+const Investigation = lazy(() => import('./pages/Investigation'));
+const FloorplanView = lazy(() => import('./pages/FloorplanView'));
+const StorageManagement = lazy(() => import('./pages/StorageManagement'));
+const ApplianceConsole = lazy(() => import('./pages/ApplianceConsole'));
 import { AlertTriangle } from 'lucide-react';
 import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
 import CommandPalette from './components/CommandPalette';
 import HotkeyHelpModal from './components/HotkeyHelpModal';
-import { DEMO_SAMPLE_CAMERAS } from './demo/fixtures';
 import api, { setAccessToken, setLogoutHandler } from './services/api';
 import {
   ALL_FEATURES_OFF,
@@ -157,11 +156,10 @@ export const App: React.FC = () => {
       api
         .get('/cameras')
         .then((res) => {
-          const cams = res.data.cameras || [];
-          setCamerasList(__DEMO_MODE__ && cams.length === 0 ? DEMO_SAMPLE_CAMERAS : cams);
+          setCamerasList(res.data.cameras || []);
         })
         .catch(() => {
-          setCamerasList(__DEMO_MODE__ ? DEMO_SAMPLE_CAMERAS : []);
+          setCamerasList([]);
         });
     }
   }, [token]);
@@ -288,49 +286,58 @@ export const App: React.FC = () => {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {currentTab === 'live' && (
-          <LiveView
-            onNavigateToDevices={() => handleSelectTab('devices')}
-            onNavigateToAlarms={() => handleSelectTab('events')}
-          />
-        )}
-        {currentTab === 'playback' && <Playback />}
-        {currentTab === 'investigation' && <Investigation />}
-        {currentTab === 'floorplans' &&
-          (featureFlags.FLOORPLANS ? (
-            <FloorplanView />
-          ) : (
-            <OutOfScopeNotice
-              name="Floorplans & Indoor Spatial View"
-              description="Floorplans are disabled on this appliance (VIGILONE_FEATURE_FLOORPLANS). The subsystem has not been validated on a real site."
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center p-8 text-vms-muted font-mono text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-vms-accent animate-ping mr-2" />
+              Loading module...
+            </div>
+          }
+        >
+          {currentTab === 'live' && (
+            <LiveView
+              onNavigateToDevices={() => handleSelectTab('devices')}
+              onNavigateToAlarms={() => handleSelectTab('events')}
             />
-          ))}
-        {currentTab === 'devices' && <Devices />}
-        {currentTab === 'anpr' && (
-          <OutOfScopeNotice
-            name="ANPR & Automated Fleet Monitoring"
-            description="Automatic Number Plate Recognition (ANPR) is out of scope for the v1.0.0 edge NVR appliance (no local OCR/inference engine attached). Planned for v2.0."
-          />
-        )}
-        {currentTab === 'events' && <Events />}
-        {currentTab === 'evidence' && <Evidence />}
-        {currentTab === 'identity' && (
-          <OutOfScopeNotice
-            name="Enterprise SSO & Identity Federation"
-            description="OIDC/SAML single sign-on is out of scope for v1.0.0. Authentication strictly uses local cryptographically secured credentials."
-          />
-        )}
-        {currentTab === 'federation' && (
-          <OutOfScopeNotice
-            name="Multi-Site Edge Mesh Federation"
-            description="WAN mesh sync between multiple appliances is out of scope for v1.0.0. Each appliance operates as an autonomous edge NVR."
-          />
-        )}
-        {currentTab === 'users' && <Users />}
-        {currentTab === 'audit' && <AuditLogs />}
-        {currentTab === 'license' && <License />}
-        {currentTab === 'storage' && <StorageManagement />}
-        {currentTab === 'appliance' && <ApplianceConsole />}
+          )}
+          {currentTab === 'playback' && <Playback />}
+          {currentTab === 'investigation' && <Investigation />}
+          {currentTab === 'floorplans' &&
+            (featureFlags.FLOORPLANS ? (
+              <FloorplanView />
+            ) : (
+              <OutOfScopeNotice
+                name="Floorplans & Indoor Spatial View"
+                description="Floorplans are disabled on this appliance (VIGILONE_FEATURE_FLOORPLANS). The subsystem has not been validated on a real site."
+              />
+            ))}
+          {currentTab === 'devices' && <Devices />}
+          {currentTab === 'anpr' && (
+            <OutOfScopeNotice
+              name="ANPR & Automated Fleet Monitoring"
+              description="Automatic Number Plate Recognition (ANPR) is out of scope for the v1.0.0 edge NVR appliance (no local OCR/inference engine attached). Planned for v2.0."
+            />
+          )}
+          {currentTab === 'events' && <Events />}
+          {currentTab === 'evidence' && <Evidence />}
+          {currentTab === 'identity' && (
+            <OutOfScopeNotice
+              name="Enterprise SSO & Identity Federation"
+              description="OIDC/SAML single sign-on is out of scope for v1.0.0. Authentication strictly uses local cryptographically secured credentials."
+            />
+          )}
+          {currentTab === 'federation' && (
+            <OutOfScopeNotice
+              name="Multi-Site Edge Mesh Federation"
+              description="WAN mesh sync between multiple appliances is out of scope for v1.0.0. Each appliance operates as an autonomous edge NVR."
+            />
+          )}
+          {currentTab === 'users' && <Users />}
+          {currentTab === 'audit' && <AuditLogs />}
+          {currentTab === 'license' && <License />}
+          {currentTab === 'storage' && <StorageManagement />}
+          {currentTab === 'appliance' && <ApplianceConsole />}
+        </Suspense>
       </main>
 
       <CommandPalette
