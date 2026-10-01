@@ -8,7 +8,7 @@
  */
 import { VigilOneEvent, EventSource } from '../services/incident/orchestrator/types';
 import { AiProvenanceV1, EventEnvelopeV1, EVENTS_CONTRACT_VERSION } from './events.v1';
-import { DETECTION_CLASS_TO_EVENT_V1 } from './aiAdapter.v1';
+import { EVENT_KINDS, v1PayloadOf, v1TypeOf } from '../services/incident/orchestrator/eventKinds';
 
 export class EventMappingError extends Error {
   constructor(public readonly code: 'AI_PROVENANCE_REQUIRED' | 'UNMAPPABLE_EVENT' | 'INVALID_ENVELOPE', message: string) {
@@ -16,23 +16,10 @@ export class EventMappingError extends Error {
   }
 }
 
-export const VIGILONE_EVENT_TO_V1: Record<VigilOneEvent['type'], string> = {
-  MOTION: 'motion.detected',
-  TRIPWIRE_CROSS: 'ai.line_crossing',
-  LOITERING_DWELL: 'ai.loitering',
-  ANPR_MATCH: 'ai.plate_detected',
-  CAMERA_OFFLINE: 'camera.offline',
-  STREAM_DEGRADED: 'camera.degraded',
-  DI_TRIGGER: 'system.digital_input',
-  SCENE_CHANGE: 'camera.degraded',
-  SYSTEM_ALERT: 'system.alert',
-  // Resolved per object class in toEventV1 (ai.person_detected / ai.vehicle_detected).
-  AI_OBJECT_DETECTED: 'ai.object_detected',
-  // Analytics computed by the camera: VigilOne has no provenance for them, so never ai.*.
-  CAMERA_ANALYTIC: 'system.camera_analytic',
-  // Resolved per door action in toEventV1.
-  DOOR_EVENT: 'access.door_opened',
-};
+/** The default events.v1 type per kind; AI objects and door events are refined per event (eventKinds.ts). */
+export const VIGILONE_EVENT_TO_V1 = Object.fromEntries(
+  Object.entries(EVENT_KINDS).map(([kind, def]) => [kind, def.v1.type])
+) as Record<VigilOneEvent['type'], string>;
 
 const SOURCE_KIND: Record<EventSource, EventEnvelopeV1['source']['kind']> = {
   VISION_AI: 'ai',
@@ -54,99 +41,18 @@ export interface MappingContext {
   sourceId?: string;
 }
 
-const toIso = (d: Date | string): string => (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
-
 function mapPayload(ev: VigilOneEvent): Record<string, unknown> {
-  const p: any = ev.payload;
-  switch (p.kind) {
-    case 'MOTION': {
-      const out: Record<string, unknown> = { score: p.score, method: 'SCENE_DIFF' };
-      // The internal bbox tuple has no declared coordinate space; only carry it when normalized.
-      if (Array.isArray(p.bbox) && p.bbox.every((n: number) => n >= 0 && n <= 1)) {
-        const [x, y, width, height] = p.bbox;
-        if (width > 0 && height > 0) out.bbox = { x, y, width, height };
-      }
-      if (ev.spatialRef?.zoneId) out.zoneId = ev.spatialRef.zoneId;
-      return out;
-    }
-    case 'TRIPWIRE_CROSS':
-      return {
-        ruleId: p.tripwireId,
-        trackId: p.trackId,
-        direction: p.direction === 'FORWARD' ? 'A_TO_B' : p.direction === 'BACKWARD' ? 'B_TO_A' : 'UNSPECIFIED',
-      };
-    case 'LOITERING_DWELL':
-      return {
-        zoneId: p.zoneId,
-        trackId: p.trackId,
-        dwellSeconds: p.dwellTimeSeconds,
-        thresholdSeconds: p.thresholdSeconds,
-      };
-    case 'ANPR_MATCH': {
-      const out: Record<string, unknown> = { plateText: p.plateText, confidence: p.confidence };
-      if (p.matchedWatchlistId) out.watchlistMatchId = p.matchedWatchlistId;
-      if (p.watchlistCategory) out.watchlistCategory = p.watchlistCategory;
-      if (p.vehicleColor) out.vehicleColor = p.vehicleColor;
-      return out;
-    }
-    case 'CAMERA_OFFLINE': {
-      const out: Record<string, unknown> = { lastSeenUtc: toIso(p.lastSeenUtc) };
-      if (p.reason) out.reason = p.reason;
-      return out;
-    }
-    case 'STREAM_DEGRADED': {
-      const out: Record<string, unknown> = { reason: 'STREAM_DEGRADED', fps: p.fps, expectedFps: p.expectedFps };
-      if (p.packetLossPercent !== undefined) out.packetLossPercent = p.packetLossPercent;
-      return out;
-    }
-    case 'SCENE_CHANGE':
-      return { reason: `TAMPER_${p.changeType}` };
-    case 'DI_TRIGGER':
-      return {
-        code: `DI_${p.state}`,
-        message: `Digital input ${p.pinNumber} changed to ${p.state}`,
-        subsystem: 'io',
-        details: { pinNumber: p.pinNumber, state: p.state, previousState: p.previousState ?? null },
-      };
-    case 'AI_OBJECT_DETECTED':
-      return { objectClass: p.objectClass, confidence: p.confidence, bbox: p.bbox, trackId: p.trackId };
-    case 'CAMERA_ANALYTIC': {
-      const details: Record<string, unknown> = { protocol: p.protocol, analyticType: p.analyticType, state: p.state, vendorTopic: p.vendorTopic };
-      if (p.ruleName) details.ruleName = p.ruleName;
-      if (p.objectType) details.objectType = p.objectType;
-      if (p.channel !== undefined) details.channel = p.channel;
-      return {
-        code: `CAMERA_${p.analyticType}`,
-        message: `Camera analytic ${p.analyticType}${p.state === true ? ' started' : p.state === false ? ' stopped' : ''}`,
-        subsystem: 'camera_analytics',
-        details,
-      };
-    }
-    case 'DOOR_EVENT':
-      if (p.action === 'OPENED' || p.action === 'FORCED_OPEN') return { doorId: p.doorId, forced: p.action === 'FORCED_OPEN' };
-      return { doorId: p.doorId, ...(p.openSeconds !== undefined ? { openSeconds: p.openSeconds } : {}) };
-    case 'SYSTEM_ALERT':
-      return {
-        code: p.alertCode,
-        message: p.message,
-        subsystem: p.subsystem,
-        ...(p.details ? { details: p.details } : {}),
-      };
-    default:
-      throw new EventMappingError('UNMAPPABLE_EVENT', `no events.v1 mapping for payload kind '${p?.kind}'`);
-  }
+  const out = v1PayloadOf(ev);
+  if (!out) throw new EventMappingError('UNMAPPABLE_EVENT', `no events.v1 mapping for payload kind '${(ev.payload as any)?.kind}'`);
+  return out;
 }
 
+const toIso = (d: Date | string): string => (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
+
 export function toEventV1(ev: VigilOneEvent, ctx: MappingContext = {}): EventEnvelopeV1 {
-  let type = VIGILONE_EVENT_TO_V1[ev.type];
-  if (ev.payload.kind === 'AI_OBJECT_DETECTED') {
-    type = DETECTION_CLASS_TO_EVENT_V1[ev.payload.objectClass];
-    if (!type) {
-      throw new EventMappingError('UNMAPPABLE_EVENT', `object class '${ev.payload.objectClass}' has no events.v1 type`);
-    }
-  }
-  if (ev.payload.kind === 'DOOR_EVENT') {
-    type = ev.payload.action === 'CLOSED' ? 'access.door_closed' : ev.payload.action === 'HELD_OPEN' ? 'access.door_held_open' : 'access.door_opened';
+  const type = v1TypeOf(ev);
+  if (!type && ev.payload.kind === 'AI_OBJECT_DETECTED') {
+    throw new EventMappingError('UNMAPPABLE_EVENT', `object class '${ev.payload.objectClass}' has no events.v1 type`);
   }
   // Events that carry their own provenance (AI worker output) need no caller-supplied context.
   if (!ctx.provenance && ev.provenance) ctx = { ...ctx, provenance: ev.provenance };

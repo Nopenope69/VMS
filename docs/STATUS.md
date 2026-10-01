@@ -6,6 +6,14 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 14 (2026-10-01): architecture review, item 2 (one table per event kind)
+
+Branch `refactor/event-kind-registry`, stacked on item 1. ADR 0006 has the details.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Event-kind table `eventKinds.ts` | DONE_VERIFIED | Five hand-kept copies are replaced: the trigger mapping, the trigger-config match, the trigger-config schemas, the preview's inverse map, and the events.v1 type and payload mapping. The dry-run kind list is replaced too. All are now derived from one entry per kind. `eventKinds.test.ts` 5/5 pins that every kind has an entry, every `RuleTriggerType` is fed by exactly one kind, and the kind-to-trigger mapping is right. Behaviour is unchanged: the existing tests pass unmodified. Backend 144/144 suites, 1033 passed, 35 skipped (they need the S3, OIDC, SMTP and real-model test servers). `modbusRelayRealIo.test.ts` 22/22 was run separately against the simulated Modbus module, covering the door-event rules. Gates exit 0. |
+
 ## Session 13 (2026-10-01): architecture review, item 1 (retire the legacy rule engine)
 
 Branch `refactor/retire-legacy-rule-engine`. This is the first of six items from the architecture review

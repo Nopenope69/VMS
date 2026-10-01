@@ -1,21 +1,7 @@
 import { PrismaClient, RuleTriggerType } from '@prisma/client';
 import { RuleEngine } from '../incident/orchestrator/ruleEngine';
 import { eventFromRow } from '../incident/orchestrator/incidentOrchestrator.service';
-
-/** Event types that can reach each trigger type (inverse of RuleEngine.mapEventTypeToTriggerType). */
-const EVENT_TYPES_FOR: Record<RuleTriggerType, string[]> = {
-  PERSON_DETECTED: ['AI_OBJECT_DETECTED'],
-  VEHICLE_DETECTED: ['AI_OBJECT_DETECTED'],
-  MOTION_ZONE: ['MOTION'],
-  TRIPWIRE_CROSS: ['TRIPWIRE_CROSS'],
-  LOITERING_DWELL: ['LOITERING_DWELL'],
-  ANPR_WATCHLIST: ['ANPR_MATCH'],
-  DIGITAL_INPUT_STATE: ['DI_TRIGGER'],
-  CAMERA_OFFLINE: ['CAMERA_OFFLINE'],
-  SCENE_CHANGE: ['SCENE_CHANGE'],
-  CAMERA_ANALYTIC: ['CAMERA_ANALYTIC'],
-  DOOR_EVENT: ['DOOR_EVENT'],
-};
+import { RULE_TRIGGERS } from '../incident/orchestrator/eventKinds';
 
 export const PREVIEW_MAX_EVENTS = 5000;
 export const PREVIEW_MAX_DAYS = 31;
@@ -50,7 +36,7 @@ export class RulePreviewService {
     to: Date
   ): Promise<PreviewResult> {
     const rows = await this.prisma.canonicalEvent.findMany({
-      where: { tenantId, type: { in: EVENT_TYPES_FOR[rule.triggerType] }, timestampUtc: { gte: from, lte: to } },
+      where: { tenantId, type: RULE_TRIGGERS[rule.triggerType].eventKind, timestampUtc: { gte: from, lte: to } },
       orderBy: { timestampUtc: 'asc' },
       take: PREVIEW_MAX_EVENTS + 1,
     });
