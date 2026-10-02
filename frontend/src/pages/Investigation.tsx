@@ -11,12 +11,15 @@ import {
   Film,
   Search,
   Calendar,
+  Crosshair,
 } from 'lucide-react';
 import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
 import EvidenceReviewModal from '../components/EvidenceReviewModal';
 import SmartSearchModal from '../components/SmartSearchModal';
 import InvestigationStopwatch, { useInvestigationTiming } from '../components/InvestigationStopwatch';
+import FindPanel from '../components/investigation/FindPanel';
+import type { TrackRecord } from '../services/investigationApi';
 import { useFeatureFlags } from '../services/features';
 import TimelineScrubber, { TimelineSegment, TimelineTrack } from '../components/TimelineScrubber';
 import Button from '../components/ui/Button';
@@ -64,6 +67,7 @@ export const Investigation: React.FC = () => {
   const featureFlags = useFeatureFlags();
   const stopwatch = useInvestigationTiming(featureFlags.INVESTIGATION_TIMING);
   const [activeManifestId, setActiveManifestId] = useState<string | undefined>(undefined);
+  const [showFind, setShowFind] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const playbackTimerRef = useRef<any>(null);
@@ -245,6 +249,36 @@ export const Investigation: React.FC = () => {
     handleSeek(targetDate);
   };
 
+  // Find panel: open a person or vehicle (its camera on the grid and in focus, playback at its first sighting).
+  const openTrack = (t: TrackRecord) => {
+    stopwatch.step('RESULT_OPENED');
+    if (!selectedCameraIds.includes(t.cameraId)) {
+      setSelectedCameraIds([...selectedCameraIds, t.cameraId]);
+      stopwatch.step('CAMERA_VIEWED');
+    }
+    setFocusedCameraId(t.cameraId);
+    handleSeek(new Date(t.firstSeenAt));
+  };
+
+  // A journey: its cameras on the grid in the order visited, playback at the first sighting.
+  const playJourney = (steps: TrackRecord[]) => {
+    const cams = [...new Set(steps.map((s) => s.cameraId))];
+    const added = cams.filter((c) => !selectedCameraIds.includes(c)).length;
+    for (let i = 0; i < added; i++) stopwatch.step('CAMERA_VIEWED');
+    setSelectedCameraIds(cams);
+    setFocusedCameraId(cams[0]);
+    setViewMode('matrix');
+    handleSeek(new Date(steps[0].firstSeenAt));
+  };
+
+  const role = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('vigilone_user') || 'null')?.role ?? 'VIEWER';
+    } catch {
+      return 'VIEWER';
+    }
+  })();
+
   // Keyboard transport accelerators for forensic review (Space, Arrows, J-K-L)
   useEffect(() => {
     const handleTransportKeyDown = (e: KeyboardEvent) => {
@@ -381,6 +415,11 @@ export const Investigation: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex items-center space-x-2">
           <InvestigationStopwatch t={stopwatch} />
+          {featureFlags.TRACK_INDEX && (
+            <Button variant={showFind ? 'primary' : 'secondary'} size="xs" icon={Crosshair} onClick={() => setShowFind(!showFind)} title="Find people and vehicles, follow them across cameras">
+              Find
+            </Button>
+          )}
           {featureFlags.SMART_SEARCH && (
             <Button
               variant="secondary"
@@ -431,8 +470,9 @@ export const Investigation: React.FC = () => {
         </div>
       )}
 
+      <div className="flex-1 flex min-h-0">
       {/* Main Video Canvas: Video First Primary Surface */}
-      <div className="flex-1 bg-vms-bg p-2 overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 bg-vms-bg p-2 overflow-hidden flex flex-col min-h-0 min-w-0">
         {viewMode === 'matrix' ? (
           <div className={`grid ${gridClass} gap-2 h-full w-full auto-rows-fr`}>
             {selectedCameraIds.map((camId, idx) => {
@@ -572,6 +612,23 @@ export const Investigation: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {featureFlags.TRACK_INDEX && showFind && (
+        <FindPanel
+          cameras={cameras}
+          semanticSearch={featureFlags.SEMANTIC_SEARCH}
+          canSealEvidence={['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role)}
+          onSearch={() => stopwatch.step('SEARCH')}
+          onOpenTrack={openTrack}
+          onPlayJourney={playJourney}
+          onSealed={(manifestId, n) => {
+            stopwatch.step('EXPORT');
+            setNotice(`Journey of ${n} sighting(s) sealed as evidence package ${manifestId}`);
+          }}
+          onClose={() => setShowFind(false)}
+        />
+      )}
       </div>
 
       {/* Bottom Forensic Timeline & Variable Transport Shuttle */}

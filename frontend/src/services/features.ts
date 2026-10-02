@@ -16,7 +16,9 @@ export type FeatureFlagName =
   | 'SMART_SEARCH'
   | 'FLOORPLANS'
   | 'CAMERA_EVENTS'
-  | 'INVESTIGATION_TIMING';
+  | 'INVESTIGATION_TIMING'
+  | 'TRACK_INDEX'
+  | 'SEMANTIC_SEARCH';
 
 export type FeatureFlagStates = Record<FeatureFlagName, boolean>;
 
@@ -31,6 +33,8 @@ export const ALL_FEATURES_OFF: FeatureFlagStates = Object.freeze({
   FLOORPLANS: false,
   CAMERA_EVENTS: false,
   INVESTIGATION_TIMING: false,
+  TRACK_INDEX: false,
+  SEMANTIC_SEARCH: false,
 });
 
 export async function fetchFeatureFlags(): Promise<FeatureFlagStates> {

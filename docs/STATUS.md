@@ -6,6 +6,24 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 24 (2026-10-02): North Star Bucket 4, investigation workspace
+
+Branch `claude/sharp-keller-tq0t8r`, from `master`. Operations: `docs/operations/INVESTIGATION_WORKSPACE.md`.
+Frontend only, plus one backend bug fix found by the new browser test.
+
+Local runs: frontend build passes; browser tests (`scripts/e2e/frontend-browser.sh`) 15/15, including the 3 new
+ones. Backend full suite: only `storageVolumeManager` fails, which also fails on `master` in this sandbox (disk
+below 5% free). All six gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Find panel: filters, description, photo, AND/NOT | DONE_VERIFIED in a browser | Filter search for cars returns the Gate and Yard tracks and no people, with the real crop picture loaded; a description search without an embedding adapter shows `QUERY_EMBEDDING_NOT_AVAILABLE`. |
+| Open, follow, decide | DONE_VERIFIED in a browser | Follow by plate refused without a purpose (`PURPOSE_REQUIRED`), then suggests the Yard sighting, which is confirmed. Follow by appearance suggests two Lobby people; the look-alike is rejected and the backend no longer suggests it. Sending the purpose under the wrong header fails 2 tests. |
+| Journey, play, seal | DONE_VERIFIED in a browser | Journey of 2 steps in time order, matching the backend; Play journey puts both cameras in the grid (breaking it fails the test); sealing makes one evidence manifest over both cameras, checked through the API. |
+| Evidence manifest with a camera that has no recording | DONE_VERIFIED (bug fix) | A multi-camera package failed with a database error when one camera had no footage in the window (an old fallback call passed a camera id as a date). `manifestBuilderRealDb.test.ts` 2/2; both failed before the fix. |
+| Journey on the floorplan, journey to incident | NOT_STARTED | Next part of the workspace. |
+| Use on real footage | NOT_STARTED / BLOCKED_HUMAN | Needs the pilot site. |
+
 ## Session 23 (2026-10-02): North Star Bucket 3, cross-camera following
 
 Branch `feat/cross-camera-follow`, from `master`. Design: ADR 0013. Operations: `docs/operations/CROSS_CAMERA_FOLLOW.md`.

@@ -86,33 +86,11 @@ export class ManifestBuilder {
     const allSegmentIds: string[] = [];
 
     for (const camId of input.cameraIds) {
-      let segments: any[] = [];
-      try {
-        segments = await this.recordingCatalog.findSegments(
-          camId,
-          input.startUtc,
-          input.endUtc
-        );
-        if ((!segments || segments.length === 0) && (this.recordingCatalog as any).findSegments) {
-          const alt = await (this.recordingCatalog as any).findSegments(
-            input.tenantId,
-            camId,
-            input.startUtc,
-            input.endUtc
-          );
-          if (alt && alt.length > 0) {
-            segments = alt;
-          }
-        }
-      } catch {
-        segments = await (this.recordingCatalog as any).findSegments(
-          input.tenantId,
-          camId,
-          input.startUtc,
-          input.endUtc
-        );
-      }
-
+      // One call shape: RecordingCatalog.findSegments(cameraId, start, end). An empty answer means this camera
+      // recorded nothing in the window, and the manifest says so (segmentCount 0). It used to retry with an old
+      // (tenantId, cameraId, start, end) shape, which put the camera id where a date belongs and failed the whole
+      // manifest whenever one camera had no footage. A real catalog error now fails the manifest loudly.
+      let segments: any[] = await this.recordingCatalog.findSegments(camId, input.startUtc, input.endUtc);
       if (!segments) segments = [];
 
       const segmentHashes: string[] = [];
