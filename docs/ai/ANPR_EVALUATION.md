@@ -13,7 +13,7 @@ A dataset directory:
 site-gate1/
   dataset.json      {"kind": "SITE", "name": "Gate 1 LPR, Mar–Apr 2027", "site": "...",
                      "collectedBy": "...", "consent": "...", "cameras": ["..."]}
-  labels.csv        image_path,plate_text,split,camera,condition,x,y,w,h
+  labels.csv        image_path,plate_text,split,camera,condition,vehicle_type,plate_type,x,y,w,h
   frames/…          the images (frames from the LPR camera; JPEG or PNG)
 ```
 
@@ -24,7 +24,8 @@ site-gate1/
 * `split`: `train`, `val` or `test`. Held-out means: `test` frames come from days and vehicles
   that are not in `train`/`val`. Without a split column, `prepare_dataset.py` splits by a hash of
   the plate text, so each vehicle lands in one split only.
-* `condition`: free text used for breakdowns, e.g. `day`, `night-ir`, `rain`, `two-line`.
+* `condition`, `vehicle_type`, `plate_type`: used for breakdowns. Use the values listed in
+  `docs/operations/PILOT_MEASUREMENT.md` (section 2) so that sites can be compared.
 * `x,y,w,h`: the plate box in pixels. It is needed for fine-tuning; evaluation does not use it.
 * Suggested minimum: 1,000 labelled test frames per site, covering night and two-line plates. A
   95% interval of about ±3 points needs roughly 1,000 frames.
@@ -51,7 +52,10 @@ process. The report contains:
 | `noReadRate` | No valid plate was read |
 | `characterErrorRate` | Edit distance of the best read, divided by label length |
 | `falseReadRate` | Reads on negative frames |
-| `byCondition`, `byCamera`, `byExpectedLength` | The same metrics per group |
+| `byCondition`, `byCamera`, `byExpectedLength`, `byVehicleType`, `byPlateType` | The same metrics per group; `fewSamples` marks a group with fewer than 30 plate frames |
+| `calibration` | Reads binned by confidence, with each bin's accuracy and mean confidence, and `expectedCalibrationError` (the read-weighted gap). A read on a frame with no plate counts as wrong |
+| `operatingPoints` | Read rate, misread rate and false-read rate at confidence thresholds 0.5 to 0.95, counting the top read of each frame; use it to choose the camera's minimum confidence |
+| `verdict` | `evaluated: true` only for SITE data with at least 300 plate frames; otherwise NOT EVALUATED and why |
 | `dataset.contentSha256` | Hash over (image SHA-256, label) pairs, which identifies the exact set evaluated |
 | `pipeline.*` | Pipeline definition SHA-256, component model hashes, and any OCR override |
 

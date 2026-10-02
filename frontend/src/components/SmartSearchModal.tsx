@@ -10,6 +10,8 @@ interface SmartSearchModalProps {
   cameraId?: string;
   cameras: Array<{ id: string; name: string }>;
   onSeekToTimestamp?: (isoTimestamp: string) => void;
+  /** Called each time a search is run (the investigation stopwatch counts them). */
+  onSearch?: () => void;
 }
 
 interface BoundingBox {
@@ -25,6 +27,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   cameraId: defaultCameraId,
   cameras,
   onSeekToTimestamp,
+  onSearch,
 }) => {
   const [activeTab, setActiveTab] = useState<'spatial' | 'plate'>('spatial');
   const [selectedCameraId, setSelectedCameraId] = useState<string>(defaultCameraId || (cameras[0]?.id || ''));
@@ -173,6 +176,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     }
     setSearching(true);
     setErrorMessage(null);
+    onSearch?.();
     try {
       const res = await api.post('/search/spatial-motion', {
         cameraId: selectedCameraId,
@@ -194,6 +198,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   const handleExecutePlateSearch = async () => {
     setSearching(true);
     setErrorMessage(null);
+    onSearch?.();
     try {
       const params: any = {
         startTime: new Date(startDate).toISOString(),

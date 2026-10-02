@@ -32,7 +32,7 @@ echo "== migrate and seed"
 
 echo "== backend on :$API_PORT"
 (cd "$ROOT/backend" && npm run -s build >/dev/null)
-(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true \
+(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_INVESTIGATION_TIMING=true \
   JWT_SECRET="${JWT_SECRET:-vigilone_e2e_jwt_signing_key_32bytes_min!!}" \
   exec node dist/server.js > "$WORK/backend.log" 2>&1) &
 PIDS+=($!)

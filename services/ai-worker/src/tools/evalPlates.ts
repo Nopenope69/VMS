@@ -20,7 +20,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { loadAnprPipeline, AnprLoadError } from '../anpr/anprService';
 import { Image3 } from '../anpr/imageOps';
-import { loadEvalDataset, EvalDatasetError, sha256File, datasetDigest, readHashList, summarise, classify, SampleOutcome } from '../anpr/plateEval';
+import { loadEvalDataset, EvalDatasetError, sha256File, datasetDigest, readHashList, summarise, classify, verdict, SampleOutcome } from '../anpr/plateEval';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -90,18 +90,23 @@ async function main() {
       reads: plates.map((p) => p.plate.normalized),
       rawTexts: plates.map((p) => p.rawText),
       lines: plates.map((p) => p.lines),
+      confidences: plates.map((p) => p.confidence),
       latencyMs,
       camera: s.camera,
       condition: s.condition,
+      vehicleType: s.vehicleType,
+      plateType: s.plateType,
     });
   }
 
   const maxErrors = Number(arg('max-errors') ?? 50);
+  const metrics = summarise(outcomes);
   const report = {
     tool: 'vigilone-eval-plates',
     reportVersion: 1,
     kind: ds.kind,
     label: ds.kind === 'SYNTHETIC' ? 'SYNTHETIC: not a measurement of site accuracy' : 'SITE (declared in dataset.json)',
+    verdict: verdict(ds.kind, metrics.positives),
     dataset: {
       name: ds.name,
       split,
@@ -120,11 +125,11 @@ async function main() {
     },
     host: { node: process.version, platform: `${process.platform}-${process.arch}` },
     generatedAt: new Date().toISOString(),
-    metrics: summarise(outcomes),
+    metrics,
     errors: outcomes
       .filter((o) => !['correct', 'true_negative'].includes(classify(o)))
       .slice(0, maxErrors)
-      .map((o) => ({ file: o.file, outcome: classify(o), expected: o.expected, reads: o.reads, rawTexts: o.rawTexts, lines: o.lines })),
+      .map((o) => ({ file: o.file, outcome: classify(o), expected: o.expected, reads: o.reads, confidences: o.confidences, rawTexts: o.rawTexts, lines: o.lines })),
   };
 
   const json = JSON.stringify(report, null, 2);
@@ -135,7 +140,8 @@ async function main() {
   process.stderr.write(
     `[${report.kind}] ${ds.name} (${split}, ${m.samples} images): plate accuracy ${pct(m.plateAccuracy)} ` +
       `(95% CI ${m.plateAccuracyCi95 ? m.plateAccuracyCi95.map(pct).join('–') : 'n/a'}), misread ${pct(m.misreadRate)}, ` +
-      `no-read ${pct(m.noReadRate)}, CER ${pct(m.characterErrorRate)}, false reads ${m.falseReads}/${m.negatives}` +
+      `no-read ${pct(m.noReadRate)}, CER ${pct(m.characterErrorRate)}, false reads ${m.falseReads}/${m.negatives}, ` +
+      `calibration error ${m.calibration ? pct(m.calibration.expectedCalibrationError) : 'n/a'}; ${report.verdict.reason}` +
       `${out ? `; report ${out}` : ''}\n`
   );
   if (!out) process.stdout.write(json + '\n');

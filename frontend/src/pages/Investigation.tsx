@@ -16,6 +16,7 @@ import api from '../services/api';
 import EvidenceExportModal from '../components/EvidenceExportModal';
 import EvidenceReviewModal from '../components/EvidenceReviewModal';
 import SmartSearchModal from '../components/SmartSearchModal';
+import InvestigationStopwatch, { useInvestigationTiming } from '../components/InvestigationStopwatch';
 import { useFeatureFlags } from '../services/features';
 import TimelineScrubber, { TimelineSegment, TimelineTrack } from '../components/TimelineScrubber';
 import Button from '../components/ui/Button';
@@ -61,6 +62,7 @@ export const Investigation: React.FC = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showSmartSearch, setShowSmartSearch] = useState(false);
   const featureFlags = useFeatureFlags();
+  const stopwatch = useInvestigationTiming(featureFlags.INVESTIGATION_TIMING);
   const [activeManifestId, setActiveManifestId] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -226,6 +228,7 @@ export const Investigation: React.FC = () => {
   const addCameraToGrid = (camId: string) => {
     if (!selectedCameraIds.includes(camId)) {
       setSelectedCameraIds([...selectedCameraIds, camId]);
+      stopwatch.step('CAMERA_VIEWED');
     }
   };
 
@@ -237,6 +240,7 @@ export const Investigation: React.FC = () => {
   };
 
   const handleSeekToTimestamp = (isoTimestamp: string) => {
+    stopwatch.step('RESULT_OPENED');
     const targetDate = new Date(isoTimestamp);
     handleSeek(targetDate);
   };
@@ -376,6 +380,7 @@ export const Investigation: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center space-x-2">
+          <InvestigationStopwatch t={stopwatch} />
           {featureFlags.SMART_SEARCH && (
             <Button
               variant="secondary"
@@ -673,6 +678,7 @@ export const Investigation: React.FC = () => {
           defaultEndTime={masterUtc}
           onClose={() => setShowExportModal(false)}
           onSuccess={(fn) => {
+            stopwatch.step('EXPORT');
             setNotice(`Evidence package export initiated: ${fn}`);
             setShowExportModal(false);
           }}
@@ -692,6 +698,7 @@ export const Investigation: React.FC = () => {
         cameraId={focusedCameraId || selectedCameraIds[0]}
         cameras={cameras}
         onSeekToTimestamp={handleSeekToTimestamp}
+        onSearch={() => stopwatch.step('SEARCH')}
       />
     </div>
   );

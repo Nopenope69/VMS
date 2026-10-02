@@ -28,6 +28,7 @@ export enum FeatureFlag {
   OBJECT_CROPS = 'OBJECT_CROPS',
   SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
   VLM_VERIFICATION = 'VLM_VERIFICATION',
+  INVESTIGATION_TIMING = 'INVESTIGATION_TIMING',
 }
 
 export interface FeatureFlagDefinition {
@@ -153,6 +154,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: ['vlmVerifier'],
     status:
       'A local SmolVLM2 model (llama.cpp, VLM_ADAPTER_URL) is asked whether the detected object is visible in each new alarm\'s snapshot; the yes/no/unclear answer is stored and shown as advisory and never changes the alarm. Answers eight labelled test questions correctly; agreement with operator verdicts on real alarms is not measured. The model needs a human licence approval before it runs.',
+  },
+  [FeatureFlag.INVESTIGATION_TIMING]: {
+    flag: FeatureFlag.INVESTIGATION_TIMING,
+    envVar: envVarFor(FeatureFlag.INVESTIGATION_TIMING),
+    title: 'Time-to-answer stopwatch',
+    routePrefixes: ['/api/v1/investigations/timings'],
+    workers: [],
+    status:
+      'An operator starts a stopwatch on the Investigation page when taking a question and stops it as answered or abandoned; searches, opened results, viewed cameras and exports are counted. Times come from the server clock. The site report gives median and 90th-percentile time to answer and the share within 60 s, with no per-operator breakdown. Tested on the real database; no pilot measurement exists yet.',
   },
 });
 
