@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T08:20:54.707Z",
-  "commit": "0733f035eef69445f29088827ee5a8460efdba1e",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36983017875",
+  "generatedAt": "2026-10-02T08:54:12.944Z",
+  "commit": "5dc0aeb93173d1b62c4ac455e774fbd4a4ff8169",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36986178192",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 149,
-        "passed": 149,
+        "total": 150,
+        "passed": 150,
         "failed": 0
       },
       "tests": {
-        "total": 1146,
-        "passed": 1110,
+        "total": 1156,
+        "passed": 1120,
         "failed": 0,
         "skipped": 36
       },
@@ -1042,6 +1042,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/trackSearchRealDb.test.ts",
+          "status": "passed",
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/turnAuth.test.ts",
           "status": "passed",
           "passed": 6,
@@ -1300,9 +1307,9 @@
     }
   ],
   "totals": {
-    "suites": 180,
-    "tests": 1454,
-    "passed": 1413,
+    "suites": 181,
+    "tests": 1464,
+    "passed": 1423,
     "failed": 0,
     "skipped": 41
   },
