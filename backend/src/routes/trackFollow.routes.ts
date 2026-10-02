@@ -10,6 +10,7 @@ import { recordSensitiveQuery } from '../services/privacy/dataProtection.service
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 import { FollowError, TrackFollowService } from '../services/tracks/trackFollow.service';
 import { bestCropsFor, presentTrack, trackInclude } from '../services/tracks/trackPresenter';
+import { journeyMap, openJourneyIncident } from '../services/tracks/journeyIncident';
 
 /**
  * Cross-camera following (feature TRACK_INDEX; appearance candidates also need SEMANTIC_SEARCH). Mounted at
@@ -162,18 +163,71 @@ router.post('/:id/links', authorize(Permission.SEARCH_VIEW), async (req: Request
 
 // ------------------------------------------------------------------ journey
 
-router.get('/:id/journey', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
-  const includePlates = req.query.includePlates === 'true';
+/** The journey from a track, after the person or plate gate; null when the gate already answered. */
+async function gatedJourney(req: Request, res: Response, includePlates: boolean) {
   const tenantId = req.user!.tenantId;
+  const start = await svc.track(tenantId, req.params.id);
+  const kind = await gateFor(req, res, start.objectClass === 'person', includePlates);
+  if (!kind) return null;
+  const j = await svc.journey(tenantId, start.id);
+  const shown = await present(j.trackIds, tenantId, kind === 'plate');
+  const steps = [...shown.values()].sort((a, b) => a.firstSeenAt.getTime() - b.firstSeenAt.getTime());
+  return { start, kind, j, steps };
+}
+
+router.get('/:id/journey', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
   try {
-    const start = await svc.track(tenantId, req.params.id);
-    const kind = await gateFor(req, res, start.objectClass === 'person', includePlates);
-    if (!kind) return;
-    const j = await svc.journey(tenantId, start.id);
-    const shown = await present(j.trackIds, tenantId, kind === 'plate');
-    const steps = [...shown.values()].sort((a, b) => a.firstSeenAt.getTime() - b.firstSeenAt.getTime());
-    await record(req, kind, 'TRACK_JOURNEY_VIEW', { trackId: start.id, tracks: steps.length, links: j.links.length });
-    return res.json({ trackId: start.id, truncated: j.truncated, cameras: steps.map((s) => s.cameraId), steps, links: j.links });
+    const g = await gatedJourney(req, res, req.query.includePlates === 'true');
+    if (!g) return;
+    await record(req, g.kind, 'TRACK_JOURNEY_VIEW', { trackId: g.start.id, tracks: g.steps.length, links: g.j.links.length });
+    return res.json({ trackId: g.start.id, truncated: g.j.truncated, cameras: g.steps.map((s) => s.cameraId), steps: g.steps, links: g.j.links });
+  } catch (err) {
+    return fail(res, err);
+  }
+});
+
+/** The journey on the floor plans its cameras are placed on (camera positions, not the object's own position). */
+router.get('/:id/journey/floorplan', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
+  try {
+    const g = await gatedJourney(req, res, false);
+    if (!g) return;
+    const map = await journeyMap(prisma, req.user!.tenantId, g.steps);
+    await record(req, g.kind, 'TRACK_JOURNEY_MAP_VIEW', { trackId: g.start.id, tracks: g.steps.length, floorplans: map.floorplans.map((f) => f.id), unplaced: map.unplaced.length });
+    return res.json({ trackId: g.start.id, truncated: g.j.truncated, ...map });
+  } catch (err) {
+    return fail(res, err);
+  }
+});
+
+const Incident = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    severity: z.enum(['INFO', 'WARNING', 'CRITICAL']).default('WARNING'),
+    evidenceManifestId: z.string().min(1).optional(),
+  })
+  .strict();
+
+/**
+ * Opens an incident (an alarm) from the confirmed journey, computed here from the stored links, never from a list
+ * the client sends. Every camera of the journey gets an evidence hold over the whole journey.
+ */
+router.post('/:id/journey/incident', authorize(Permission.SEARCH_VIEW), authorize(Permission.ALARM_MANAGE), async (req: Request, res: Response) => {
+  const p = Incident.safeParse(req.body);
+  if (!p.success) return invalid(res, p.error);
+  try {
+    const g = await gatedJourney(req, res, false);
+    if (!g) return;
+    const out = await openJourneyIncident(
+      prisma,
+      { tenantId: req.user!.tenantId, userId: req.user!.id, clientIp: req.ip, userAgent: req.get('user-agent') },
+      g.start.id,
+      g.steps,
+      g.j.links.map((l) => l.id),
+      p.data
+    );
+    await record(req, g.kind, 'TRACK_JOURNEY_INCIDENT', { trackId: g.start.id, alarmId: out.alarm.id, tracks: g.steps.length, cameras: out.holds, evidenceManifestId: p.data.evidenceManifestId ?? null });
+    return res.status(201).json({ alarm: out.alarm, holds: out.holds, windowStart: out.windowStart, windowEnd: out.windowEnd, truncated: g.j.truncated });
   } catch (err) {
     return fail(res, err);
   }

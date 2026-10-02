@@ -2,7 +2,8 @@
  * The investigation workspace (North Star Bucket 4), end to end against the real backend and a seeded tenant of its
  * own (backend/scripts/e2e/seed-workspace.ts): find by filters with real thumbnails, the refusal when no embedding
  * adapter is configured, following a vehicle by plate (refused without a purpose), confirming, the journey, sealing
- * it as one evidence package, and following a person by appearance. Each step checks what the backend stored.
+ * it as one evidence package, the journey on the floor plan, opening an incident from it (with footage held on every
+ * journey camera), and following a person by appearance. Each step checks what the backend stored.
  */
 import fs from 'fs';
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
@@ -85,6 +86,31 @@ test('follows a car by plate: refused without a purpose, then confirmed into a j
 
   const backendJourney = await apiGet(request, `/tracks/${ws.tracks['car@Gate']}/journey`);
   expect(backendJourney.steps.map((s: any) => s.id)).toEqual([ws.tracks['car@Gate'], ws.tracks['car@Yard']]);
+
+  // On the floor plan: the Gate sighting is drawn; the Yard camera is on no plan and is listed, not guessed.
+  await p.getByRole('button', { name: 'Show on floor plan' }).click();
+  const plan = p.getByRole('figure', { name: 'Journey on floor plan Ground floor' });
+  await expect(plan.getByRole('img', { name: /^Step 1 on Gate at/ })).toBeVisible();
+  await expect(plan.getByRole('img', { name: /^Step \d on / })).toHaveCount(1);
+  await expect(p.getByLabel('Not on a floor plan')).toContainText('step 2 (Yard)');
+
+  // Open an incident from the journey, with the sealed package attached.
+  await p.getByRole('button', { name: 'Open incident' }).click();
+  const form = p.getByRole('form', { name: 'New incident' });
+  await form.getByLabel('Incident title').fill('White car from the gate to the yard');
+  await form.getByLabel('Severity').selectOption('CRITICAL');
+  await expect(form.getByLabel('Attach the sealed evidence package')).toBeChecked();
+  await form.getByRole('button', { name: 'Create incident' }).click();
+  const opened = page.getByText(/^Incident \S+ opened; footage held on 2 camera\(s\)$/);
+  await expect(opened).toBeVisible();
+  const alarmId = (await opened.textContent())!.match(/^Incident (\S+) opened/)![1];
+  const { alarms } = await apiGet(request, '/alarms');
+  const alarm = alarms.find((a: any) => a.id === alarmId);
+  expect(alarm).toMatchObject({ title: 'White car from the gate to the yard', severity: 'CRITICAL', cameraId: ws.cameras.Gate });
+  expect(alarm.metadataJson.evidenceManifestId).toBe(manifestId);
+  expect(alarm.metadataJson.steps.map((s: any) => s.trackId)).toEqual([ws.tracks['car@Gate'], ws.tracks['car@Yard']]);
+  const { holds } = await apiGet(request, `/alarms/${alarmId}/holds`);
+  expect(holds.map((h: any) => h.cameraId).sort()).toEqual([ws.cameras.Gate, ws.cameras.Yard].sort());
 });
 
 test('follows a person by appearance on the neighbouring camera, rejects the look-alike and plays the journey', async ({ page, request }) => {
@@ -111,6 +137,12 @@ test('follows a person by appearance on the neighbouring camera, rejects the loo
 
   await p.getByRole('button', { name: 'Show journey' }).click();
   await expect(p.getByLabel('Journey steps').getByRole('button')).toHaveCount(2);
+  await p.getByRole('button', { name: 'Show on floor plan' }).click();
+  const plan = p.getByRole('figure', { name: 'Journey on floor plan Ground floor' });
+  await expect(plan.getByRole('img', { name: /^Step 1 on Gate at/ })).toBeVisible();
+  await expect(plan.getByRole('img', { name: /^Step 2 on Lobby at/ })).toBeVisible();
+  await expect(p.getByLabel('Not on a floor plan')).toHaveCount(0);
+
   await p.getByRole('button', { name: 'Play journey' }).click();
   // The grid now holds the journey's cameras.
   await expect(page.getByRole('button', { name: 'Unassign camera' })).toHaveCount(2);

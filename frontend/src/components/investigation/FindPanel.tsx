@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, X, Users, Car, ArrowLeft, Check, Ban, Play, ShieldCheck, Route, Image as ImageIcon } from 'lucide-react';
+import { Search, X, Users, Car, ArrowLeft, Check, Ban, Play, ShieldCheck, Route, Map as MapIcon, Siren, Image as ImageIcon } from 'lucide-react';
+import JourneyMap from './JourneyMap';
 import Button from '../ui/Button';
 import {
   Candidate,
@@ -10,7 +11,10 @@ import {
   candidates as fetchCandidates,
   cropImageUrl,
   decide,
+  JourneyMapData,
   journey as fetchJourney,
+  journeyFloorplan,
+  openJourneyIncident,
   listTracks,
   refusalText,
   sealJourney,
@@ -21,7 +25,8 @@ import {
  * The investigation workspace (North Star Bucket 4), a side panel of the Investigation page:
  *
  *   find (words, a photo or filters) -> open a person or vehicle (playback jumps there) -> follow it to other
- *   cameras (confirm or reject each suggestion) -> its journey (play it, seal it as one evidence package).
+ *   cameras (confirm or reject each suggestion) -> its journey (play it, see it on the floor plan, seal it as one
+ *   evidence package, open an incident from it).
  *
  * People and plates need a declared purpose, chosen at the top and sent with every request that needs it. Every
  * refusal from the backend is shown as it is, never hidden.
@@ -30,10 +35,12 @@ interface Props {
   cameras: Array<{ id: string; name: string }>;
   semanticSearch: boolean;
   canSealEvidence: boolean;
+  canOpenIncident: boolean;
   onSearch: () => void;
   onOpenTrack: (t: TrackRecord) => void;
   onPlayJourney: (steps: TrackRecord[]) => void;
   onSealed: (manifestId: string, steps: number) => void;
+  onIncident: (alarmId: string, holds: number) => void;
   onClose: () => void;
 }
 
@@ -100,7 +107,7 @@ function PathSketch({ path }: { path: TrackRecord['path'] }) {
   );
 }
 
-export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvidence, onSearch, onOpenTrack, onPlayJourney, onSealed, onClose }) => {
+export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvidence, canOpenIncident, onSearch, onOpenTrack, onPlayJourney, onSealed, onIncident, onClose }) => {
   const camName = useMemo(() => new Map(cameras.map((c) => [c.id, c.name])), [cameras]);
   const name = (id: string) => camName.get(id) || `Camera ${id.slice(0, 6)}`;
 
@@ -144,6 +151,10 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
   const [follow, setFollow] = useState<{ method: 'appearance' | 'plate'; adjacency?: string; outsideTravelTime?: number; readsWithoutTrack?: Array<{ cameraId: string; firstSeenAt: string }>; list: Candidate[] } | null>(null);
   const [steps, setSteps] = useState<TrackRecord[] | null>(null);
   const [legalHold, setLegalHold] = useState(true);
+  const [map, setMap] = useState<JourneyMapData | null>(null);
+  const [sealedId, setSealedId] = useState<string | null>(null);
+  const [incident, setIncident] = useState<{ title: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; description: string; attach: boolean } | null>(null);
+  const [incidentId, setIncidentId] = useState<string | null>(null);
 
   const isPersonQuery = includePersons || objectClass === 'person' || !!colour.upper || !!colour.lower;
 
@@ -242,6 +253,10 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
     try {
       const j = await fetchJourney(current.track.id, sensitive(current.track));
       setSteps(j.steps);
+      setMap(null);
+      setSealedId(null);
+      setIncident(null);
+      setIncidentId(null);
       setView('journey');
     } catch (err) {
       setError(refusalText(err, 'Could not load the journey'));
@@ -255,9 +270,49 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
     setError(null);
     try {
       const m = await sealJourney(steps, legalHold, `Journey of ${current.track.objectClass} track ${current.track.id}: ${steps.length} sightings on ${new Set(steps.map((s) => s.cameraId)).size} cameras`);
+      setSealedId(m.id);
       onSealed(m.id, steps.length);
     } catch (err) {
       setError(refusalText(err, 'Could not seal the evidence'));
+    }
+  };
+
+  const showMap = async () => {
+    if (!current) return;
+    if (map) return setMap(null);
+    setError(null);
+    try {
+      setMap(await journeyFloorplan(current.track.id, sensitive(current.track)));
+    } catch (err) {
+      setError(refusalText(err, 'Could not load the floor plan'));
+    }
+  };
+
+  const startIncident = () => {
+    if (!steps?.length || !current) return;
+    const cams = new Set(steps.map((s) => s.cameraId)).size;
+    setIncident({ title: `${current.track.objectClass} seen on ${cams} camera(s), ${time(steps[0].firstSeenAt)}`, severity: 'WARNING', description: '', attach: true });
+  };
+
+  const submitIncident = async () => {
+    if (!incident || !current) return;
+    setError(null);
+    try {
+      const out = await openJourneyIncident(
+        current.track.id,
+        {
+          title: incident.title,
+          severity: incident.severity,
+          description: incident.description || undefined,
+          evidenceManifestId: incident.attach && sealedId ? sealedId : undefined,
+        },
+        sensitive(current.track)
+      );
+      setIncident(null);
+      setIncidentId(out.alarm.id);
+      onIncident(out.alarm.id, out.holds);
+    } catch (err) {
+      setError(refusalText(err, 'Could not open the incident'));
     }
   };
 
@@ -548,12 +603,55 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
               <Button size="xs" variant="secondary" icon={Play} onClick={() => onPlayJourney(steps)}>
                 Play journey
               </Button>
+              <Button size="xs" variant="secondary" icon={MapIcon} onClick={showMap}>
+                {map ? 'Hide floor plan' : 'Show on floor plan'}
+              </Button>
               {canSealEvidence && (
                 <Button size="xs" variant="primary" icon={ShieldCheck} onClick={seal}>
                   Seal journey as evidence
                 </Button>
               )}
+              {canOpenIncident && !incident && !incidentId && (
+                <Button size="xs" variant="secondary" icon={Siren} onClick={startIncident}>
+                  Open incident
+                </Button>
+              )}
             </div>
+            {map && <JourneyMap data={map} time={time} />}
+            {incident && (
+              <form
+                className="space-y-1.5 p-2 border border-vms-border rounded"
+                aria-label="New incident"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitIncident();
+                }}
+              >
+                <input className={sel} aria-label="Incident title" value={incident.title} maxLength={200} onChange={(e) => setIncident({ ...incident, title: e.target.value })} />
+                <select className={sel} aria-label="Severity" value={incident.severity} onChange={(e) => setIncident({ ...incident, severity: e.target.value as 'INFO' | 'WARNING' | 'CRITICAL' })}>
+                  <option value="INFO">Info</option>
+                  <option value="WARNING">Warning</option>
+                  <option value="CRITICAL">Critical</option>
+                </select>
+                <textarea className={sel} aria-label="Incident notes" rows={2} maxLength={2000} placeholder="Notes (optional)" value={incident.description} onChange={(e) => setIncident({ ...incident, description: e.target.value })} />
+                {sealedId && (
+                  <label className="flex items-center space-x-2 text-xs">
+                    <input type="checkbox" checked={incident.attach} onChange={(e) => setIncident({ ...incident, attach: e.target.checked })} aria-label="Attach the sealed evidence package" />
+                    <span>Attach the sealed evidence package</span>
+                  </label>
+                )}
+                <div className="text-[10px] text-vms-dim">Footage on every camera of the journey is held, from a minute before the first sighting to two minutes after the last.</div>
+                <div className="flex gap-1.5">
+                  <Button size="xs" variant="primary" type="submit" disabled={!incident.title.trim()}>
+                    Create incident
+                  </Button>
+                  <Button size="xs" variant="secondary" type="button" onClick={() => setIncident(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            )}
+            {incidentId && <div className="text-[11px] text-emerald-400">Incident opened. It is on the Alarms page.</div>}
             {canSealEvidence && (
               <label className="flex items-center space-x-2 text-xs">
                 <input type="checkbox" checked={legalHold} onChange={(e) => setLegalHold(e.target.checked)} aria-label="Legal hold" />
