@@ -17,6 +17,39 @@ export interface LicenseClaims {
   isTrial?: boolean; // True for unsigned 30-day appliance evaluation trial
 }
 
+/**
+ * The only terms an unsigned evaluation trial may carry; bootstrap writes exactly these (auth.routes.ts).
+ * An unsigned claim is not evidence of anything, so a TRIAL_UNSIGNED artifact asking for more (a feature, a
+ * camera, a tier, a longer or post-dated period) is refused rather than trusted.
+ */
+export const TRIAL_TERMS = { tier: 'BASIC' as LicenseTier, maxCameras: 4, features: ['EVIDENCE_EXPORT'], days: 30 };
+const TRIAL_CLOCK_SKEW_MS = 5 * 60_000;
+
+function trialProblem(claims: LicenseClaims, now: number): string | null {
+  if (!claims.isTrial || !claims.licenseId || !claims.tenantId || typeof claims.maxCameras !== 'number') return 'Invalid unsigned trial claim structure';
+  if (claims.tier !== TRIAL_TERMS.tier) return `Unsigned trial claims tier ${claims.tier}; a trial is ${TRIAL_TERMS.tier}`;
+  if (!Number.isInteger(claims.maxCameras) || claims.maxCameras < 1 || claims.maxCameras > TRIAL_TERMS.maxCameras) {
+    return `Unsigned trial claims ${claims.maxCameras} cameras; a trial allows ${TRIAL_TERMS.maxCameras}`;
+  }
+  const extra = (Array.isArray(claims.features) ? claims.features : [null]).filter((f) => !TRIAL_TERMS.features.includes(f as string));
+  if (extra.length) return `Unsigned trial claims features outside the trial: ${extra.join(', ')}`;
+  const issued = Date.parse(claims.issuedAt);
+  const expires = claims.expiresAt ? Date.parse(claims.expiresAt) : NaN;
+  if (Number.isNaN(issued) || Number.isNaN(expires)) return 'Unsigned trial needs valid issuedAt and expiresAt';
+  if (issued > now + TRIAL_CLOCK_SKEW_MS) return 'Unsigned trial is issued in the future';
+  if (expires - issued > TRIAL_TERMS.days * 86_400_000) return `Unsigned trial runs longer than ${TRIAL_TERMS.days} days`;
+  return null;
+}
+
+/**
+ * Keys trusted for licence artifacts: the vendor key, plus VIGILONE_LICENSE_TEST_PUBLIC_KEY under NODE_ENV=test
+ * only, so browser tests against a running server can sign their own licence.
+ */
+function trustedLicenseKeys(): string[] {
+  const testKey = setting('NODE_ENV') === 'test' ? setting('VIGILONE_LICENSE_TEST_PUBLIC_KEY') : undefined;
+  return testKey ? [VENDOR_LICENSE_PUBLIC_KEY, testKey] : [VENDOR_LICENSE_PUBLIC_KEY];
+}
+
 export interface LicenseVerificationResult {
   valid: boolean;
   error?: string;
@@ -60,28 +93,25 @@ export function signLicensePayload(
 }
 
 /**
- * Verifies a license artifact against the embedded root vendor Ed25519 public key.
- * Strictly offline verification.
+ * Verifies a license artifact against the embedded root vendor Ed25519 public key (or the given key).
+ * Strictly offline verification. An unsigned trial is accepted only on the fixed TRIAL_TERMS.
  */
 export function verifyLicenseArtifact(
   signedPayload: string,
   signatureEd25519: string,
-  publicKeyPem: string = VENDOR_LICENSE_PUBLIC_KEY
+  publicKeyPem?: string,
+  now: number = Date.now()
 ): LicenseVerificationResult {
   try {
     if (signatureEd25519 === 'TRIAL_UNSIGNED') {
       const claims: LicenseClaims = JSON.parse(signedPayload);
-      if (claims.isTrial && claims.licenseId && claims.tenantId && typeof claims.maxCameras === 'number') {
-        return { valid: true, claims };
-      }
-      return { valid: false, error: 'Invalid unsigned trial claim structure' };
+      const problem = trialProblem(claims, now);
+      return problem ? { valid: false, error: problem } : { valid: true, claims };
     }
 
-    const isVerified = crypto.verify(
-      null,
-      Buffer.from(signedPayload, 'utf8'),
-      publicKeyPem,
-      Buffer.from(signatureEd25519, 'hex')
+    const signature = Buffer.from(signatureEd25519, 'hex');
+    const isVerified = (publicKeyPem ? [publicKeyPem] : trustedLicenseKeys()).some((key) =>
+      crypto.verify(null, Buffer.from(signedPayload, 'utf8'), key, signature)
     );
 
     if (!isVerified) {

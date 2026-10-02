@@ -123,6 +123,7 @@ export const SETTINGS = {
   // Test only
   WHATSAPP_API_BASE_URL: optionalText('Test only: WhatsApp Cloud API base URL (honoured only when NODE_ENV=test).'),
   VIGILONE_ANPR_TEST_ENDPOINT: flag('Test only: exposes POST /anpr/detect (honoured only when NODE_ENV=test).'),
+  VIGILONE_LICENSE_TEST_PUBLIC_KEY: optionalText('Test only: an extra Ed25519 public key (PEM) trusted for licence artifacts (honoured only when NODE_ENV=test).'),
 } as const;
 
 export type SettingName = keyof typeof SETTINGS;
