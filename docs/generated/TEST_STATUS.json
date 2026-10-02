@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T11:37:23.341Z",
-  "commit": "9c7c4ceb339ed7e29044269189848c93ce31f71c",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37001527055",
+  "generatedAt": "2026-10-02T15:50:04.501Z",
+  "commit": "952a9690efed9cfa1dd9195cfb0048477e8acf4c",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37029056127",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 151,
-        "passed": 151,
+        "total": 152,
+        "passed": 152,
         "failed": 0
       },
       "tests": {
-        "total": 1168,
-        "passed": 1132,
+        "total": 1170,
+        "passed": 1134,
         "failed": 0,
         "skipped": 36
       },
@@ -639,6 +639,13 @@
           "file": "backend/src/__tests__/loadStress.test.ts",
           "status": "passed",
           "passed": 1,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/manifestBuilderRealDb.test.ts",
+          "status": "passed",
+          "passed": 2,
           "failed": 0,
           "skipped": 0
         },
@@ -1314,9 +1321,9 @@
     }
   ],
   "totals": {
-    "suites": 182,
-    "tests": 1476,
-    "passed": 1435,
+    "suites": 183,
+    "tests": 1478,
+    "passed": 1437,
     "failed": 0,
     "skipped": 41
   },
