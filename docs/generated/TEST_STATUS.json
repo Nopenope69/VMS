@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T15:50:04.501Z",
-  "commit": "952a9690efed9cfa1dd9195cfb0048477e8acf4c",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37029056127",
+  "generatedAt": "2026-10-02T18:21:02.292Z",
+  "commit": "b0c7aae2c453ecdc39dfb5c125c592756e7e13e2",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37046170922",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 152,
-        "passed": 152,
+        "total": 153,
+        "passed": 153,
         "failed": 0
       },
       "tests": {
-        "total": 1170,
-        "passed": 1134,
+        "total": 1176,
+        "passed": 1140,
         "failed": 0,
         "skipped": 36
       },
@@ -611,6 +611,13 @@
           "file": "backend/src/__tests__/investigationTimingRealDb.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/journeyIncidentRealDb.test.ts",
+          "status": "passed",
+          "passed": 6,
           "failed": 0,
           "skipped": 0
         },
@@ -1321,9 +1328,9 @@
     }
   ],
   "totals": {
-    "suites": 183,
-    "tests": 1478,
-    "passed": 1437,
+    "suites": 184,
+    "tests": 1484,
+    "passed": 1443,
     "failed": 0,
     "skipped": 41
   },
