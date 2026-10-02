@@ -79,7 +79,11 @@ export function useInvestigationTiming(enabled: boolean): InvestigationTiming {
         .post(`/investigations/timings/${timing.id}/steps`, { kind })
         // A step answered after the stopwatch was stopped (or replaced) must not bring it back on screen.
         .then((res) => setTiming((cur) => (cur && cur.id === res.data.timing.id && res.data.timing.outcome === 'OPEN' ? res.data.timing : cur)))
-        .catch((err) => setError(`Stopwatch step not recorded: ${message(err, kind)}`));
+        .catch((err) => {
+          // The same race the other way: the stopwatch was stopped while this step was on its way. Not an error.
+          if (err?.response?.data?.code === 'TIMING_CLOSED') return;
+          setError(`Stopwatch step not recorded: ${message(err, kind)}`);
+        });
     },
     [enabled, timing]
   );
