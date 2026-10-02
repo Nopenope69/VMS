@@ -10,6 +10,8 @@ interface SmartSearchModalProps {
   cameraId?: string;
   cameras: Array<{ id: string; name: string }>;
   onSeekToTimestamp?: (isoTimestamp: string) => void;
+  /** Called each time a search is run (the investigation stopwatch counts them). */
+  onSearch?: () => void;
 }
 
 /** One row of GET /search/plates: { result: { observations, total } } (smartSearch.service.ts searchPlates). */
@@ -61,6 +63,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   cameraId: defaultCameraId,
   cameras,
   onSeekToTimestamp,
+  onSearch,
 }) => {
   const [activeTab, setActiveTab] = useState<'spatial' | 'plate'>('spatial');
   const [selectedCameraId, setSelectedCameraId] = useState<string>(defaultCameraId || (cameras[0]?.id || ''));
@@ -235,6 +238,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     }
     setSearching(true);
     setErrorMessage(null);
+    onSearch?.();
     try {
       // Body as smartSearch.routes.ts reads it.
       const res = await api.post('/search/spatial-motion', {
@@ -258,6 +262,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   const handleExecutePlateSearch = async () => {
     setSearching(true);
     setErrorMessage(null);
+    onSearch?.();
     try {
       // Parameter names as smartSearch.routes.ts reads them.
       const params: Record<string, string> = {

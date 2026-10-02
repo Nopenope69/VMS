@@ -34,14 +34,14 @@ echo "== migrate and seed"
 export VIGILONE_LICENSE_TEST_PUBLIC_KEY="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).licensePublicKey)' "$WORK/seed.json")"
 
 echo "== backend on :$API_PORT"
-(cd "$ROOT/backend" && npm run -s build >/dev/null)
-(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_SMART_SEARCH=true \
+(cd "$ROOT/backend" && npm run -s build >"$WORK/backend-build.log" 2>&1) || { echo "backend build failed:"; tail -30 "$WORK/backend-build.log"; exit 1; }
+(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_SMART_SEARCH=true VIGILONE_FEATURE_INVESTIGATION_TIMING=true \
   JWT_SECRET="${JWT_SECRET:-vigilone_e2e_jwt_signing_key_32bytes_min!!}" \
   exec node dist/server.js > "$WORK/backend.log" 2>&1) &
 PIDS+=($!)
 
 echo "== frontend (vite preview) on :$WEB_PORT"
-(cd "$ROOT/frontend" && npm run -s build >/dev/null)
+(cd "$ROOT/frontend" && npm run -s build >"$WORK/frontend-build.log" 2>&1) || { echo "frontend build failed:"; tail -30 "$WORK/frontend-build.log"; exit 1; }
 (cd "$ROOT/frontend" && VIGILONE_API_TARGET="http://127.0.0.1:$API_PORT" exec node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port "$WEB_PORT" --strictPort > "$WORK/web.log" 2>&1) &
 PIDS+=($!)
 

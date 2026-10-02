@@ -36,6 +36,7 @@ describe('Feature flags: typed registry', () => {
         'SMART_SEARCH',
         'VLM_VERIFICATION',
         'TRACK_INDEX',
+        'INVESTIGATION_TIMING',
       ].sort()
     );
   });

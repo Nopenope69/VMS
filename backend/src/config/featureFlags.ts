@@ -29,6 +29,7 @@ export enum FeatureFlag {
   SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
   VLM_VERIFICATION = 'VLM_VERIFICATION',
   TRACK_INDEX = 'TRACK_INDEX',
+  INVESTIGATION_TIMING = 'INVESTIGATION_TIMING',
 }
 
 export interface FeatureFlagDefinition {
@@ -163,6 +164,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: [],
     status:
       'Each tracked person or vehicle gets one record: class, first and last seen, a thinned path, overall direction, visits to the camera\'s named zones, clothing or body colour, and the plate read tied to the vehicle. Colours come from a pixel count in the worker, not a trained model, and are withheld on IR pictures. Person tracks and plates need a declared purpose and are audited. Tested on the real database with synthetic detections; accuracy on real cameras is not measured.',
+  },
+  [FeatureFlag.INVESTIGATION_TIMING]: {
+    flag: FeatureFlag.INVESTIGATION_TIMING,
+    envVar: envVarFor(FeatureFlag.INVESTIGATION_TIMING),
+    title: 'Time-to-answer stopwatch',
+    routePrefixes: ['/api/v1/investigations/timings'],
+    workers: [],
+    status:
+      'An operator starts a stopwatch on the Investigation page when taking a question and stops it as answered or abandoned; searches, opened results, viewed cameras and exports are counted. Times come from the server clock. The site report gives median and 90th-percentile time to answer and the share within 60 s, with no per-operator breakdown. Tested on the real database; no pilot measurement exists yet.',
   },
 });
 

@@ -412,10 +412,12 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 **State:**
 - The North Star was rewritten around the AI investigation product (PR #29). Its build plan has buckets 1 to 8
   (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
-- **Bucket 1, the track index** (one `ObjectTrack` per tracked object: path, direction, zones, colours, linked
-  plate; ADR 0011, `docs/operations/TRACK_INDEX.md`) is built on branch `feat/track-index`, off by default.
-- **Next:** Bucket 5 (measurement tools: ANPR benchmark, search recall@k, time-to-answer), then Bucket 2 (search v1
-  over tracks: group results by track, filters with semantic ranking, search by uploaded photo).
+- **Bucket 1, the track index** (#30, merged) and the console plate search fix (#31, merged).
+- **Bucket 5, measurement tools** (this branch, `feat/measurement-tools`, PR #32: ANPR calibration and breakdowns,
+  the time-to-answer stopwatch, `docs/operations/PILOT_MEASUREMENT.md`), off by default; `master` merged in.
+- **Bucket 2, track search** is PR #33 (branch `feat/track-search`).
+- **Next:** Bucket 3 (follow a vehicle by plate, then people by appearance, across cameras) or Bucket 4
+  (investigation workspace screens, which also put search on screen).
 
 **Open follow-ups, all known and documented, none started:**
 

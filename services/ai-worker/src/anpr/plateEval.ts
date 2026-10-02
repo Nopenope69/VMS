@@ -1,7 +1,7 @@
 /**
  * Plate-level evaluation (P4.3): pure metric code shared by the eval CLI and its tests.
  *
- * A dataset is a labels CSV (image_path,plate_text[,split,camera,condition]) next to a
+ * A dataset is a labels CSV (image_path,plate_text[,split,camera,condition,vehicle_type,plate_type]) next to a
  * dataset.json header that declares what the data is: { "kind": "SITE" | "SYNTHETIC", "name": … }.
  * The kind is never inferred: SITE accuracy is only reported for data a person declared as site
  * footage. An empty plate_text is a negative (no plate expected; any read is a false read).
@@ -22,6 +22,9 @@ export interface EvalSample {
   split: string;
   camera: string;
   condition: string;
+  /** Optional breakdown columns: e.g. car, motorcycle, auto, truck; standard, bh, two-line, temporary. */
+  vehicleType: string;
+  plateType: string;
 }
 
 export interface EvalDataset {
@@ -83,6 +86,8 @@ export function loadEvalDataset(dir: string, opts: { split?: string } = {}): Eva
       split: 'test',
       camera: 'synthetic',
       condition: String(im.format ?? ''),
+      vehicleType: '',
+      plateType: String(im.format ?? ''),
     }));
     return { kind: 'SYNTHETIC', name: `synthetic fixtures (${m.generator}, seed ${m.seed})`, meta: { generator: m.generator, seed: m.seed }, samples };
   }
@@ -107,7 +112,7 @@ export function loadEvalDataset(dir: string, opts: { split?: string } = {}): Eva
     seen.add(file);
     const imagePath = path.resolve(dir, file);
     if (!fs.existsSync(imagePath)) throw new EvalDatasetError(`${imagePath} (listed in ${labelsPath}) does not exist`);
-    const s: EvalSample = { file, imagePath, expected: normalizeLabel(get(r, 'plate_text')), split: get(r, 'split', 'test') || 'test', camera: get(r, 'camera', ''), condition: get(r, 'condition', '') };
+    const s: EvalSample = { file, imagePath, expected: normalizeLabel(get(r, 'plate_text')), split: get(r, 'split', 'test') || 'test', camera: get(r, 'camera', ''), condition: get(r, 'condition', ''), vehicleType: get(r, 'vehicle_type', ''), plateType: get(r, 'plate_type', '') };
     if (!opts.split || s.split === opts.split) samples.push(s);
   }
   if (samples.length === 0) throw new EvalDatasetError(`${labelsPath}: no samples in split '${opts.split}'`);
@@ -166,9 +171,13 @@ export interface SampleOutcome {
   reads: string[];
   rawTexts: string[];
   lines: number[];
+  /** Confidence of each read, aligned with `reads` (needed for calibration and operating points). */
+  confidences?: number[];
   latencyMs: number;
   camera: string;
   condition: string;
+  vehicleType?: string;
+  plateType?: string;
 }
 
 export type OutcomeClass = 'correct' | 'misread' | 'no_read' | 'true_negative' | 'false_read';
@@ -192,8 +201,20 @@ interface Group {
   noRead: number;
 }
 
+/** A group with fewer plate frames than this is reported, but flagged: its interval is too wide to compare. */
+export const MIN_GROUP_POSITIVES = 30;
+/**
+ * A SITE report is called evaluated only with at least this many plate frames (about +/-5 points at 95%). A
+ * proposed minimum, not a standard; ANPR_EVALUATION.md suggests 1,000 per site for +/-3 points.
+ */
+export const MIN_SITE_POSITIVES = 300;
+/** Confidence thresholds at which operating points are reported. */
+export const OPERATING_THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95];
+const CALIBRATION_EDGES = [0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0000001];
+
 function summariseGroup(g: Group) {
   return {
+    fewSamples: g.positives < MIN_GROUP_POSITIVES,
     positives: g.positives,
     correct: g.correct,
     plateAccuracy: g.positives ? g.correct / g.positives : null,
@@ -206,7 +227,7 @@ function summariseGroup(g: Group) {
 /** Aggregates per-sample outcomes into the report's metrics (all ratios over counted samples; null when undefined). */
 export function summarise(outcomes: SampleOutcome[]) {
   const total: Group = { positives: 0, correct: 0, misread: 0, noRead: 0 };
-  const by: Record<string, Record<string, Group>> = { camera: {}, condition: {}, expectedLength: {} };
+  const by: Record<string, Record<string, Group>> = { camera: {}, condition: {}, expectedLength: {}, vehicleType: {}, plateType: {} };
   let negatives = 0;
   let falseReads = 0;
   let editSum = 0;
@@ -218,7 +239,13 @@ export function summarise(outcomes: SampleOutcome[]) {
       if (c === 'false_read') falseReads++;
       continue;
     }
-    const keys: Record<string, string> = { camera: o.camera || '(none)', condition: o.condition || '(none)', expectedLength: String(o.expected.length) };
+    const keys: Record<string, string> = {
+      camera: o.camera || '(none)',
+      condition: o.condition || '(none)',
+      expectedLength: String(o.expected.length),
+      vehicleType: o.vehicleType || '(none)',
+      plateType: o.plateType || '(none)',
+    };
     for (const g of [total, ...Object.entries(keys).map(([k, v]) => (by[k][v] ||= { positives: 0, correct: 0, misread: 0, noRead: 0 }))]) {
       g.positives++;
       if (c === 'correct') g.correct++;
@@ -243,5 +270,79 @@ export function summarise(outcomes: SampleOutcome[]) {
     byCamera: groups(by.camera),
     byCondition: groups(by.condition),
     byExpectedLength: groups(by.expectedLength),
+    byVehicleType: groups(by.vehicleType),
+    byPlateType: groups(by.plateType),
+    calibration: calibration(outcomes),
+    operatingPoints: operatingPoints(outcomes),
   };
+}
+
+/** Top read and whether it is right, for every sample with a read; null when any read lacks a confidence. */
+function topReads(outcomes: SampleOutcome[]): Array<{ confidence: number; positive: boolean; correct: boolean }> | null {
+  const out = [];
+  for (const o of outcomes) {
+    if (!o.reads.length) continue;
+    const c = o.confidences?.[0];
+    if (typeof c !== 'number' || !Number.isFinite(c)) return null;
+    out.push({ confidence: c, positive: Boolean(o.expected), correct: Boolean(o.expected) && o.reads[0] === o.expected });
+  }
+  return out;
+}
+
+/**
+ * Does a read's confidence mean what it says? Reads (top read of each frame, negatives included: a read on a frame
+ * without a plate is wrong) are binned by confidence; each bin's accuracy is compared with its mean confidence.
+ * expectedCalibrationError is the read-weighted mean gap. Null when the reads carry no confidences.
+ */
+export function calibration(outcomes: SampleOutcome[]) {
+  const reads = topReads(outcomes);
+  if (!reads || reads.length === 0) return null;
+  const bins = [];
+  let ece = 0;
+  for (let i = 0; i < CALIBRATION_EDGES.length - 1; i++) {
+    const lo = CALIBRATION_EDGES[i];
+    const hi = CALIBRATION_EDGES[i + 1];
+    const inBin = reads.filter((r) => r.confidence >= lo && r.confidence < hi);
+    if (!inBin.length) {
+      bins.push({ from: lo, to: Math.min(1, hi), reads: 0, meanConfidence: null, accuracy: null });
+      continue;
+    }
+    const meanConfidence = inBin.reduce((a, r) => a + r.confidence, 0) / inBin.length;
+    const accuracy = inBin.filter((r) => r.correct).length / inBin.length;
+    ece += (inBin.length / reads.length) * Math.abs(accuracy - meanConfidence);
+    bins.push({ from: lo, to: Math.min(1, hi), reads: inBin.length, meanConfidence, accuracy });
+  }
+  return { reads: reads.length, expectedCalibrationError: ece, bins };
+}
+
+/**
+ * What a site gets at each confidence threshold, counting only the top read of a frame when its confidence is at
+ * or above the threshold (the product keeps the best read): share of plate frames read correctly, share misread,
+ * and share of plate-less frames with a false read. Use it to choose the camera's minimum confidence.
+ */
+export function operatingPoints(outcomes: SampleOutcome[]) {
+  const reads = topReads(outcomes);
+  if (!reads) return null;
+  const positives = outcomes.filter((o) => o.expected).length;
+  const negatives = outcomes.length - positives;
+  return OPERATING_THRESHOLDS.map((t) => {
+    const kept = reads.filter((r) => r.confidence >= t);
+    const correct = kept.filter((r) => r.correct).length;
+    const misread = kept.filter((r) => r.positive && !r.correct).length;
+    const falseReads = kept.filter((r) => !r.positive).length;
+    return {
+      threshold: t,
+      readRate: positives ? correct / positives : null,
+      readRateCi95: wilson95(correct, positives),
+      misreadRate: positives ? misread / positives : null,
+      falseReadRate: negatives ? falseReads / negatives : null,
+    };
+  });
+}
+
+/** Whether a report may be quoted as site accuracy, and why not. */
+export function verdict(kind: DatasetKind, positives: number): { evaluated: boolean; reason: string } {
+  if (kind !== 'SITE') return { evaluated: false, reason: 'NOT EVALUATED: the dataset is not declared as SITE data' };
+  if (positives < MIN_SITE_POSITIVES) return { evaluated: false, reason: `NOT EVALUATED: ${positives} plate frames, fewer than the ${MIN_SITE_POSITIVES} needed` };
+  return { evaluated: true, reason: `SITE data, ${positives} plate frames` };
 }
