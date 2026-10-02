@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T09:02:15.149Z",
-  "commit": "1570908d1d351966c1a80100e7fa9e92e97cc0e9",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36986936301",
+  "generatedAt": "2026-10-02T11:37:23.341Z",
+  "commit": "9c7c4ceb339ed7e29044269189848c93ce31f71c",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37001527055",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 150,
-        "passed": 150,
+        "total": 151,
+        "passed": 151,
         "failed": 0
       },
       "tests": {
-        "total": 1156,
-        "passed": 1120,
+        "total": 1168,
+        "passed": 1132,
         "failed": 0,
         "skipped": 36
       },
@@ -1028,6 +1028,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/trackFollowRealDb.test.ts",
+          "status": "passed",
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/trackIndexRealDb.test.ts",
           "status": "passed",
           "passed": 13,
@@ -1307,9 +1314,9 @@
     }
   ],
   "totals": {
-    "suites": 181,
-    "tests": 1464,
-    "passed": 1423,
+    "suites": 182,
+    "tests": 1476,
+    "passed": 1435,
     "failed": 0,
     "skipped": 41
   },
