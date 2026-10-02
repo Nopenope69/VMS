@@ -129,7 +129,18 @@ jobs:
             echo "No status change."
           else
             git commit -m "docs(status): regenerate test status from CI run ${GITHUB_RUN_ID} [status-bot] [skip ci]"
-            git push
+            if ! git push; then
+              # Rejected. If the branch moved on while the suites ran (two merges close together), this status
+              # describes an older commit and the run for the newer commit writes its own: skip, do not fail.
+              # Any other refusal is a real failure.
+              git fetch origin "$GITHUB_REF_NAME"
+              if [ "$(git rev-parse "origin/$GITHUB_REF_NAME")" != "$GITHUB_SHA" ]; then
+                echo "::notice::$GITHUB_REF_NAME moved past $GITHUB_SHA during this run; its status is written by the newer run."
+              else
+                echo "::error::push of the generated status was refused"
+                exit 1
+              fi
+            fi
           fi
 
       - name: Fail if any suite failed
