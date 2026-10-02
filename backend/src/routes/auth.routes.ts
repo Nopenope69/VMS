@@ -5,7 +5,7 @@ import { LicenseTier } from '@prisma/client';
 import prismaInstance from '../config/database';
 import config from '../config/env';
 import { requireAuth } from '../middleware/auth';
-import { LicenseClaims } from '../utils/license';
+import { LicenseClaims, TRIAL_TERMS } from '../utils/license';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { loginRateLimiter, bootstrapRateLimiter, AuthRateLimiter } from '../middleware/rateLimiter';
 import { getInstalledSoftwareVersion } from '../utils/softwareVersion';
@@ -180,13 +180,13 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
 
       // Provision an initial unsigned 30-day evaluation trial (4 cameras)
       const now = new Date();
-      const trialExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30-day evaluation
+      const trialExpiresAt = new Date(now.getTime() + TRIAL_TERMS.days * 24 * 60 * 60 * 1000);
       const trialClaims: LicenseClaims = {
         licenseId: `lic_trial_${Date.now()}`,
         tenantId: tenant.id,
-        tier: 'BASIC',
-        maxCameras: 4,
-        features: ['EVIDENCE_EXPORT'],
+        tier: TRIAL_TERMS.tier,
+        maxCameras: TRIAL_TERMS.maxCameras,
+        features: [...TRIAL_TERMS.features],
         issuedAt: now.toISOString(),
         expiresAt: trialExpiresAt.toISOString(),
         isTrial: true,
@@ -197,7 +197,7 @@ router.post('/bootstrap', bootstrapRateLimiter, async (req: Request, res: Respon
           tenantId: tenant.id,
           licenseId: trialClaims.licenseId,
           tier: LicenseTier.BASIC,
-          maxCameras: 4,
+          maxCameras: trialClaims.maxCameras,
           features: trialClaims.features,
           signedPayload: JSON.stringify(trialClaims),
           signatureEd25519: 'TRIAL_UNSIGNED',

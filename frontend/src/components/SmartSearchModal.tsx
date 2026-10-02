@@ -25,6 +25,22 @@ interface PlateObservation {
   matchedWatchlist: { id: string; category: string; ownerName: string | null } | null;
 }
 
+/** One cluster of POST /search/spatial-motion: { result: { totalDetections, clusters } } (spatialEngine.service.ts). */
+interface SpatialCluster {
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  peakConfidence: number;
+  type: string;
+  detectionCount: number;
+}
+
+/** A datetime-local value is the user's local wall time; toISOString() would hand it UTC and shift the range. */
+const toLocalInput = (d: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 /** The backend's refusal as the user should read it: its message, plus its code when it sends one. */
 const refusalText = (err: any, fallback: string): string => {
   const data = err.response?.data;
@@ -48,10 +64,8 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'spatial' | 'plate'>('spatial');
   const [selectedCameraId, setSelectedCameraId] = useState<string>(defaultCameraId || (cameras[0]?.id || ''));
-  const [startDate, setStartDate] = useState<string>(
-    new Date(Date.now() - 86400000).toISOString().slice(0, 16)
-  );
-  const [endDate, setEndDate] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [startDate, setStartDate] = useState<string>(toLocalInput(new Date(Date.now() - 86400000)));
+  const [endDate, setEndDate] = useState<string>(toLocalInput(new Date()));
   const [minConfidence, setMinConfidence] = useState<number>(0.5);
 
   // Spatial ROI State
@@ -62,7 +76,8 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
 
   // Search Results
   const [searching, setSearching] = useState<boolean>(false);
-  const [spatialResults, setSpatialResults] = useState<any[]>([]);
+  const [spatialResults, setSpatialResults] = useState<SpatialCluster[]>([]);
+  const [spatialTotal, setSpatialTotal] = useState<number>(0);
   const [plateQuery, setPlateQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [plateResults, setPlateResults] = useState<PlateObservation[]>([]);
@@ -83,17 +98,16 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     }
   }, [defaultCameraId, cameras]);
 
-  // The purpose list the tenant allows, from the DPDP settings (as DpdpSettingsModal reads it).
+  // The purposes the tenant allows; GET /privacy/dpdp/purposes is open to every signed-in role.
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
     setPurposeLoadError(null);
     api
-      .get('/privacy/dpdp/settings')
+      .get('/privacy/dpdp/purposes')
       .then((res) => {
         if (cancelled) return;
-        const allowed: string[] = res.data.settings?.allowedPurposes || [];
-        setPurposes((res.data.purposes || []).filter((p: string) => allowed.includes(p)));
+        setPurposes(res.data.allowed || []);
         setNeedReference(res.data.needReference || []);
       })
       .catch((err) => {
@@ -222,18 +236,20 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     setSearching(true);
     setErrorMessage(null);
     try {
+      // Body as smartSearch.routes.ts reads it.
       const res = await api.post('/search/spatial-motion', {
         cameraId: selectedCameraId,
-        roi: roiBox,
+        boundingBox: roiBox,
         startTime: new Date(startDate).toISOString(),
         endTime: new Date(endDate).toISOString(),
         minConfidence,
       });
-      setSpatialResults(res.data.events || []);
+      setSpatialResults(res.data.result.clusters);
+      setSpatialTotal(res.data.result.totalDetections);
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.error || 'Spatial forensic search failed. Check license entitlement.'
-      );
+      setSpatialResults([]);
+      setSpatialTotal(0);
+      setErrorMessage(refusalText(err, 'Spatial forensic search failed.'));
     } finally {
       setSearching(false);
     }
@@ -266,13 +282,6 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
       setPlateResults([]);
       setPlateTotal(0);
       setErrorMessage(refusalText(err, 'Forensic license plate query failed.'));
-      // Roles without PRIVACY_POLICY_MANAGE cannot read the DPDP settings; the purpose refusals carry the list.
-      const data = err.response?.data;
-      if (Array.isArray(data?.allowed)) setPurposes(data.allowed);
-      else if (purposes.length === 0 && Array.isArray(data?.purposes)) setPurposes(data.purposes);
-      if (data?.code === 'PURPOSE_REFERENCE_REQUIRED' && purpose && !needReference.includes(purpose)) {
-        setNeedReference([...needReference, purpose]);
-      }
     } finally {
       setSearching(false);
     }
@@ -316,7 +325,11 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
         {/* Tabs Bar */}
         <div className="flex border-b border-vms-border bg-vms-surface px-5 pt-2">
           <button
-            onClick={() => setActiveTab('spatial')}
+            onClick={() => {
+              setActiveTab('spatial');
+              // "All cameras" exists only for plates; the spatial search needs one camera.
+              if (!selectedCameraId) setSelectedCameraId(defaultCameraId || cameras[0]?.id || '');
+            }}
             className={`flex items-center space-x-2 py-2 px-4 text-xs font-mono font-semibold border-b-2 transition-colors ${
               activeTab === 'spatial'
                 ? 'border-vms-accent text-vms-accent bg-vms-panel/50'
@@ -478,7 +491,8 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
               <div className="flex flex-col h-full min-h-[300px]">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-vms-text font-mono">
-                    Intersects Found ({spatialResults.length})
+                    Intersects Found ({spatialResults.length} {spatialResults.length === 1 ? 'cluster' : 'clusters'}, {spatialTotal}{' '}
+                    {spatialTotal === 1 ? 'detection' : 'detections'})
                   </span>
                 </div>
 
@@ -490,23 +504,28 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                       <span className="text-[10px] text-vms-dim mt-1">Adjust ROI or widen time window</span>
                     </div>
                   ) : (
-                    spatialResults.map((event) => (
+                    spatialResults.map((cluster) => (
                       <div
-                        key={event.id}
+                        key={`${cluster.type}-${cluster.startTime}`}
                         className="bg-vms-surface p-2.5 rounded border border-vms-border hover:border-vms-accent transition-colors flex items-center justify-between text-xs"
                       >
                         <div className="flex items-center space-x-3">
                           <div className="w-2 h-2 rounded-full bg-vms-accent" />
                           <div>
                             <div className="font-semibold text-vms-text flex items-center space-x-2">
-                              <span>{event.type}</span>
+                              <span>{cluster.type}</span>
                               <span className="text-[10px] px-1.5 py-[2px] rounded bg-sky-500/20 text-sky-400 border border-sky-500/40 font-mono">
-                                {Math.round(event.confidence * 100)}% conf
+                                {Math.round(cluster.peakConfidence * 100)}% peak
+                              </span>
+                              <span className="text-[10px] px-1.5 py-[2px] rounded bg-vms-panel border border-vms-border font-mono text-vms-muted">
+                                {cluster.detectionCount}x
                               </span>
                             </div>
                             <div className="text-[10px] font-mono text-vms-muted mt-0.5 flex items-center space-x-1">
                               <Clock className="w-3 h-3 text-vms-dim" />
-                              <span>{new Date(event.timestamp).toLocaleString()}</span>
+                              <span>
+                                {new Date(cluster.startTime).toLocaleString()} • {cluster.durationSeconds}s
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -517,7 +536,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                             size="xs"
                             icon={ArrowRight}
                             onClick={() => {
-                              onSeekToTimestamp(event.timestamp);
+                              onSeekToTimestamp(cluster.startTime);
                               onClose();
                             }}
                           >
