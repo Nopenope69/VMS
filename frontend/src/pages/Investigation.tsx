@@ -619,6 +619,7 @@ export const Investigation: React.FC = () => {
           cameras={cameras}
           semanticSearch={featureFlags.SEMANTIC_SEARCH}
           canSealEvidence={['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role)}
+          canOpenIncident={['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role)}
           onSearch={() => stopwatch.step('SEARCH')}
           onOpenTrack={openTrack}
           onPlayJourney={playJourney}
@@ -626,6 +627,7 @@ export const Investigation: React.FC = () => {
             stopwatch.step('EXPORT');
             setNotice(`Journey of ${n} sighting(s) sealed as evidence package ${manifestId}`);
           }}
+          onIncident={(alarmId, holds) => setNotice(`Incident ${alarmId} opened; footage held on ${holds} camera(s)`)}
           onClose={() => setShowFind(false)}
         />
       )}

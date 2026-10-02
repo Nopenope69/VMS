@@ -2,7 +2,8 @@
  * Seed for the investigation workspace browser test (frontend/e2e/investigation-workspace.spec.ts), in a tenant of
  * its own so the other browser tests keep their single camera and their counts. All real rows:
  *
- *  - cameras Gate, Lobby and Yard on one site; Gate and Lobby are neighbours (0 to 120 s);
+ *  - cameras Gate, Lobby and Yard on one site; Gate and Lobby are neighbours (0 to 120 s) and placed on the
+ *    'Ground floor' plan; Yard is on no floor plan;
  *  - person X at the Gate, X again in the Lobby 60 s later, and person Y in the Lobby at the same time;
  *  - a white car at the Gate whose plate MH12WS0001 is read again at the Yard an hour later;
  *  - crops with real JPEG files (true SHA-256) and embeddings from a registered embedding model, with controlled
@@ -48,6 +49,10 @@ export async function seedWorkspace(prisma: PrismaClient, opts: { password: stri
   }
   const [a, b] = [cam.Gate, cam.Lobby].sort();
   await prisma.cameraNeighbour.create({ data: { tenantId: tenant.id, cameraAId: a, cameraBId: b, minTransitSeconds: 0, maxTransitSeconds: 120 } });
+  // Ground floor plan with Gate and Lobby placed; Yard is on no floor plan.
+  const plan = await prisma.floorplan.create({ data: { tenantId: tenant.id, siteId: site.id, name: 'Ground floor', imageObjectKey: 'plans/ws-ground.png' } });
+  await prisma.cameraSpatialPlacement.create({ data: { cameraId: cam.Gate, floorplanId: plan.id, x: 150, y: 600 } });
+  await prisma.cameraSpatialPlacement.create({ data: { cameraId: cam.Lobby, floorplanId: plan.id, x: 500, y: 300 } });
 
   const email = `ws-admin-${suffix}@e2e.invalid`;
   await prisma.user.create({ data: { tenantId: tenant.id, email, name: 'Workspace Admin', role: 'TENANT_ADMIN', passwordHash: await bcrypt.hash(opts.password, 10) } });

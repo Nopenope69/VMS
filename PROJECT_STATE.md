@@ -413,14 +413,11 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 - The North Star was rewritten around the AI investigation product (#29). Its build plan has buckets 1 to 8
   (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
 - Merged: Bucket 1, the track index (#30, ADR 0011); Bucket 5, measurement tools (#32); Bucket 2, track search
-  (#33, ADR 0012); Bucket 3, cross-camera following (#36, ADR 0013); the plate and spatial search fixes (#31, #34);
-  the status-push race fix (#35).
-- **Bucket 4, the investigation workspace** (Find panel on the Investigation page: search, follow, decide, journey,
-  play, seal as evidence; `docs/operations/INVESTIGATION_WORKSPACE.md`) is on branch
-  `claude/sharp-keller-tq0t8r`. It also fixes multi-camera evidence packages failing when one camera had no
-  footage.
-- **Next:** the rest of Bucket 4 (journey on the floorplan, journey to incident), then Bucket 6 (privacy tools) or
-  Bucket 7 (housekeeping), or V1.0 understand-and-act (Bucket 8).
+  (#33, ADR 0012); Bucket 3, cross-camera following (#36, ADR 0013); Bucket 4, the investigation workspace Find
+  panel (#37); the plate and spatial search fixes (#31, #34); the status-push race fix (#35).
+- **Bucket 4, finished** (journey on the floor plan, journey to incident with footage held on every journey camera;
+  `docs/operations/INVESTIGATION_WORKSPACE.md`) is on branch `claude/sharp-keller-tq0t8r`.
+- **Next:** Bucket 6 (privacy tools) or Bucket 7 (housekeeping), or V1.0 understand-and-act (Bucket 8).
 
 **Open follow-ups, all known and documented, none started:**
 

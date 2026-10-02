@@ -6,6 +6,20 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 25 (2026-10-02): North Star Bucket 4 finished, journey on the floor plan and journey to incident
+
+Branch `claude/sharp-keller-tq0t8r`, from `master` after #37. Operations: `docs/operations/INVESTIGATION_WORKSPACE.md`.
+No schema change.
+
+Local runs: backend `tsc` passes; frontend build passes; browser tests 15/15. All six gates exit 0. Backend full
+suite: see the PR.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Journey on the floor plan | DONE_VERIFIED | `journeyIncidentRealDb.test.ts`: steps numbered over the whole journey and drawn at their cameras' placements, other floors left out, a camera with no placement listed as unplaced (skipping it fails 2 tests); person journeys need the permission and a purpose. Browser test: Gate drawn, Yard listed as not on a floor plan; the person journey drawn at Gate and Lobby; leaving out the purpose fails the test. Drawn at the camera position, not the object's floor position (needs calibrated cameras). |
+| Journey to incident | DONE_VERIFIED | An alarm on the first camera with the journey in its metadata (no plate text) and the sealed package; holds on every journey camera from 60 s before the first sighting to 120 s after the last (holding only one camera, or ending the window at the first sighting, each fail the test); the alarm sweeper pins the Yard segment inside the window and not the one outside, and marks the Gate hold failed because Gate recorded nothing. Bad bodies, a client-sent step list, another tenant's package and a viewer are refused with no alarm created. Browser test: incident opened from the screen with the package attached (dropping it fails the test), checked through the alarms API. |
+| Use on real footage | NOT_STARTED / BLOCKED_HUMAN | Needs the pilot site. |
+
 ## Session 24 (2026-10-02): North Star Bucket 4, investigation workspace
 
 Branch `claude/sharp-keller-tq0t8r`, from `master`. Operations: `docs/operations/INVESTIGATION_WORKSPACE.md`.

@@ -21,6 +21,18 @@ On the Investigation page, the **Find** button opens a panel next to the camera 
 4. **Journey.** "Show journey" lists the confirmed sightings in time order. "Play journey" puts the journey's
    cameras in the grid from the first sighting. "Seal journey as evidence" makes one evidence package over those
    cameras from 30 s before the first sighting to 30 s after the last, on legal hold by default.
+5. **On the floor plan.** "Show on floor plan" draws the numbered sightings, joined in order, on each floor plan
+   the journey's cameras are placed on (the Floor plans page). Each sighting is drawn **at the camera that saw
+   it**, not where the person or vehicle stood: that would need calibrated cameras, which is not built. A camera on
+   no floor plan is listed under the drawing ("Not on a floor plan: step 2 (Yard)"), never placed by guess. The
+   drawing uses the floor plan editor's layout, not an uploaded floor plan picture.
+6. **Open incident.** Opens an incident (an alarm, so it is on the Alarms page with assignment, SLA and escalation
+   as usual) with a title, severity and notes, and the sealed package attached if one was sealed. The server works
+   out the journey from the confirmed links itself; it never takes a list of sightings from the screen. Footage on
+   **every** camera of the journey is held, from `INCIDENT_HOLD_PRE_SECONDS` (60 s) before the first sighting to
+   `INCIDENT_HOLD_POST_SECONDS` (120 s) after the last, for `INCIDENT_HOLD_DAYS` (90). The alarm sweeper pins the
+   recordings and marks each hold complete, or failed with `NO_RECORDING_SEGMENTS_IN_WINDOW` when a camera
+   recorded nothing (`GET /api/v1/alarms/:id/holds`). Needs `ALARM_MANAGE` (operators and administrators).
 
 Every step is recorded by the investigation stopwatch (`PILOT_MEASUREMENT.md`) when it is running.
 
@@ -42,14 +54,27 @@ purpose.
 * Set camera neighbours and travel times (`CROSS_CAMERA_FOLLOW.md`) so suggestions are limited to cameras a person
   or vehicle can actually reach.
 
+## API
+
+* `GET /api/v1/tracks/:id/journey/floorplan`: per floor plan, its placed cameras and the journey's sightings with
+  their step numbers; `unplaced` lists sightings on cameras with no placement. Audited as `TRACK_JOURNEY_MAP_VIEW`.
+* `POST /api/v1/tracks/:id/journey/incident` `{title, severity?, description?, evidenceManifestId?}` (201): the
+  alarm, the number of cameras held and the hold window. The alarm's `metadataJson` has `source: "JOURNEY"`, the
+  steps (track, camera, times), cameras, link ids, window and package id, and never plate text. Audited as
+  `TRACK_JOURNEY_INCIDENT` and `ALARM_CREATE`. A package from another tenant is 404.
+
+Both follow the journey's privacy rules: a person journey needs `CROP_PERSON_QUERY` and a purpose.
+
 ## Not built yet
 
-* The journey drawn on the floorplan, and turning a journey into an incident. The sealed package is a standard
-  evidence manifest; the journey's link evidence is not yet written into it.
+* Where on the floor a person or vehicle was (needs calibrated cameras), and drawing on an uploaded floor plan
+  picture.
+* The sealed package is a standard evidence manifest; the journey's link evidence is not written into it.
 * Accuracy on real footage is not measured (see the three linked documents).
 
 ## Tests
 
-`frontend/e2e/investigation-workspace.spec.ts` (3 tests) runs in CI (`frontend-browser-tests`) on a seeded tenant
+`frontend/e2e/investigation-workspace.spec.ts` (3 tests, including the floor plan and the incident) runs in CI (`frontend-browser-tests`) on a seeded tenant
 (`backend/scripts/e2e/seed-workspace.ts`) with real crop pictures and controlled embeddings, and checks what the
-backend stored after each step.
+backend stored after each step. `backend/src/__tests__/journeyIncidentRealDb.test.ts` covers the floor plan layout,
+the incident, the holds being pinned by the alarm sweeper, and the privacy and permission refusals.

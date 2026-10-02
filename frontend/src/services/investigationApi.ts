@@ -129,3 +129,30 @@ export async function cropImageUrl(cropId: string, p?: Purpose | null): Promise<
   const res = await api.get(`/search/crops/${cropId}/image`, { responseType: 'blob', headers: headers(p) });
   return URL.createObjectURL(res.data);
 }
+
+export interface JourneyMapData {
+  floorplans: Array<{
+    id: string;
+    name: string;
+    floorLevel: number;
+    cameras: Array<{ cameraId: string; name: string; x: number; y: number }>;
+    points: Array<{ step: number; trackId: string; cameraId: string; x: number; y: number; firstSeenAt: string; lastSeenAt: string }>;
+  }>;
+  unplaced: Array<{ step: number; trackId: string; cameraId: string; cameraName: string }>;
+}
+
+/** The journey on the floor plans its cameras are placed on (each sighting at the position of its camera). */
+export async function journeyFloorplan(trackId: string, p?: Purpose | null): Promise<JourneyMapData> {
+  const res = await api.get(`/tracks/${trackId}/journey/floorplan`, { headers: headers(p) });
+  return res.data;
+}
+
+/** Opens an incident (an alarm) from the journey; the server takes the journey from the confirmed links, not from here. */
+export async function openJourneyIncident(
+  trackId: string,
+  body: { title: string; description?: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; evidenceManifestId?: string },
+  p?: Purpose | null
+) {
+  const res = await api.post(`/tracks/${trackId}/journey/incident`, body, { headers: headers(p) });
+  return res.data as { alarm: { id: string }; holds: number; windowStart: string; windowEnd: string };
+}

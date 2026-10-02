@@ -29,5 +29,9 @@ time-based parts for alarms from every source.
   reviewed and false-alarm rate per rule and per model (model taken from the alarm's own
   provenance). The resolve dialog records the verdict.
 
+- **From an investigation:** an incident can be opened from a confirmed cross-camera journey (Find panel,
+  `POST /tracks/:id/journey/incident`), with holds on every journey camera over the whole journey.
+  See `INVESTIGATION_WORKSPACE.md`.
+
 Tests: `alarmWorkflowRealDb.test.ts` (real DB, HTTP, ffmpeg-generated segments),
 `ruleBuilderRealDb.test.ts` (feedback), `migrationPhase3.test.ts` (constraints).
