@@ -11,26 +11,15 @@ import { CropStore } from '../services/crops/cropStore';
 import { cropsRoot } from '../services/crops/cropCapture.service';
 import { EMBEDDING_DIM, EmbeddingError, MAX_RESULTS, searchSimilar, searchSimilarToCrop, SearchFilters } from '../services/search/cropEmbeddingStore';
 import { EmbeddingAdapterClient, EmbeddingResult } from '../services/search/embeddingAdapterClient';
-import { embeddingAdapterUrl } from '../services/search/embeddingWorkers';
+import { defaultQueryEmbedder } from '../services/search/queryEmbedder';
 
 /** Embeds query text with the verified embedding adapter; null when no adapter is configured. */
 export type TextEmbedder = (text: string) => Promise<EmbeddingResult>;
 const MAX_QUERY_TEXT = 512;
 
 function defaultTextEmbedder(): TextEmbedder | null {
-  let url: string;
-  try {
-    url = embeddingAdapterUrl();
-  } catch {
-    return null;
-  }
-  return async (text) => {
-    // Verify health, descriptor and registry on every query: it is cheap next to an inference, and a model
-    // swapped under us is caught instead of compared against the wrong vectors.
-    const client = new EmbeddingAdapterClient(prisma, url, 10000);
-    await client.connect();
-    return client.embedText(text);
-  };
+  const q = defaultQueryEmbedder();
+  return q ? q.text : null;
 }
 let textEmbedderOverride: TextEmbedder | null | undefined;
 /** Test hook: replace (or with null, remove) the text embedder. undefined restores the default. */

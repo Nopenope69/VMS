@@ -81,6 +81,24 @@ own ranking, and duplicates. It prints EVALUATED only with `--real-site-data` an
 queries. Publish `metrics.json` next to the model's card, with the dataset description and how many
 crops the site had, because recall depends on how many other crops there are to confuse it with.
 
+## Track mode (track search)
+
+Track search (`TRACK_SEARCH.md`) returns tracks, not crops, so it is labelled with tracks:
+
+```json
+{ "schema": "vigilone.track-retrieval-labels.v1",
+  "queries": [
+    { "id": "q1", "text": "white SUV", "filters": { "cameraIds": ["<camera>"] }, "relevant": ["<track id>", "..."] },
+    { "id": "q2", "queryCropId": "<crop>", "queryTrackId": "<that crop's track>", "relevant": ["<track id>"] } ] }
+```
+
+* A query is either `text` or a `queryCropId`. A crop query also names its own track (`queryTrackId`). Finding
+  that track is trivial, so it is removed from the ranking before scoring and may not be listed as relevant.
+* `relevant` lists every track id that answers the query under your definition (section 1).
+* `filters` are sent as they are; use them when the question has them ("at the gate", "after 10 PM").
+* The same two commands collect and score (`retrieval-collect.mjs` calls `/api/v1/tracks/search` for these
+  labels, `--k` up to 50). The metrics say `mode: "tracks"` and how many own tracks were removed.
+
 ## What this does not measure
 
 Text search (there is none yet), quality across sites, or drift over time. Repeat the procedure after

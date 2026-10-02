@@ -8,6 +8,13 @@ import { authorize, hasPermission, Permission } from '../services/rbac/permissio
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { recordSensitiveQuery, requirePurpose } from '../services/privacy/dataProtection.service';
 import { COLOUR_NAMES, DIRECTIONS } from '../services/tracks/trackMath';
+import { bestCropsFor, presentTrack, trackInclude } from '../services/tracks/trackPresenter';
+import crypto from 'crypto';
+import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
+import { EmbeddingError, loadEmbedding } from '../services/search/cropEmbeddingStore';
+import { jpegSize } from '../services/search/embeddingAdapterClient';
+import { queryEmbedder } from '../services/search/queryEmbedder';
+import { DEFAULT_CANDIDATES, MAX_CANDIDATES, MAX_EXTRA_TERMS, MAX_TRACK_RESULTS, searchTracks } from '../services/search/trackSearch';
 
 /**
  * Track index API (feature TRACK_INDEX, licence feature ADVANCED_SEARCH): one record per tracked object.
@@ -71,44 +78,6 @@ async function sensitiveAccess(req: Request, res: Response, kind: 'person' | 'pl
   return passed;
 }
 
-const trackInclude = { vehicleObservation: { select: { id: true, normalizedPlate: true, stateCode: true, plateFormat: true, bestConfidence: true } } } as const;
-type TrackWithPlate = Prisma.ObjectTrackGetPayload<{ include: typeof trackInclude }>;
-
-function present(t: TrackWithPlate, cropByDetection: Map<string, string>, includePlates: boolean) {
-  const votes = t.colourVotesJson as any;
-  const named = ['upper', 'lower', 'body'].reduce((n, k) => n + Object.values((votes?.[k] || {}) as Record<string, number>).reduce((a, b) => a + b, 0), 0);
-  return {
-    id: t.id,
-    cameraId: t.cameraId,
-    trackId: t.trackId,
-    objectClass: t.objectClass,
-    firstSeenAt: t.firstSeenAt,
-    lastSeenAt: t.lastSeenAt,
-    dwellSeconds: t.dwellSeconds,
-    observationCount: t.observationCount,
-    maxConfidence: t.maxConfidence,
-    direction: t.direction,
-    path: t.pathJson,
-    zones: t.zonesJson,
-    colours: { upper: t.upperColour, lower: t.lowerColour, body: t.bodyColour, monochromeDetections: votes?.monochrome ?? 0, namedDetections: named },
-    bestDetectionId: t.bestDetectionId,
-    bestCropId: t.bestDetectionId ? cropByDetection.get(t.bestDetectionId) ?? null : null,
-    plate: includePlates
-      ? t.vehicleObservation
-        ? { vehicleObservationId: t.vehicleObservation.id, plate: t.vehicleObservation.normalizedPlate, stateCode: t.vehicleObservation.stateCode, format: t.vehicleObservation.plateFormat, confidence: t.vehicleObservation.bestConfidence }
-        : null
-      : { linked: t.vehicleObservationId !== null },
-    modelSha256: t.modelSha256,
-  };
-}
-
-async function cropsFor(tracks: TrackWithPlate[]): Promise<Map<string, string>> {
-  const ids = tracks.map((t) => t.bestDetectionId).filter((v): v is string => !!v);
-  if (ids.length === 0) return new Map();
-  const crops = await prisma.objectCrop.findMany({ where: { detectionEventId: { in: ids } }, select: { id: true, detectionEventId: true } });
-  return new Map(crops.map((c) => [c.detectionEventId!, c.id]));
-}
-
 router.get('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
   const p = Query.safeParse(req.query);
   if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.') || 'query'}: ${p.error.issues[0].message}`, code: 'INVALID_TRACK_QUERY' });
@@ -146,7 +115,7 @@ router.get('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Res
   try {
     const limit = q.limit ?? 50;
     const tracks = await prisma.objectTrack.findMany({ where, include: trackInclude, orderBy: { lastSeenAt: 'desc' }, take: limit, skip: q.offset ?? 0 });
-    const crops = await cropsFor(tracks);
+    const crops = await bestCropsFor(prisma, tracks);
     const details = {
       filters: { ...q, purpose: undefined, purposeReference: undefined },
       resultCount: tracks.length,
@@ -154,9 +123,187 @@ router.get('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Res
     if (asksPersons) await recordSensitiveQuery(prisma, req, 'TRACK_PERSON_QUERY', details);
     else if (q.includePlates) await recordSensitiveQuery(prisma, req, 'TRACK_PLATE_QUERY', details);
     else await AuditChainService.record(prisma, { tenantId, userId: req.user!.id, action: 'TRACK_QUERY', resourceType: 'ObjectTrack', ipAddress: req.ip || '127.0.0.1', metadata: details });
-    return res.json({ tracks: tracks.map((t) => present(t, crops, q.includePlates === true)), limit, offset: q.offset ?? 0 });
+    return res.json({ tracks: tracks.map((t) => presentTrack(t, crops, q.includePlates === true)), limit, offset: q.offset ?? 0 });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------------------------------------------------ search by appearance
+
+const MAX_TERM = 200;
+const MAX_QUERY_TEXT = 512;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const term = z.string().refine((v) => v.trim().length > 0 && v.trim().length <= MAX_TERM, `each term must be 1 to ${MAX_TERM} characters`);
+const SearchBody = z
+  .object({
+    text: z.string().optional(),
+    cropId: z.string().min(1).max(128).optional(),
+    imageJpegBase64: z.string().max(Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4).optional(),
+    and: z.array(term).max(MAX_EXTRA_TERMS).optional(),
+    not: z.array(term).max(MAX_EXTRA_TERMS).optional(),
+    filters: z
+      .object({
+        cameraIds: z.array(z.string().min(1)).min(1).max(100).optional(),
+        from: iso.optional(),
+        to: iso.optional(),
+        objectClasses: z.array(z.string().min(1)).min(1).max(20).optional(),
+        zoneId: z.string().min(1).max(128).optional(),
+        direction: z.enum(DIRECTIONS).optional(),
+        upperColour: colour.optional(),
+        lowerColour: colour.optional(),
+        bodyColour: colour.optional(),
+        minDwellSeconds: z.number().min(0).max(86_400).optional(),
+        hasPlate: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    includePersons: z.boolean().optional(),
+    includePlates: z.boolean().optional(),
+    modelSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    limit: z.number().int().min(1).max(MAX_TRACK_RESULTS).optional(),
+    candidates: z.number().int().min(1).max(MAX_CANDIDATES).optional(),
+    exact: z.boolean().optional(),
+  })
+  .strict();
+
+const searchFail = (res: Response, err: any) => {
+  if (err instanceof EmbeddingError) {
+    const unavailable = ['EMBEDDING_ADAPTER_UNAVAILABLE', 'EMBEDDING_ADAPTER_INVALID', 'EMBEDDING_MODEL_NOT_REGISTERED'].includes(err.code);
+    const status = unavailable ? 503 : err.code === 'EMBEDDING_NOT_FOUND' || err.code === 'EMBEDDING_CROP_NOT_FOUND' ? 404 : 400;
+    return res.status(status).json({ error: err.message, code: err.code });
+  }
+  return res.status(500).json({ error: err.message });
+};
+
+router.post('/search', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
+  const p = SearchBody.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: `${p.error.issues[0].path.join('.') || 'body'}: ${p.error.issues[0].message}`, code: 'INVALID_TRACK_SEARCH' });
+  const b = p.data;
+  const f = b.filters ?? {};
+  const tenantId = req.user!.tenantId;
+  const text = b.text?.trim();
+  if ((b.text !== undefined ? 1 : 0) + (b.cropId ? 1 : 0) + (b.imageJpegBase64 ? 1 : 0) !== 1) {
+    return res.status(400).json({ error: 'give exactly one of text, cropId or imageJpegBase64', code: 'INVALID_TRACK_SEARCH' });
+  }
+  if (b.text !== undefined && (!text || text.length > MAX_QUERY_TEXT)) return res.status(400).json({ error: `text must be 1 to ${MAX_QUERY_TEXT} characters and not blank`, code: 'INVALID_TRACK_SEARCH' });
+  if (!isFeatureEnabled(FeatureFlag.SEMANTIC_SEARCH)) {
+    return res.status(501).json({ error: 'search by appearance needs the semantic search feature (VIGILONE_FEATURE_SEMANTIC_SEARCH)', code: 'FEATURE_DISABLED', feature: FeatureFlag.SEMANTIC_SEARCH });
+  }
+
+  let image: Buffer | undefined;
+  if (b.imageJpegBase64) {
+    image = Buffer.from(b.imageJpegBase64, 'base64');
+    if (image.length === 0 || image.length > MAX_IMAGE_BYTES) return res.status(400).json({ error: `the photo must be 1 byte to ${MAX_IMAGE_BYTES / 1024 / 1024} MB`, code: 'INVALID_TRACK_SEARCH' });
+    try {
+      jpegSize(image);
+    } catch {
+      return res.status(400).json({ error: 'the photo must be a JPEG', code: 'IMAGE_NOT_JPEG' });
+    }
+  }
+
+  // Who may see what, decided before any embedding work.
+  let queryIsPerson = false;
+  if (b.cropId) {
+    const c = await prisma.objectCrop.findUnique({ where: { id: b.cropId }, select: { tenantId: true, cropClass: true } });
+    if (!c || c.tenantId !== tenantId) return res.status(404).json({ error: 'crop not found', code: 'EMBEDDING_CROP_NOT_FOUND' });
+    queryIsPerson = c.cropClass === 'PERSON';
+  }
+  if ((queryIsPerson || f.objectClasses?.includes('person') || f.upperColour || f.lowerColour) && b.includePersons !== true) {
+    return res.status(400).json({ error: 'this query is about people: set includePersons: true (and declare a purpose)', code: 'PERSON_QUERY_REQUIRES_INCLUDE' });
+  }
+  const asksPersons = b.includePersons === true;
+  if (asksPersons && b.includePlates) return res.status(400).json({ error: 'ask for person tracks and plate data in separate requests: each has its own purpose', code: 'SENSITIVE_CATEGORIES_SEPARATE' });
+  if (asksPersons && !(await sensitiveAccess(req, res, 'person'))) return;
+  if (b.includePlates && !(await sensitiveAccess(req, res, 'plate'))) return;
+
+  try {
+    // Every text term and the photo go through the same verified model; its SHA-256 picks the stored vectors.
+    const texts = [...(text ? [text] : []), ...(b.and ?? []).map((t) => t.trim()), ...(b.not ?? []).map((t) => t.trim())];
+    let modelSha256 = b.modelSha256;
+    const vecs = new Map<string, Float32Array>();
+    let imageVector: Float32Array | undefined;
+    if (texts.length || image) {
+      const embed = queryEmbedder();
+      if (!embed) return res.status(501).json({ error: 'text and photo queries need the embedding adapter (EMBEDDING_ADAPTER_URL is not set)', code: 'QUERY_EMBEDDING_NOT_AVAILABLE' });
+      const results = [];
+      for (const t of texts) {
+        const r = await embed.text(t);
+        vecs.set(t, r.vector);
+        results.push(r);
+      }
+      if (image) {
+        const r = await embed.image(image);
+        imageVector = r.vector;
+        results.push(r);
+      }
+      const shas = new Set(results.map((r) => r.model.sha256));
+      if (shas.size !== 1) return res.status(503).json({ error: 'the embedding model changed during the query; try again', code: 'EMBEDDING_MODEL_CHANGED' });
+      const served = results[0].model.sha256;
+      if (modelSha256 && modelSha256 !== served) return res.status(409).json({ error: `the embedding adapter serves model ${served}, not the requested ${modelSha256}`, code: 'TEXT_MODEL_MISMATCH' });
+      modelSha256 = served;
+    }
+    if (!modelSha256) {
+      const last = await prisma.cropEmbedding.findFirst({ where: { tenantId }, orderBy: { createdAt: 'desc' }, select: { modelSha256: true } });
+      if (!last) return res.status(404).json({ error: 'no crop has been embedded yet', code: 'NO_EMBEDDINGS' });
+      modelSha256 = last.modelSha256;
+    }
+    let query: Float32Array;
+    if (b.cropId) {
+      const v = await loadEmbedding(prisma, tenantId, b.cropId, modelSha256);
+      if (!v) return res.status(404).json({ error: `crop ${b.cropId} has no embedding from model ${modelSha256}`, code: 'EMBEDDING_NOT_FOUND' });
+      query = v;
+    } else query = imageVector ?? vecs.get(text!)!;
+
+    const result = await searchTracks(prisma, {
+      tenantId,
+      modelSha256,
+      query,
+      and: (b.and ?? []).map((t) => vecs.get(t.trim())!),
+      not: (b.not ?? []).map((t) => vecs.get(t.trim())!),
+      filters: { ...f, from: f.from ? new Date(f.from) : undefined, to: f.to ? new Date(f.to) : undefined, includePersons: asksPersons },
+      excludeCropId: b.cropId,
+      limit: b.limit,
+      candidates: b.candidates ?? Math.max(DEFAULT_CANDIDATES, b.limit ?? 0),
+      exact: b.exact,
+    });
+    const rows = await prisma.objectTrack.findMany({ where: { id: { in: result.hits.map((h) => h.trackDbId) }, tenantId }, include: trackInclude });
+    const byId = new Map(rows.map((t) => [t.id, t]));
+    const crops = await bestCropsFor(prisma, rows);
+    const details = {
+      queryKind: b.cropId ? 'crop' : image ? 'image' : 'text',
+      queryText: text ?? null,
+      queryCropId: b.cropId ?? null,
+      imageSha256: image ? crypto.createHash('sha256').update(image).digest('hex') : null,
+      imageBytes: image?.length ?? null,
+      and: b.and ?? [],
+      not: b.not ?? [],
+      filters: f,
+      modelSha256,
+      mode: result.mode,
+      resultCount: result.hits.length,
+    };
+    if (asksPersons) await recordSensitiveQuery(prisma, req, 'TRACK_PERSON_SEARCH_QUERY', details);
+    else if (b.includePlates) await recordSensitiveQuery(prisma, req, 'TRACK_PLATE_SEARCH_QUERY', details);
+    else await AuditChainService.record(prisma, { tenantId, userId: req.user!.id, action: 'TRACK_SEARCH_QUERY', resourceType: 'ObjectTrack', ipAddress: req.ip || '127.0.0.1', metadata: details });
+    return res.json({
+      modelSha256,
+      mode: result.mode,
+      candidatesScanned: result.candidatesScanned,
+      tracksExcludedByNot: result.tracksExcludedByNot,
+      results: result.hits
+        .filter((h) => byId.has(h.trackDbId))
+        .map((h) => ({
+          score: h.score,
+          matchedCropId: h.bestCropId,
+          matchedCropImageUrl: `/api/v1/search/crops/${h.bestCropId}/image`,
+          matchedCrops: h.matchedCrops,
+          excludedCrops: h.excludedCrops,
+          track: presentTrack(byId.get(h.trackDbId)!, crops, b.includePlates === true),
+        })),
+    });
+  } catch (err) {
+    return searchFail(res, err);
   }
 });
 
@@ -174,7 +321,7 @@ router.get('/:id', authorize(Permission.SEARCH_VIEW), async (req: Request, res: 
     if (isPerson) await recordSensitiveQuery(prisma, req, 'TRACK_PERSON_VIEW', details);
     else if (includePlates) await recordSensitiveQuery(prisma, req, 'TRACK_PLATE_VIEW', details);
     else await AuditChainService.record(prisma, { tenantId, userId: req.user!.id, action: 'TRACK_VIEW', resourceType: 'ObjectTrack', resourceId: track.id, ipAddress: req.ip || '127.0.0.1', metadata: details });
-    return res.json({ track: present(track, await cropsFor([track]), includePlates) });
+    return res.json({ track: presentTrack(track, await bestCropsFor(prisma, [track]), includePlates) });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

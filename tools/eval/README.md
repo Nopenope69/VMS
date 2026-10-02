@@ -26,6 +26,8 @@ node tools/eval/model-card.mjs --model yolox-tiny --metrics /tmp/metrics.json \
   It refuses missing results, the query crop inside its own ranking and duplicates, and says
   NOT EVALUATED unless `--real-site-data` is given with at least 100 labelled queries.
   `__tests__/retrieval-eval.test.mjs` checks it against hand-computed values.
+- Both retrieval tools also work in track mode (labels `vigilone.track-retrieval-labels.v1`, track search;
+  `docs/operations/TRACK_SEARCH.md`), tested in `__tests__/retrieval-tracks.test.mjs`.
 - `retrieval-collect.mjs` runs a labelled query set through the search API and writes the rankings
   `retrieval-eval.mjs` scores. It stops without writing a file if any query fails, is refused, or is
   answered by a different model. `__tests__/retrieval-collect.test.mjs` runs it against a local stub of

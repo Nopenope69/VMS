@@ -6,6 +6,27 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 22 (2026-10-02): North Star Bucket 2, track search
+
+Branch `feat/track-search`, stacked on `feat/track-index` (PR #30). Design: ADR 0012. Operations:
+`docs/operations/TRACK_SEARCH.md`. Route `POST /api/v1/tracks/search` (flags TRACK_INDEX and SEMANTIC_SEARCH).
+
+Local runs: backend `tsc` passes; full suite with 2 workers 149 suites, 1106 passed, 3 failed, 29 skipped. The
+failures are the two known ones: `vlmVerifierRealDb` 14/14 when run alone, and `storageVolumeManager`, which also
+fails on `master` in this sandbox (disk below 5% free). Retrieval tool tests 16/16. All six gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| One result per track, filters before ranking | DONE_VERIFIED on controlled embeddings | `trackSearchRealDb.test.ts` 10/10 on the real database: a white SUV seen three times is one result with `matchedCrops` 3; a camera filter finds its track with a candidate budget of one, which a filter applied after ranking could not; dwell and body colour filters. Removing the camera condition from the SQL fails the test. |
+| AND and NOT terms | DONE_VERIFIED on controlled embeddings | "person" AND "backpack" ranks the person with a backpack first; "person" NOT "uniform" drops the track in uniform in every frame and keeps the one in uniform in one frame of three (1 frame set aside). Scoring AND by the best term instead of the weakest, or dropping a track on any one set-aside frame, each fail the tests. |
+| Query by stored crop and by uploaded JPEG | DONE_VERIFIED | The query crop is never returned; a non-JPEG photo is refused; the photo's SHA-256 and size are audited and the picture is not. |
+| Privacy | DONE_VERIFIED | Person tracks left out by default; `includePersons` needs the permission (operator 403) and a purpose (400 without); person-crop and clothing-colour queries must set it; persons and plates not together; audited as `TRACK_SEARCH_QUERY` / `TRACK_PERSON_SEARCH_QUERY` with the purpose. |
+| Refusals | DONE_VERIFIED | Malformed queries, more than 4 AND terms, a model the adapter does not serve (409), an unknown crop (404), 501 without SEMANTIC_SEARCH or without an embedding adapter (a stored-crop query still works). |
+| Recall@k tools in track mode | DONE_VERIFIED | `retrieval-tracks.test.mjs`: hand-computed recall@k and MRR, the query crop's own track removed before scoring, refusals, and the collector calling track search with filters and purpose. |
+| Crop search refactor | DONE_VERIFIED | Its text embedder now comes from the shared `queryEmbedder.ts`; the crop search suites pass unchanged. |
+| Search quality and speed on site data | NOT_STARTED / BLOCKED_HUMAN | Needs labelled queries from the pilot (recall@k) and the reference hardware (speed with hundreds of thousands of embedded crops). |
+| Search screens | NOT_STARTED | Bucket 4 (investigation workspace) puts this on screen. |
+
 ## Session 20 (2026-10-01): North Star Bucket 1, the track index
 
 Branch `feat/track-index`, from `master`. Design: ADR 0011. Operations: `docs/operations/TRACK_INDEX.md`. Flag

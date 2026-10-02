@@ -162,7 +162,7 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     routePrefixes: ['/api/v1/tracks'],
     workers: [],
     status:
-      'Each tracked person or vehicle gets one record: class, first and last seen, a thinned path, overall direction, visits to the camera\'s named zones, clothing or body colour, and the plate read tied to the vehicle. Colours come from a pixel count in the worker, not a trained model, and are withheld on IR pictures. Person tracks and plates need a declared purpose and are audited. Tested on the real database with synthetic detections; accuracy on real cameras is not measured.',
+      'Each tracked person or vehicle gets one record: class, first and last seen, a thinned path, overall direction, visits to the camera\'s named zones, clothing or body colour, and the plate read tied to the vehicle. Colours come from a pixel count in the worker, not a trained model, and are withheld on IR pictures. Search by appearance (text, a stored crop or an uploaded photo, with AND/NOT terms and the same filters; also needs SEMANTIC_SEARCH) returns one result per track. Person tracks and plates need a declared purpose and are audited. Tested on the real database with synthetic detections and embeddings; accuracy on real cameras and search recall are not measured.',
   },
 });
 
