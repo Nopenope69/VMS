@@ -236,8 +236,13 @@ router.get('/jobs/:id/package', authorize(Permission.REDACTION_EXECUTE), async (
 
 // --- DPDP controls (P4.6) ---
 
-router.get('/dpdp/purposes', (_req: Request, res: Response) => {
-  res.json({ purposes: DATA_PURPOSES, needReference: PURPOSES_NEEDING_REFERENCE });
+/**
+ * The purposes a plate or biometric query may declare on this tenant, for any signed-in user: operators need the
+ * list to pick one, and it is not personal data. The full settings stay behind PRIVACY_POLICY_MANAGE.
+ */
+router.get('/dpdp/purposes', async (req: Request, res: Response) => {
+  const s = await getDataProtection(prisma, req.user!.tenantId);
+  res.json({ purposes: DATA_PURPOSES, allowed: s.allowedPurposes, needReference: PURPOSES_NEEDING_REFERENCE });
 });
 
 router.get('/dpdp/settings', authorize(Permission.PRIVACY_POLICY_MANAGE), async (req: Request, res: Response) => {
