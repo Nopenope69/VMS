@@ -86,4 +86,5 @@ retention purge, unless it overlaps an incident evidence hold or legal hold on i
 ## Following across cameras
 
 Tracks on different cameras can be linked into one journey, by plate or by appearance, with an operator
-confirming each link: `CROSS_CAMERA_FOLLOW.md`.
+confirming each link: `CROSS_CAMERA_FOLLOW.md`. The Find panel on the Investigation page puts search and
+following on screen: `INVESTIGATION_WORKSPACE.md`.

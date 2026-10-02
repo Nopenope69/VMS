@@ -11,7 +11,8 @@
  * inside and outside the spatial search's default region; and a licence carrying ADVANCED_SEARCH, which
  * /api/v1/search requires. The licence is signed with a key made here, whose public half goes out in the seed
  * file as licensePublicKey: the runner hands it to the backend as VIGILONE_LICENSE_TEST_PUBLIC_KEY, which the
- * backend trusts only under NODE_ENV=test (utils/license.ts).
+ * backend trusts only under NODE_ENV=test (utils/license.ts). The investigation workspace data lives in a second
+ * tenant (seed-workspace.ts), returned as `workspace`.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -19,6 +20,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { LicenseClaims, signLicensePayload } from '../../src/utils/license';
+import { seedWorkspace } from './seed-workspace';
 
 const DAY = 86_400_000;
 
@@ -155,8 +157,12 @@ async function main() {
     });
   }
 
+  // The investigation workspace test has a tenant of its own (seed-workspace.ts).
+  const workspace = await seedWorkspace(prisma, { password, licencePrivateKey: licenceKey.privateKey, recordingsDir: process.env.RECORDINGS_DIR || path.join(exportsDir, '..', 'recordings') });
+
   process.stdout.write(
     JSON.stringify({
+      workspace,
       tenantId: tenant.id,
       email,
       viewerEmail,
