@@ -10,7 +10,7 @@ Fiduciary to decide and document.
 | :--- | :--- | :--- |
 | `faceProcessingEnabled` | **false** | When false, face-related processing is refused or dropped. Face redaction jobs fail with `REDACTION_FACE_PROCESSING_DISABLED`; this is checked when a job is created and again when it runs. Camera face analytics (Hikvision `faceDetection`, Dahua `FaceDetection`) are dropped and counted in `vigilone_camera_events_dropped_total{reason="face_processing_disabled"}`. Switching it on requires `acknowledgeBiometricProcessing: true` |
 | `plateRetentionDays` | 30 | Plate reads (and their snapshot files) whose last sighting is older than this are purged |
-| `detectionSnapshotRetentionDays` | 30 | AI detection snapshot images older than this are deleted. The event record (time, class, box, provenance) stays |
+| `detectionSnapshotRetentionDays` | 30 | AI detection snapshot images older than this are deleted. The event record (time, class, box, provenance) stays. Track index rows (path, zones, colours) last seen before this are deleted |
 | `allowedPurposes` | all six | Purposes operators may declare for plate queries |
 
 Every change is audited as `DPDP_SETTINGS_UPDATE` with the before and after values.
@@ -51,6 +51,8 @@ The purge runs hourly (`DPDP_PURGE_INTERVAL_MS`) for every tenant, and on demand
 
 * deletes plate reads past retention, together with their snapshot files;
 * deletes detection snapshot files past retention and clears their path on the event;
+* deletes track index rows (`ObjectTrack`: where an object went and its colours) last seen before the same
+  period;
 * **keeps** anything on the same camera that overlaps an active incident evidence hold or a
   legal-hold evidence manifest;
 * deletes files only under `RECORDINGS_DIR` or `SNAPSHOTS_DIR`. A path outside those roots is

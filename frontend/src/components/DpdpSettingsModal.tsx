@@ -16,6 +16,8 @@ interface PurgeResult {
   plateSnapshotsDeleted: number;
   detectionSnapshotsDeleted: number;
   detectionSnapshotsHeld: number;
+  tracksDeleted: number;
+  tracksHeld: number;
 }
 const purgeResultOf = (res: { data: { result: PurgeResult } }): PurgeResult => res.data.result;
 
@@ -110,8 +112,9 @@ export const DpdpSettingsModal: React.FC<DpdpSettingsModalProps> = ({ isOpen, on
       setStatusMessage({
         type: 'success',
         text:
-          `Purge done: ${r.plateReadsDeleted} plate reads, ${r.plateSnapshotsDeleted} plate snapshots and ` +
-          `${r.detectionSnapshotsDeleted} detection snapshots deleted; ${r.plateReadsHeld + r.detectionSnapshotsHeld} kept under a legal hold.`,
+          `Purge done: ${r.plateReadsDeleted} plate reads, ${r.plateSnapshotsDeleted} plate snapshots, ` +
+          `${r.detectionSnapshotsDeleted} detection snapshots and ${r.tracksDeleted} tracks deleted; ` +
+          `${r.plateReadsHeld + r.detectionSnapshotsHeld + r.tracksHeld} kept under a legal hold.`,
       });
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.response?.data?.error || err.message || 'Purge failed' });

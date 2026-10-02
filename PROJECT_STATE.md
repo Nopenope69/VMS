@@ -410,10 +410,12 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 ## 9. Where to Pick Up Next
 
 **State:**
-- `master` is green; there are no open PRs.
-- The six architecture items and PR #27 are merged.
-- The generated status run after PR #26 passed (run 36896753713). The run after PR #27 (36902883702) was still in
-  progress at hand-off: **check it first next session**. Its new browser-test job already passed in that PR's CI.
+- The North Star was rewritten around the AI investigation product (PR #29). Its build plan has buckets 1 to 8
+  (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
+- **Bucket 1, the track index** (one `ObjectTrack` per tracked object: path, direction, zones, colours, linked
+  plate; ADR 0011, `docs/operations/TRACK_INDEX.md`) is built on branch `feat/track-index`, off by default.
+- **Next:** Bucket 5 (measurement tools: ANPR benchmark, search recall@k, time-to-answer), then Bucket 2 (search v1
+  over tracks: group results by track, filters with semantic ranking, search by uploaded photo).
 
 **Open follow-ups, all known and documented, none started:**
 

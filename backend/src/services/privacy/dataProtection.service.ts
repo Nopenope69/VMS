@@ -139,6 +139,9 @@ export interface PurgeResult {
   plateSnapshotsDeleted: number;
   detectionSnapshotsDeleted: number;
   detectionSnapshotsHeld: number;
+  /** Track index rows (paths, zones, colours) past the detection snapshot retention period. */
+  tracksDeleted: number;
+  tracksHeld: number;
   snapshotFilesOutsideRoots: number;
   snapshotFilesMissing: number;
 }
@@ -163,7 +166,7 @@ function deleteSnapshot(file: string, r: PurgeResult): void {
 
 export async function purgeTenant(prisma: PrismaClient, tenantId: string, now = new Date(), actorUserId: string | null = null): Promise<PurgeResult> {
   const s = await getDataProtection(prisma, tenantId);
-  const r: PurgeResult = { tenantId, at: now.toISOString(), plateReadsDeleted: 0, plateReadsHeld: 0, plateSnapshotsDeleted: 0, detectionSnapshotsDeleted: 0, detectionSnapshotsHeld: 0, snapshotFilesOutsideRoots: 0, snapshotFilesMissing: 0 };
+  const r: PurgeResult = { tenantId, at: now.toISOString(), plateReadsDeleted: 0, plateReadsHeld: 0, plateSnapshotsDeleted: 0, detectionSnapshotsDeleted: 0, detectionSnapshotsHeld: 0, tracksDeleted: 0, tracksHeld: 0, snapshotFilesOutsideRoots: 0, snapshotFilesMissing: 0 };
 
   const held = await loadHoldChecker(prisma, tenantId, now);
 
@@ -206,13 +209,32 @@ export async function purgeTenant(prisma: PrismaClient, tenantId: string, now = 
   }
   if (clear.length) r.detectionSnapshotsDeleted = (await prisma.detectionEvent.updateMany({ where: { id: { in: clear } }, data: { snapshotPath: null } })).count;
 
+  // Tracks describe where a person or vehicle went and what they wore: they follow the detection retention.
+  for (;;) {
+    const batch = await prisma.objectTrack.findMany({
+      where: { tenantId, lastSeenAt: { lt: snapCutoff } },
+      select: { id: true, cameraId: true, firstSeenAt: true, lastSeenAt: true },
+      take: 500,
+      skip: r.tracksHeld,
+      orderBy: { lastSeenAt: 'asc' },
+    });
+    if (batch.length === 0) break;
+    const del: string[] = [];
+    for (const t of batch) {
+      if (held(t.cameraId, t.firstSeenAt, t.lastSeenAt)) r.tracksHeld++;
+      else del.push(t.id);
+    }
+    if (del.length) r.tracksDeleted += (await prisma.objectTrack.deleteMany({ where: { id: { in: del } } })).count;
+    if (batch.length < 500) break;
+  }
+
   await prisma.dataProtectionSettings.upsert({
     where: { tenantId },
     create: { tenantId, ...DEFAULTS, lastPurgeAt: now, lastPurgeJson: r as any },
     update: { lastPurgeAt: now, lastPurgeJson: r as any },
   });
   cache.delete(tenantId);
-  for (const [kind, n] of [['plate_read', r.plateReadsDeleted], ['plate_snapshot', r.plateSnapshotsDeleted], ['detection_snapshot', r.detectionSnapshotsDeleted]] as const) {
+  for (const [kind, n] of [['plate_read', r.plateReadsDeleted], ['plate_snapshot', r.plateSnapshotsDeleted], ['detection_snapshot', r.detectionSnapshotsDeleted], ['object_track', r.tracksDeleted]] as const) {
     if (n) MetricsService.incCounter('vigilone_dpdp_purged_total', 'Personal data removed by the retention purge', { kind }, n);
   }
   await AuditChainService.record(prisma, { tenantId, userId: actorUserId ?? undefined, action: 'DPDP_RETENTION_PURGE', resourceType: 'DataProtection', ipAddress: '127.0.0.1', metadata: { ...r, plateRetentionDays: s.plateRetentionDays, detectionSnapshotRetentionDays: s.detectionSnapshotRetentionDays } } as any);

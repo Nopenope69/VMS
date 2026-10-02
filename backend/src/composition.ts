@@ -37,6 +37,7 @@ import { recordingWatchdogService } from './services/recording/recordingWatchdog
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
 import { setting } from './config/settings';
 import { CameraRegistry } from './services/camera/cameraRegistry';
+import { TrackIndexService } from './services/tracks/trackIndex.service';
 
 // --- Modules shared by routes and background services ---------------------------------------------------
 export const recordingCatalog = new RecordingCatalog(prisma);
@@ -48,6 +49,7 @@ export const playbackSync = new PlaybackSyncService(prisma, recordingCatalog);
 export const alarmWorkflow = new AlarmWorkflowService(prisma, new NotificationAdapter(prisma), recordingCatalog);
 export const notificationDispatcher = new NotificationDispatcherService(prisma);
 export const plateAggregator = new PlateTrackAggregatorService(prisma);
+export const trackIndex = new TrackIndexService(prisma);
 export const edgeAiRuntime = new EdgeAiRuntimeService(prisma);
 export const videoRedactor = new VideoRedactorService(prisma);
 export const redactionQueue = new RedactionQueue(prisma, videoRedactor);

@@ -28,6 +28,7 @@ export enum FeatureFlag {
   OBJECT_CROPS = 'OBJECT_CROPS',
   SEMANTIC_SEARCH = 'SEMANTIC_SEARCH',
   VLM_VERIFICATION = 'VLM_VERIFICATION',
+  TRACK_INDEX = 'TRACK_INDEX',
 }
 
 export interface FeatureFlagDefinition {
@@ -153,6 +154,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: ['vlmVerifier'],
     status:
       'A local SmolVLM2 model (llama.cpp, VLM_ADAPTER_URL) is asked whether the detected object is visible in each new alarm\'s snapshot; the yes/no/unclear answer is stored and shown as advisory and never changes the alarm. Answers eight labelled test questions correctly; agreement with operator verdicts on real alarms is not measured. The model needs a human licence approval before it runs.',
+  },
+  [FeatureFlag.TRACK_INDEX]: {
+    flag: FeatureFlag.TRACK_INDEX,
+    envVar: envVarFor(FeatureFlag.TRACK_INDEX),
+    title: 'Track index (one record per tracked object)',
+    routePrefixes: ['/api/v1/tracks'],
+    workers: [],
+    status:
+      'Each tracked person or vehicle gets one record: class, first and last seen, a thinned path, overall direction, visits to the camera\'s named zones, clothing or body colour, and the plate read tied to the vehicle. Colours come from a pixel count in the worker, not a trained model, and are withheld on IR pictures. Person tracks and plates need a declared purpose and are audited. Tested on the real database with synthetic detections; accuracy on real cameras is not measured.',
   },
 });
 

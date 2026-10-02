@@ -15,6 +15,7 @@ import { ModelCardV1 } from './adapter/contract';
 import { eventTypeForClass } from './classMap';
 import { MetricsRegistry } from './metrics';
 import { cropToJpeg } from './cropExtractor';
+import { describeColours, isMonochromeFrame } from './colourAttributes';
 import {
   ModelManifestRecord,
   NormalizedDetectionEvent,
@@ -37,6 +38,8 @@ export interface AiWorkerConfig {
   maxQueued?: number;
   /** Attach a JPEG crop of each CONFIRMED detection for the backend crop store. Default OFF (AI_ATTACH_CROPS). */
   attachCrops?: boolean;
+  /** Name the colours of each CONFIRMED detection (colourAttributes.ts). Default ON (AI_COLOUR_ATTRIBUTES). */
+  colourAttributes?: boolean;
 }
 
 export const AI_WORKER_ADAPTER_VERSION = '2.0.0-phase2';
@@ -78,6 +81,33 @@ export class AiWorker {
    * Adds a JPEG crop to the event. Never throws: a crop is an extra, and a failure here must not
    * stop the detection from being submitted. Failures are counted and logged (once a minute).
    */
+  /** Frame-wide saturation check; a failure counts as colour (the per-detection naming then reports it). */
+  private monochrome(frame: Buffer, geometry: FrameGeometry): boolean {
+    try {
+      return isMonochromeFrame(frame, geometry);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Adds `attributesJson.colour`. A failure is counted and the detection is still sent without it. */
+  private attachColours(event: NormalizedDetectionEvent, frame: Buffer, geometry: FrameGeometry, monochrome: boolean): void {
+    const counter = 'vigilone_ai_colour_attributes_total';
+    const help = 'Colour attributes named for confirmed detections, by outcome';
+    try {
+      const colour = event.boundingBox ? describeColours(frame, geometry, event.boundingBox, event.objectClass, monochrome) : null;
+      if (!colour) {
+        this.core.metrics.inc(counter, help, { outcome: 'not_applicable' });
+        return;
+      }
+      event.attributesJson = { ...(event.attributesJson || {}), colour };
+      this.core.metrics.inc(counter, help, { outcome: colour.monochrome ? 'monochrome' : 'named' });
+    } catch (err: any) {
+      this.core.metrics.inc(counter, help, { outcome: 'failed' });
+      console.warn(`[AiWorker] colour attributes failed for ${event.cameraId}: ${err?.message || err}`);
+    }
+  }
+
   private async attachCrop(event: NormalizedDetectionEvent, frame: Buffer, geometry: FrameGeometry): Promise<void> {
     const counter = 'vigilone_ai_crops_attached_total';
     const help = 'Detection crops attached for the backend crop store, by outcome';
@@ -228,12 +258,17 @@ export class AiWorker {
         const firstSeen = new Map(tracker.getTracks().map((t) => [t.trackId, t.firstSeenAt]));
 
         // Transmit ONLY CONFIRMED tracks to backend internal API
+        let monochrome: boolean | undefined; // computed once per frame, only if a detection needs it
         for (const event of normalizedEvents) {
           if (event.trackId && firstSeen.has(event.trackId)) {
             event.trackFirstSeenAt = firstSeen.get(event.trackId)!.toISOString();
           }
           if (event.trackState === 'CONFIRMED') {
             if (this.config.attachCrops === true) await this.attachCrop(event, frameData as Buffer, geometry!);
+            if (this.config.colourAttributes !== false) {
+              if (monochrome === undefined) monochrome = this.monochrome(frameData as Buffer, geometry!);
+              this.attachColours(event, frameData as Buffer, geometry!, monochrome);
+            }
             await this.apiClient.submitDetection(event);
             delete event.cropJpegBase64; // the returned events stay small
             this.core.metrics.inc('vigilone_ai_detections_submitted_total', 'Confirmed-track detections sent to the backend', { objectClass: event.objectClass || 'unknown' });

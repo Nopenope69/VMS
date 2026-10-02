@@ -13,6 +13,7 @@ import { AiProvenance, VigilOneEvent } from '../incident/orchestrator/types';
 import { FeatureFlag, isFeatureEnabled } from '../../config/featureFlags';
 import { CropCaptureService } from '../crops/cropCapture.service';
 import { Point2D, TripwireRuleInput, LoiteringRuleInput } from '../spatial/engine';
+import type { TrackIndexService } from '../tracks/trackIndex.service';
 
 /**
  * AI detection ingestion (POST /internal/detections), Phase 2.
@@ -25,6 +26,8 @@ import { Point2D, TripwireRuleInput, LoiteringRuleInput } from '../spatial/engin
  *    (plus one per minimum-dwell milestone used by an enabled rule), and a TRIPWIRE_CROSS /
  *    LOITERING_DWELL event per spatial incident. Incident and canonical event are written in one
  *    transaction, so a crash between them cannot lose the event (inbox re-drive).
+ *  - CONFIRMED detections also update their ObjectTrack (feature TRACK_INDEX, default OFF); a failure there is
+ *    logged and counted, and never fails the ingestion.
  *  - Evidence isolation: nothing here touches recordings, segments or evidence manifests.
  */
 export class DetectionIngestionError extends Error {
@@ -88,7 +91,8 @@ export class DetectionIngestionService {
     private prisma: PrismaClient,
     private getSpatialEngine: () => SpatialEngineLike,
     private orchestrator: Pick<IncidentOrchestrator, 'ingestEvent'> = incidentOrchestrator,
-    private cropCapture: Pick<CropCaptureService, 'captureSafely'> = new CropCaptureService(prisma)
+    private cropCapture: Pick<CropCaptureService, 'captureSafely'> = new CropCaptureService(prisma),
+    private trackIndex: Pick<TrackIndexService, 'observeSafely'> | null = null
   ) {}
 
   public async ingest(body: unknown): Promise<IngestOutcome> {
@@ -179,6 +183,22 @@ export class DetectionIngestionService {
     if (!duplicate && d.trackId && d.trackState === 'CONFIRMED' && centroid) {
       aiEventsEmitted = await this.emitAiObjectEvents(d, camera.id, eventTime, d.provenance);
       incidentsCreated = await this.evaluateSpatialRules(d, camera.id, centroid, eventTime, d.provenance);
+    }
+
+    if (!duplicate && this.trackIndex && isFeatureEnabled(FeatureFlag.TRACK_INDEX) && d.trackId && d.trackState === 'CONFIRMED' && d.boundingBox && d.objectClass) {
+      await this.trackIndex.observeSafely({
+        tenantId: d.tenantId,
+        cameraId: camera.id,
+        detectionId: detection.id,
+        trackId: d.trackId,
+        objectClass: d.objectClass,
+        confidence: d.confidence,
+        boundingBox: d.boundingBox,
+        at: eventTime,
+        trackFirstSeenAt: d.trackFirstSeenAt && Number.isFinite(Date.parse(d.trackFirstSeenAt)) ? new Date(d.trackFirstSeenAt) : undefined,
+        attributes: d.attributesJson,
+        modelSha256: d.provenance.modelSha256,
+      });
     }
 
     // Last, so cutting a crop can never delay the events above. captureSafely does not throw and
