@@ -6,7 +6,10 @@
  *
  * Creates, all real rows: one tenant, site and camera; an admin (TENANT_ADMIN) with a bcrypt password; a sealed
  * evidence export with its manifest; a COMPLETED redaction job whose derivative file exists in EXPORTS_DIR with
- * its true SHA-256; one plate read past its retention period and one within it.
+ * its true SHA-256; one plate read past its retention period and one within it; a VIEWER (no PLATE_DATA_QUERY);
+ * a plate read for the plate search test; and an unsigned evaluation licence carrying ADVANCED_SEARCH, which
+ * /api/v1/search requires. No vendor signing key exists outside the vendor, so the licence uses the appliance's own
+ * TRIAL_UNSIGNED form (utils/license.ts), the same shape bootstrap writes, with ADVANCED_SEARCH added.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -36,6 +39,35 @@ async function main() {
   const email = `admin-${suffix}@e2e.invalid`;
   const admin = await prisma.user.create({
     data: { tenantId: tenant.id, email, name: 'E2E Admin', role: 'TENANT_ADMIN', passwordHash: await bcrypt.hash(password, 10) },
+  });
+
+  const viewerEmail = `viewer-${suffix}@e2e.invalid`;
+  await prisma.user.create({
+    data: { tenantId: tenant.id, email: viewerEmail, name: 'E2E Viewer', role: 'VIEWER', passwordHash: await bcrypt.hash(password, 10) },
+  });
+
+  const now = new Date();
+  const licence = {
+    licenseId: `lic_e2e_${suffix}`,
+    tenantId: tenant.id,
+    tier: 'BASIC' as const,
+    maxCameras: 4,
+    features: ['EVIDENCE_EXPORT', 'ADVANCED_SEARCH'],
+    issuedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 30 * DAY).toISOString(),
+    isTrial: true,
+  };
+  await prisma.license.create({
+    data: {
+      tenantId: tenant.id,
+      licenseId: licence.licenseId,
+      tier: 'BASIC',
+      maxCameras: licence.maxCameras,
+      features: licence.features,
+      signedPayload: JSON.stringify(licence),
+      signatureEd25519: 'TRIAL_UNSIGNED',
+      expiresAt: new Date(licence.expiresAt),
+    },
   });
 
   const start = new Date(Date.now() - 2 * 3_600_000);
@@ -83,12 +115,30 @@ async function main() {
   await prisma.vehicleObservation.create({
     data: { tenantId: tenant.id, cameraId: camera.id, plateNumber: 'KA01AB2222', normalizedPlate: 'KA01AB2222', firstSeenAt: new Date(Date.now() - DAY), lastSeenAt: new Date(Date.now() - DAY) },
   });
+  // The plate the search test looks for: seen an hour ago at the gate camera, inside every retention period.
+  const searchPlate = 'MH12SS4321';
+  await prisma.vehicleObservation.create({
+    data: {
+      tenantId: tenant.id,
+      cameraId: camera.id,
+      plateNumber: searchPlate,
+      normalizedPlate: searchPlate,
+      stateCode: 'MH',
+      vehicleCategory: 'FOUR_WHEELER',
+      observationCount: 3,
+      bestConfidence: 0.93,
+      firstSeenAt: new Date(Date.now() - 3_600_000),
+      lastSeenAt: new Date(Date.now() - 3_600_000),
+    },
+  });
 
   process.stdout.write(
     JSON.stringify({
       tenantId: tenant.id,
       email,
+      viewerEmail,
       password,
+      searchPlate,
       cameraId: camera.id,
       manifestId: manifest.id,
       exportId: evidenceExport.id,

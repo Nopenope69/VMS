@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-01T18:45:19.551Z",
-  "commit": "40429e48491e7411492d3411afdaee738beef9c4",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36905281448",
+  "generatedAt": "2026-10-02T07:38:26.357Z",
+  "commit": "70645bdb4df5f80d0c210790399ecfc94c693c49",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36978712965",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 146,
-        "passed": 146,
+        "total": 148,
+        "passed": 148,
         "failed": 0
       },
       "tests": {
-        "total": 1093,
-        "passed": 1057,
+        "total": 1128,
+        "passed": 1092,
         "failed": 0,
         "skipped": 36
       },
@@ -1021,6 +1021,20 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/trackIndexRealDb.test.ts",
+          "status": "passed",
+          "passed": 13,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/trackMath.test.ts",
+          "status": "passed",
+          "passed": 22,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/turnAuth.test.ts",
           "status": "passed",
           "passed": 6,
@@ -1046,13 +1060,13 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 30,
-        "passed": 29,
+        "total": 31,
+        "passed": 30,
         "failed": 0
       },
       "tests": {
-        "total": 283,
-        "passed": 278,
+        "total": 303,
+        "passed": 298,
         "failed": 0,
         "skipped": 5
       },
@@ -1076,6 +1090,13 @@
           "file": "services/ai-worker/src/__tests__/classScopedNms.test.ts",
           "status": "passed",
           "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/colourAttributes.test.ts",
+          "status": "passed",
+          "passed": 20,
           "failed": 0,
           "skipped": 0
         },
@@ -1272,9 +1293,9 @@
     }
   ],
   "totals": {
-    "suites": 176,
-    "tests": 1376,
-    "passed": 1335,
+    "suites": 179,
+    "tests": 1431,
+    "passed": 1390,
     "failed": 0,
     "skipped": 41
   },

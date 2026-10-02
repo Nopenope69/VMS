@@ -14,6 +14,26 @@ interface SmartSearchModalProps {
   onSearch?: () => void;
 }
 
+/** One row of GET /search/plates: { result: { observations, total } } (smartSearch.service.ts searchPlates). */
+interface PlateObservation {
+  id: string;
+  plateNumber: string;
+  stateCode: string | null;
+  vehicleCategory: string;
+  lastSeenAt: string;
+  observationCount: number;
+  bestConfidence: number;
+  camera: { id: string; name: string } | null;
+  matchedWatchlist: { id: string; category: string; ownerName: string | null } | null;
+}
+
+/** The backend's refusal as the user should read it: its message, plus its code when it sends one. */
+const refusalText = (err: any, fallback: string): string => {
+  const data = err.response?.data;
+  if (!data?.error) return err.message || fallback;
+  return data.code ? `${data.error} (${data.code})` : data.error;
+};
+
 interface BoundingBox {
   x: number;
   y: number;
@@ -48,7 +68,14 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
   const [spatialResults, setSpatialResults] = useState<any[]>([]);
   const [plateQuery, setPlateQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [plateResults, setPlateResults] = useState<any[]>([]);
+  const [plateResults, setPlateResults] = useState<PlateObservation[]>([]);
+  const [plateTotal, setPlateTotal] = useState<number>(0);
+  // Purpose limitation (dataProtection.service.ts requirePurpose): every plate query declares a purpose.
+  const [purposes, setPurposes] = useState<string[]>([]);
+  const [needReference, setNeedReference] = useState<string[]>([]);
+  const [purpose, setPurpose] = useState<string>('');
+  const [purposeReference, setPurposeReference] = useState<string>('');
+  const [purposeLoadError, setPurposeLoadError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,6 +85,27 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
       setSelectedCameraId(cameras[0].id);
     }
   }, [defaultCameraId, cameras]);
+
+  // The purpose list the tenant allows, from the DPDP settings (as DpdpSettingsModal reads it).
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setPurposeLoadError(null);
+    api
+      .get('/privacy/dpdp/settings')
+      .then((res) => {
+        if (cancelled) return;
+        const allowed: string[] = res.data.settings?.allowedPurposes || [];
+        setPurposes((res.data.purposes || []).filter((p: string) => allowed.includes(p)));
+        setNeedReference(res.data.needReference || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setPurposeLoadError(refusalText(err, 'Could not load the purpose list.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -200,19 +248,36 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
     setErrorMessage(null);
     onSearch?.();
     try {
-      const params: any = {
+      // Parameter names as smartSearch.routes.ts reads them.
+      const params: Record<string, string> = {
         startTime: new Date(startDate).toISOString(),
         endTime: new Date(endDate).toISOString(),
       };
       if (plateQuery.trim()) params.plateQuery = plateQuery.trim();
-      if (selectedCategory) params.category = selectedCategory;
+      if (selectedCameraId) params.cameraId = selectedCameraId;
+      if (selectedCategory) params.watchlistCategory = selectedCategory;
 
-      const res = await api.get('/search/anpr-plates', { params });
-      setPlateResults(res.data.plates || []);
+      // No purpose is filled in client-side: the backend decides, and its refusal is shown.
+      const headers: Record<string, string> = {};
+      if (purpose) headers['X-VigilOne-Purpose'] = purpose;
+      if (purpose && needReference.includes(purpose) && purposeReference.trim()) {
+        headers['X-VigilOne-Purpose-Reference'] = purposeReference.trim();
+      }
+
+      const res = await api.get('/search/plates', { params, headers });
+      setPlateResults(res.data.result.observations);
+      setPlateTotal(res.data.result.total);
     } catch (err: any) {
-      setErrorMessage(
-        err.response?.data?.error || 'Forensic license plate query failed.'
-      );
+      setPlateResults([]);
+      setPlateTotal(0);
+      setErrorMessage(refusalText(err, 'Forensic license plate query failed.'));
+      // Roles without PRIVACY_POLICY_MANAGE cannot read the DPDP settings; the purpose refusals carry the list.
+      const data = err.response?.data;
+      if (Array.isArray(data?.allowed)) setPurposes(data.allowed);
+      else if (purposes.length === 0 && Array.isArray(data?.purposes)) setPurposes(data.purposes);
+      if (data?.code === 'PURPOSE_REFERENCE_REQUIRED' && purpose && !needReference.includes(purpose)) {
+        setNeedReference([...needReference, purpose]);
+      }
     } finally {
       setSearching(false);
     }
@@ -291,6 +356,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
               onChange={(e) => setSelectedCameraId(e.target.value)}
               className="w-full bg-vms-surface border border-vms-border rounded px-2 py-1.5 font-mono text-vms-text focus:border-vms-accent focus:outline-none text-xs"
             >
+              {activeTab === 'plate' && <option value="">All cameras</option>}
               {cameras.map((cam) => (
                 <option key={cam.id} value={cam.id}>
                   {cam.name}
@@ -352,12 +418,12 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="w-full bg-vms-surface border border-vms-border rounded px-2 py-1.5 font-mono text-vms-text focus:border-vms-accent focus:outline-none text-xs"
               >
+                {/* The WatchlistCategory enum in prisma/schema.prisma. */}
                 <option value="">All Categories</option>
-                <option value="HOTLIST_STOLEN">Hotlist / Stolen</option>
-                <option value="SECURITY_BLOCKED">Security Blocked</option>
-                <option value="VIP_EXEMPT">VIP / Whitelist</option>
-                <option value="VISITOR">Visitor</option>
-                <option value="SUSPICIOUS">Suspicious</option>
+                <option value="BLACKLIST">Blacklist</option>
+                <option value="SUSPECT">Suspect</option>
+                <option value="VIP">VIP</option>
+                <option value="WHITELIST">Whitelist</option>
               </select>
             </div>
           )}
@@ -366,7 +432,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {errorMessage && (
-            <div className="p-3 bg-rose-950/70 border border-rose-800 rounded text-rose-300 text-xs font-mono flex items-center space-x-2">
+            <div role="alert" className="p-3 bg-rose-950/70 border border-rose-800 rounded text-rose-300 text-xs font-mono flex items-center space-x-2">
               <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{errorMessage}</span>
             </div>
@@ -472,10 +538,51 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
           ) : (
             /* Plate Search Tab */
             <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label htmlFor="plate-search-purpose" className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">
+                    Purpose of Query (DPDP)
+                  </label>
+                  <select
+                    id="plate-search-purpose"
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    className="w-full bg-vms-surface border border-vms-border rounded px-2 py-1.5 font-mono text-vms-text focus:border-vms-accent focus:outline-none text-xs"
+                  >
+                    <option value="">Select a purpose…</option>
+                    {purposes.map((p) => (
+                      <option key={p} value={p}>
+                        {p.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  {purposeLoadError && (
+                    <p className="text-[10px] font-mono text-amber-400 mt-1">Purpose list unavailable: {purposeLoadError}</p>
+                  )}
+                </div>
+                {purpose && needReference.includes(purpose) && (
+                  <div>
+                    <label htmlFor="plate-search-purpose-reference" className="block text-[10px] uppercase font-mono text-vms-muted mb-1 tracking-wider">
+                      Case / Request Reference
+                    </label>
+                    <input
+                      id="plate-search-purpose-reference"
+                      type="text"
+                      maxLength={200}
+                      placeholder="e.g. FIR 123/2026"
+                      value={purposeReference}
+                      onChange={(e) => setPurposeReference(e.target.value)}
+                      className="w-full bg-vms-surface border border-vms-border rounded px-2 py-1.5 font-mono text-vms-text focus:border-vms-accent focus:outline-none text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center space-x-3">
                 <div className="flex-1 relative">
                   <input
                     type="text"
+                    aria-label="Plate query"
                     placeholder="Search by Plate (e.g. DL01*, MH12, KA05MB1234)..."
                     value={plateQuery}
                     onChange={(e) => setPlateQuery(e.target.value.toUpperCase())}
@@ -498,7 +605,10 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
               {/* Plate Results List */}
               <div className="bg-vms-panel border border-vms-border rounded overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-vms-border bg-vms-surface flex justify-between items-center text-xs font-semibold text-vms-text font-mono uppercase tracking-wider">
-                  <span>Detected Vehicle Observations ({plateResults.length})</span>
+                  <span>
+                    Detected Vehicle Observations ({plateResults.length}
+                    {plateTotal > plateResults.length ? ` of ${plateTotal}` : ''})
+                  </span>
                 </div>
 
                 <div className="divide-y divide-vms-border max-h-[360px] overflow-y-auto">
@@ -518,18 +628,23 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
 
                           <div>
                             <div className="flex items-center space-x-2">
-                              <span className="font-medium text-vms-text">{obs.stateName || 'Indian Vehicle'}</span>
+                              <span className="font-medium text-vms-text">{obs.camera?.name || 'Unknown camera'}</span>
+                              {obs.stateCode && (
+                                <span className="text-[10px] px-1.5 py-[2px] rounded bg-vms-panel border border-vms-border font-mono text-vms-muted">
+                                  {obs.stateCode}
+                                </span>
+                              )}
                               <span className="text-[10px] px-1.5 py-[2px] rounded bg-vms-panel border border-vms-border font-mono text-vms-muted">
-                                {obs.category || 'CAR'}
+                                {obs.vehicleCategory}
                               </span>
-                              {obs.isWatchlistMatch && (
+                              {obs.matchedWatchlist && (
                                 <span className="text-[10px] px-1.5 py-[2px] rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 font-bold uppercase font-mono">
-                                  Watchlist Hit
+                                  Watchlist: {obs.matchedWatchlist.category}
                                 </span>
                               )}
                             </div>
                             <div className="text-[10px] font-mono text-vms-dim mt-0.5">
-                              Seen {obs.observationCount}x • Best Conf: {Math.round(obs.bestConfidence * 100)}% • Last Seen: {new Date(obs.lastSeen).toLocaleString()}
+                              Seen {obs.observationCount}x • Best Conf: {Math.round(obs.bestConfidence * 100)}% • Last Seen: {new Date(obs.lastSeenAt).toLocaleString()}
                             </div>
                           </div>
                         </div>
@@ -540,7 +655,7 @@ export const SmartSearchModal: React.FC<SmartSearchModalProps> = ({
                             size="xs"
                             icon={ArrowRight}
                             onClick={() => {
-                              onSeekToTimestamp(obs.lastSeen);
+                              onSeekToTimestamp(obs.lastSeenAt);
                               onClose();
                             }}
                           >

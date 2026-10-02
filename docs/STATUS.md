@@ -24,6 +24,28 @@ Frontend builds; browser tests 7/7. All six gates exit 0.
 | Pilot measurement guide | DONE | `PILOT_MEASUREMENT.md`: the four V0.1 measurements, their tools and minimums, breakdown values for the India benchmark, and a fair time-to-answer protocol (fixed questions with known answers, a baseline the old way). |
 | Measurements on a real site | BLOCKED_HUMAN | Needs the pilot: labelled plate frames, labelled search queries, annotated detector frames, and operators timing real questions. |
 | Found in passing | NOT_STARTED | The console's plate search calls `/search/anpr-plates`, which does not exist, and sends no purpose. Queued as a separate task. |
+## Session 20 (2026-10-01): North Star Bucket 1, the track index
+
+Branch `feat/track-index`, from `master`. Design: ADR 0011. Operations: `docs/operations/TRACK_INDEX.md`. Flag
+`VIGILONE_FEATURE_TRACK_INDEX` (default OFF).
+
+Local runs: backend `tsc` passes; full suite 148 suites, 1083 passed, 16 failed, 29 skipped. The failures were then
+checked one by one: `featureFlags` expected the old flag list (updated, 27/27); `vlmVerifierRealDb` 14/14,
+`leaderLeaseRealDb` 7/7 and `semanticSearchRealModels` 7/7 pass when run alone (timeouts under the full parallel
+load on this 4-core sandbox); `storageVolumeManager` fails 1 test on `master` too, because this sandbox's disk is
+below the 5% free it needs. ai-worker 30 suites, 290 passed, 13 skipped. Frontend builds; browser tests 6/6.
+Hygiene, model-licence, fail-loud, feature-flag-docs, status-docs and dependency-licence gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| `ObjectTrack` table and migration | DONE_VERIFIED | Migration `20261009000000_track_index` applied; `prisma migrate diff` against the schema is empty (apart from the HNSW index Prisma cannot express). |
+| Track summary from detections | DONE_VERIFIED on synthetic detections | `trackIndexRealDb.test.ts` 13/13 through the real internal endpoint: class vote, first seen from the tracker, dwell, thinned ground-point path, direction, visits to INCLUSION zones only, colour votes (monochrome and malformed attributes add no names), best detection; tentative and duplicate detections ignored; nothing while the flag is off. Ten concurrent detections of one track give `observationCount` 10; without the row lock that test fails. |
+| Plate read tied to the vehicle track | DONE_VERIFIED on synthetic reads | Same suite: the plate inside the car box in the nearest frame is tied both ways (`ObjectTrack.vehicleObservationId`, `VehicleObservation.trackId`); a plate outside every vehicle box and one 14 s later are not. Not run with the real ANPR pipeline and detector on one camera. |
+| Colour names in the worker | DONE_VERIFIED on synthetic pictures | `colourAttributes.test.ts` 20/20: eleven colour names, a person's shirt and trousers and a car's body on a letterboxed 1920x1080 canvas, IR pictures reported as monochrome with no names, no name when no colour leads, a failure counted and the detection still sent. The first version judged a grey street with one coloured person as monochrome (found by the test, fixed). Accuracy on real cameras: NOT_STARTED, needs pilot footage. |
+| API `/api/v1/tracks` | DONE_VERIFIED | Same suite: person tracks left out by default; `includePersons` needs `CROP_PERSON_QUERY` (operator 403) and a purpose (400 without); plate text needs `PLATE_DATA_QUERY` and a purpose; both together refused; audited as `TRACK_QUERY`, `TRACK_PERSON_QUERY` (with purpose) and `TRACK_PLATE_QUERY`; another tenant's track 404; 501 with the flag off. Removing the person exclusion fails 2 tests. |
+| Retention | DONE_VERIFIED | Tracks last seen before `detectionSnapshotRetentionDays` are purged, held ones kept, counts in the purge result and the DPDP dialog. Ignoring holds fails the test. |
+| Pure rules | DONE_VERIFIED | `trackMath.test.ts` 22/22: path waypoints and the 120-point bound over 2000 observations, eight directions and STATIONARY, zone visits across gaps, vote and colour thresholds. |
+| Load at a real site's detection rate | NOT_STARTED | Three extra statements per confirmed detection; measure on the bench before enabling for many cameras. |
 
 ## Session 19 (2026-10-01): redaction console and DPDP settings (Antigravity commit 4482397, reviewed and fixed)
 
