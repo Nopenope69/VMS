@@ -3,12 +3,12 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Browser tests against the real backend and a seeded scratch database. Run them with
  * scripts/e2e/frontend-browser.sh, which starts the backend and `vite preview` and writes the seed file.
- * Only redaction-dpdp.spec.ts, plate-search.spec.ts and spatial-search.spec.ts are wired in: e2e/operations.spec.ts predates this setup, logs in with
+ * The specs listed below are wired in. e2e/operations.spec.ts is not: it predates this setup, logs in with
  * credentials no database has, and has never run.
  */
 export default defineConfig({
   testDir: './e2e',
-  testMatch: process.env.E2E_ONLY ? [process.env.E2E_ONLY] : ['redaction-dpdp.spec.ts', 'plate-search.spec.ts', 'spatial-search.spec.ts'],
+  testMatch: process.env.E2E_ONLY ? [process.env.E2E_ONLY] : ['redaction-dpdp.spec.ts', 'plate-search.spec.ts', 'spatial-search.spec.ts', 'investigation-stopwatch.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,

@@ -308,6 +308,7 @@ model Tenant {
   vlmVerifications        VlmVerification[]
   objectCrops             ObjectCrop[]
   objectTracks            ObjectTrack[]
+  investigationTimings    InvestigationTiming[]
   cropEmbeddings          CropEmbedding[]
   detectionEvents         DetectionEvent[]
   vehicleObservations     VehicleObservation[]
@@ -2078,4 +2079,29 @@ model ObjectTrack {
   @@index([tenantId, objectClass, lastSeenAt])
   @@index([vehicleObservationId])
   @@index([zoneIds], type: Gin)
+}
+
+/// Time-to-answer stopwatch (feature INVESTIGATION_TIMING): one row per timed investigation, all times taken by the
+/// server clock. services/investigation/investigationTiming.service.ts.
+model InvestigationTiming {
+  id                  String    @id @default(uuid())
+  tenantId            String
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// The operator who ran it (kept if the user is deleted, for the report).
+  userId              String
+  /// Optional short note from the operator (the kind of question, not the answer).
+  label               String?
+  startedAt           DateTime  @default(now())
+  /// When the operator first opened a result (jumped to footage from a search result or event).
+  firstResultOpenedAt DateTime?
+  endedAt             DateTime?
+  /// OPEN, ANSWERED or ABANDONED.
+  outcome             String    @default("OPEN")
+  searches            Int       @default(0)
+  resultsOpened       Int       @default(0)
+  camerasViewed       Int       @default(0)
+  exports             Int       @default(0)
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, userId, outcome])
 }

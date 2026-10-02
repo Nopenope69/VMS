@@ -27,6 +27,25 @@ fails on `master` in this sandbox (disk below 5% free). Retrieval tool tests 16/
 | Search quality and speed on site data | NOT_STARTED / BLOCKED_HUMAN | Needs labelled queries from the pilot (recall@k) and the reference hardware (speed with hundreds of thousands of embedded crops). |
 | Search screens | NOT_STARTED | Bucket 4 (investigation workspace) puts this on screen. |
 
+## Session 21 (2026-10-02): North Star Bucket 5, measurement tools
+
+Branch `feat/measurement-tools`, from `master` (independent of Bucket 1). Guide: `docs/operations/PILOT_MEASUREMENT.md`.
+Flag `VIGILONE_FEATURE_INVESTIGATION_TIMING` (default OFF).
+
+Local runs: backend `tsc` passes; full suite with 2 workers 147 suites, 1067 passed, 5 failed, 29 skipped. The
+failures: `vlmVerifierRealDb` 14/14 when run alone (timeouts under load); `storageVolumeManager` fails on `master`
+too, because this sandbox's disk is below the 5% free it needs. ai-worker 29 suites, 275 passed, 13 skipped.
+Frontend builds; browser tests 7/7. All six gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| ANPR benchmark: calibration, operating points, vehicle and plate type, verdict | DONE_VERIFIED on SYNTHETIC data | `plateEval.test.ts` 16/16, including hand-computed calibration error (0.45 on a constructed set), operating points at each threshold, groups under 30 frames flagged, and the verdict (NOT EVALUATED for SYNTHETIC data or under 300 plate frames). The compiled tool ran with the real pinned models on the six SYNTHETIC fixtures: 6/6 read, calibration error 14.3%, NOT EVALUATED. **Says nothing about Indian roads.** |
+| Time-to-answer stopwatch, backend | DONE_VERIFIED | `investigationTimingRealDb.test.ts` 8/8 on the real database: server-clock times (a client-sent start time is refused), steps, first opened result kept on later ones, one running stopwatch per operator also under 5 concurrent starts (database partial unique index; without it the test fails), other operators' stopwatches 404, stale ones closed as ABANDONED, report median / p90 / share within 60 s / steps checked against hand-computed values, NOT EVALUATED under 30 answers, report needs AUDIT_VIEW and stays in the tenant, 501 with the flag off. Moving the first-result time on a later step fails the test. |
+| Stopwatch on the Investigation page | DONE_VERIFIED in a browser | `investigation-stopwatch.spec.ts`: start with a question, a camera assigned to the grid is counted, Answered stops it, and the backend's current stopwatch and report agree. Removing the camera step makes it fail. |
+| Pilot measurement guide | DONE | `PILOT_MEASUREMENT.md`: the four V0.1 measurements, their tools and minimums, breakdown values for the India benchmark, and a fair time-to-answer protocol (fixed questions with known answers, a baseline the old way). |
+| Measurements on a real site | BLOCKED_HUMAN | Needs the pilot: labelled plate frames, labelled search queries, annotated detector frames, and operators timing real questions. |
+| Found in passing | NOT_STARTED | The console's plate search calls `/search/anpr-plates`, which does not exist, and sends no purpose. Queued as a separate task. |
+
 ## Session 20 (2026-10-01): North Star Bucket 1, the track index
 
 Branch `feat/track-index`, from `master`. Design: ADR 0011. Operations: `docs/operations/TRACK_INDEX.md`. Flag
