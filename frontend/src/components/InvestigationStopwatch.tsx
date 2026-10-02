@@ -13,6 +13,7 @@ export type TimingStep = 'SEARCH' | 'RESULT_OPENED' | 'CAMERA_VIEWED' | 'EXPORT'
 interface Timing {
   id: string;
   startedAt: string;
+  outcome: string;
   label: string | null;
   searches: number;
   resultsOpened: number;
@@ -76,7 +77,8 @@ export function useInvestigationTiming(enabled: boolean): InvestigationTiming {
       if (!enabled || !timing) return;
       api
         .post(`/investigations/timings/${timing.id}/steps`, { kind })
-        .then((res) => setTiming(res.data.timing))
+        // A step answered after the stopwatch was stopped (or replaced) must not bring it back on screen.
+        .then((res) => setTiming((cur) => (cur && cur.id === res.data.timing.id && res.data.timing.outcome === 'OPEN' ? res.data.timing : cur)))
         .catch((err) => setError(`Stopwatch step not recorded: ${message(err, kind)}`));
     },
     [enabled, timing]
