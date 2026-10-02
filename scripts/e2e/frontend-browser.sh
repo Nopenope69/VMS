@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frontend browser tests (frontend/e2e/redaction-dpdp.spec.ts) against the real backend and a seeded scratch
+# Frontend browser tests (frontend/e2e/redaction-dpdp.spec.ts, plate-search.spec.ts) against the real backend and a seeded scratch
 # database. The database named in TEST_DB_URL is dropped and recreated: never point it at real data.
 #
 #   TEST_DB_URL=postgresql://vigilone:pw@localhost:5432/vigilone_e2e scripts/e2e/frontend-browser.sh
@@ -32,7 +32,7 @@ echo "== migrate and seed"
 
 echo "== backend on :$API_PORT"
 (cd "$ROOT/backend" && npm run -s build >/dev/null)
-(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true \
+(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_SMART_SEARCH=true \
   JWT_SECRET="${JWT_SECRET:-vigilone_e2e_jwt_signing_key_32bytes_min!!}" \
   exec node dist/server.js > "$WORK/backend.log" 2>&1) &
 PIDS+=($!)
