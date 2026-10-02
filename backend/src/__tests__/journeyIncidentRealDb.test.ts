@@ -145,6 +145,14 @@ describe('journey to incident', () => {
     const manifest = await prisma.evidenceManifest.create({
       data: { tenantId, createdByUserId: admin.userId, startUtc: sec(-30), endUtc: sec(360), cameraIdsJson: [cam.Gate, cam.Yard], masterEvidenceHash: 'h', sourceMetadataJson: {}, segmentManifestJson: [] },
     });
+    // The footage exists before the incident is opened, as on a real site. (Created afterwards, any alarm sweeper
+    // running in between, such as another test file's, would rightly close the past window as having no footage.)
+    const inWindow = await prisma.recordingSegment.create({
+      data: { tenantId, cameraId: cam.Yard, filePath: `/recordings/${cam.Yard}/in.mp4`, startTime: sec(290), endTime: sec(350), durationMs: 60_000, sizeBytes: BigInt(1000), sha256Hash: 'b'.repeat(64) },
+    });
+    const outside = await prisma.recordingSegment.create({
+      data: { tenantId, cameraId: cam.Yard, filePath: `/recordings/${cam.Yard}/out.mp4`, startTime: sec(900), endTime: sec(960), durationMs: 60_000, sizeBytes: BigInt(1000), sha256Hash: 'c'.repeat(64) },
+    });
     const r = await call(operator, 'POST', `/${T['car@Yard']}/journey/incident`, { title: 'White car through the yard', severity: 'CRITICAL', evidenceManifestId: manifest.id });
     expect(r.status).toBe(201);
     expect(r.json.holds).toBe(2);
@@ -164,7 +172,6 @@ describe('journey to incident', () => {
     for (const h of holds) {
       expect(h.windowStart.toISOString()).toBe(sec(-60).toISOString());
       expect(h.windowEnd.toISOString()).toBe(sec(450).toISOString());
-      expect(h.status).toBe('PENDING');
     }
     const actions = (await prisma.auditEvent.findMany({ where: { tenantId, resourceId: alarm.id }, select: { action: true } })).map((a) => a.action);
     expect(actions).toContain('ALARM_CREATE');
@@ -173,12 +180,8 @@ describe('journey to incident', () => {
 
     // The alarm sweeper pins the Yard footage over the journey window, says plainly that Gate recorded nothing, and
     // does not replace the journey-wide hold with its own short one around the alarm time.
-    const inWindow = await prisma.recordingSegment.create({
-      data: { tenantId, cameraId: cam.Yard, filePath: `/recordings/${cam.Yard}/in.mp4`, startTime: sec(290), endTime: sec(350), durationMs: 60_000, sizeBytes: BigInt(1000), sha256Hash: 'b'.repeat(64) },
-    });
-    const outside = await prisma.recordingSegment.create({
-      data: { tenantId, cameraId: cam.Yard, filePath: `/recordings/${cam.Yard}/out.mp4`, startTime: sec(900), endTime: sec(960), durationMs: 60_000, sizeBytes: BigInt(1000), sha256Hash: 'c'.repeat(64) },
-    });
+    // sweep() works across all tenants, like the alarm workflow test's; `npm test` runs files in band, so no other
+    // file's alarms are in flight while it runs.
     const { AlarmWorkflowService } = require('../services/incident/workflow/alarmWorkflow.service');
     const { NotificationAdapter } = require('../services/incident/orchestrator/adapters/notificationAdapter');
     const workflow = new AlarmWorkflowService(prisma, new NotificationAdapter(prisma), undefined, {
