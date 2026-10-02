@@ -15,14 +15,14 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
           tenantId: 'tenant-alpha',
           name: 'Front Entrance',
           streamPath: 'cam_front',
-          isOnline: true,
+          monitored: true,
         },
         {
           id: 'cam-02',
           tenantId: 'tenant-alpha',
           name: 'Rear Loading Dock',
           streamPath: 'cam_rear',
-          isOnline: true,
+          monitored: true,
         },
       ]),
     };
@@ -83,14 +83,14 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
           tenantId: 'tenant-alpha',
           name: 'Front Entrance',
           streamPath: 'cam_front',
-          isOnline: true,
+          monitored: true,
         },
         {
           id: 'cam-02',
           tenantId: 'tenant-alpha',
           name: 'Rear Loading Dock',
           streamPath: 'cam_rear',
-          isOnline: false, // Offline!
+          monitored: false, // no longer monitored
         },
       ]);
 
@@ -141,7 +141,7 @@ describe('StreamSupervisor: Multi-Camera Pipeline & Failure Isolation', () => {
         tenantId: 'tenant-alpha',
         name: 'Isolated Cam',
         streamPath: 'cam_iso',
-        isOnline: true,
+        monitored: true,
       });
 
       const testFrame: VideoFrame = {
@@ -206,7 +206,7 @@ describe('StreamSupervisor: each sampled frame is inferred at most once', () => 
     const worker = { processFrame: jest.fn(async (f: VideoFrame) => { seen.push(f.sequenceNumber); return []; }) };
     const api = { fetchActiveCameras: jest.fn().mockResolvedValue([]) };
     const supervisor = new StreamSupervisor({ apiClient: api as any, aiWorker: worker as any, gateMode: 'off' } as any);
-    const manager = supervisor.startCameraStream({ id: 'cam-x', tenantId: 't', name: 'x', streamPath: 'x', isOnline: true }, { sourceWidth: 8, sourceHeight: 8 });
+    const manager = supervisor.startCameraStream({ id: 'cam-x', tenantId: 't', name: 'x', streamPath: 'x', monitored: true }, { sourceWidth: 8, sourceHeight: 8 });
     // Simulate what StreamManager does for each decoded frame: enqueue, then emit.
     for (let i = 1; i <= 3; i++) {
       manager.getQueue().enqueue(frame('cam-x', i));

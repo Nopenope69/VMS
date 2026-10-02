@@ -112,10 +112,10 @@ export class AuthenticatedInternalApiClient {
    * Fetches active camera loopback streams from the appliance backend.
    * Only safe metadata is returned (no credentials or external IPs).
    */
-  public async fetchActiveCameras(params?: { tenantId?: string; isOnline?: boolean }): Promise<DiscoveredCamera[]> {
+  public async fetchActiveCameras(params?: { tenantId?: string; monitored?: boolean }): Promise<DiscoveredCamera[]> {
     const query: Record<string, string> = {};
     if (params?.tenantId) query.tenantId = params.tenantId;
-    if (params?.isOnline !== undefined) query.isOnline = String(params.isOnline);
+    if (params?.monitored !== undefined) query.monitored = String(params.monitored);
     const res = await this.request<{ cameras: DiscoveredCamera[] }>('GET', '/cameras', undefined, query);
     return res.cameras;
   }

@@ -112,14 +112,14 @@ export class StreamSupervisor extends EventEmitter {
     for (const cam of discovered) {
       discoveredMap.set(cam.id, cam);
 
-      if (cam.isOnline && !this.streams.has(cam.id)) {
+      if (cam.monitored && !this.streams.has(cam.id)) {
         if (this.governor.canAdmitStream(cam.id)) {
           this.startCameraStream(cam);
         } else {
           this.emit('warn', `Cannot admit camera '${cam.name}' (${cam.id}): Concurrency limit reached`);
         }
-      } else if (!cam.isOnline && this.streams.has(cam.id)) {
-        // Camera went offline; stop AI frame acquisition
+      } else if (!cam.monitored && this.streams.has(cam.id)) {
+        // Camera no longer monitored; stop AI frame acquisition
         await this.stopCameraStream(cam.id);
       }
     }
