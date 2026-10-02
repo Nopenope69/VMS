@@ -13,7 +13,6 @@ import {
   SigningMode,
   ChainOfCustodyLog,
 } from '@prisma/client';
-import config from '../../../config/env';
 import { FFmpegService } from '../../ffmpeg/ffmpeg.service';
 import {
   computeFileSha256,
@@ -48,6 +47,7 @@ import {
   canonicalizeJson,
 } from './manifestBuilder';
 import { PackageAssembler } from './packageAssembler';
+import { setting } from '../../../config/settings';
 
 export interface CreateEvidenceParams {
   tenantId: string;
@@ -176,7 +176,7 @@ export class EvidenceArchive {
    * Processes a single-camera structured evidence export package with full Section 63 BSA bundle.
    */
   async processExport(params: CreateEvidenceParams): Promise<string> {
-    const exportsDir = config.EXPORTS_DIR;
+    const exportsDir = setting('EXPORTS_DIR');
     if (!fs.existsSync(exportsDir)) {
       fs.mkdirSync(exportsDir, { recursive: true });
     }
@@ -227,7 +227,7 @@ export class EvidenceArchive {
     fs.mkdirSync(workDir, { recursive: true });
 
     // Check admission control before locking segments
-    const admission = await this.pinAdapter.checkAdmissionControl(config.RECORDINGS_DIR);
+    const admission = await this.pinAdapter.checkAdmissionControl(setting('RECORDINGS_DIR'));
     if (!admission.admitted) {
       await this.prisma.evidenceExport.update({
         where: { id: exportId },
@@ -574,7 +574,7 @@ export class EvidenceArchive {
     return this.custodyLedger.getHistory(tenantId, evidenceId);
   }
 
-  async checkAdmissionControl(recordingsDir = config.RECORDINGS_DIR): Promise<AdmissionStatus> {
+  async checkAdmissionControl(recordingsDir = setting('RECORDINGS_DIR')): Promise<AdmissionStatus> {
     return this.pinAdapter.checkAdmissionControl(recordingsDir);
   }
 

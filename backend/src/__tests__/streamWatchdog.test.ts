@@ -12,6 +12,7 @@ describe('StreamWatchdogService - Baseline Deviation Inspector & Recovery', () =
 
     mockPrisma = {
       camera: {
+        update: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn().mockResolvedValue({
           id: 'cam_dog_01',
           name: 'Front Gate High-Res',
@@ -65,6 +66,13 @@ describe('StreamWatchdogService - Baseline Deviation Inspector & Recovery', () =
     expect(res.deviationScore).toBe(0);
     expect(createdAlarms).toHaveLength(0);
     expect(mockPrisma.streamDiagnostic.create).toHaveBeenCalledTimes(1);
+    // A ready stream is a sighting: the camera's lastSeenAt is stamped (its liveness on screen).
+    expect(mockPrisma.camera.update).toHaveBeenCalledWith({ where: { id: expect.any(String) }, data: { lastSeenAt: expect.any(Date) } });
+  });
+
+  it('does not stamp lastSeenAt when the stream is down, so the camera ages out to offline', async () => {
+    await service.evaluateStream('cam_wd_01', { fps: 0, bitrateKbps: 0, resolution: 'UNKNOWN', videoCodec: 'none', ready: false });
+    expect(mockPrisma.camera.update).not.toHaveBeenCalled();
   });
 
   it('should flag LOW_FPS degradation and raise alarm when FPS drops below 50% of baseline', async () => {

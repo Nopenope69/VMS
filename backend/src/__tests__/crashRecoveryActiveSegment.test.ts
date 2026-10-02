@@ -66,9 +66,7 @@ describe('CrashRecovery leaves actively written segments alone', () => {
 });
 
 describe('RecordingCatalog orphan admission control leaves actively written files alone', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const config = require('../config/env').default;
-  const savedDir = config.RECORDINGS_DIR;
+  const savedDir = process.env.RECORDINGS_DIR;
   const savedGrace = process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS;
   let root: string;
 
@@ -76,10 +74,11 @@ describe('RecordingCatalog orphan admission control leaves actively written file
     delete process.env.CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS;
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'vigilone-catalog-active-'));
     fs.mkdirSync(path.join(root, 'unregistered_cam'));
-    config.RECORDINGS_DIR = root;
+    process.env.RECORDINGS_DIR = root;
   });
   afterEach(() => {
-    config.RECORDINGS_DIR = savedDir;
+    if (savedDir === undefined) delete process.env.RECORDINGS_DIR;
+    else process.env.RECORDINGS_DIR = savedDir;
     restoreGrace(savedGrace);
     fs.rmSync(root, { recursive: true, force: true });
   });

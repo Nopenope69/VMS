@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { setting } from './settings';
 
 dotenv.config();
 
@@ -24,12 +25,7 @@ export const envSchema = z.object({
   MANAGEMENT_IP: z.string().default('127.0.0.1'),
   CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
   MEDIAMTX_API_URL: z.string().default('http://mediamtx:9997'),
-  COTURN_SECRET: z.string().default('vigilone_turn_secret_dev_38921'),
-  COTURN_HOST: z.string().default('turn.vigilone.internal'),
-  COTURN_PORT: z.coerce.number().default(3478),
   METRICS_AUTH_TOKEN: z.string().optional(),
-  RECORDINGS_DIR: z.string().default('/recordings'),
-  EXPORTS_DIR: z.string().default('/recordings/exports'),
   RECORD_SEGMENT_DURATION: z.string().default('10m'),
   RECORD_PART_DURATION: z.string().default('1s'),
 });
@@ -132,11 +128,12 @@ export function loadConfig() {
         'FATAL: Production mode detected with default, short (<32 chars), or insecure INTERNAL_API_SECRET! Halting startup.'
       );
     }
+    const coturnSecret = setting('COTURN_SECRET');
     if (
-      parsed.data.COTURN_SECRET.length < 32 ||
-      parsed.data.COTURN_SECRET.toLowerCase().includes('change_me') ||
-      parsed.data.COTURN_SECRET.toLowerCase().includes('vigilone_turn_secret_dev') ||
-      parsed.data.COTURN_SECRET.toLowerCase().includes('vigilone_dev')
+      coturnSecret.length < 32 ||
+      coturnSecret.toLowerCase().includes('change_me') ||
+      coturnSecret.toLowerCase().includes('vigilone_turn_secret_dev') ||
+      coturnSecret.toLowerCase().includes('vigilone_dev')
     ) {
       throw new Error(
         'FATAL: Production mode detected with default, short (<32 chars), or insecure COTURN_SECRET! Halting startup.'

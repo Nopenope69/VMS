@@ -37,7 +37,7 @@ async function setup() {
   const camera = await prisma.camera.create({
     data: {
       tenantId: tenant.id, siteId: site.id, name: 'E2E gate camera (SIMULATED-CAMERA)', streamPath,
-      ipAddress: '127.0.0.1', mainRtspUri: cameraUrl, isOnline: true,
+      ipAddress: '127.0.0.1', mainRtspUri: cameraUrl, monitored: true,
       recordingMode: 'CONTINUOUS', desiredRecorderState: 'RUNNING',
     },
   });

@@ -6,19 +6,19 @@ import { CustodyLedger } from '../services/evidence/archive/custodyLedger';
 import { RetentionPolicyEngine } from '../services/recording/catalog/retentionPolicy';
 import { PackageAssembler } from '../services/evidence/archive/packageAssembler';
 import { EvidenceArchive } from '../services/evidence/archive/evidenceArchive.service';
-import config from '../config/env';
 
 describe('Task 2.3: Fail-Closed Custody Ledger & Audit Chain (C-012)', () => {
-  const originalExportsDir = config.EXPORTS_DIR;
+  const originalExportsDir = process.env.EXPORTS_DIR;
   const testExportsDir = path.join(os.tmpdir(), `vigilone-exports-test-${Date.now()}`);
 
   beforeAll(() => {
-    (config as any).EXPORTS_DIR = testExportsDir;
+    process.env.EXPORTS_DIR = testExportsDir;
     fs.mkdirSync(testExportsDir, { recursive: true });
   });
 
   afterAll(() => {
-    (config as any).EXPORTS_DIR = originalExportsDir;
+    if (originalExportsDir === undefined) delete process.env.EXPORTS_DIR;
+    else process.env.EXPORTS_DIR = originalExportsDir;
     try {
       fs.rmSync(testExportsDir, { recursive: true, force: true });
     } catch {}

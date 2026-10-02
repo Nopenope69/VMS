@@ -10,8 +10,8 @@ import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
 import { computeFileSha256 } from '../../../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
-import config from '../../../config/env';
 import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
+import { setting } from '../../../config/settings';
 
 export interface RegisterSegmentInput {
   tenantId?: string;
@@ -394,7 +394,7 @@ export class RecordingCatalog {
 
     let indexedCount = 0;
     try {
-      const recordingsDir = config.RECORDINGS_DIR || '/var/lib/vigilone/recordings';
+      const recordingsDir = setting('RECORDINGS_DIR');
       const files = await this.storageAdapter.scanDirectory(recordingsDir);
 
       for (const filePath of files) {

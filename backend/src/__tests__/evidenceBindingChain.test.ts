@@ -16,7 +16,6 @@ import {
   getOrCreateApplianceEd25519Keys,
 } from '../utils/crypto';
 
-import config from '../config/env';
 
 describe('Stage 5: Full Evidence Manifest Cryptographic Binding Chain (Section 3.3)', () => {
   const testOutputDir = path.join(__dirname, '..', '..', 'test_tmp_evidence_binding');
@@ -26,14 +25,20 @@ describe('Stage 5: Full Evidence Manifest Cryptographic Binding Chain (Section 3
   let custodyLogs: any[];
   let evidencePins: any[];
 
+  const saved = { EXPORTS_DIR: process.env.EXPORTS_DIR, RECORDINGS_DIR: process.env.RECORDINGS_DIR };
+
   beforeAll(() => {
     fs.mkdirSync(testOutputDir, { recursive: true });
-    config.EXPORTS_DIR = path.join(testOutputDir, 'exports');
-    config.RECORDINGS_DIR = testOutputDir;
-    fs.mkdirSync(config.EXPORTS_DIR, { recursive: true });
+    process.env.EXPORTS_DIR = path.join(testOutputDir, 'exports');
+    process.env.RECORDINGS_DIR = testOutputDir;
+    fs.mkdirSync(process.env.EXPORTS_DIR, { recursive: true });
   });
 
   afterAll(() => {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
     try {
       fs.rmSync(testOutputDir, { recursive: true, force: true });
     } catch {}

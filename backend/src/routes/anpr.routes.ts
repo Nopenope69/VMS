@@ -11,12 +11,12 @@ import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v
 import { z } from 'zod';
 import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 import { setting } from '../config/settings';
+import { isLive } from '../services/camera/liveness';
 
 const router = Router();
 
 // Plate reads become ANPR_MATCH events in the orchestrator (rules: ANPR_WATCHLIST); list entries
 // with alertOnMatch raise an audited alarm linked to that event.
-aggregator.setEventSink((ev) => incidentOrchestrator.ingestEvent(ev));
 aggregator.setAlarmSink((ev, wl) =>
   incidentOrchestrator.elevateAlarm({
     tenantId: ev.tenantId,
@@ -309,14 +309,14 @@ router.get('/health', authorize(Permission.ANPR_VIEW), async (req: Request, res:
         select: { name: true, version: true, sha256: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.camera.findMany({ where: { tenantId, lprMode: true }, select: { id: true, name: true, isOnline: true, lprConfigJson: true } }),
+      prisma.camera.findMany({ where: { tenantId, lprMode: true }, select: { id: true, name: true, lastSeenAt: true, lprConfigJson: true } }),
       prisma.vehicleObservation.count({ where: { tenantId, lastSeenAt: { gte: since } } }),
       prisma.vehicleObservation.findFirst({ where: { tenantId }, orderBy: { lastSeenAt: 'desc' }, select: { lastSeenAt: true } }),
     ]);
     return res.json({
       status: {
         pipelines,
-        lprCameras,
+        lprCameras: lprCameras.map(({ lastSeenAt, ...c }) => ({ ...c, isOnline: isLive(lastSeenAt) })),
         readsLastHour,
         lastReadAt: lastRead?.lastSeenAt ?? null,
         checkedAt: new Date(),

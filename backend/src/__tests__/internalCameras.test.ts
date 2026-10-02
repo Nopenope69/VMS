@@ -98,7 +98,7 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
           tenantId: 'tenant-alpha',
           name: 'Gate 1 North Entrance',
           streamPath: 'cam_gate1_north',
-          isOnline: true,
+          monitored: true,
           // DB fields that MUST NOT be selected or returned
           ipAddress: '192.168.1.100',
           encryptedAuth: 'aes256gcm_encrypted_creds_here',
@@ -116,7 +116,7 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
           tenantId: true,
           name: true,
           streamPath: true,
-          isOnline: true,
+          monitored: true,
         });
 
         // Return only the projected fields as Prisma would
@@ -126,7 +126,7 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
             tenantId: mockCamerasInDb[0].tenantId,
             name: mockCamerasInDb[0].name,
             streamPath: mockCamerasInDb[0].streamPath,
-            isOnline: mockCamerasInDb[0].isOnline,
+            monitored: mockCamerasInDb[0].monitored,
           },
         ]);
       });
@@ -145,7 +145,7 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
       expect(returnedCam.tenantId).toBe('tenant-alpha');
       expect(returnedCam.name).toBe('Gate 1 North Entrance');
       expect(returnedCam.streamPath).toBe('cam_gate1_north');
-      expect(returnedCam.isOnline).toBe(true);
+      expect(returnedCam.monitored).toBe(true);
 
       // SENSITIVE FIELDS STRICTLY FORBIDDEN
       expect((returnedCam as any).ipAddress).toBeUndefined();
@@ -156,21 +156,21 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
       expect((returnedCam as any).username).toBeUndefined();
     });
 
-    it('filters cameras by tenantId and isOnline query parameters', async () => {
+    it('filters cameras by tenantId and monitored query parameters', async () => {
       (prisma.camera.findMany as jest.Mock).mockResolvedValue([
         {
           id: 'cam-uuid-2',
           tenantId: 'tenant-beta',
           name: 'Perimeter West',
           streamPath: 'cam_perim_west',
-          isOnline: true,
+          monitored: true,
         },
       ]);
 
       const req: any = {
         query: {
           tenantId: 'tenant-beta',
-          isOnline: 'true',
+          monitored: 'true',
         },
       };
       const res = createMockRes();
@@ -181,14 +181,14 @@ describe('Internal Camera Discovery & Privacy Redaction Boundary', () => {
       expect(prisma.camera.findMany).toHaveBeenCalledWith({
         where: {
           tenantId: 'tenant-beta',
-          isOnline: true,
+          monitored: true,
         },
         select: {
           id: true,
           tenantId: true,
           name: true,
           streamPath: true,
-          isOnline: true,
+          monitored: true,
         },
         orderBy: { name: 'asc' },
       });

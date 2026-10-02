@@ -2,7 +2,7 @@ import checkDiskSpace from 'check-disk-space';
 import { monitorEventLoopDelay, IntervalHistogram } from 'perf_hooks';
 import { SegmentStatus } from '@prisma/client';
 import prisma from '../../config/database';
-import config from '../../config/env';
+import { setting } from '../../config/settings';
 
 export interface MetricLabelSet {
   [key: string]: string | number;
@@ -138,7 +138,7 @@ export class MetricsService {
 
     // 2. Storage Vitals
     try {
-      const disk = await checkDiskSpace(config.RECORDINGS_DIR);
+      const disk = await checkDiskSpace(setting('RECORDINGS_DIR'));
       const usedBytes = disk.size - disk.free;
       const fillRatio = disk.size > 0 ? (usedBytes / disk.size).toFixed(4) : '0';
 

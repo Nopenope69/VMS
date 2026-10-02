@@ -93,7 +93,7 @@ router.post('/', authorize(Permission.CAMERA_CREATE), enforceCameraQuota, async 
         hasPtz: camera.hasPtz,
         recordingMode: camera.recordingMode,
         recorderState: camera.recorderState,
-        isOnline: camera.isOnline,
+        isOnline: false, // not seen by the stream watchdog yet
       },
       ...(warnings.length ? { warnings } : {}),
     });

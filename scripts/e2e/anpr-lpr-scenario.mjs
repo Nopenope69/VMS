@@ -28,7 +28,7 @@ async function setup() {
   const camera = await prisma.camera.create({
     data: {
       tenantId: tenant.id, siteId: site.id, name: 'E2E LPR lane (SIMULATED-CAMERA)', streamPath, ipAddress: '127.0.0.1',
-      mainRtspUri: process.env.CAMERA_RTSP_URL, isOnline: true, recordingMode: 'CONTINUOUS', desiredRecorderState: 'RUNNING',
+      mainRtspUri: process.env.CAMERA_RTSP_URL, monitored: true, recordingMode: 'CONTINUOUS', desiredRecorderState: 'RUNNING',
       lprMode: true, lprConfigJson: { fps: 2, maxWidth: 1280, minConfidence: 0.5 },
     },
   });

@@ -24,14 +24,15 @@ To find out what runs in the process, you had to read every route file. The cata
 It also owns `startBackgroundServices()` and `stopBackgroundServices()`. Routes take their instances from it.
 `server.ts` keeps only the HTTP server, the HA leader lease and shutdown.
 
-## Not done
-* The `incidentOrchestrator` instance is still created in its own module. Four services
-  (`detectionIngestion`, `sceneChangeDetector`, `streamWatchdog`, `storageSentinel`) import it
-  directly, some through a dynamic `import()` to avoid an import cycle. Injecting it into them is the next
-  step. Until then the orchestrator's bookmark adapter keeps its own `RecordingCatalog`. That is harmless
-  (the catalog holds no state outside the database unless its timers are started), but it is a second copy.
-* `EvidenceExportService` and `EvidenceManifestService` are used only by tests. They build their own
-  `EvidenceArchive` and were left as they are.
+## Done later (Bucket 7, 2026-10-02)
+* The `IncidentOrchestrator` is built in `composition.ts`, with the shared `RecordingCatalog` (its bookmark
+  adapter no longer makes a second one). Its module no longer exports an instance. Every event producer is
+  handed its `ingestEvent` as an `EventSink`: the stream watchdog, scene-change detector and plate aggregator
+  through `setEventSink`, the storage sentinel, camera event manager and door monitor through their constructors,
+  and detection ingestion and the journey incident route as an argument. A producer with no sink logs
+  "no event sink wired" instead of dropping the event silently. `compositionEventSinks.test.ts` pins the wiring
+  and that no service imports an orchestrator instance.
+* `EvidenceExportService` and `EvidenceManifestService` were deleted; their tests use `EvidenceArchive`.
 
 ## Consequences
 * One file lists what runs in the backend process and in what order it starts and stops.

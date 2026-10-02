@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { handleSegmentComplete } from '../routes/internal.routes';
-import { EvidenceManifestService } from '../services/evidence/evidenceManifest.service';
+import { EvidenceArchive } from '../services/evidence/archive';
 import { ChainOfCustodyService } from '../services/evidence/chainOfCustody.service';
 import { RecordingIndexService } from '../services/recording/recordingIndex.service';
 import { StreamManager } from '../../../services/ai-worker/src/streamManager';
@@ -143,7 +143,7 @@ describe('Architectural Invariant: AI / Evidence Plane Strict Decoupling', () =>
       } as unknown as RecordingIndexService;
 
       const chainOfCustody = new ChainOfCustodyService(prisma);
-      const manifestService = new EvidenceManifestService(prisma, recordingIndex, chainOfCustody);
+      const manifestService = new EvidenceArchive(prisma, recordingIndex, chainOfCustody);
 
       const manifest = await manifestService.createManifest({
         tenantId: 'tenant-secure',

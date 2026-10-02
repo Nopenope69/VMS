@@ -7,7 +7,8 @@
  * Creates, all real rows: one tenant, site and camera; an admin (TENANT_ADMIN) with a bcrypt password; a sealed
  * evidence export with its manifest; a COMPLETED redaction job whose derivative file exists in EXPORTS_DIR with
  * its true SHA-256; one plate read past its retention period and one within it; a VIEWER (no PLATE_DATA_QUERY)
- * and an OPERATOR (PLATE_DATA_QUERY, no PRIVACY_POLICY_MANAGE); a plate read for the plate search test; detections
+ * and an OPERATOR (PLATE_DATA_QUERY, no PRIVACY_POLICY_MANAGE); two active alarms (one CRITICAL, one WARNING) for
+ * the operations test; the camera is never seen by the stream watchdog, so it is offline; a plate read for the plate search test; detections
  * inside and outside the spatial search's default region; and a licence carrying ADVANCED_SEARCH, which
  * /api/v1/search requires. The licence is signed with a key made here, whose public half goes out in the seed
  * file as licensePublicKey: the runner hands it to the backend as VIGILONE_LICENSE_TEST_PUBLIC_KEY, which the
@@ -55,6 +56,10 @@ async function main() {
   await prisma.user.create({
     data: { tenantId: tenant.id, email: operatorEmail, name: 'E2E Operator', role: 'OPERATOR', passwordHash: await bcrypt.hash(password, 10) },
   });
+
+  // Two active alarms for the operations test (frontend/e2e/operations.spec.ts).
+  const critical = await prisma.alarm.create({ data: { tenantId: tenant.id, cameraId: camera.id, title: 'E2E perimeter breach', severity: 'CRITICAL' } });
+  const warning = await prisma.alarm.create({ data: { tenantId: tenant.id, cameraId: camera.id, title: 'E2E camera tamper', severity: 'WARNING' } });
 
   const licenceKey = crypto.generateKeyPairSync('ed25519', {
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -171,6 +176,7 @@ async function main() {
       password,
       searchPlate,
       cameraId: camera.id,
+      alarms: { critical: critical.id, warning: warning.id },
       manifestId: manifest.id,
       exportId: evidenceExport.id,
       completedJobId: completedJob.id,

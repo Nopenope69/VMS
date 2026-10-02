@@ -1,4 +1,3 @@
-import prisma from '../../../config/database';
 import { PrismaClient, Alarm, EventSeverity, RuleActionType } from '@prisma/client';
 import { assertTenantBoundary } from '../../rbac/permissions';
 import {
@@ -14,6 +13,7 @@ import { RelayAdapter, HardwareDriver, RelayExecuteParams, RelayExecuteResult } 
 import { NotificationAdapter, DispatchNotificationRequest } from './adapters/notificationAdapter';
 import { PtzAdapter } from './adapters/ptzAdapter';
 import { BookmarkAdapter } from './adapters/bookmarkAdapter';
+import { RecordingCatalog } from '../../recording/catalog/recordingCatalog.service';
 
 export class IncidentOrchestrator {
   private prisma: PrismaClient;
@@ -25,14 +25,14 @@ export class IncidentOrchestrator {
   private ptzAdapter: PtzAdapter;
   private bookmarkAdapter: BookmarkAdapter;
 
-  constructor(prisma: PrismaClient, deps: { relayAdapter?: RelayAdapter } = {}) {
+  constructor(prisma: PrismaClient, deps: { relayAdapter?: RelayAdapter; recordingCatalog?: RecordingCatalog } = {}) {
     this.prisma = prisma;
     this.ruleEngine = new RuleEngine(prisma);
     this.alarmLifecycle = new AlarmLifecycle(prisma);
     this.relayAdapter = deps.relayAdapter ?? new RelayAdapter(prisma);
     this.notificationAdapter = new NotificationAdapter(prisma);
     this.ptzAdapter = new PtzAdapter(prisma);
-    this.bookmarkAdapter = new BookmarkAdapter(prisma);
+    this.bookmarkAdapter = new BookmarkAdapter(prisma, deps.recordingCatalog);
 
     this.actionOutbox = new ActionOutbox(prisma, {
       relayAdapter: this.relayAdapter,
@@ -256,8 +256,7 @@ export class IncidentOrchestrator {
   }
 }
 
-export const incidentOrchestrator = new IncidentOrchestrator(prisma);
-export default incidentOrchestrator;
+export default IncidentOrchestrator;
 
 /** Row persisted in CanonicalEvent for an orchestrator event (transactional inbox). */
 export function canonicalRow(event: VigilOneEvent) {

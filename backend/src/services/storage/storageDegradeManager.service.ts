@@ -7,7 +7,7 @@ import {
 } from '@prisma/client';
 import checkDiskSpace from 'check-disk-space';
 import fs from 'fs';
-import config from '../../config/env';
+import { setting } from '../../config/settings';
 
 export type AdaptiveStorageState =
   | 'AVAILABLE'
@@ -75,7 +75,7 @@ export class StorageDegradeManagerService {
    * Evaluates multi-signal storage thresholds including free percentage, absolute headroom,
    * and projected time-to-full (rate of exhaustion).
    */
-  async evaluateStorageVitals(diskPath = config.RECORDINGS_DIR || '/recordings'): Promise<StorageRateAnalysis> {
+  async evaluateStorageVitals(diskPath = setting('RECORDINGS_DIR')): Promise<StorageRateAnalysis> {
     const resolvedPath = fs.existsSync(diskPath) ? diskPath : '/';
     const disk = await checkDiskSpace(resolvedPath);
 

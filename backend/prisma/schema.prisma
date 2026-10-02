@@ -455,7 +455,9 @@ model Camera {
   lastReconciledAt       DateTime?
   lastRecorderError      String?
 
-  isOnline   Boolean   @default(false)
+  /// Watched by the stream and recording watchdogs and the recording scheduler (set at onboarding). Not liveness:
+  /// a camera is live when lastSeenAt, stamped by the stream watchdog whenever its stream is ready, is recent.
+  monitored  Boolean   @default(false)
   lastSeenAt DateTime?
 
   createdAt DateTime @default(now())

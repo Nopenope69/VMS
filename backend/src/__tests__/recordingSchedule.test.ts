@@ -56,7 +56,7 @@ describe('RecordingScheduleService - Idempotent Timezone Engine', () => {
       mockPrisma.camera.findUnique.mockResolvedValue({
         id: 'cam_sch_01',
         name: 'Main Gate',
-        isOnline: true,
+        monitored: true,
         recordingMode: RecordingMode.SCHEDULED,
         site: { timezone: 'UTC' },
         recordingSchedule: {
@@ -89,7 +89,7 @@ describe('RecordingScheduleService - Idempotent Timezone Engine', () => {
       mockPrisma.camera.findUnique.mockResolvedValue({
         id: 'cam_sch_01',
         name: 'Main Gate',
-        isOnline: true,
+        monitored: true,
         recordingMode: RecordingMode.SCHEDULED,
         site: { timezone: 'UTC' },
         recordingSchedule: {
@@ -117,7 +117,7 @@ describe('RecordingScheduleService - Idempotent Timezone Engine', () => {
       mockPrisma.camera.findUnique.mockResolvedValue({
         id: 'cam_sch_01',
         name: 'Main Gate',
-        isOnline: true,
+        monitored: true,
         recordingMode: RecordingMode.SCHEDULED,
         site: { timezone: 'UTC' },
         recordingSchedule: {
@@ -142,17 +142,17 @@ describe('RecordingScheduleService - Idempotent Timezone Engine', () => {
       });
     });
 
-    it('should skip evaluation if camera is offline', async () => {
+    it('should skip evaluation if the camera is not monitored', async () => {
       mockPrisma.camera.findUnique.mockResolvedValue({
         id: 'cam_sch_offline',
         name: 'Perimeter 3',
-        isOnline: false,
+        monitored: false,
         recordingMode: RecordingMode.SCHEDULED,
       });
 
       const result = await service.evaluateCamera('cam_sch_offline');
       expect(result.applied).toBe(false);
-      expect(result.reason).toBe('CAMERA_OFFLINE');
+      expect(result.reason).toBe('CAMERA_NOT_MONITORED');
       expect(mediaProvider.setRecording).not.toHaveBeenCalled();
     });
   });

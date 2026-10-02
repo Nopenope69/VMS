@@ -187,6 +187,9 @@ export type EventSource =
   | 'MOTION_DETECTOR'
   | 'CAMERA_ANALYTICS';
 
+/** Where a producer (watchdog, detector, sentinel, ...) hands its events: the orchestrator's ingestEvent, injected by the composition root. */
+export type EventSink = (event: VigilOneEvent) => Promise<unknown>;
+
 export interface VigilOneEvent<T extends VigilOneEventPayload = VigilOneEventPayload> {
   id: string;                      // Canonical deduplication ID
   tenantId: string;

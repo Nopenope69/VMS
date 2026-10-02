@@ -11,6 +11,7 @@ import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 import { FollowError, TrackFollowService } from '../services/tracks/trackFollow.service';
 import { bestCropsFor, presentTrack, trackInclude } from '../services/tracks/trackPresenter';
 import { journeyMap, openJourneyIncident } from '../services/tracks/journeyIncident';
+import { incidentOrchestrator } from '../composition';
 
 /**
  * Cross-camera following (feature TRACK_INDEX; appearance candidates also need SEMANTIC_SEARCH). Mounted at
@@ -220,6 +221,7 @@ router.post('/:id/journey/incident', authorize(Permission.SEARCH_VIEW), authoriz
     if (!g) return;
     const out = await openJourneyIncident(
       prisma,
+      incidentOrchestrator,
       { tenantId: req.user!.tenantId, userId: req.user!.id, clientIp: req.ip, userAgent: req.get('user-agent') },
       g.start.id,
       g.steps,

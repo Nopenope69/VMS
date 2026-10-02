@@ -38,11 +38,13 @@ The routes parse requests and shape responses only (434 lines).
 * With no measurement, `GET /:id/diagnostic` returns `diagnostic: null`, and the modal says so.
 * A refused `SetPreset` is a 502, and no preset is stored.
 
-## Finding, not changed
-`Camera.isOnline` is set to true at onboarding and nothing ever updates it. The stream watchdog, the recording
-watchdog and the recording scheduler select cameras on it, so it works as "monitored". Setting it to false at
-onboarding would stop scheduled recording for new cameras. Renaming it, or giving it a real liveness writer,
-is a separate change.
+## Finding, changed later (Bucket 7, 2026-10-02)
+`Camera.isOnline` was set to true at onboarding and nothing ever updated it, so the screens showed every camera
+as online, dead or not. The stream watchdog, the recording watchdog and the recording scheduler select cameras
+on it, so it worked as "monitored". It is now renamed `monitored` (migration
+`20261012000000_camera_monitored_flag`). Liveness is separate: the stream watchdog stamps `lastSeenAt` whenever
+MediaMTX reports the stream ready, and the API's `isOnline` is true only when that stamp is under 90 s old
+(`services/camera/liveness.ts`). A camera never seen, or whose watchdog is not running, is shown offline.
 
 ## Consequences
 * `cameraRegistryRealDb.test.ts` pins:

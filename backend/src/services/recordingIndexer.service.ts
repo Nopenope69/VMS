@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import config from '../config/env';
 import { FFmpegService } from './ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../utils/segmentPath';
 import { isWithinActiveWriteGrace } from './reconciliation/crashRecovery.service';
+import { setting } from '../config/settings';
 
 export class RecordingIndexerService {
   private prisma: PrismaClient;
@@ -52,7 +52,7 @@ export class RecordingIndexerService {
     this.isScanning = true;
 
     let indexedCount = 0;
-    const recordingsRoot = config.RECORDINGS_DIR;
+    const recordingsRoot = setting('RECORDINGS_DIR');
     const corruptedDir = path.join(recordingsRoot, 'corrupted');
 
     if (!fs.existsSync(recordingsRoot)) {

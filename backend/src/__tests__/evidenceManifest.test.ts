@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { EvidenceManifestService } from '../services/evidence/evidenceManifest.service';
+import { EvidenceArchive } from '../services/evidence/archive';
 import { ChainOfCustodyService } from '../services/evidence/chainOfCustody.service';
 import { RecordingIndexService } from '../services/recording/recordingIndex.service';
 
@@ -7,7 +7,7 @@ describe('Bucket 6: Evidence Integrity, Multi-Camera Manifest & Section 63 BSA P
   let prisma: any;
   let recordingIndex: any;
   let chainOfCustody: ChainOfCustodyService;
-  let manifestService: EvidenceManifestService;
+  let manifestService: EvidenceArchive;
 
   beforeEach(() => {
     const custodyLogs: any[] = [];
@@ -36,7 +36,7 @@ describe('Bucket 6: Evidence Integrity, Multi-Camera Manifest & Section 63 BSA P
     } as unknown as RecordingIndexService;
 
     chainOfCustody = new ChainOfCustodyService(prisma);
-    manifestService = new EvidenceManifestService(prisma, recordingIndex, chainOfCustody);
+    manifestService = new EvidenceArchive(prisma, recordingIndex, chainOfCustody);
   });
 
   describe('Multi-Camera Evidence Manifest Creation & Section 63 BSA Metadata', () => {

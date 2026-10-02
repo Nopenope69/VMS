@@ -102,7 +102,8 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     title: 'Smart search',
     routePrefixes: ['/api/v1/search'],
     workers: [],
-    status: 'Plain SQL over DetectionEvent rows; there is no embedding or semantic search yet.',
+    status:
+      'Spatial motion search (stored events inside a box drawn on one camera) and plate search (purpose-limited), both plain SQL over stored events and plate reads. Search by description or photo is separate: SEMANTIC_SEARCH (crops) and TRACK_INDEX (tracks).',
   },
   [FeatureFlag.FLOORPLANS]: {
     flag: FeatureFlag.FLOORPLANS,

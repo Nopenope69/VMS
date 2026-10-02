@@ -573,6 +573,7 @@ export const Events: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <Filter className="w-3.5 h-3.5 text-vms-dim" />
                   <select
+                    aria-label="Alarm severity"
                     value={alarmSeverityFilter}
                     onChange={(e) => setAlarmSeverityFilter(e.target.value)}
                     className="bg-vms-bg border border-vms-border rounded px-2.5 py-1 text-xs text-vms-text focus:outline-none focus:border-vms-accent"
@@ -993,6 +994,7 @@ export const Events: React.FC = () => {
                 ))}
               </div>
               <textarea
+                aria-label="Resolution notes"
                 rows={3}
                 required
                 placeholder="Enter verifiable root cause notes (e.g. Physical inspection confirmed perimeter secured; sensor re-calibrated)."
@@ -1003,6 +1005,7 @@ export const Events: React.FC = () => {
               <label className="flex items-center gap-2 mt-2 text-xs text-vms-muted">
                 Verdict
                 <select
+                  aria-label="Verdict"
                   value={verdict}
                   onChange={(e) => setVerdict(e.target.value as typeof verdict)}
                   className="bg-vms-bg border border-vms-border rounded px-2 py-1 text-xs text-vms-text font-mono"

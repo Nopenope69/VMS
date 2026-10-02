@@ -1,5 +1,5 @@
 import { EventSeverity, PrismaClient } from '@prisma/client';
-import { incidentOrchestrator } from '../incident/orchestrator/incidentOrchestrator.service';
+import type { IncidentOrchestrator } from '../incident/orchestrator/incidentOrchestrator.service';
 import { workflowConfigFromEnv } from '../incident/workflow/alarmWorkflow.service';
 import { FollowError } from './trackFollow.service';
 
@@ -93,6 +93,7 @@ export interface JourneyIncidentInput {
 
 export async function openJourneyIncident(
   prisma: PrismaClient,
+  orchestrator: Pick<IncidentOrchestrator, 'elevateAlarm'>,
   ctx: { tenantId: string; userId: string; clientIp?: string; userAgent?: string },
   startTrackId: string,
   steps: JourneyStep[],
@@ -112,7 +113,7 @@ export async function openJourneyIncident(
   const windowStart = new Date(first - cfg.holdPreSeconds * 1000);
   const windowEnd = new Date(last + cfg.holdPostSeconds * 1000);
 
-  const alarm = await incidentOrchestrator.elevateAlarm(
+  const alarm = await orchestrator.elevateAlarm(
     {
       tenantId: ctx.tenantId,
       cameraId: steps[0].cameraId,

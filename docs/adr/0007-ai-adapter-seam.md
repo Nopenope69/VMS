@@ -46,7 +46,8 @@ not done, for three reasons:
 * The SDK has no liveness hook (the VLM is FAILED when its llama.cpp sidecar dies, ADR 0005).
 * The worker image does not ship the SDK.
 
-Closing those gaps is a change to the published SDK interface and deserves its own decision. Until then, the
+Closing those gaps is a change to the published SDK interface and deserves its own decision. (2026-10-02: the
+owner chose to do it as a separate piece of work, not in the Bucket 7 housekeeping.) Until then, the
 worker's base class and the SDK server enforce the same rules in two places. CI runs the conformance kit
 against the SDK server and against the worker's object-detection adapter. The pipeline adapters are covered by
 their own adapter tests (stub and real-model), not by the kit.

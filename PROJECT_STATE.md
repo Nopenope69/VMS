@@ -172,7 +172,7 @@
    - **Per-Camera Bounded Queues**: `BoundedFrameQueue` (default capacity 10) per camera drops oldest frames on saturation; Camera A spikes never starve Camera B.
    - **Appliance Resource Limits**: `ResourceGovernor` limits concurrency (`MAX_CONCURRENT_STREAMS = 16`, `MAX_FPS = 5`, `MAX_WIDTH = 1280`, `MAX_HEIGHT = 720`).
    - **8-State Stream Lifecycle**: `StreamManager` (`DISCOVERED` $\rightarrow$ `CONNECTING` $\rightarrow$ `CONNECTED` $\rightarrow$ `RUNNING` $\rightarrow$ `DISCONNECTED` $\rightarrow$ `BACKOFF` $\rightarrow$ `STOPPING` $\rightarrow$ `STOPPED`) with exponential backoff ($1\text{s} \times 2^N$ up to 30s) and randomized jitter.
-   - **Camera Discovery**: `GET /internal/cameras` returns strictly safe metadata (`id, tenantId, name, streamPath, isOnline`), never leaking credentials, hardware IPs, or external RTSP URIs.
+   - **Camera Discovery**: `GET /internal/cameras` returns strictly safe metadata (`id, tenantId, name, streamPath, monitored`), never leaking credentials, hardware IPs, or external RTSP URIs.
    - **Evidence Plane Isolation Invariant**: AI crashes, FFmpeg non-zero exits, and loopback reconnects have zero impact on MediaMTX recording, fMP4 segmenting, or Section 63 BSA evidence manifests.
 
 5. **Interactive Indoor Spatial Maps & Camera Geometry:**
@@ -365,7 +365,7 @@ The `improve-codebase-architecture` review found six deepening candidates. Statu
 | 2 | One entry per event kind | Merged (PR #20) | ADR 0006, `eventKinds.ts` |
 | 3 | One ai-adapter.v1 seam per side | Merged (PR #21) | ADR 0007. Worker on the SDK server: not done. |
 | 4 | Composition root | Merged (PR #22) | ADR 0008. The orchestrator instance is still created in its own module; four services import it directly. |
-| 5 | Camera registry module | Merged (PR #25) | ADR 0009. Fixes cross-tenant writes: another tenant could edit and delete zones, stop and delete guard tours, and run the diagnostic probe. Also makes onboarding all or nothing and stops inventing diagnostics and presets. Finding kept as is: `Camera.isOnline` is never updated after onboarding, and the watchdogs select on it, so it works as "monitored". |
+| 5 | Camera registry module | Merged (PR #25) | ADR 0009. Fixes cross-tenant writes: another tenant could edit and delete zones, stop and delete guard tours, and run the diagnostic probe. Also makes onboarding all or nothing and stops inventing diagnostics and presets. Finding fixed in Bucket 7: `Camera.isOnline` became `monitored`, and online is now real liveness from the stream watchdog. |
 | 6 | One declaration of settings | Merged (PR #26) | ADR 0010, `config/settings.ts`. A bad setting stops start-up, naming the variable; before, `DOOR_POLL_INTERVAL_MS=5s` became a 1 ms timer. `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` still have two readers. |
 
 **Known gap, fixed in PR #23:** the generated status showed the ai-worker red (28 failures in `goldenSiglip2`, `goldenVlm` and `embeddingAdapter`). The cause was not the code. `status.yml` required the model tests but never fetched the SigLIP 2 and SmolVLM2 models or built `llama-server`. The PR checks in `ci.yml` do, and are green. Verified after merge: status run 36855674301 passed, the first green run of that workflow since Phase 5.
@@ -404,8 +404,8 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 - It seeds the database (`backend/scripts/e2e/seed-frontend-e2e.ts`), then starts the real backend and
   `vite preview`.
 - CI job: `frontend-browser-tests`.
-- `frontend/e2e/operations.spec.ts` (flows 1 to 6) has never run: it logs in as `admin`/`admin123`, which does not
-  exist. It is not wired into the Playwright config.
+- `frontend/e2e/operations.spec.ts` was rewritten in Bucket 7 against the seeded tenant (sign-in and role menus,
+  camera directory liveness, alarm triage, storage) and runs with the others.
 
 ## 9. Where to Pick Up Next
 
@@ -413,25 +413,21 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 - The North Star was rewritten around the AI investigation product (#29). Its build plan has buckets 1 to 8
   (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
 - Merged: Bucket 1, the track index (#30, ADR 0011); Bucket 5, measurement tools (#32); Bucket 2, track search
-  (#33, ADR 0012); Bucket 3, cross-camera following (#36, ADR 0013); Bucket 4, the investigation workspace Find
-  panel (#37); the plate and spatial search fixes (#31, #34); the status-push race fix (#35).
-- **Bucket 4, finished** (journey on the floor plan, journey to incident with footage held on every journey camera;
-  `docs/operations/INVESTIGATION_WORKSPACE.md`) is on branch `claude/sharp-keller-tq0t8r`.
-- **Next:** Bucket 6 (privacy tools) or Bucket 7 (housekeeping), or V1.0 understand-and-act (Bucket 8).
+  (#33, ADR 0012); Bucket 3, cross-camera following (#36, ADR 0013); Bucket 4, the investigation workspace (#37,
+  #38); the plate and spatial search fixes (#31, #34); the status-push race fix (#35).
+- **Bucket 7, housekeeping** (orchestrator injected from the composition root, camera liveness, one settings
+  reader, unused evidence services deleted, operator browser tests, README) is on branch
+  `claude/sharp-keller-tq0t8r`.
+- **Next:** Bucket 6 (privacy tools) or V1.0 understand-and-act (Bucket 8).
 
-**Open follow-ups, all known and documented, none started:**
+**Open follow-ups, all known and documented:**
 
 | Follow-up | Detail | Recorded in |
 | --- | --- | --- |
-| Incident orchestrator instance | Inject it from the composition root. `detectionIngestion`, `sceneChangeDetector`, `streamWatchdog` and `storageSentinel` still import it directly; the bookmark adapter keeps its own `RecordingCatalog`. | ADR 0008 |
-| `Camera.isOnline` | It is set at onboarding and never updated, and the watchdogs and scheduler select on it, so it works as "monitored". It needs a rename or a real liveness writer. | ADR 0009 |
-| Settings with two readers | `RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` are read by both `config/env.ts` and `config/settings.ts`. Merging them means changing how about ten tests patch them. | ADR 0010 |
-| ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. | ADR 0007 |
-| Unused evidence services | `EvidenceExportService` and `EvidenceManifestService` are used only by tests. | ADR 0008 |
-| Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). | `docs/BACKLOG.md`; the compliance audit, section 4 |
-| No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. | Compliance audit, sections 1 and 6 |
-| `operations.spec.ts` flows 1 to 6 | Rewrite them against seeded data and wire them in, or delete them. | Section 8 |
-| `main` branch | Holds the unfixed Antigravity commit. Delete it or reset it to `master` (an owner decision). The stale remote branch `chore/repo-skills` should also be deleted. | Section 8 |
+| ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. The owner moved it to its own piece of work. | ADR 0007 |
+| Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). Bucket 6. | `docs/BACKLOG.md`; the compliance audit, section 4 |
+| No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. Bucket 6. | Compliance audit, sections 1 and 6 |
+| `main` branch | Holds the unfixed Antigravity commit; everything on it is on `master`. The owner decided to delete it; agent sessions cannot delete branches, so the owner does it on GitHub (Branches page). `chore/repo-skills` is already gone. | Section 8 |
 
 **Local environment notes (cloud sandbox):**
 - PostgreSQL can stop when the container restarts. Run `service postgresql start`.

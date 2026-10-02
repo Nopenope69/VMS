@@ -123,8 +123,8 @@ export class RecordingScheduleService {
       return { applied: false, mode: RecordingMode.OFF, reason: 'CAMERA_NOT_FOUND' };
     }
 
-    if (!camera.isOnline) {
-      return { applied: false, mode: RecordingMode.OFF, reason: 'CAMERA_OFFLINE' };
+    if (!camera.monitored) {
+      return { applied: false, mode: RecordingMode.OFF, reason: 'CAMERA_NOT_MONITORED' };
     }
 
     if (camera.recordingMode !== RecordingMode.SCHEDULED) {
@@ -197,7 +197,7 @@ export class RecordingScheduleService {
       const scheduledCameras = await this.prisma.camera.findMany({
         where: {
           recordingMode: RecordingMode.SCHEDULED,
-          isOnline: true,
+          monitored: true,
         },
         select: { id: true },
       });

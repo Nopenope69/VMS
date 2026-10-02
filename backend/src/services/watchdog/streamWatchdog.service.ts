@@ -2,6 +2,7 @@ import prisma from '../../config/database';
 import axios from 'axios';
 import { PrismaClient, EventType, EventSeverity, AlarmState } from '@prisma/client';
 import config from '../../config/env';
+import type { EventSink } from '../incident/orchestrator/types';
 
 export interface StreamTelemetrySample {
   fps: number;
@@ -27,8 +28,13 @@ export class StreamWatchdogService {
   private isChecking = false;
   private previousStates = new Map<string, boolean>(); // cameraId -> wasDegraded
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, private eventSink: EventSink | null = null) {
     this.prisma = prisma;
+  }
+
+  /** The orchestrator's ingestEvent, set by the composition root. */
+  setEventSink(sink: EventSink | null): void {
+    this.eventSink = sink;
   }
 
   start(intervalMs = 30000): void {
@@ -79,6 +85,11 @@ export class StreamWatchdogService {
       metrics = sample;
     } else {
       metrics = await this.probeMediaMtx(camera.streamPath);
+    }
+
+    // Liveness: the stream is up now. Not stamped when it is down, so lastSeenAt ages out (camera/liveness.ts).
+    if (metrics.ready) {
+      await this.prisma.camera.update({ where: { id: camera.id }, data: { lastSeenAt: new Date() } });
     }
 
     // Evaluate deviation scores
@@ -154,10 +165,10 @@ export class StreamWatchdogService {
 
       // Ingest into authoritative IncidentOrchestrator pipeline
       try {
-        const { incidentOrchestrator } = await import('../incident/orchestrator/incidentOrchestrator.service');
+        if (!this.eventSink) throw new Error('no event sink wired (composition root not loaded); event not routed to the orchestrator');
         const isOffline = primaryIssue === 'STREAM_STALLED';
         const eventId = `watchdog-${cameraId}-${Date.now()}`;
-        await incidentOrchestrator.ingestEvent({
+        await this.eventSink({
           id: eventId,
           correlationId: eventId,
           source: 'WATCHDOG',
@@ -303,7 +314,7 @@ export class StreamWatchdogService {
     const results: StreamEvaluationResult[] = [];
     try {
       const onlineCameras = await this.prisma.camera.findMany({
-        where: { isOnline: true },
+        where: { monitored: true },
         select: { id: true },
       });
 

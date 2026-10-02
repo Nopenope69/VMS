@@ -8,7 +8,7 @@ import { ModelRegistryService, ModelRegistryError } from '../services/ai/modelRe
 import { DetectionIngestionService, DetectionIngestionError } from '../services/ai/detectionIngestion.service';
 import { spatialEngine } from '../services/spatial/engine';
 import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
-import { plateAggregator as anprAggregator, trackIndex } from '../composition';
+import { incidentOrchestrator, plateAggregator as anprAggregator, trackIndex } from '../composition';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 
 let currentSpatialEngine = spatialEngine;
@@ -144,7 +144,7 @@ export async function handleIngestDetection(req: Request, res: Response) {
 
 let detectionIngestion: DetectionIngestionService | null = null;
 function getDetectionIngestion(): DetectionIngestionService {
-  if (!detectionIngestion) detectionIngestion = new DetectionIngestionService(prisma, () => currentSpatialEngine, undefined, undefined, trackIndex);
+  if (!detectionIngestion) detectionIngestion = new DetectionIngestionService(prisma, () => currentSpatialEngine, incidentOrchestrator, undefined, trackIndex);
   return detectionIngestion;
 }
 /** Test hook: replace the ingestion service (e.g. with an injected orchestrator). */
@@ -238,8 +238,8 @@ export async function handleGetInternalCameras(req: Request, res: Response) {
     if (typeof req.query.tenantId === 'string' && req.query.tenantId.trim()) {
       where.tenantId = req.query.tenantId.trim();
     }
-    if (req.query.isOnline !== undefined) {
-      where.isOnline = req.query.isOnline === 'true';
+    if (req.query.monitored !== undefined) {
+      where.monitored = req.query.monitored === 'true';
     }
 
     // Explicitly select only non-sensitive fields. Never expose IP, ONVIF credentials, or external RTSP URIs.
@@ -250,7 +250,7 @@ export async function handleGetInternalCameras(req: Request, res: Response) {
         tenantId: true,
         name: true,
         streamPath: true,
-        isOnline: true,
+        monitored: true,
       },
       orderBy: { name: 'asc' },
     });
