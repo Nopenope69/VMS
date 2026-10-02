@@ -410,14 +410,15 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 ## 9. Where to Pick Up Next
 
 **State:**
-- The North Star was rewritten around the AI investigation product (PR #29). Its build plan has buckets 1 to 8
-  (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
-- **Bucket 1, the track index** (one `ObjectTrack` per tracked object: path, direction, zones, colours, linked
-  plate; ADR 0011, `docs/operations/TRACK_INDEX.md`) is PR #30, branch `feat/track-index`, off by default.
+- Merged: the North Star rewrite (#29), **Bucket 1, the track index** (#30: one `ObjectTrack` per tracked
+  object; ADR 0011, `docs/operations/TRACK_INDEX.md`), and the console plate search fix (#31).
 - **Bucket 2, track search** (`POST /api/v1/tracks/search`: text, stored crop or uploaded photo, AND/NOT terms,
   filters before ranking, one result per track; ADR 0012, `docs/operations/TRACK_SEARCH.md`) is on branch
-  `feat/track-search`, **stacked on #30**: its PR targets `feat/track-index`; retarget it to `master` once #30 merges.
-- **Bucket 5, measurement tools** is on branch `feat/measurement-tools` (independent of the two above).
+  `feat/track-search`, off by default.
+- **Bucket 5, measurement tools** is PR #32 (branch `feat/measurement-tools`). It needs `master` merged in: #31
+  changed the same search window, browser-test config and test script.
+- The North Star build plan has buckets 1 to 8 (section 5 of
+  `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
 - **Next:** Bucket 3 (follow a vehicle by plate, then people by appearance, across cameras; operator-confirmed
   links) or Bucket 4 (investigation workspace screens, which also put search on screen).
 

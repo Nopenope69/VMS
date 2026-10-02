@@ -8,7 +8,7 @@ Nothing here says "passing" without the run that showed it. CI-generated test co
 
 ## Session 22 (2026-10-02): North Star Bucket 2, track search
 
-Branch `feat/track-search`, stacked on `feat/track-index` (PR #30). Design: ADR 0012. Operations:
+Branch `feat/track-search`, built on `feat/track-index` (PR #30, since merged; `master` merged in). Design: ADR 0012. Operations:
 `docs/operations/TRACK_SEARCH.md`. Route `POST /api/v1/tracks/search` (flags TRACK_INDEX and SEMANTIC_SEARCH).
 
 Local runs: backend `tsc` passes; full suite with 2 workers 149 suites, 1106 passed, 3 failed, 29 skipped. The
