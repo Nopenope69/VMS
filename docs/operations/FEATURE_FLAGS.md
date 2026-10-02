@@ -37,7 +37,7 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `EXPLANATIONS` | `VIGILONE_FEATURE_EXPLANATIONS` | no routes: an explanation is generated for each new alarm and written into evidence packages (ADR 0005) |
 | `SEMANTIC_SEARCH` | `VIGILONE_FEATURE_SEMANTIC_SEARCH` | `/api/v1/search/crops` and the `cropEmbedder` worker (needs `EMBEDDING_ADAPTER_URL`; ADR 0005) |
 | `VLM_VERIFICATION` | `VIGILONE_FEATURE_VLM_VERIFICATION` | the `vlmVerifier` worker and `GET /api/v1/alarms/:id/second-opinion`, `/alarms/second-opinion/agreement` (needs `VLM_ADAPTER_URL`; ADR 0005; advisory only) |
-| `TRACK_INDEX` | `VIGILONE_FEATURE_TRACK_INDEX` | `/api/v1/tracks` (list, one track, and `POST /search`, which also needs `SEMANTIC_SEARCH`) and the per-detection track update in detection and plate ingestion (ADR 0011, 0012; `TRACK_INDEX.md`, `TRACK_SEARCH.md`) |
+| `TRACK_INDEX` | `VIGILONE_FEATURE_TRACK_INDEX` | `/api/v1/tracks` (list, one track, `POST /search` and appearance following, which also need `SEMANTIC_SEARCH`; camera neighbours, plate following, links and journeys: `CROSS_CAMERA_FOLLOW.md`) and the per-detection track update in detection and plate ingestion (ADR 0011, 0012; `TRACK_INDEX.md`, `TRACK_SEARCH.md`) |
 | `INVESTIGATION_TIMING` | `VIGILONE_FEATURE_INVESTIGATION_TIMING` | `/api/v1/investigations/timings` and the stopwatch on the Investigation page (`PILOT_MEASUREMENT.md`, section 4) |
 | `OBJECT_CROPS` | `VIGILONE_FEATURE_OBJECT_CROPS` | `/api/v1/crop-policy` (per-site person-crop switch and retention), crop capture on the detection path and the `cropPurger` worker (ADR 0005); person crops also need the per-site switch |
 

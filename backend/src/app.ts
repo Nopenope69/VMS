@@ -42,6 +42,7 @@ import privacyRoutes from './routes/privacy.routes';
 import cropPolicyRoutes from './routes/cropPolicy.routes';
 import cropSearchRoutes from './routes/cropSearch.routes';
 import trackRoutes from './routes/track.routes';
+import trackFollowRoutes from './routes/trackFollow.routes';
 import investigationTimingRoutes from './routes/investigationTiming.routes';
 import floorplanRoutes from './routes/floorplan.routes';
 import webrtcRoutes from './routes/webrtc.routes';
@@ -141,6 +142,8 @@ app.use('/api/v1/alarms', alarmRoutes);
 app.use('/api/v1/anpr', requireFeatureFlag(FeatureFlag.ANPR), anprRoutes);
 // Crop search sits under /search but has its own flag; mounted first so the plate-search flag does not govern it.
 app.use('/api/v1/search/crops', requireFeatureFlag(FeatureFlag.SEMANTIC_SEARCH), cropSearchRoutes);
+// Following first: its /camera-neighbours must not be read as a track id by the track routes' /:id.
+app.use('/api/v1/tracks', requireFeatureFlag(FeatureFlag.TRACK_INDEX), trackFollowRoutes);
 app.use('/api/v1/tracks', requireFeatureFlag(FeatureFlag.TRACK_INDEX), trackRoutes);
 app.use('/api/v1/investigations/timings', requireFeatureFlag(FeatureFlag.INVESTIGATION_TIMING), investigationTimingRoutes);
 app.use('/api/v1/search', requireFeatureFlag(FeatureFlag.SMART_SEARCH), smartSearchRoutes);

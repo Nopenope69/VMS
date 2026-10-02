@@ -52,7 +52,7 @@ The purge runs hourly (`DPDP_PURGE_INTERVAL_MS`) for every tenant, and on demand
 * deletes plate reads past retention, together with their snapshot files;
 * deletes detection snapshot files past retention and clears their path on the event;
 * deletes track index rows (`ObjectTrack`: where an object went and its colours) last seen before the same
-  period;
+  period, and with them the operators' cross-camera links between those tracks (`TrackLink`);
 * **keeps** anything on the same camera that overlaps an active incident evidence hold or a
   legal-hold evidence manifest;
 * deletes files only under `RECORDINGS_DIR` or `SNAPSHOTS_DIR`. A path outside those roots is

@@ -82,3 +82,8 @@ returned.
 Tracks follow `detectionSnapshotRetentionDays` (default 30): a track last seen before that is deleted by the
 retention purge, unless it overlaps an incident evidence hold or legal hold on its camera. See
 `DATA_PROTECTION.md`.
+
+## Following across cameras
+
+Tracks on different cameras can be linked into one journey, by plate or by appearance, with an operator
+confirming each link: `CROSS_CAMERA_FOLLOW.md`.

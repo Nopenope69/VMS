@@ -6,6 +6,25 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 23 (2026-10-02): North Star Bucket 3, cross-camera following
+
+Branch `feat/cross-camera-follow`, from `master`. Design: ADR 0013. Operations: `docs/operations/CROSS_CAMERA_FOLLOW.md`.
+New tables `CameraNeighbour` and `TrackLink` (migration `20261011000000_cross_camera_follow`).
+
+Local runs: backend `tsc` passes; full suite with 2 workers 151 suites, 1129 passed, 10 failed, 29 skipped. The
+failures: `cropEmbedderRealDb` and `semanticSearchRealModels` pass 24/24 when run alone (timeouts under load);
+`storageVolumeManager` also fails on `master` in this sandbox (disk below 5% free). All six gates exit 0.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Camera neighbours | DONE_VERIFIED | `trackFollowRealDb.test.ts`: set by CAMERA_CONFIG only (operator 403), pairs stored once in id order, self-pairs, duplicates, unknown cameras and min > max refused (also by database CHECKs), audited. |
+| Appearance candidates | DONE_VERIFIED on controlled embeddings | The same person on a neighbouring camera within the travel time and back on the same camera rank above another person; a non-neighbour camera, another site and a sighting too slow for the pair's travel time are left out (`outsideTravelTime` 1); a camera without neighbours falls back to its own site (`site-fallback`). Ignoring travel times, or widening the fallback beyond the site, fails the tests. |
+| Plate candidates | DONE_VERIFIED on synthetic reads | Same plate on another camera two hours later; a read without a vehicle track listed separately; outside a 1-hour window nothing; plate text only with `includePlates` and the plate purpose. Works with semantic search off. |
+| Decisions and journey | DONE_VERIFIED | Confirmed A-B and B-C give the journey A, B, C in time order from either end; a rejected look-alike is not suggested again (keeping it fails the test); PLATE links between different plates refused; person-to-vehicle and self links refused; server-side evidence (similarity, same plate, gap) and no plate text in the stored link (storing it fails the test). |
+| Privacy and retention | DONE_VERIFIED | Person following needs CROP_PERSON_QUERY and a purpose, plate following PLATE_DATA_QUERY and a purpose; queries, decisions and journey views audited with the purpose; a link is deleted with either track. |
+| Accuracy on real footage | NOT_STARTED / BLOCKED_HUMAN | How often the true next sighting is in the top 5 needs labelled cross-camera journeys from the pilot; travel times need the real site layout. |
+| Screens | NOT_STARTED | Bucket 4 (investigation workspace). |
+
 ## Session 22 (2026-10-02): North Star Bucket 2, track search
 
 Branch `feat/track-search`, built on `feat/track-index` (PR #30, since merged; `master` merged in). Design: ADR 0012. Operations:
