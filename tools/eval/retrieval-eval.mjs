@@ -11,6 +11,11 @@
  * results.json { "schema": "vigilone.retrieval-results.v1", "modelSha256": "<64 hex>",
  *                "queries": [ { "id": "q1", "ranked": ["<crop>", ...] } ] }   (best first, as the API returns them)
  *
+ * Track mode (track search, North Star Bucket 2): labels `vigilone.track-retrieval-labels.v1` list relevant
+ * TRACK ids per query (a query is `text` or a `queryCropId`), results `vigilone.track-retrieval-results.v1` rank
+ * track ids. A crop query's own track (`queryTrackId`) is trivially found: it is removed from the ranking before
+ * scoring (and counted), and may not be labelled relevant.
+ *
  * The result is marked `evaluated: true` only with --real-site-data AND at least MIN_QUERIES labelled
  * queries; otherwise it says NOT EVALUATED and why. Inputs that would flatter the score are refused, not
  * skipped: a labelled query with no results, results for an unknown query, the query crop inside its own
@@ -38,8 +43,10 @@ export function wilson(k, n, z = 1.959963984540054) {
 }
 
 export function evaluate(labels, results, { ks = [1, 5, 10, 20], realSiteData = false, dataset = null } = {}) {
-  if (labels?.schema !== 'vigilone.retrieval-labels.v1') fail('labels.schema must be vigilone.retrieval-labels.v1');
-  if (results?.schema !== 'vigilone.retrieval-results.v1') fail('results.schema must be vigilone.retrieval-results.v1');
+  const trackMode = labels?.schema === 'vigilone.track-retrieval-labels.v1';
+  if (!trackMode && labels?.schema !== 'vigilone.retrieval-labels.v1') fail('labels.schema must be vigilone.retrieval-labels.v1 or vigilone.track-retrieval-labels.v1');
+  const resultsSchema = trackMode ? 'vigilone.track-retrieval-results.v1' : 'vigilone.retrieval-results.v1';
+  if (results?.schema !== resultsSchema) fail(`results.schema must be ${resultsSchema} for these labels`);
   if (!HEX64.test(results.modelSha256 ?? '')) fail('results.modelSha256 must be the SHA-256 of the embedding model that produced the rankings');
   if (!Array.isArray(labels.queries) || labels.queries.length === 0) fail('labels has no queries');
   if (!ks.length || ks.some((k) => !Number.isInteger(k) || k < 1)) fail('k values must be positive integers');
@@ -51,18 +58,28 @@ export function evaluate(labels, results, { ks = [1, 5, 10, 20], realSiteData = 
   }
   const ids = new Set();
   const per = [];
+  const unit = trackMode ? 'track' : 'crop';
+  let selfRemoved = 0;
   for (const q of labels.queries) {
     if (typeof q.id !== 'string' || !q.id) fail('a labelled query has no id');
     if (ids.has(q.id)) fail(`labels list query ${q.id} twice`);
     ids.add(q.id);
-    if (!Array.isArray(q.relevant) || q.relevant.length === 0) fail(`query ${q.id} has no relevant crops; it cannot be scored`);
+    if (trackMode && (typeof q.text === 'string') === (typeof q.queryCropId === 'string')) fail(`query ${q.id} needs exactly one of text or queryCropId`);
+    if (!Array.isArray(q.relevant) || q.relevant.length === 0) fail(`query ${q.id} has no relevant ${unit}s; it cannot be scored`);
     const relevant = new Set(q.relevant);
-    if (relevant.size !== q.relevant.length) fail(`query ${q.id} lists a relevant crop twice`);
-    if (relevant.has(q.queryCropId)) fail(`query ${q.id}: the query crop is listed as relevant to itself`);
-    const list = ranked.get(q.id);
+    if (relevant.size !== q.relevant.length) fail(`query ${q.id} lists a relevant ${unit} twice`);
+    const self = trackMode ? q.queryTrackId : q.queryCropId;
+    if (self && relevant.has(self)) fail(`query ${q.id}: the query ${trackMode ? "crop's own track" : 'crop'} is listed as relevant to itself`);
+    if (trackMode && q.queryCropId && !q.queryTrackId) fail(`query ${q.id}: a crop query needs queryTrackId (its own track, which is removed from the ranking)`);
+    let list = ranked.get(q.id);
     if (!list) fail(`no results for labelled query ${q.id} (a missing answer is not a zero, and is not skipped)`);
-    if (new Set(list).size !== list.length) fail(`results for ${q.id} contain a crop twice`);
-    if (list.includes(q.queryCropId)) fail(`results for ${q.id} contain the query crop itself`);
+    if (new Set(list).size !== list.length) fail(`results for ${q.id} contain a ${unit} twice`);
+    if (trackMode) {
+      if (self && list.includes(self)) {
+        selfRemoved++;
+        list = list.filter((t) => t !== self);
+      }
+    } else if (list.includes(q.queryCropId)) fail(`results for ${q.id} contain the query crop itself`);
     const at = {};
     for (const k of ks) {
       const top = new Set(list.slice(0, k));
@@ -83,11 +100,13 @@ export function evaluate(labels, results, { ks = [1, 5, 10, 20], realSiteData = 
   const evaluated = realSiteData && n >= MIN_QUERIES;
   return {
     schema: 'vigilone.retrieval-metrics.v1',
+    mode: trackMode ? 'tracks' : 'crops',
     modelSha256: results.modelSha256,
     dataset,
     queries: n,
     k: byK,
     mrr: per.reduce((s, p) => s + (p.firstRelevantRank ? 1 / p.firstRelevantRank : 0), 0) / n,
+    ...(trackMode ? { ownTracksRemoved: selfRemoved } : {}),
     evaluated,
     status: evaluated
       ? 'EVALUATED'

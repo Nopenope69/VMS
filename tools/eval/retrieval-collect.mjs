@@ -7,6 +7,10 @@
  *        [--k 20] [--include-persons --purpose SECURITY_INCIDENT_INVESTIGATION [--reference "case ref"]]
  *        [--model-sha <64 hex>] [--exact] [--out results.json]
  *
+ * With track labels (vigilone.track-retrieval-labels.v1) it sends POST /api/v1/tracks/search instead (each query by
+ * `text` or `queryCropId`, with its optional `filters`) and writes vigilone.track-retrieval-results.v1 with the
+ * ranked track ids.
+ *
  * It sends one POST /api/v1/search/crops per labelled query (by cropId) and writes
  * { schema: vigilone.retrieval-results.v1, modelSha256, queries: [{ id, ranked: [cropId...] }] }.
  * It stops on the first problem and writes nothing: a failed or refused query, a query whose answer
@@ -22,11 +26,15 @@ const fail = (m) => {
 };
 
 export async function collect(labels, { url, token, k = 20, includePersons = false, purpose, reference, modelSha, exact = false, fetchImpl = fetch }) {
-  if (labels?.schema !== 'vigilone.retrieval-labels.v1' || !Array.isArray(labels.queries) || labels.queries.length === 0) fail('labels must be vigilone.retrieval-labels.v1 with at least one query');
+  const trackMode = labels?.schema === 'vigilone.track-retrieval-labels.v1';
+  if ((!trackMode && labels?.schema !== 'vigilone.retrieval-labels.v1') || !Array.isArray(labels.queries) || labels.queries.length === 0) {
+    fail('labels must be vigilone.retrieval-labels.v1 or vigilone.track-retrieval-labels.v1 with at least one query');
+  }
+  if (trackMode && (!Number.isInteger(k) || k < 1 || k > 50)) fail('--k must be a whole number from 1 to 50 for track search');
   if (!url || !token) fail('--url and --token are required');
   if (!Number.isInteger(k) || k < 1 || k > 100) fail('--k must be a whole number from 1 to 100');
   if (includePersons && !purpose) fail('--include-persons needs --purpose (person crops are purpose-limited and audited)');
-  const endpoint = `${url.replace(/\/+$/, '')}/api/v1/search/crops`;
+  const endpoint = `${url.replace(/\/+$/, '')}${trackMode ? '/api/v1/tracks/search' : '/api/v1/search/crops'}`;
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
   if (purpose) headers['x-vigilone-purpose'] = purpose;
   if (reference) headers['x-vigilone-purpose-reference'] = reference;
@@ -36,8 +44,12 @@ export async function collect(labels, { url, token, k = 20, includePersons = fal
   const modes = { ann: 0, exact: 0 };
   let seenModel = modelSha ?? null;
   for (const q of labels.queries) {
-    if (typeof q.id !== 'string' || typeof q.queryCropId !== 'string') fail('every labelled query needs an id and a queryCropId');
-    const body = { cropId: q.queryCropId, limit: k, ...(includePersons ? { includePersons: true } : {}), ...(exact ? { exact: true } : {}), ...(modelSha ? { modelSha256: modelSha } : {}) };
+    if (typeof q.id !== 'string') fail('every labelled query needs an id');
+    if (trackMode ? (typeof q.text === 'string') === (typeof q.queryCropId === 'string') : typeof q.queryCropId !== 'string') {
+      fail(trackMode ? `query ${q.id} needs exactly one of text or queryCropId` : 'every labelled query needs an id and a queryCropId');
+    }
+    const what = trackMode && typeof q.text === 'string' ? { text: q.text } : { cropId: q.queryCropId };
+    const body = { ...what, ...(trackMode && q.filters ? { filters: q.filters } : {}), limit: k, ...(includePersons ? { includePersons: true } : {}), ...(exact ? { exact: true } : {}), ...(modelSha ? { modelSha256: modelSha } : {}) };
     let res;
     try {
       res = await fetchImpl(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -51,13 +63,16 @@ export async function collect(labels, { url, token, k = 20, includePersons = fal
       /* reported below */
     }
     if (!res.ok) fail(`query ${q.id}: HTTP ${res.status} ${json?.code ?? ''} ${json?.error ?? ''}`.trim());
-    if (!json || !Array.isArray(json.hits) || !/^[a-f0-9]{64}$/.test(json.model?.sha256 ?? '')) fail(`query ${q.id}: the answer is not a search result with a model hash`);
-    if (seenModel && json.model.sha256 !== seenModel) fail(`query ${q.id}: answered by model ${json.model.sha256}, not ${seenModel}; rankings from different models cannot be scored together`);
-    seenModel = json.model.sha256;
+    const answeredBy = trackMode ? json?.modelSha256 : json?.model?.sha256;
+    const list = trackMode ? json?.results : json?.hits;
+    if (!json || !Array.isArray(list) || !/^[a-f0-9]{64}$/.test(answeredBy ?? '')) fail(`query ${q.id}: the answer is not a search result with a model hash`);
+    if (seenModel && answeredBy !== seenModel) fail(`query ${q.id}: answered by model ${answeredBy}, not ${seenModel}; rankings from different models cannot be scored together`);
+    seenModel = answeredBy;
     modes[json.mode] = (modes[json.mode] ?? 0) + 1;
-    queries.push({ id: q.id, ranked: json.hits.map((h) => h.cropId) });
+    queries.push({ id: q.id, ranked: trackMode ? list.map((r) => r.track?.id) : list.map((h) => h.cropId) });
+    if (queries[queries.length - 1].ranked.some((x) => typeof x !== 'string')) fail(`query ${q.id}: a result has no ${trackMode ? 'track id' : 'crop id'}`);
   }
-  return { schema: 'vigilone.retrieval-results.v1', modelSha256: seenModel, k, modes, collectedAtUtc: new Date().toISOString(), queries };
+  return { schema: trackMode ? 'vigilone.track-retrieval-results.v1' : 'vigilone.retrieval-results.v1', modelSha256: seenModel, k, modes, collectedAtUtc: new Date().toISOString(), queries };
 }
 
 async function main() {
