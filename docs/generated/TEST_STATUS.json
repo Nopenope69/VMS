@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T08:01:47.440Z",
-  "commit": "0fd92d6278efcffe7d9a54935f99d0a575531eb8",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36981207362",
+  "generatedAt": "2026-10-02T08:20:54.707Z",
+  "commit": "0733f035eef69445f29088827ee5a8460efdba1e",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36983017875",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 148,
-        "passed": 148,
+        "total": 149,
+        "passed": 149,
         "failed": 0
       },
       "tests": {
-        "total": 1138,
-        "passed": 1102,
+        "total": 1146,
+        "passed": 1110,
         "failed": 0,
         "skipped": 36
       },
@@ -608,6 +608,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/investigationTimingRealDb.test.ts",
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/layoutManager.test.ts",
           "status": "passed",
           "passed": 2,
@@ -1065,8 +1072,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 303,
-        "passed": 298,
+        "total": 308,
+        "passed": 303,
         "failed": 0,
         "skipped": 5
       },
@@ -1215,7 +1222,7 @@
         {
           "file": "services/ai-worker/src/__tests__/plateEval.test.ts",
           "status": "other",
-          "passed": 8,
+          "passed": 13,
           "failed": 0,
           "skipped": 3
         },
@@ -1293,9 +1300,9 @@
     }
   ],
   "totals": {
-    "suites": 179,
-    "tests": 1441,
-    "passed": 1400,
+    "suites": 180,
+    "tests": 1454,
+    "passed": 1413,
     "failed": 0,
     "skipped": 41
   },
