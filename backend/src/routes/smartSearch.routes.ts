@@ -78,7 +78,7 @@ router.get('/plates', authorize(Permission.SEARCH_VIEW), authorize(Permission.PL
     });
     await recordSensitiveQuery(prisma, req, 'PLATE_SEARCH_QUERY', {
       filters: { cameraId: cameraId ?? null, plateQuery: plateQuery ?? null, stateCode: stateCode ?? null, category: category ?? null, watchlistCategory: watchlistCategory ?? null, startTime: startTime ?? null, endTime: endTime ?? null },
-      resultCount: Array.isArray((result as any)?.results) ? (result as any).results.length : Array.isArray(result) ? (result as any).length : null,
+      resultCount: result.observations.length,
     });
 
     return res.json({ result });
