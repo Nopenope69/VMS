@@ -1,14 +1,15 @@
 import { Router, Request, Response } from 'express';
-import { Prisma, Role } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { loadTenantLicense, requireFeature } from '../middleware/license';
-import { authorize, hasPermission, Permission } from '../services/rbac/permissions';
+import { authorize, Permission } from '../services/rbac/permissions';
 import { AuditChainService } from '../services/audit/auditChain.service';
-import { recordSensitiveQuery, requirePurpose } from '../services/privacy/dataProtection.service';
+import { recordSensitiveQuery } from '../services/privacy/dataProtection.service';
 import { COLOUR_NAMES, DIRECTIONS } from '../services/tracks/trackMath';
 import { bestCropsFor, presentTrack, trackInclude } from '../services/tracks/trackPresenter';
+import { sensitiveAccess } from '../middleware/sensitiveAccess';
 import crypto from 'crypto';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
 import { EmbeddingError, loadEmbedding } from '../services/search/cropEmbeddingStore';
@@ -60,23 +61,6 @@ const Query = z
     purposeReference: z.string().optional(),
   })
   .strict();
-
-const plateGate = requirePurpose(prisma, 'PLATE');
-const personGate = requirePurpose(prisma, 'BIOMETRIC');
-
-/** Runs the purpose gate for a category. Sends the error response itself and returns false when refused. */
-async function sensitiveAccess(req: Request, res: Response, kind: 'person' | 'plate'): Promise<boolean> {
-  const permission = kind === 'person' ? Permission.CROP_PERSON_QUERY : Permission.PLATE_DATA_QUERY;
-  if (!hasPermission(req.user!.role as Role, permission)) {
-    res.status(403).json({ error: `Forbidden: ${kind === 'person' ? 'person tracks' : 'plate data'} need the '${permission}' permission`, code: kind === 'person' ? 'PERSON_TRACK_FORBIDDEN' : 'PLATE_DATA_FORBIDDEN' });
-    return false;
-  }
-  let passed = false;
-  await (kind === 'person' ? personGate : plateGate)(req, res, () => {
-    passed = true;
-  });
-  return passed;
-}
 
 router.get('/', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
   const p = Query.safeParse(req.query);

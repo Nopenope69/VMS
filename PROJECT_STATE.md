@@ -410,17 +410,15 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 ## 9. Where to Pick Up Next
 
 **State:**
-- The North Star was rewritten around the AI investigation product (PR #29). Its build plan has buckets 1 to 8
+- The North Star was rewritten around the AI investigation product (#29). Its build plan has buckets 1 to 8
   (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
-- Merged: **Bucket 1, the track index** (#30: one `ObjectTrack` per tracked object; ADR 0011,
-  `docs/operations/TRACK_INDEX.md`), the console plate search fix (#31), the trial-licence, purpose-list and
-  spatial-search fixes (#34), and **Bucket 5, measurement tools** (#32: ANPR calibration and breakdowns, the
-  time-to-answer stopwatch, `docs/operations/PILOT_MEASUREMENT.md`), off by default.
-- **Bucket 2, track search** (`POST /api/v1/tracks/search`: text, stored crop or uploaded photo, AND/NOT terms,
-  filters before ranking, one result per track; ADR 0012, `docs/operations/TRACK_SEARCH.md`) is PR #33 (branch
-  `feat/track-search`), off by default; `master` merged in.
-- **Next:** Bucket 3 (follow a vehicle by plate, then people by appearance, across cameras; operator-confirmed
-  links) or Bucket 4 (investigation workspace screens, which also put search on screen).
+- Merged: Bucket 1, the track index (#30, ADR 0011); Bucket 5, measurement tools (#32); Bucket 2, track search
+  (#33, ADR 0012); the plate and spatial search fixes (#31, #34); the status-push race fix (#35).
+- **Bucket 3, cross-camera following** (camera neighbours, plate and appearance candidates, operator-decided links,
+  journeys; ADR 0013, `docs/operations/CROSS_CAMERA_FOLLOW.md`) is on branch `feat/cross-camera-follow`, off by
+  default.
+- **Next:** Bucket 4, the investigation workspace (screens for search, follow, journey on the floorplan, incident,
+  evidence). Buckets 1 to 3 have APIs only.
 
 **Open follow-ups, all known and documented, none started:**
 

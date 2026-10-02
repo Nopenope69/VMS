@@ -39,6 +39,8 @@ export interface TrackFilters {
   hasPlate?: boolean;
   /** Person tracks and person crops are excluded unless this is true. */
   includePersons?: boolean;
+  /** Leave these tracks out (cross-camera following never suggests the track it starts from). */
+  excludeTrackIds?: string[];
 }
 
 export interface TrackSearchInput {
@@ -91,6 +93,7 @@ export function trackFilterSql(tenantId: string, f: TrackFilters): Prisma.Sql {
   if (f.minDwellSeconds !== undefined) parts.push(Prisma.sql`t."dwellSeconds" >= ${f.minDwellSeconds}`);
   if (f.hasPlate === true) parts.push(Prisma.sql`t."vehicleObservationId" IS NOT NULL`);
   if (f.hasPlate === false) parts.push(Prisma.sql`t."vehicleObservationId" IS NULL`);
+  if (f.excludeTrackIds?.length) parts.push(Prisma.sql`t."id" NOT IN (${Prisma.join(f.excludeTrackIds)})`);
   if (!f.includePersons) parts.push(Prisma.sql`t."objectClass" <> 'person'`, Prisma.sql`c."cropClass" = 'NON_PERSON'`);
   return Prisma.join(parts, ' AND ');
 }

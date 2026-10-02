@@ -308,6 +308,8 @@ model Tenant {
   vlmVerifications        VlmVerification[]
   objectCrops             ObjectCrop[]
   objectTracks            ObjectTrack[]
+  cameraNeighbours        CameraNeighbour[]
+  trackLinks              TrackLink[]
   investigationTimings    InvestigationTiming[]
   cropEmbeddings          CropEmbedding[]
   detectionEvents         DetectionEvent[]
@@ -475,6 +477,8 @@ model Camera {
   detectionEvents       DetectionEvent[]
   objectCrops           ObjectCrop[]
   objectTracks          ObjectTrack[]
+  neighboursA           CameraNeighbour[]       @relation("NeighbourA")
+  neighboursB           CameraNeighbour[]       @relation("NeighbourB")
   vehicleObservations   VehicleObservation[]
   spatialAnalyticsRules SpatialAnalyticsRule[]
   spatialPlacement      CameraSpatialPlacement?
@@ -2074,6 +2078,9 @@ model ObjectTrack {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
+  linksFrom TrackLink[] @relation("TrackLinkFrom")
+  linksTo   TrackLink[] @relation("TrackLinkTo")
+
   @@unique([cameraId, trackId])
   @@index([tenantId, lastSeenAt])
   @@index([tenantId, objectClass, lastSeenAt])
@@ -2104,4 +2111,47 @@ model InvestigationTiming {
 
   @@index([tenantId, startedAt])
   @@index([tenantId, userId, outcome])
+}
+
+/// Two cameras a person or vehicle can pass between, with the usual travel time (feature TRACK_INDEX, cross-camera
+/// following). Undirected: stored once with cameraAId < cameraBId. services/tracks/trackFollow.service.ts.
+model CameraNeighbour {
+  id                String   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cameraAId         String
+  cameraA           Camera   @relation("NeighbourA", fields: [cameraAId], references: [id], onDelete: Cascade)
+  cameraBId         String
+  cameraB           Camera   @relation("NeighbourB", fields: [cameraBId], references: [id], onDelete: Cascade)
+  /// Fewest seconds between leaving one camera and appearing on the other. 0 also allows overlapping views.
+  minTransitSeconds Int      @default(0)
+  maxTransitSeconds Int      @default(120)
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+
+  @@unique([cameraAId, cameraBId])
+  @@index([tenantId])
+}
+
+/// An operator's decision that two tracks are (CONFIRMED) or are not (REJECTED) the same person or vehicle.
+/// Stored once per pair with fromTrackId < toTrackId; deleted with either track (retention).
+model TrackLink {
+  id              String      @id @default(uuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromTrackId     String
+  fromTrack       ObjectTrack @relation("TrackLinkFrom", fields: [fromTrackId], references: [id], onDelete: Cascade)
+  toTrackId       String
+  toTrack         ObjectTrack @relation("TrackLinkTo", fields: [toTrackId], references: [id], onDelete: Cascade)
+  /// PLATE (same plate read) or APPEARANCE (looks alike); evidenceJson says what the server found.
+  method          String
+  status          String
+  evidenceJson    Json
+  note            String?
+  decidedByUserId String
+  decidedAt       DateTime    @default(now())
+
+  @@unique([fromTrackId, toTrackId])
+  @@index([toTrackId])
+  @@index([tenantId, status])
 }
