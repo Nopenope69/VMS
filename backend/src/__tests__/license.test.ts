@@ -116,4 +116,65 @@ describe('Ed25519 Commercial Licensing Engine', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Invalid unsigned trial claim');
   });
+
+  describe('an unsigned trial is held to the bootstrap terms', () => {
+    const now = Date.parse('2026-10-01T00:00:00Z');
+    const trial = (over: Partial<LicenseClaims>): LicenseClaims => ({
+      licenseId: 'lic_trial_terms',
+      tenantId: 'tenant_trial',
+      tier: 'BASIC',
+      maxCameras: 4,
+      features: ['EVIDENCE_EXPORT'],
+      issuedAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 30 * 86_400_000).toISOString(),
+      isTrial: true,
+      ...over,
+    });
+    const verify = (c: LicenseClaims) => verifyLicenseArtifact(JSON.stringify(c), 'TRIAL_UNSIGNED', undefined, now);
+
+    it('accepts exactly the bootstrap terms', () => {
+      expect(verify(trial({})).valid).toBe(true);
+    });
+
+    it.each<[string, Partial<LicenseClaims>, string]>([
+      ['an extra feature', { features: ['EVIDENCE_EXPORT', 'ADVANCED_SEARCH'] }, 'ADVANCED_SEARCH'],
+      ['more cameras', { maxCameras: 999 }, '999 cameras'],
+      ['a higher tier', { tier: 'ENTERPRISE' }, 'tier ENTERPRISE'],
+      ['no expiry', { expiresAt: null }, 'expiresAt'],
+      ['a year-long period', { expiresAt: new Date(now + 365 * 86_400_000).toISOString() }, 'longer than 30 days'],
+      [
+        'a post-dated issue',
+        { issuedAt: new Date(now + 300 * 86_400_000).toISOString(), expiresAt: new Date(now + 310 * 86_400_000).toISOString() },
+        'issued in the future',
+      ],
+    ])('refuses %s', (_label, over, error) => {
+      const r = verify(trial(over));
+      expect(r.valid).toBe(false);
+      expect(r.error).toContain(error);
+    });
+  });
+
+  describe('VIGILONE_LICENSE_TEST_PUBLIC_KEY', () => {
+    const saved = { key: process.env.VIGILONE_LICENSE_TEST_PUBLIC_KEY, env: process.env.NODE_ENV };
+    afterEach(() => {
+      process.env.VIGILONE_LICENSE_TEST_PUBLIC_KEY = saved.key;
+      process.env.NODE_ENV = saved.env;
+      if (saved.key === undefined) delete process.env.VIGILONE_LICENSE_TEST_PUBLIC_KEY;
+    });
+    const artifact = () => signLicensePayload(validClaims, testKeyPair.privateKey);
+
+    it('is trusted under NODE_ENV=test', () => {
+      process.env.NODE_ENV = 'test';
+      process.env.VIGILONE_LICENSE_TEST_PUBLIC_KEY = testKeyPair.publicKey;
+      const a = artifact();
+      expect(verifyLicenseArtifact(a.signedPayload, a.signatureEd25519).valid).toBe(true);
+    });
+
+    it('is ignored outside NODE_ENV=test', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.VIGILONE_LICENSE_TEST_PUBLIC_KEY = testKeyPair.publicKey;
+      const a = artifact();
+      expect(verifyLicenseArtifact(a.signedPayload, a.signatureEd25519).valid).toBe(false);
+    });
+  });
 });

@@ -96,6 +96,13 @@ describe('P4.6 purpose limitation, RBAC and audit on plate queries', () => {
     expect((a[0].metadataJson as any).after.allowedPurposes).toEqual(['SECURITY_INCIDENT_INVESTIGATION']);
     expect((await call(operator, 'PUT', '/privacy/dpdp/settings', { plateRetentionDays: 5 })).status).toBe(403);
   });
+
+  it('an operator reads the allowed purposes without the DPDP settings', async () => {
+    expect((await call(operator, 'GET', '/privacy/dpdp/settings')).status).toBe(403);
+    const r = await call(operator, 'GET', '/privacy/dpdp/purposes');
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ purposes: expect.arrayContaining(['LAW_ENFORCEMENT_REQUEST']), allowed: ['SECURITY_INCIDENT_INVESTIGATION'], needReference: ['LAW_ENFORCEMENT_REQUEST', 'LEGAL_CLAIM'] });
+  });
 });
 
 describe('P4.6 face switch (default off)', () => {

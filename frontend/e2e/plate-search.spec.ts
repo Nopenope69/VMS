@@ -10,6 +10,7 @@ import { test, expect, Page, APIRequestContext } from '@playwright/test';
 interface Seed {
   email: string;
   viewerEmail: string;
+  operatorEmail: string;
   password: string;
   cameraId: string;
   searchPlate: string;
@@ -86,4 +87,16 @@ test("shows the backend's 403 to a viewer without PLATE_DATA_QUERY", async ({ pa
   await expect(page.getByRole('alert')).toContainText("Required permission: 'PLATE_DATA_QUERY'");
   await expect(page.getByText(seed.searchPlate, { exact: true })).toBeHidden();
   expect((await plateSearchAudits(request)).length).toBe(before);
+});
+
+test('an operator, who cannot read the DPDP settings, gets the allowed purposes and finds the plate', async ({ page }) => {
+  await openPlateSearch(page, seed.operatorEmail);
+  const purpose = page.getByLabel('Purpose of Query (DPDP)');
+  await expect(purpose.locator('option[value="SECURITY_INCIDENT_INVESTIGATION"]')).toHaveCount(1);
+  await expect(page.getByText(/Purpose list unavailable/)).toBeHidden();
+  await purpose.selectOption('SECURITY_INCIDENT_INVESTIGATION');
+  await expect(page.getByLabel('Case / Request Reference')).toBeHidden();
+  await page.getByLabel('Plate query').fill(seed.searchPlate);
+  await page.getByRole('button', { name: 'Find Vehicles' }).click();
+  await expect(page.getByText(seed.searchPlate, { exact: true })).toBeVisible();
 });

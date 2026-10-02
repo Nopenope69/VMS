@@ -6,16 +6,19 @@
  *
  * Creates, all real rows: one tenant, site and camera; an admin (TENANT_ADMIN) with a bcrypt password; a sealed
  * evidence export with its manifest; a COMPLETED redaction job whose derivative file exists in EXPORTS_DIR with
- * its true SHA-256; one plate read past its retention period and one within it; a VIEWER (no PLATE_DATA_QUERY);
- * a plate read for the plate search test; and an unsigned evaluation licence carrying ADVANCED_SEARCH, which
- * /api/v1/search requires. No vendor signing key exists outside the vendor, so the licence uses the appliance's own
- * TRIAL_UNSIGNED form (utils/license.ts), the same shape bootstrap writes, with ADVANCED_SEARCH added.
+ * its true SHA-256; one plate read past its retention period and one within it; a VIEWER (no PLATE_DATA_QUERY)
+ * and an OPERATOR (PLATE_DATA_QUERY, no PRIVACY_POLICY_MANAGE); a plate read for the plate search test; detections
+ * inside and outside the spatial search's default region; and a licence carrying ADVANCED_SEARCH, which
+ * /api/v1/search requires. The licence is signed with a key made here, whose public half goes out in the seed
+ * file as licensePublicKey: the runner hands it to the backend as VIGILONE_LICENSE_TEST_PUBLIC_KEY, which the
+ * backend trusts only under NODE_ENV=test (utils/license.ts).
  */
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import { LicenseClaims, signLicensePayload } from '../../src/utils/license';
 
 const DAY = 86_400_000;
 
@@ -46,27 +49,35 @@ async function main() {
     data: { tenantId: tenant.id, email: viewerEmail, name: 'E2E Viewer', role: 'VIEWER', passwordHash: await bcrypt.hash(password, 10) },
   });
 
+  const operatorEmail = `operator-${suffix}@e2e.invalid`;
+  await prisma.user.create({
+    data: { tenantId: tenant.id, email: operatorEmail, name: 'E2E Operator', role: 'OPERATOR', passwordHash: await bcrypt.hash(password, 10) },
+  });
+
+  const licenceKey = crypto.generateKeyPairSync('ed25519', {
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
   const now = new Date();
-  const licence = {
+  const licence: LicenseClaims = {
     licenseId: `lic_e2e_${suffix}`,
     tenantId: tenant.id,
-    tier: 'BASIC' as const,
+    tier: 'PROFESSIONAL',
     maxCameras: 4,
     features: ['EVIDENCE_EXPORT', 'ADVANCED_SEARCH'],
     issuedAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 30 * DAY).toISOString(),
-    isTrial: true,
   };
+  const signed = signLicensePayload(licence, licenceKey.privateKey);
   await prisma.license.create({
     data: {
       tenantId: tenant.id,
       licenseId: licence.licenseId,
-      tier: 'BASIC',
+      tier: licence.tier,
       maxCameras: licence.maxCameras,
       features: licence.features,
-      signedPayload: JSON.stringify(licence),
-      signatureEd25519: 'TRIAL_UNSIGNED',
-      expiresAt: new Date(licence.expiresAt),
+      expiresAt: new Date(licence.expiresAt!),
+      ...signed,
     },
   });
 
@@ -131,12 +142,26 @@ async function main() {
       lastSeenAt: new Date(Date.now() - 3_600_000),
     },
   });
+  // Spatial search: two PERSON_DETECTED inside the default region (0.2..0.8) ten seconds apart, one cluster;
+  // one VEHICLE_DETECTED outside it. An hour ago, so a range built in UTC instead of local time misses them.
+  const at = Date.now() - 3_600_000;
+  for (const [type, box, ms] of [
+    ['PERSON_DETECTED', { x: 0.4, y: 0.4, width: 0.1, height: 0.2 }, 0],
+    ['PERSON_DETECTED', { x: 0.45, y: 0.4, width: 0.1, height: 0.2 }, 10_000],
+    ['VEHICLE_DETECTED', { x: 0.9, y: 0.9, width: 0.05, height: 0.05 }, 5_000],
+  ] as const) {
+    await prisma.detectionEvent.create({
+      data: { tenantId: tenant.id, cameraId: camera.id, type, confidence: 0.9, boundingBox: box, timestamp: new Date(at + ms) },
+    });
+  }
 
   process.stdout.write(
     JSON.stringify({
       tenantId: tenant.id,
       email,
       viewerEmail,
+      operatorEmail,
+      licensePublicKey: licenceKey.publicKey,
       password,
       searchPlate,
       cameraId: camera.id,

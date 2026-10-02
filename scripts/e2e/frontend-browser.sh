@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frontend browser tests (frontend/e2e/redaction-dpdp.spec.ts, plate-search.spec.ts) against the real backend and a seeded scratch
+# Frontend browser tests (frontend/e2e/redaction-dpdp.spec.ts, plate-search.spec.ts, spatial-search.spec.ts) against the real backend and a seeded scratch
 # database. The database named in TEST_DB_URL is dropped and recreated: never point it at real data.
 #
 #   TEST_DB_URL=postgresql://vigilone:pw@localhost:5432/vigilone_e2e scripts/e2e/frontend-browser.sh
@@ -29,6 +29,9 @@ mkdir -p "$EXPORTS_DIR" "$RECORDINGS_DIR" "$SNAPSHOTS_DIR"
 
 echo "== migrate and seed"
 (cd "$ROOT/backend" && npx prisma migrate deploy >/dev/null && npx ts-node scripts/e2e/seed-frontend-e2e.ts > "$WORK/seed.json")
+
+# The seed signs its licence with a key it makes; the backend trusts that key only under NODE_ENV=test.
+export VIGILONE_LICENSE_TEST_PUBLIC_KEY="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).licensePublicKey)' "$WORK/seed.json")"
 
 echo "== backend on :$API_PORT"
 (cd "$ROOT/backend" && npm run -s build >/dev/null)

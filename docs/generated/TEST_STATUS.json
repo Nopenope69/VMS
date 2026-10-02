@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T07:38:26.357Z",
-  "commit": "70645bdb4df5f80d0c210790399ecfc94c693c49",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/36978712965",
+  "generatedAt": "2026-10-02T08:01:47.440Z",
+  "commit": "0fd92d6278efcffe7d9a54935f99d0a575531eb8",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/36981207362",
   "projects": [
     {
       "name": "backend",
@@ -12,8 +12,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 1128,
-        "passed": 1092,
+        "total": 1138,
+        "passed": 1102,
         "failed": 0,
         "skipped": 36
       },
@@ -316,7 +316,7 @@
         {
           "file": "backend/src/__tests__/dpdpRealDb.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 8,
           "failed": 0,
           "skipped": 0
         },
@@ -624,7 +624,7 @@
         {
           "file": "backend/src/__tests__/license.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 16,
           "failed": 0,
           "skipped": 0
         },
@@ -1294,8 +1294,8 @@
   ],
   "totals": {
     "suites": 179,
-    "tests": 1431,
-    "passed": 1390,
+    "tests": 1441,
+    "passed": 1400,
     "failed": 0,
     "skipped": 41
   },
