@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-03T19:39:07.567Z",
-  "commit": "04bc4da147ad94d9ae60a6fbf1814a8d2666149c",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37148333311",
+  "generatedAt": "2026-10-03T20:13:42.654Z",
+  "commit": "2f250ad958e6d354180f53b218ae9f2f1c7c1749",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37150443661",
   "projects": [
     {
       "name": "backend",
@@ -1114,8 +1114,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 308,
-        "passed": 303,
+        "total": 309,
+        "passed": 304,
         "failed": 0,
         "skipped": 5
       },
@@ -1173,7 +1173,7 @@
         {
           "file": "services/ai-worker/src/__tests__/embeddingAdapter.test.ts",
           "status": "passed",
-          "passed": 24,
+          "passed": 25,
           "failed": 0,
           "skipped": 0
         },
@@ -1343,8 +1343,8 @@
   ],
   "totals": {
     "suites": 186,
-    "tests": 1493,
-    "passed": 1452,
+    "tests": 1494,
+    "passed": 1453,
     "failed": 0,
     "skipped": 41
   },
