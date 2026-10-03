@@ -103,6 +103,11 @@ describe('embedding adapter (stand-in pipeline)', () => {
     expect(await core.handleTextEmbedRequest(textBody())).toMatchObject({ status: 'error', errorCode: 'RUNTIME_ERROR' });
   });
 
+  it('a zero vector is refused (the SDK core checks every embedding)', async () => {
+    const core = new EmbeddingAdapterCore(fake({ embedText: async () => new Float32Array(EMBEDDING_DIM) }), { adapterId: 'e', adapterVersion: 't' });
+    expect(await core.handleTextEmbedRequest(textBody())).toMatchObject({ status: 'error', errorCode: 'RUNTIME_ERROR', message: expect.stringMatching(/zero vector/) });
+  });
+
   it('a late answer is DEADLINE_EXCEEDED', async () => {
     const core = new EmbeddingAdapterCore(fake({ embedText: () => new Promise((r) => setTimeout(() => r(new Float32Array(EMBEDDING_DIM)), 30)) }), { adapterId: 'e', adapterVersion: 't' });
     expect(await core.handleTextEmbedRequest(textBody({ deadlineMs: 1 }))).toMatchObject({ status: 'error', errorCode: 'DEADLINE_EXCEEDED' });
@@ -111,7 +116,7 @@ describe('embedding adapter (stand-in pipeline)', () => {
   it('a second request while one runs is OVERLOADED and health says DEGRADED', async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const core = new EmbeddingAdapterCore(fake({ embedText: async () => { await gate; return new Float32Array(EMBEDDING_DIM); } }), { adapterId: 'e', adapterVersion: 't' });
+    const core = new EmbeddingAdapterCore(fake({ embedText: async () => { await gate; return new Float32Array(EMBEDDING_DIM).fill(0.5); } }), { adapterId: 'e', adapterVersion: 't' });
     const first = core.handleTextEmbedRequest(textBody());
     expect(core.health().status).toBe('DEGRADED');
     expect(await core.handleTextEmbedRequest(textBody({ requestId: 'r3' }))).toMatchObject({ status: 'error', errorCode: 'OVERLOADED', retryable: true });

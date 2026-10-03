@@ -5,12 +5,15 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "sync-sdk": "node scripts/sync-sdk.mjs",
+    "check-sdk": "node scripts/sync-sdk.mjs --check",
     "build": "../../backend/node_modules/.bin/tsc",
     "test": "../../backend/node_modules/.bin/jest --config jest.config.js --runInBand"
   },
   "dependencies": {
     "@huggingface/tokenizers": "0.2.0",
-    "onnxruntime-node": "1.30.0"
+    "onnxruntime-node": "1.30.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "20.17.9",

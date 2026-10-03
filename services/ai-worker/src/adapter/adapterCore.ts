@@ -19,12 +19,10 @@ import {
   RETRYABLE,
 } from './contract';
 
-export class AdapterError extends Error {
-  constructor(public readonly code: AdapterErrorCode, message: string) {
-    super(message);
-    this.name = 'AdapterError';
-  }
-}
+import { AdapterError } from '../sdk/core';
+
+/** One error class for the whole worker: the SDK's (the pipeline adapters run on the SDK core). */
+export { AdapterError };
 
 export interface AdapterCoreOptions {
   adapterId: string;

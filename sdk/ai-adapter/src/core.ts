@@ -1,0 +1,517 @@
+/**
+ * The ai-adapter.v1 rules, without a transport. `createAdapter` (server.ts) puts HTTP in front of this; an
+ * adapter that already has its own HTTP layer (the VigilOne ai-worker) calls it directly. Either way the rules
+ * below live here only:
+ *
+ *   - the descriptor and health come from the model cards; health is LOADING until every model loaded, FAILED
+ *     when loading failed or a model reports it can no longer serve (its `failure()` hook), DEGRADED while
+ *     every slot is busy;
+ *   - every request is validated against the contract; its task must be served, its modelId loaded for that
+ *     task, and a vlm_verification request must name a target class from the model card;
+ *   - frames are checked (rgb24/bgr24 byte length, JPEG signature, at most 3840x2160); shared-memory frames are
+ *     refused;
+ *   - the request deadline is enforced (DEADLINE_EXCEEDED) and the model receives an AbortSignal;
+ *   - bounded concurrency: beyond maxInFlight running and maxQueued waiting, OVERLOADED;
+ *   - every result is validated against the contract before it is returned; a model that returns something
+ *     invalid (unknown class, box outside the frame, NaN, a VLM answer for another class) produces
+ *     RUNTIME_ERROR, never a bad success;
+ *   - provenance (model hash, adapter, every component model, a fresh inference id, the frame's own
+ *     timestamp) is filled in from the model card, so a success always carries it;
+ *   - every outcome is reported once to `onOutcome` (for metrics), including work run outside a request.
+ */
+import crypto from 'crypto';
+import { z } from 'zod';
+import {
+  AI_ADAPTER_CONTRACT,
+  AI_ADAPTER_ERROR_CODES,
+  AdapterDescriptorV1,
+  AdapterHealthV1,
+  AiTaskV1,
+  DetectionV1,
+  InferenceRequestV1,
+  InferenceResultV1,
+  ModelCardV1,
+  TextEmbeddingRequestV1,
+  VerificationV1,
+} from './contract/aiAdapter.v1';
+import { AiProvenanceV1 } from './contract/events.v1';
+
+export type ModelCard = z.infer<typeof ModelCardV1>;
+export type Detection = z.infer<typeof DetectionV1>;
+export type AiTask = z.infer<typeof AiTaskV1>;
+export type Verification = z.infer<typeof VerificationV1>;
+export type Provenance = z.infer<typeof AiProvenanceV1>;
+export type ProvenanceComponent = NonNullable<Provenance['components']>[number];
+export type Descriptor = z.infer<typeof AdapterDescriptorV1>;
+export type Health = z.infer<typeof AdapterHealthV1>;
+export type InferenceResult = z.infer<typeof InferenceResultV1>;
+export type OkResult = Extract<InferenceResult, { status: 'ok' }>;
+export type AdapterErrorCode = (typeof AI_ADAPTER_ERROR_CODES)[number];
+
+export const HTTP_STATUS: Record<AdapterErrorCode, number> = {
+  MODEL_NOT_LOADED: 503,
+  MODEL_INTEGRITY_FAILED: 503,
+  LICENSE_REJECTED: 503,
+  UNSUPPORTED_TASK: 400,
+  INVALID_FRAME: 400,
+  DEADLINE_EXCEEDED: 504,
+  RUNTIME_ERROR: 500,
+  OVERLOADED: 429,
+};
+export const RETRYABLE: Record<AdapterErrorCode, boolean> = {
+  MODEL_NOT_LOADED: true,
+  MODEL_INTEGRITY_FAILED: false,
+  LICENSE_REJECTED: false,
+  UNSUPPORTED_TASK: false,
+  INVALID_FRAME: false,
+  DEADLINE_EXCEEDED: true,
+  RUNTIME_ERROR: true,
+  OVERLOADED: true,
+};
+
+/** The largest frame accepted, in pixels (4K UHD). */
+export const MAX_FRAME_PIXELS = 3840 * 2160;
+const MAX_MESSAGE = 1000;
+
+/** Throw this from model code to answer with a specific contract error. */
+export class AdapterError extends Error {
+  constructor(public readonly code: AdapterErrorCode, message: string) {
+    super(message);
+    this.name = 'AdapterError';
+  }
+}
+
+/** The contract error code a thrown value carries (an AdapterError, or any error with a contract `code`). */
+export function errorCodeOf(e: unknown): AdapterErrorCode {
+  const code = (e as any)?.code;
+  return (e instanceof AdapterError || (e as any)?.name === 'AdapterError') && (AI_ADAPTER_ERROR_CODES as readonly string[]).includes(code) ? code : 'RUNTIME_ERROR';
+}
+
+export interface Frame {
+  cameraId: string;
+  timestampUtc: string;
+  width: number;
+  height: number;
+  format: 'rgb24' | 'bgr24' | 'jpeg';
+  /** Raw pixels (rgb24 / bgr24, width * height * 3 bytes) or the JPEG file. */
+  data: Buffer;
+}
+
+export interface InferContext {
+  requestId: string;
+  tenantId: string;
+  /** The task asked for (a model can serve more than one, see AdapterModel.tasks). */
+  task: AiTask;
+  /** For vlm_verification: the class to check, one of the model card's classes. */
+  vlmQuery?: { targetClass: string };
+  deadlineMs: number;
+  /** Aborted when the deadline passes; stop work when it fires. */
+  signal: AbortSignal;
+}
+
+export interface ModelOutput {
+  /** Normalised boxes (0..1 of the frame); classes must be in the model card. */
+  detections?: Detection[];
+  /** For the embedding task: the vector (it is sent as little-endian float32, base64). */
+  embedding?: Float32Array;
+  /** For the vlm_verification task (required there, refused elsewhere): the model's answer. */
+  verification?: Verification;
+}
+
+export interface AdapterModel {
+  card: ModelCard;
+  /** Tasks served besides the card's own (e.g. one redaction model for faces and plates). */
+  tasks?: AiTask[];
+  /** Load weights, check their SHA-256 (see verifyFileSha256). Health is LOADING until every load resolves. */
+  load?(): Promise<void>;
+  infer(frame: Frame, ctx: InferContext): Promise<ModelOutput>;
+  embedText?(text: string, ctx: InferContext): Promise<Float32Array>;
+  /**
+   * Liveness: why the model cannot serve now (e.g. its runtime process died), or null. Checked on every health
+   * probe and request; while it returns a reason, health is FAILED and requests get MODEL_NOT_LOADED.
+   */
+  failure?(): string | null;
+  /** Reported in provenance (default: the card's runtime). */
+  runtime?: string;
+  executionProvider?: string;
+  /** Provenance components besides the card's components (e.g. the runtime binary and its hash). */
+  provenanceComponents?: ProvenanceComponent[];
+}
+
+export interface Outcome {
+  outcome: 'ok' | AdapterErrorCode;
+  /** Set for ok outcomes. */
+  latencyMs?: number;
+  /** The model asked for, when the request named one. */
+  modelId?: string;
+}
+
+export interface AdapterCoreOptions {
+  adapterId: string;
+  adapterVersion: string;
+  models: AdapterModel[];
+  /** Tasks declared in the descriptor (default: those of the models). Needed when no model could be built. */
+  tasks?: AiTask[];
+  /** Why the models could not be built at all (licence, SHA-256, missing file): health is FAILED with it. */
+  loadFailure?: string;
+  /** Air-gapped sites refuse adapters that need the internet. Default false. */
+  requiresNetworkEgress?: boolean;
+  /** Requests running at once (default 1) and waiting for a slot (default 4; 0 answers OVERLOADED at once). */
+  maxInFlight?: number;
+  maxQueued?: number;
+  /** Called once for every outcome (metrics). Must not throw. */
+  onOutcome?: (o: Outcome) => void;
+  log?: (msg: string) => void;
+}
+
+export interface AdapterCore {
+  descriptor: Descriptor;
+  /** Loads every model (call once; later calls return the same promise). */
+  load(): Promise<void>;
+  health(): Health;
+  /** POST /v1/infer. Never throws: every failure is an error result. */
+  infer(body: unknown): Promise<InferenceResult>;
+  /** True when a model has a text tower (POST /v1/embed-text is served). */
+  servesTextEmbedding: boolean;
+  /** POST /v1/embed-text. Never throws. */
+  embedText(body: unknown): Promise<InferenceResult>;
+  /**
+   * Runs model work that does not come in as a request (e.g. a camera stream) under the same slots, deadline
+   * and outcome reporting. Throws an AdapterError on failure.
+   */
+  run<T>(modelId: string, deadlineMs: number, fn: (signal: AbortSignal) => Promise<T>): Promise<{ value: T; latencyMs: number }>;
+  /** Fresh provenance for a result of `modelId` on a frame taken at `frameTimestampUtc`. */
+  provenance(modelId: string, frameTimestampUtc: string): Provenance;
+  /** Requests running now. */
+  inFlight(): number;
+}
+
+const requestIdOf = (body: unknown) => {
+  const id = (body as any)?.requestId;
+  return typeof id === 'string' && id ? id.slice(0, 200) : `invalid-${crypto.randomUUID()}`;
+};
+const issues = (e: z.ZodError) => e.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+
+export function createAdapterCore(o: AdapterCoreOptions): AdapterCore {
+  const servedBy = (m: AdapterModel): AiTask[] => [m.card.task, ...(m.tasks ?? [])];
+  const tasks = o.tasks ?? Array.from(new Set(o.models.flatMap(servedBy)));
+  const descriptor = AdapterDescriptorV1.parse({
+    contract: AI_ADAPTER_CONTRACT,
+    adapterId: o.adapterId,
+    adapterVersion: o.adapterVersion,
+    tasks,
+    models: o.models.map((m) => m.card),
+    requiresNetworkEgress: o.requiresNetworkEgress ?? false,
+  });
+  for (const m of o.models) {
+    const extra = servedBy(m).filter((t) => !tasks.includes(t));
+    if (extra.length) throw new Error(`model ${m.card.modelId} serves ${extra.join(', ')}, which the adapter does not declare`);
+  }
+  const byId = new Map(o.models.map((m) => [m.card.modelId, m]));
+  if (byId.size !== o.models.length) throw new Error('model ids must be unique');
+  const maxInFlight = o.maxInFlight ?? 1;
+  const maxQueued = o.maxQueued ?? 4;
+  const report = (r: Outcome) => {
+    try {
+      o.onOutcome?.(r);
+    } catch {
+      /* metrics never break a request */
+    }
+  };
+
+  // Without a load step there is nothing to wait for: READY (or FAILED) from the start.
+  let state: 'LOADING' | 'READY' | 'FAILED' = o.loadFailure ? 'FAILED' : o.models.some((m) => m.load) ? 'LOADING' : 'READY';
+  let lastError: string | null = o.loadFailure ?? null;
+  if (state === 'READY' && o.models.length === 0) {
+    state = 'FAILED';
+    lastError = 'the adapter has no models';
+  }
+  let loading: Promise<void> | null = state === 'LOADING' ? null : Promise.resolve();
+  const load = () =>
+    (loading ??= (async () => {
+      try {
+        for (const m of o.models) await m.load?.();
+        state = 'READY';
+      } catch (e: any) {
+        state = 'FAILED';
+        lastError = String(e?.message ?? e);
+        o.log?.(`[adapter] model load failed: ${lastError}`);
+      }
+    })());
+
+  // Bounded concurrency with a small FIFO queue.
+  let inFlight = 0;
+  const waiters: (() => void)[] = [];
+  const acquire = (): Promise<void> => {
+    if (inFlight < maxInFlight) {
+      inFlight++;
+      return Promise.resolve();
+    }
+    if (waiters.length >= maxQueued) return Promise.reject(new AdapterError('OVERLOADED', `adapter busy: ${inFlight} running, ${waiters.length} waiting`));
+    return new Promise((resolve) => waiters.push(() => (inFlight++, resolve())));
+  };
+  const release = () => {
+    inFlight--;
+    waiters.shift()?.();
+  };
+
+  const deadModels = () => o.models.map((m) => ({ m, why: m.failure?.() ?? null })).filter((d) => d.why);
+
+  const health = (): Health => {
+    if (state !== 'READY') {
+      return AdapterHealthV1.parse({
+        contract: AI_ADAPTER_CONTRACT,
+        adapterId: o.adapterId,
+        status: state,
+        loadedModelIds: [],
+        lastError: state === 'FAILED' ? lastError : null,
+        observedAtUtc: new Date().toISOString(),
+      });
+    }
+    const dead = deadModels();
+    const alive = o.models.filter((m) => !dead.some((d) => d.m === m)).map((m) => m.card.modelId);
+    const status = alive.length === 0 ? 'FAILED' : dead.length || inFlight >= maxInFlight ? 'DEGRADED' : 'READY';
+    return AdapterHealthV1.parse({
+      contract: AI_ADAPTER_CONTRACT,
+      adapterId: o.adapterId,
+      status,
+      loadedModelIds: alive,
+      lastError: dead.length ? dead.map((d) => d.why).join('; ') : null,
+      observedAtUtc: new Date().toISOString(),
+    });
+  };
+
+  const errorResult = (requestId: string, code: AdapterErrorCode, message: string): InferenceResult => ({
+    contract: AI_ADAPTER_CONTRACT,
+    status: 'error',
+    requestId,
+    errorCode: code,
+    message: (message || code).slice(0, MAX_MESSAGE),
+    retryable: RETRYABLE[code],
+  });
+
+  function decodeFrame(f: z.infer<typeof InferenceRequestV1>['frame']): Frame {
+    if (f.data.kind !== 'inline_base64') throw new AdapterError('INVALID_FRAME', 'shared-memory frames are not supported by this adapter');
+    if (f.width * f.height > MAX_FRAME_PIXELS) throw new AdapterError('INVALID_FRAME', `frame ${f.width}x${f.height} is larger than 3840x2160`);
+    const data = Buffer.from(f.data.value, 'base64');
+    if (f.format === 'jpeg') {
+      if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) throw new AdapterError('INVALID_FRAME', 'not a JPEG file');
+    } else if (data.length !== f.width * f.height * 3) {
+      throw new AdapterError('INVALID_FRAME', `frame has ${data.length} bytes, expected ${f.width * f.height * 3} for ${f.width}x${f.height} ${f.format}`);
+    }
+    return { cameraId: f.cameraId, timestampUtc: f.timestampUtc, width: f.width, height: f.height, format: f.format, data };
+  }
+
+  function encodeEmbedding(v: Float32Array) {
+    if (v.length === 0 || v.length > 4096) throw new AdapterError('RUNTIME_ERROR', `embedding has ${v.length} values`);
+    let norm = 0;
+    for (const x of v) {
+      if (!Number.isFinite(x)) throw new AdapterError('RUNTIME_ERROR', 'embedding contains NaN or infinity');
+      norm += x * x;
+    }
+    if (norm === 0) throw new AdapterError('RUNTIME_ERROR', 'embedding is a zero vector');
+    const le = Buffer.alloc(v.length * 4);
+    v.forEach((x, i) => le.writeFloatLE(x, i * 4));
+    return { dim: v.length, encoding: 'float32_base64' as const, vector: le.toString('base64'), normalized: Math.abs(Math.sqrt(norm) - 1) < 1e-3 };
+  }
+
+  /**
+   * Runs fn under the concurrency limit and the deadline. The slot is held until fn itself settles, even after
+   * the deadline answered the caller, so a model that ignores its AbortSignal cannot exceed maxInFlight.
+   */
+  async function guarded<T>(deadlineMs: number, fn: (signal: AbortSignal) => Promise<T>): Promise<{ value: T; latencyMs: number }> {
+    const t0 = Date.now();
+    await acquire();
+    let released = false;
+    const rel = () => {
+      if (!released) {
+        released = true;
+        release();
+      }
+    };
+    const remaining = deadlineMs - (Date.now() - t0);
+    if (remaining <= 0) {
+      rel();
+      throw new AdapterError('DEADLINE_EXCEEDED', `deadline of ${deadlineMs} ms passed while waiting for a slot`);
+    }
+    const ctl = new AbortController();
+    let timer: NodeJS.Timeout | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        ctl.abort();
+        reject(new AdapterError('DEADLINE_EXCEEDED', `deadline of ${deadlineMs} ms exceeded`));
+      }, remaining);
+    });
+    let work: Promise<T>;
+    try {
+      work = fn(ctl.signal);
+    } catch (e) {
+      clearTimeout(timer);
+      rel();
+      throw e;
+    }
+    work.then(rel, rel);
+    let value: T;
+    try {
+      value = await Promise.race([work, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+    // A runtime that computes synchronously (onnxruntime-node on the main thread) can finish before the timer
+    // gets a chance to fire; a result later than its deadline is still refused.
+    const latencyMs = Date.now() - t0;
+    if (latencyMs > deadlineMs) throw new AdapterError('DEADLINE_EXCEEDED', `deadline of ${deadlineMs} ms exceeded (answer took ${latencyMs} ms)`);
+    return { value, latencyMs };
+  }
+
+  function provenanceFor(m: AdapterModel, frameTimestampUtc: string): Provenance {
+    const components: ProvenanceComponent[] = [
+      ...(m.card.components ?? []).map((c) => ({ role: c.role, modelName: c.name, modelVersion: c.version, modelSha256: c.sha256 })),
+      ...(m.provenanceComponents ?? []),
+    ];
+    return {
+      adapterId: o.adapterId,
+      adapterVersion: o.adapterVersion,
+      modelId: m.card.modelId,
+      modelName: m.card.name,
+      modelVersion: m.card.version,
+      modelSha256: m.card.sha256,
+      runtime: m.runtime ?? m.card.runtime,
+      ...(m.executionProvider ? { executionProvider: m.executionProvider } : {}),
+      inferenceId: crypto.randomUUID(),
+      frameTimestampUtc,
+      ...(components.length ? { components } : {}),
+    };
+  }
+
+  /** The model for `modelId`, ready to serve `task` (null: any task, for text embedding). */
+  function modelFor(task: AiTask | null, modelId: string): AdapterModel {
+    if (task !== null && !tasks.includes(task)) throw new AdapterError('UNSUPPORTED_TASK', `this adapter does not serve ${task} (${tasks.join(', ')})`);
+    if (state !== 'READY') throw new AdapterError('MODEL_NOT_LOADED', state === 'FAILED' ? `models failed to load: ${lastError}` : 'models are still loading');
+    const m = byId.get(modelId);
+    if (!m || (task !== null && !servedBy(m).includes(task))) {
+      const loaded = o.models.map((x) => x.card.modelId).join(', ') || 'none';
+      throw new AdapterError('MODEL_NOT_LOADED', `model '${modelId}' is not loaded for this task (loaded: ${loaded})`);
+    }
+    const why = m.failure?.();
+    if (why) throw new AdapterError('MODEL_NOT_LOADED', why);
+    return m;
+  }
+
+  /** Validates an ok result against the contract; anything else becomes RUNTIME_ERROR. */
+  function checked(result: OkResult): OkResult {
+    const c = InferenceResultV1.safeParse(result);
+    if (c.success) return result;
+    o.log?.(`[adapter] refused an invalid result: ${issues(c.error)}`);
+    throw new AdapterError('RUNTIME_ERROR', `the model produced a result that breaks the contract: ${issues(c.error)}`);
+  }
+
+  /** Runs a request handler: every failure becomes one error result, every outcome is reported once. */
+  async function answer(body: unknown, modelId: string | undefined, handler: () => Promise<OkResult>): Promise<InferenceResult> {
+    try {
+      const r = await handler();
+      report({ outcome: 'ok', latencyMs: r.latencyMs, modelId });
+      return r;
+    } catch (e: any) {
+      const code = errorCodeOf(e);
+      report({ outcome: code, modelId });
+      return errorResult(requestIdOf(body), code, String(e?.message ?? e));
+    }
+  }
+
+  async function infer(body: unknown): Promise<InferenceResult> {
+    const named = typeof (body as any)?.modelId === 'string' ? (body as any).modelId : undefined;
+    return answer(body, named, async () => {
+      const p = InferenceRequestV1.safeParse(body);
+      if (!p.success) throw new AdapterError('INVALID_FRAME', `invalid InferenceRequestV1: ${issues(p.error)}`);
+      const r = p.data;
+      if (r.vlmQuery && r.task !== 'vlm_verification') throw new AdapterError('INVALID_FRAME', 'invalid InferenceRequestV1: vlmQuery is only allowed for the vlm_verification task');
+      if (!r.vlmQuery && r.task === 'vlm_verification') throw new AdapterError('INVALID_FRAME', 'invalid InferenceRequestV1: vlm_verification needs vlmQuery');
+      const m = modelFor(r.task, r.modelId);
+      if (r.vlmQuery && !m.card.classes.includes(r.vlmQuery.targetClass)) {
+        throw new AdapterError('UNSUPPORTED_TASK', `target class '${r.vlmQuery.targetClass}' is not one this model checks (${m.card.classes.join(', ')})`);
+      }
+      const frame = decodeFrame(r.frame);
+      const { value: out, latencyMs } = await guarded(r.deadlineMs, (signal) =>
+        m.infer(frame, { requestId: r.requestId, tenantId: r.tenantId, task: r.task, ...(r.vlmQuery ? { vlmQuery: r.vlmQuery } : {}), deadlineMs: r.deadlineMs, signal })
+      );
+      const classes = new Set(m.card.classes);
+      const stray = (out.detections ?? []).filter((d) => !classes.has(d.objectClass)).map((d) => d.objectClass);
+      if (stray.length) throw new AdapterError('RUNTIME_ERROR', `the model returned classes not in its card: ${[...new Set(stray)].join(', ')}`);
+      if (r.task === 'embedding' && !out.embedding) throw new AdapterError('RUNTIME_ERROR', 'the embedding model returned no embedding');
+      if (r.task !== 'embedding' && out.embedding) throw new AdapterError('RUNTIME_ERROR', `the model returned an embedding for ${r.task}`);
+      if (r.vlmQuery) {
+        if (!out.verification) throw new AdapterError('RUNTIME_ERROR', 'the VLM returned no verification');
+        if (out.verification.targetClass !== r.vlmQuery.targetClass) {
+          throw new AdapterError('RUNTIME_ERROR', `the VLM answered for '${out.verification.targetClass}', not '${r.vlmQuery.targetClass}'`);
+        }
+      } else if (out.verification) {
+        throw new AdapterError('RUNTIME_ERROR', `the model returned a verification for ${r.task}`);
+      }
+      return checked({
+        contract: AI_ADAPTER_CONTRACT,
+        status: 'ok',
+        requestId: r.requestId,
+        detections: out.detections ?? [],
+        ...(out.embedding ? { embedding: encodeEmbedding(out.embedding) } : {}),
+        ...(out.verification ? { verification: out.verification } : {}),
+        provenance: provenanceFor(m, frame.timestampUtc),
+        latencyMs,
+      });
+    });
+  }
+
+  async function embedText(body: unknown): Promise<InferenceResult> {
+    const named = typeof (body as any)?.modelId === 'string' ? (body as any).modelId : undefined;
+    return answer(body, named, async () => {
+      const p = TextEmbeddingRequestV1.safeParse(body);
+      if (!p.success) throw new AdapterError('INVALID_FRAME', `invalid TextEmbeddingRequestV1: ${issues(p.error)}`);
+      const r = p.data;
+      if (r.text.trim().length === 0) throw new AdapterError('INVALID_FRAME', 'invalid TextEmbeddingRequestV1: text is blank');
+      const m = modelFor(null, r.modelId);
+      if (!m.embedText) throw new AdapterError('UNSUPPORTED_TASK', `model ${r.modelId} has no text tower`);
+      const { value: v, latencyMs } = await guarded(r.deadlineMs, (signal) =>
+        m.embedText!(r.text, { requestId: r.requestId, tenantId: r.tenantId, task: m.card.task, deadlineMs: r.deadlineMs, signal })
+      );
+      return checked({
+        contract: AI_ADAPTER_CONTRACT,
+        status: 'ok',
+        requestId: r.requestId,
+        detections: [],
+        embedding: encodeEmbedding(v),
+        provenance: provenanceFor(m, new Date().toISOString()),
+        latencyMs,
+      });
+    });
+  }
+
+  async function run<T>(modelId: string, deadlineMs: number, fn: (signal: AbortSignal) => Promise<T>) {
+    try {
+      modelFor(null, modelId);
+      const r = await guarded(deadlineMs, fn);
+      report({ outcome: 'ok', latencyMs: r.latencyMs, modelId });
+      return r;
+    } catch (e) {
+      report({ outcome: errorCodeOf(e), modelId });
+      throw e;
+    }
+  }
+
+  function provenance(modelId: string, frameTimestampUtc: string): Provenance {
+    const m = byId.get(modelId);
+    if (!m) throw new AdapterError('MODEL_NOT_LOADED', `model '${modelId}' is not loaded`);
+    return provenanceFor(m, frameTimestampUtc);
+  }
+
+  return {
+    descriptor,
+    load,
+    health,
+    infer,
+    servesTextEmbedding: o.models.some((m) => m.embedText),
+    embedText,
+    run,
+    provenance,
+    inFlight: () => inFlight,
+  };
+}

@@ -1,18 +1,6 @@
-import crypto from 'crypto';
 import { MetricsRegistry, LATENCY_BUCKETS_MS } from '../metrics';
-import { AdapterError, validateRequest } from './adapterCore';
-import {
-  AI_ADAPTER_CONTRACT,
-  AdapterDescriptorV1,
-  AdapterErrorCode,
-  AdapterHealthV1,
-  AiProvenanceV1,
-  AiTaskV1,
-  InferenceRequestV1,
-  InferenceResultV1,
-  ModelCardV1,
-  RETRYABLE,
-} from './contract';
+import { AdapterDescriptorV1, AdapterHealthV1, AiProvenanceV1, AiTaskV1, InferenceResultV1, ModelCardV1 } from './contract';
+import { AdapterCore, AdapterModel, Frame, InferContext, ModelCard, ModelOutput, Outcome, createAdapterCore } from '../sdk/core';
 
 /** What every loaded model pipeline (ANPR, redaction, embedding, VLM) exposes about itself. */
 export interface LoadedPipelineLike {
@@ -35,29 +23,22 @@ export interface PipelineAdapterOptions {
   failure?: string;
 }
 
-type OkResult = Extract<InferenceResultV1, { status: 'ok' }>;
-
-/** Errors already counted in `vigilone_ai_inferences_total`. */
-const COUNTED = new WeakSet<object>();
-
 /**
- * The ai-adapter.v1 rules every model pipeline in the worker follows, in one place:
+ * A model pipeline of the worker (ANPR, redaction, embedding, VLM) as an ai-adapter.v1 adapter. The contract
+ * rules are the adapter SDK's (`createAdapterCore`, in src/sdk, a checked copy of sdk/ai-adapter; ADR 0007):
+ * validation, served tasks and model ids, bounded concurrency (no queue: one more than maxInFlight is
+ * OVERLOADED), deadlines, result checks, provenance with every component model, and health (FAILED with the
+ * load error or when the pipeline's runtime died, DEGRADED when busy).
  *
- *   - descriptor and health from the pipeline's model card (FAILED with the load error; DEGRADED when busy);
- *   - each request is validated, its task must be served and its modelId must be the loaded pipeline;
- *   - bounded concurrency: beyond maxInFlight running, OVERLOADED (counted before any await, so a burst
- *     cannot slip past the limit);
- *   - deadlines: a result ready after the deadline is discarded as DEADLINE_EXCEEDED, never a success;
- *   - provenance names the pipeline definition and every component model, with a fresh inference id;
- *   - every outcome is counted once in `vigilone_ai_inferences_total`; every failure becomes an error result.
- *
- * A pipeline adapter supplies its model card and the model call. The object-detection core (adapterCore.ts)
- * keeps its own queue because the camera stream pipeline shares its slots.
+ * A pipeline adapter supplies its model card, its runtime label and its model call. This class adds the
+ * worker's metrics: every outcome is counted once in `vigilone_ai_inferences_total`, including work from the
+ * camera LPR path (`inSlot`). The object-detection core (adapterCore.ts) keeps its own queue, which the camera
+ * stream pipeline shares.
  */
 export abstract class PipelineAdapterCore<L extends LoadedPipelineLike> {
   public readonly metrics = new MetricsRegistry();
-  protected inFlight = 0;
   protected modelId: string;
+  private sdk: AdapterCore | null = null;
 
   protected constructor(
     protected readonly loaded: L | null,
@@ -75,20 +56,68 @@ export abstract class PipelineAdapterCore<L extends LoadedPipelineLike> {
     return this.modelId;
   }
 
+  /**
+   * Uses the id the backend registered for this pipeline (called once at start-up, right after registration).
+   * The SDK core is rebuilt with it; no request can carry the new id before the backend has it.
+   */
   setModelId(id: string): void {
     this.modelId = id;
+    this.sdk = null;
   }
 
   /** The model card for the loaded pipeline (never called without one). */
   protected abstract card(l: L, base: PipelineCardBase): ModelCardV1;
 
-  /** Why the pipeline cannot serve now, or null. Overridden where a pipeline can die after loading. */
-  protected failure(): string | null {
-    return this.loaded ? null : this.opts.failure || `${this.label} not loaded`;
-  }
-
   /** The provenance runtime label and any extra components (e.g. the llama-server binary). */
   protected abstract runtime(l: L): { runtime: string; extraComponents?: NonNullable<AiProvenanceV1['components']> };
+
+  /** The model call for one request of a served task (the SDK core has checked the request and frame). */
+  protected abstract infer(l: L, frame: Frame, ctx: InferContext): Promise<ModelOutput>;
+
+  /** Why a loaded pipeline cannot serve now, or null. Overridden where a pipeline can die after loading. */
+  protected liveness(_l: L): string | null {
+    return null;
+  }
+
+  /** Optional text tower (POST /v1/embed-text). */
+  protected embedText?(l: L, text: string, ctx: InferContext): Promise<Float32Array>;
+
+  /** The SDK core, built on first use (the model card comes from the subclass). */
+  protected get core(): AdapterCore {
+    if (this.sdk) return this.sdk;
+    const l = this.loaded;
+    const models: AdapterModel[] = [];
+    if (l) {
+      const { runtime, extraComponents } = this.runtime(l);
+      models.push({
+        card: this.modelCard() as ModelCard,
+        tasks: this.tasks.slice(1),
+        runtime,
+        executionProvider: 'cpu',
+        ...(extraComponents?.length ? { provenanceComponents: extraComponents } : {}),
+        failure: () => this.liveness(l),
+        infer: (frame, ctx) => this.infer(l, frame, ctx),
+        ...(this.embedText ? { embedText: (text: string, ctx: InferContext) => this.embedText!(l, text, ctx) } : {}),
+      });
+    }
+    this.sdk = createAdapterCore({
+      adapterId: this.opts.adapterId,
+      adapterVersion: this.opts.adapterVersion,
+      models,
+      tasks: this.tasks,
+      ...(l ? {} : { loadFailure: this.opts.failure || `${this.label} not loaded` }),
+      maxInFlight: this.opts.maxInFlight ?? 1,
+      maxQueued: 0,
+      onOutcome: (o) => this.count(o),
+    });
+    return this.sdk;
+  }
+
+  private count(o: Outcome): void {
+    this.metrics.inc('vigilone_ai_inferences_total', 'Inferences by outcome', { outcome: o.outcome });
+    if (o.outcome === 'OVERLOADED') this.metrics.inc('vigilone_ai_requests_rejected_total', 'Requests rejected by backpressure', { reason: 'overloaded' });
+    if (o.outcome === 'ok' && o.latencyMs !== undefined) this.metrics.observe('vigilone_ai_inference_latency_ms', `End-to-end ${this.label} latency`, LATENCY_BUCKETS_MS, o.latencyMs);
+  }
 
   modelCard(): ModelCardV1 | null {
     const l = this.loaded;
@@ -107,111 +136,25 @@ export abstract class PipelineAdapterCore<L extends LoadedPipelineLike> {
   }
 
   describe(): AdapterDescriptorV1 {
-    const card = this.modelCard();
-    return { contract: AI_ADAPTER_CONTRACT, adapterId: this.opts.adapterId, adapterVersion: this.opts.adapterVersion, tasks: this.tasks, models: card ? [card] : [], requiresNetworkEgress: false };
+    return this.core.descriptor as AdapterDescriptorV1;
   }
 
   health(): AdapterHealthV1 {
-    const failure = this.failure();
-    return {
-      contract: AI_ADAPTER_CONTRACT,
-      adapterId: this.opts.adapterId,
-      status: failure ? 'FAILED' : this.inFlight >= this.maxInFlight ? 'DEGRADED' : 'READY',
-      loadedModelIds: failure ? [] : [this.modelId],
-      lastError: failure,
-      observedAtUtc: new Date().toISOString(),
-    };
+    return this.core.health();
   }
 
-  protected get maxInFlight(): number {
-    return this.opts.maxInFlight ?? 1;
+  /** POST /v1/infer. Never throws. */
+  handleInferRequest(body: unknown): Promise<InferenceResultV1> {
+    return this.core.infer(body) as Promise<InferenceResultV1>;
+  }
+
+  /** Runs work outside a request (the camera LPR path) in a slot under the deadline; counted like a request. */
+  protected inSlot<T>(deadlineMs: number, work: () => Promise<T>): Promise<{ value: T; latencyMs: number }> {
+    return this.core.run(this.modelId, deadlineMs, () => work());
   }
 
   protected provenance(frameTimestampUtc: string): AiProvenanceV1 {
-    const l = this.loaded!;
-    const { runtime, extraComponents = [] } = this.runtime(l);
-    return {
-      adapterId: this.opts.adapterId,
-      adapterVersion: this.opts.adapterVersion,
-      modelId: this.modelId,
-      modelName: l.definition.name,
-      modelVersion: l.definition.version,
-      modelSha256: l.definitionSha256,
-      runtime,
-      executionProvider: 'cpu',
-      inferenceId: crypto.randomUUID(),
-      frameTimestampUtc,
-      components: [...l.components.map((c) => ({ role: c.role, modelName: c.entry.name, modelVersion: c.entry.version, modelSha256: c.entry.sha256 })), ...extraComponents],
-    };
-  }
-
-  /** Fails unless the pipeline is loaded and `modelId` names it. */
-  protected requireModel(modelId: string): void {
-    const failure = this.failure();
-    if (failure) throw new AdapterError('MODEL_NOT_LOADED', failure);
-    if (modelId !== this.modelId) throw new AdapterError('MODEL_NOT_LOADED', `model '${modelId}' is not loaded (loaded: ${this.modelId})`);
-  }
-
-  /** Runs `work` in a slot under the deadline; counts the ok outcome and its latency. */
-  protected async inSlot<T>(deadlineMs: number, work: () => Promise<T>): Promise<{ value: T; latencyMs: number }> {
-    if (this.inFlight >= this.maxInFlight) {
-      this.metrics.inc('vigilone_ai_requests_rejected_total', 'Requests rejected by backpressure', { reason: 'overloaded' });
-      throw this.counted(new AdapterError('OVERLOADED', `${this.label} busy: ${this.inFlight} running`));
-    }
-    this.inFlight++;
-    const started = Date.now();
-    let value: T;
-    try {
-      value = await work();
-    } catch (err) {
-      throw this.counted(err);
-    } finally {
-      this.inFlight--;
-    }
-    const latencyMs = Date.now() - started;
-    if (latencyMs > deadlineMs) throw this.counted(new AdapterError('DEADLINE_EXCEEDED', `result ready after ${latencyMs}ms, deadline was ${deadlineMs}ms`));
-    this.metrics.inc('vigilone_ai_inferences_total', 'Inferences by outcome', { outcome: 'ok' });
-    this.metrics.observe('vigilone_ai_inference_latency_ms', `End-to-end ${this.label} latency`, LATENCY_BUCKETS_MS, latencyMs);
-    return { value, latencyMs };
-  }
-
-  /** POST /v1/infer: validation, task and model checks, then `run`. Never throws. */
-  async handleInferRequest(body: unknown): Promise<InferenceResultV1> {
-    return this.answer(body, async () => {
-      const req = validateRequest(body);
-      this.requireModel(req.modelId);
-      if (!this.tasks.includes(req.task)) throw new AdapterError('UNSUPPORTED_TASK', `task '${req.task}' is not served by this adapter (${this.tasks.join(', ')})`);
-      return this.run(req);
-    });
-  }
-
-  /** The model call for one validated request of a served task. */
-  protected abstract run(req: InferenceRequestV1): Promise<OkResult>;
-
-  /** Wraps a handler: any thrown error becomes a counted error result for the request. */
-  protected async answer(body: unknown, handler: () => Promise<OkResult>): Promise<InferenceResultV1> {
-    try {
-      return await handler();
-    } catch (err: any) {
-      const code: AdapterErrorCode = err instanceof AdapterError ? err.code : 'RUNTIME_ERROR';
-      if (!COUNTED.has(err)) this.metrics.inc('vigilone_ai_inferences_total', 'Inferences by outcome', { outcome: code });
-      return { contract: AI_ADAPTER_CONTRACT, status: 'error', requestId: requestIdOf(body), errorCode: code, message: (err?.message || 'inference failed').slice(0, 2000), retryable: RETRYABLE[code] };
-    }
-  }
-
-  /** Counts a failure inside a slot once, so the stream path (no `answer`) is counted too. */
-  private counted(err: unknown): unknown {
-    if (err && typeof err === 'object' && !COUNTED.has(err)) {
-      COUNTED.add(err);
-      const code: AdapterErrorCode = err instanceof AdapterError ? err.code : 'RUNTIME_ERROR';
-      this.metrics.inc('vigilone_ai_inferences_total', 'Inferences by outcome', { outcome: code });
-    }
-    return err;
-  }
-
-  /** An ok result; provenance is fresh for this frame unless `fields` carries one. */
-  protected ok(requestId: string, frameTimestampUtc: string, latencyMs: number, fields: Partial<OkResult>): OkResult {
-    return { contract: AI_ADAPTER_CONTRACT, status: 'ok', requestId, detections: [], ...fields, provenance: fields.provenance ?? this.provenance(frameTimestampUtc), latencyMs } as OkResult;
+    return this.core.provenance(this.modelId, frameTimestampUtc);
   }
 }
 
@@ -225,10 +168,4 @@ export interface PipelineCardBase {
   weightsLicense: string;
   weightsSource: string;
   components: NonNullable<ModelCardV1['components']>;
-}
-
-/** The request id to echo in an error result: the body's own, or 'unidentified-request'. */
-export function requestIdOf(body: unknown): string {
-  const id = body && typeof (body as any).requestId === 'string' ? (body as any).requestId : '';
-  return id ? id.slice(0, 200) : 'unidentified-request';
 }

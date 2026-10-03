@@ -1,6 +1,6 @@
 {
   "name": "@vigilone/ai-adapter-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Build an AI adapter that VigilOne can use (ai-adapter.v1): contract schemas, an HTTP server that enforces the contract, and the conformance kit.",
   "license": "UNLICENSED",
