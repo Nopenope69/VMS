@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-02T18:21:02.292Z",
-  "commit": "b0c7aae2c453ecdc39dfb5c125c592756e7e13e2",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37046170922",
+  "generatedAt": "2026-10-03T18:56:15.010Z",
+  "commit": "16599cbd772e0f62405ea4afa0234425d500f75b",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37145735506",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 153,
-        "passed": 153,
+        "total": 155,
+        "passed": 155,
         "failed": 0
       },
       "tests": {
-        "total": 1176,
-        "passed": 1140,
+        "total": 1183,
+        "passed": 1147,
         "failed": 0,
         "skipped": 36
       },
@@ -104,9 +104,16 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/cameraLiveness.test.ts",
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/cameraRegistryRealDb.test.ts",
           "status": "passed",
-          "passed": 8,
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -135,6 +142,13 @@
           "file": "backend/src/__tests__/clockGuardHostState.test.ts",
           "status": "passed",
           "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/compositionEventSinks.test.ts",
+          "status": "passed",
+          "passed": 3,
           "failed": 0,
           "skipped": 0
         },
@@ -1023,7 +1037,7 @@
         {
           "file": "backend/src/__tests__/streamWatchdog.test.ts",
           "status": "passed",
-          "passed": 4,
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -1328,9 +1342,9 @@
     }
   ],
   "totals": {
-    "suites": 184,
-    "tests": 1484,
-    "passed": 1443,
+    "suites": 186,
+    "tests": 1491,
+    "passed": 1450,
     "failed": 0,
     "skipped": 41
   },
