@@ -414,20 +414,30 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   (section 5 of `docs/strategy/00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`), one PR per bucket.
 - Merged: Bucket 1, the track index (#30, ADR 0011); Bucket 5, measurement tools (#32); Bucket 2, track search
   (#33, ADR 0012); Bucket 3, cross-camera following (#36, ADR 0013); Bucket 4, the investigation workspace (#37,
-  #38); the plate and spatial search fixes (#31, #34); the status-push race fix (#35).
-- **Bucket 7, housekeeping** (orchestrator injected from the composition root, camera liveness, one settings
-  reader, unused evidence services deleted, operator browser tests, README) is on branch
-  `claude/sharp-keller-tq0t8r`.
-- **Next:** Bucket 6 (privacy tools) or V1.0 understand-and-act (Bucket 8).
+  #38); Bucket 7, housekeeping (#39); the plate and spatial search fixes (#31, #34); the status-push race fix
+  (#35).
+- Buckets 1 to 5 and 7 are done. Left: **Bucket 6** (privacy tools: data-principal access/erasure requests,
+  exportable record of processing, breach register), **Bucket 8** (V1.0 understand-and-act; several items need a
+  local language model and a licence decision first) and the **ai-worker on the SDK server** (its own piece of
+  work, owner's decision). Bucket H (bench, clean-install drill, footage, licences, DPDP choices, pilot site) is
+  the owner's field track.
+- **Next:** the owner picks Bucket 6, Bucket 8 or the ai-worker/SDK change in a new session. Start from `master`.
 
 **Open follow-ups, all known and documented:**
 
 | Follow-up | Detail | Recorded in |
 | --- | --- | --- |
+| Out-of-order track path (bug) | `appendPath` in `backend/src/services/tracks/trackMath.ts` drops a point older than the path's end. When the latest detection of a burst is applied first, earlier ones are lost: one point, `direction` null. Reproduced; it makes `trackIndexRealDb` (the concurrent-burst test) fail now and then in CI. Proposed fix: a point earlier than the path's start becomes the new start (`out.unshift(p)`), plus a latest-first unit test. Not yet applied. | PR #39 comment |
 | ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. The owner moved it to its own piece of work. | ADR 0007 |
 | Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). Bucket 6. | `docs/BACKLOG.md`; the compliance audit, section 4 |
 | No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. Bucket 6. | Compliance audit, sections 1 and 6 |
-| `main` branch | Holds the unfixed Antigravity commit; everything on it is on `master`. The owner decided to delete it; agent sessions cannot delete branches, so the owner does it on GitHub (Branches page). `chore/repo-skills` is already gone. | Section 8 |
+| `main` branch | Still on GitHub (holds the unfixed Antigravity commit; everything on it is on `master`). The owner decided to delete it; agent sessions cannot delete branches, so the owner does it on GitHub (Branches page). `chore/repo-skills` is already gone. | Section 8 |
+
+**Working agreements with the owner:**
+- One PR per bucket or fix, started from `master`; the owner merges. Run the full suites and the six gates before
+  pushing; drive CI to green; explain results in plain, non-technical words.
+- Fail loud and label status honestly (`docs/STATUS.md` states). Never commit skills or `.claude` files.
+- Agent sessions push only to their own branch; branch deletion and merges are the owner's.
 
 **Local environment notes (cloud sandbox):**
 - PostgreSQL can stop when the container restarts. Run `service postgresql start`.
