@@ -71,12 +71,18 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.
 /**
  * Adds an observation to a thinned path. All points but the last are fixed waypoints; the last is the track's
  * current end and moves with every observation. When the current end is far enough (in time or space) from the
- * last waypoint, it becomes a waypoint and the new observation becomes the end. Out-of-order points are ignored.
+ * last waypoint, it becomes a waypoint and the new observation becomes the end. Detections can arrive out of order
+ * (a burst is applied concurrently): a point earlier than the path's start becomes the new start, so the track's
+ * true beginning is kept; any other late point is ignored.
  */
 export function appendPath(path: PathPoint[], p: PathPoint): PathPoint[] {
   const out = path.slice();
   const end = out[out.length - 1];
   if (!end) return [p];
+  if (p.t < out[0].t) {
+    out.unshift(p);
+    return out.length > PATH_MAX_POINTS ? thin(out) : out;
+  }
   if (p.t <= end.t) return out;
   if (out.length === 1) {
     out.push(p);

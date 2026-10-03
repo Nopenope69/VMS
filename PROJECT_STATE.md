@@ -427,7 +427,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 
 | Follow-up | Detail | Recorded in |
 | --- | --- | --- |
-| Out-of-order track path (bug) | `appendPath` in `backend/src/services/tracks/trackMath.ts` drops a point older than the path's end. When the latest detection of a burst is applied first, earlier ones are lost: one point, `direction` null. Reproduced; it makes `trackIndexRealDb` (the concurrent-burst test) fail now and then in CI. Proposed fix: a point earlier than the path's start becomes the new start (`out.unshift(p)`), plus a latest-first unit test. Not yet applied. | PR #39 comment |
+| Out-of-order track path (bug) | **Fixed** on `claude/amazing-hypatia-hkgolw`: in `appendPath` (`backend/src/services/tracks/trackMath.ts`) a point earlier than the path's start now becomes the new start, so a burst applied latest-first keeps its beginning and its direction. Other late points (inside the path) are still ignored. Unit tests cover start-replacement, a late inner point and a latest-first burst; `trackIndexRealDb` passed 10 runs in a row. | PR #39 comment |
 | ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. The owner moved it to its own piece of work. | ADR 0007 |
 | Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). Bucket 6. | `docs/BACKLOG.md`; the compliance audit, section 4 |
 | No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. Bucket 6. | Compliance audit, sections 1 and 6 |

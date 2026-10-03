@@ -36,9 +36,26 @@ describe('appendPath', () => {
     expect(path.map((q) => q.x)).toEqual([0.1, 0.2, 0.3]);
   });
 
-  it('ignores out-of-order points', () => {
+  it('makes a point earlier than the start the new start', () => {
     const path = appendPath(appendPath([], p(1000, 0.1, 0.1)), p(500, 0.9, 0.9));
-    expect(path).toEqual([p(1000, 0.1, 0.1)]);
+    expect(path).toEqual([p(500, 0.9, 0.9), p(1000, 0.1, 0.1)]);
+  });
+
+  it('ignores a late point that falls inside the path', () => {
+    let path = appendPath([], p(0, 0.1, 0.5));
+    path = appendPath(path, p(2000, 0.9, 0.5));
+    expect(appendPath(path, p(1000, 0.5, 0.9))).toEqual(path);
+    expect(appendPath(path, p(0, 0.3, 0.3))).toEqual(path);
+  });
+
+  it('keeps the start and a direction when the latest detection of a burst is applied first', () => {
+    // A concurrent burst: the newest detection lands first, then the rest, newest to oldest.
+    let path: PathPoint[] = [];
+    for (let i = 9; i >= 0; i--) path = appendPath(path, p(i * 200, 0.1 + i * 0.05, 0.5));
+    expect(path[0].t).toBe(0);
+    expect(path[path.length - 1].t).toBe(1800);
+    for (let i = 1; i < path.length; i++) expect(path[i].t).toBeGreaterThan(path[i - 1].t);
+    expect(directionOf(path)).toBe('RIGHT');
   });
 
   it('stays bounded on a long track and keeps its first and last points', () => {
