@@ -137,15 +137,6 @@ export function setting<K extends SettingName>(name: K, env: Env = process.env):
   return spec.parse(raw, name);
 }
 
-/**
- * The parsed value when the variable is set, otherwise undefined. For the few settings that config/env.ts also
- * loads at boot (RECORDINGS_DIR, EXPORTS_DIR, COTURN_*): callers fall back to the boot config, which tests patch.
- */
-export function settingIfSet<K extends SettingName>(name: K, env: Env = process.env): SettingValue<K> | undefined {
-  const raw = env[name];
-  return raw === undefined || raw.trim() === '' ? undefined : setting(name, env);
-}
-
 /** Every setting that is set but does not parse, as messages naming the variable. Empty when all are valid. */
 export function settingProblems(env: Env = process.env): string[] {
   const problems: string[] = [];

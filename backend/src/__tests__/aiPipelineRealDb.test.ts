@@ -12,9 +12,9 @@ import { ModelManifestService } from '../services/ai/modelManifest.service';
 import { ModelRegistryService } from '../services/ai/modelRegistry.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { spatialEngine } from '../services/spatial/engine';
-import { incidentOrchestrator } from '../services/incident/orchestrator/incidentOrchestrator.service';
+import { incidentOrchestrator } from '../composition';
 import { markAutomationRulesChanged } from '../services/automation/ruleCache';
-import { EvidenceManifestService } from '../services/evidence/evidenceManifest.service';
+import { EvidenceArchive } from '../services/evidence/archive';
 import { RecordingIndexService } from '../services/recording/recordingIndex.service';
 
 // beforeAll starts the real app: on a cold ts-jest cache that compiles the whole backend, which
@@ -198,7 +198,7 @@ describe('spatial incidents and the orchestrator bridge (real DB)', () => {
   });
 
   it('evidence isolation: spatial incidents never call recording-index or evidence-manifest code', async () => {
-    const manifestSpy = jest.spyOn(EvidenceManifestService.prototype, 'createManifest');
+    const manifestSpy = jest.spyOn(EvidenceArchive.prototype, 'createManifest');
     const indexSpy = jest.spyOn(RecordingIndexService.prototype, 'indexSegment');
     const t0 = Date.parse('2026-09-27T11:20:00Z');
     await ingest(detection('trk-iso', { x: 0.5, y: 0.7 }, t0));

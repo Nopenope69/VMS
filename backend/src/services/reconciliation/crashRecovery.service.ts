@@ -8,7 +8,6 @@ import { computeFileSha256 } from '../../utils/crypto';
 import { extractStreamPathAndFilename, calculateSegmentBounds, SegmentBounds } from '../../utils/segmentPath';
 import ControlPlaneManifestService from '../appliance/controlPlaneManifest.service';
 import PinStateMirrorService from '../evidence/pinStateMirror.service';
-import config from '../../config/env';
 import { setting } from '../../config/settings';
 
 export interface CrashRecoveryReport {
@@ -330,7 +329,7 @@ export class CrashRecoveryService {
 
     try {
       const roots =
-        scanRoots && scanRoots.length > 0 ? scanRoots : [config.RECORDINGS_DIR || '/recordings'];
+        scanRoots && scanRoots.length > 0 ? scanRoots : [setting('RECORDINGS_DIR')];
 
       // Also gather active StorageVolume paths
       try {

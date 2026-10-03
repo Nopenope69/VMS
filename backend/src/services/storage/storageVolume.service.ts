@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import checkDiskSpace from 'check-disk-space';
 import { PrismaClient, VolumeStatus, EventSeverity, AlarmState, StorageVolume } from '@prisma/client';
-import config from '../../config/env';
+import { setting } from '../../config/settings';
 
 export interface VolumeHealthReport {
   id: string;
@@ -62,7 +62,7 @@ export class StorageVolumeService {
       return existing;
     }
 
-    const defaultPath = config.RECORDINGS_DIR || '/recordings';
+    const defaultPath = setting('RECORDINGS_DIR');
     if (!fs.existsSync(defaultPath)) {
       fs.mkdirSync(defaultPath, { recursive: true });
     }

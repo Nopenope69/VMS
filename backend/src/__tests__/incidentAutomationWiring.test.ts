@@ -1,4 +1,3 @@
-import { incidentOrchestrator } from '../services/incident/orchestrator/incidentOrchestrator.service';
 import { SceneChangeDetectorService } from '../services/motion/sceneChangeDetector.service';
 import { StreamWatchdogService } from '../services/watchdog/streamWatchdog.service';
 import prisma from '../config/database';
@@ -60,11 +59,12 @@ jest.mock('check-disk-space', () => {
 });
 
 describe('IncidentOrchestrator Automation Loop Wiring', () => {
-  let ingestSpy: jest.SpyInstance;
+  // The orchestrator's ingestEvent as the composition root hands it to each producer.
+  let ingestSpy: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    ingestSpy = jest.spyOn(incidentOrchestrator, 'ingestEvent').mockResolvedValue({
+    ingestSpy = jest.fn().mockResolvedValue({
       eventId: 'mock-ingest-evt',
       correlationId: 'mock-corr-1',
       rulesEvaluated: 1,
@@ -74,10 +74,6 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
     });
   });
 
-  afterEach(() => {
-    ingestSpy.mockRestore();
-  });
-
   it('wires SceneChangeDetectorService to ingestEvent on motion episode start', async () => {
     (prisma.camera.findUnique as jest.Mock).mockResolvedValue({
       id: 'cam-motion-1',
@@ -85,7 +81,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
       siteId: 'site-alpha',
     });
 
-    const sceneDetector = new SceneChangeDetectorService(1000);
+    const sceneDetector = new SceneChangeDetectorService(1000, ingestSpy);
     await sceneDetector.handleSceneChange('cam-motion-1', 0.88);
 
     expect(ingestSpy).toHaveBeenCalledTimes(1);
@@ -114,7 +110,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
       },
     });
 
-    const watchdog = new StreamWatchdogService(prisma as any);
+    const watchdog = new StreamWatchdogService(prisma as any, ingestSpy);
     // Evaluate stream with stalled metrics (ready = false)
     await watchdog.evaluateStream('cam-stream-1', {
       fps: 0,
@@ -140,7 +136,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
     (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
 
-    const sentinel = new StorageSentinelService(prisma as any);
+    const sentinel = new StorageSentinelService(prisma as any, ingestSpy);
     await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
 
     expect(ingestSpy).toHaveBeenCalledTimes(1);
@@ -159,7 +155,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
     (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
     (prisma.recordingSegment as any).count = jest.fn().mockResolvedValue(0);
     try {
-      const sentinel = new StorageSentinelService(prisma as any);
+      const sentinel = new StorageSentinelService(prisma as any, ingestSpy);
       await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
       const eventArg = ingestSpy.mock.calls[0][0];
       expect(eventArg.payload.alertCode).toBe('NON_RECORDING_STORAGE_EXHAUSTION');
@@ -174,7 +170,7 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
     (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 'tenant-automation' }]);
     (prisma.recordingSegment as any).count = jest.fn().mockResolvedValue(12);
     try {
-      const sentinel = new StorageSentinelService(prisma as any);
+      const sentinel = new StorageSentinelService(prisma as any, ingestSpy);
       await sentinel.checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
       const eventArg = ingestSpy.mock.calls[0][0];
       expect(eventArg.payload.alertCode).toBe('PINNED_STORAGE_EXHAUSTION');
@@ -187,13 +183,13 @@ describe('IncidentOrchestrator Automation Loop Wiring', () => {
   it('raises the storage alarm for every tenant, and for none (loudly) before bootstrap', async () => {
     (prisma.recordingSegment.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.tenant.findMany as jest.Mock).mockResolvedValue([{ id: 't1' }, { id: 't2' }]);
-    await new StorageSentinelService(prisma as any).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+    await new StorageSentinelService(prisma as any, ingestSpy).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
     expect(ingestSpy.mock.calls.map((c: any[]) => c[0].tenantId)).toEqual(['t1', 't2']);
 
     ingestSpy.mockClear();
     (prisma.tenant.findMany as jest.Mock).mockResolvedValue([]);
     const errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    await new StorageSentinelService(prisma as any).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
+    await new StorageSentinelService(prisma as any, ingestSpy).checkAndPurge(80, 70, 30 * 1024 * 1024 * 1024);
     expect(ingestSpy).not.toHaveBeenCalled();
     expect(errSpy.mock.calls.some((c) => String(c[0]).includes('no tenant exists yet'))).toBe(true);
     errSpy.mockRestore();

@@ -157,7 +157,8 @@ export interface DiscoveredCamera {
   tenantId: string;
   name: string;
   streamPath: string;
-  isOnline: boolean;
+  /** Watched by the appliance (Camera.monitored); the worker analyses monitored cameras. */
+  monitored: boolean;
 }
 
 export interface FrameGeometry {

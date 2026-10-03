@@ -1,117 +1,114 @@
-import { test, expect } from '@playwright/test';
-
 /**
- * VigilOne Stage 3: Playwright Frontend Smoke & Operations Validation
- * Conforms to Master Commercialization Execution Contract (Section 2 & 3.1)
- * Validates Core V1 Operator Flows:
- * 1. Authentication & Role Gate
- * 2. Live Grid Multi-Stream View
- * 3. Playback Timeline Scrubber & Seek Target
- * 4. Section 63 BSA Evidence Legal Hold & Export
- * 5. Storage Management & Mount Guard Status
- * 6. Alarm Management & Telemetry Filter
+ * Core operator screens against the real backend and the seeded tenant (backend/scripts/e2e/seed-frontend-e2e.ts):
+ * sign-in and what each role is shown, the live grid's camera directory (a camera the stream watchdog has never
+ * seen is offline, never shown online by default), alarm triage (filter, acknowledge, resolve with a verdict, each
+ * checked in the backend; a viewer is refused by the backend too), and the storage screen showing the backend's
+ * own figures. The evidence screen is covered by redaction-dpdp.spec.ts.
  */
+import fs from 'fs';
+import { test, expect, Page, APIRequestContext } from '@playwright/test';
 
-const BASE_URL = process.env.VIGILONE_BASE_URL || 'http://localhost:3000';
+const seedFile = process.env.E2E_SEED_FILE;
+if (!seedFile) throw new Error('E2E_SEED_FILE is not set: run these tests through scripts/e2e/frontend-browser.sh');
+const seed = JSON.parse(fs.readFileSync(seedFile, 'utf8')) as {
+  email: string;
+  viewerEmail: string;
+  operatorEmail: string;
+  password: string;
+  cameraId: string;
+  alarms: { critical: string; warning: string };
+};
 
-test.describe('VigilOne Core Operator Workflows', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to base appliance URL
-    await page.goto(BASE_URL);
-  });
+async function signIn(page: Page, email: string, password = seed.password) {
+  await page.goto('/');
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: 'Sign In to Console' }).click();
+}
 
-  test('Flow 1: Operator Authentication & Local RBAC', async ({ page }) => {
-    // Ensure login page is presented
-    await expect(page.locator('input[name="username"], input[type="text"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
+async function token(request: APIRequestContext, email: string) {
+  const r = await request.post('/api/v1/auth/login', { data: { email, password: seed.password } });
+  expect(r.status()).toBe(200);
+  return (await r.json()).token as string;
+}
 
-    // Fill credentials
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
+async function alarm(request: APIRequestContext, id: string) {
+  const r = await request.get('/api/v1/alarms', { headers: { authorization: `Bearer ${await token(request, seed.email)}` } });
+  expect(r.status()).toBe(200);
+  return (await r.json()).alarms.find((a: any) => a.id === id);
+}
 
-    // Verify successful login into dashboard
-    await expect(page.locator('header')).toBeVisible();
-    await expect(page.getByText('Live Grid')).toBeVisible();
-  });
+test('sign-in refuses a wrong password and shows each role only its screens', async ({ page }) => {
+  await signIn(page, seed.email, 'not-the-password');
+  await expect(page.getByText(/invalid|incorrect|failed/i).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign In to Console' })).toBeVisible();
 
-  test('Flow 2: Live View Grid Layout & Multi-Camera Rendering', async ({ page }) => {
-    // Authenticate
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
+  await signIn(page, seed.viewerEmail);
+  await expect(page.getByRole('button', { name: 'Live Grid' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Investigation' })).toBeVisible();
+  for (const hidden of ['Alarms', 'Evidence (Sec. 63)', 'Storage', 'Staff']) await expect(page.getByRole('button', { name: hidden })).toHaveCount(0);
 
-    // Navigate to Live Grid
-    await page.getByRole('button', { name: /Live Grid/i }).click();
+  // Signing out ends the session: a reload does not bring it back.
+  await page.getByTitle('Sign Out of Appliance').click();
+  await expect(page.getByRole('button', { name: 'Sign In to Console' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign In to Console' })).toBeVisible();
 
-    // Verify layout buttons (1x1, 2x2, 3x3)
-    const layoutControls = page.locator('button:has-text("1x1"), button:has-text("2x2"), button:has-text("3x3")');
-    if (await layoutControls.count() > 0) {
-      await layoutControls.first().click();
-    }
+  await signIn(page, seed.email);
+  for (const shown of ['Live Grid', 'Alarms', 'Evidence (Sec. 63)', 'Storage', 'Staff']) await expect(page.getByRole('button', { name: shown })).toBeVisible();
+});
 
-    // Verify camera video container is rendered
-    await expect(page.locator('.grid, [data-testid="camera-grid"]')).toBeVisible();
-  });
+test('the camera directory shows a camera the stream watchdog has never seen as offline', async ({ page }) => {
+  await signIn(page, seed.email);
+  await page.getByRole('button', { name: 'Live Grid' }).click();
+  // The directory is open by default.
+  await expect(page.getByText('0 Online / 1 Total')).toBeVisible();
+  await expect(page.getByTitle('Camera Offline')).toHaveCount(1);
+  await expect(page.getByTitle('Camera Online')).toHaveCount(0);
+});
 
-  test('Flow 3: Playback Timeline Scrubber & Filename-Derived Seek Target', async ({ page }) => {
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
+test('alarm triage: filter by severity, acknowledge, resolve with a verdict; a viewer is refused by the backend', async ({ page, request }) => {
+  // The backend refuses a viewer, whatever the screen shows.
+  const viewerAck = await request.post(`/api/v1/alarms/${seed.alarms.critical}/acknowledge`, { headers: { authorization: `Bearer ${await token(request, seed.viewerEmail)}` } });
+  expect(viewerAck.status()).toBe(403);
+  expect((await alarm(request, seed.alarms.critical)).state).toBe('ACTIVE');
 
-    // Switch to Playback / Investigation tab
-    const playbackBtn = page.getByRole('button', { name: /Investigation|Playback/i });
-    if (await playbackBtn.isVisible()) {
-      await playbackBtn.click();
-      // Verify timeline scrubber exists
-      await expect(page.locator('input[type="range"], [role="slider"], canvas, .timeline-container')).toBeVisible();
-    }
-  });
+  await signIn(page, seed.operatorEmail);
+  await page.getByRole('button', { name: 'Alarms' }).click();
+  await expect(page.getByRole('row', { name: /E2E perimeter breach/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /E2E camera tamper/ })).toBeVisible();
 
-  test('Flow 4: Section 63 BSA Evidence Packaging & Legal Hold', async ({ page }) => {
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
+  await page.getByLabel('Alarm severity').selectOption('CRITICAL');
+  await expect(page.getByRole('row', { name: /E2E camera tamper/ })).toHaveCount(0);
+  const breach = page.getByRole('row', { name: /E2E perimeter breach/ });
+  await breach.getByRole('button', { name: 'Acknowledge' }).click();
+  await expect(breach.getByRole('button', { name: 'Acknowledge' })).toHaveCount(0);
+  await expect.poll(async () => (await alarm(request, seed.alarms.critical)).state).toBe('ACKNOWLEDGED');
 
-    // Navigate to Section 63 Evidence tab
-    await page.getByRole('button', { name: /Section 63 Evidence/i }).click();
+  // Acknowledged alarms are listed under "In Review" (the list opens on active ones).
+  await page.getByRole('button', { name: 'In Review' }).click();
+  await breach.getByRole('button', { name: 'Resolve' }).click();
+  await page.getByLabel('Resolution notes').fill('Guard checked the fence; a fox set off the beam.');
+  await page.getByLabel('Verdict').selectOption('FALSE_ALARM');
+  await page.getByRole('button', { name: 'Confirm Resolution' }).click();
+  await expect.poll(async () => (await alarm(request, seed.alarms.critical)).state).toBe('RESOLVED');
+  const resolved = await alarm(request, seed.alarms.critical);
+  expect(resolved.resolutionNotes).toBe('Guard checked the fence; a fox set off the beam.');
+  const fb = await request.get('/api/v1/alarms/feedback/stats', { headers: { authorization: `Bearer ${await token(request, seed.email)}` } });
+  expect(fb.status()).toBe(200);
+  // The verdict counts: the two seeded alarms have no rule, one is reviewed, as a false alarm.
+  expect((await fb.json()).byRule.find((r: any) => r.ruleId === null)).toMatchObject({ alarms: 2, reviewed: 1, falseAlarms: 1, falseAlarmRate: 1 });
 
-    // Verify Evidence management table renders
-    await expect(page.getByText(/Evidence Packages|Legal Hold|Section 63/i).first()).toBeVisible();
+  // The other alarm was not touched.
+  expect((await alarm(request, seed.alarms.warning)).state).toBe('ACTIVE');
+});
 
-    // Verify Export Evidence button
-    const exportBtn = page.getByRole('button', { name: /New Export|Create Package|Export/i });
-    if (await exportBtn.isVisible()) {
-      await exportBtn.click();
-      // Ensure dialog opens with date range and camera selection
-      await expect(page.locator('[role="dialog"], .modal')).toBeVisible();
-      await page.keyboard.press('Escape');
-    }
-  });
-
-  test('Flow 5: Storage Management & Mount Guard Telemetry', async ({ page }) => {
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
-
-    // Navigate to Storage tab
-    await page.getByRole('button', { name: /Storage/i }).click();
-
-    // Verify storage volume vitals and Mount Guard indicators
-    await expect(page.getByText(/Storage Volumes|Pool Status|Capacity/i).first()).toBeVisible();
-  });
-
-  test('Flow 6: System Alarms & Severity Filtering', async ({ page }) => {
-    await page.fill('input[type="text"]', 'admin');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
-
-    // Navigate to Events tab
-    await page.getByRole('button', { name: /Events|Alarms/i }).click();
-
-    // Verify event/alarm list renders
-    await expect(page.getByText(/Active Alarms|Security Events|Alarm Feed/i).first()).toBeVisible();
-  });
-
-  // Flows 7-9 were replaced by e2e/redaction-dpdp.spec.ts, which runs against the real backend.
+test("the storage screen shows the backend's own figures", async ({ page, request }) => {
+  const r = await request.get('/api/v1/system/storage/status', { headers: { authorization: `Bearer ${await token(request, seed.email)}` } });
+  expect(r.status()).toBe(200);
+  const status = await r.json();
+  await signIn(page, seed.email);
+  await page.getByRole('button', { name: 'Storage' }).click();
+  await expect(page.getByText('STATE:')).toBeVisible();
+  await expect(page.getByText(new RegExp(`Total:\\s*${status.cameraStats.total}\\b`))).toBeVisible();
 });

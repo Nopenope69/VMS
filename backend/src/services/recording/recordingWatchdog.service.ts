@@ -105,7 +105,7 @@ export class RecordingWatchdogService {
     try {
       const activeCameras = await this.prisma.camera.findMany({
         where: {
-          isOnline: true,
+          monitored: true,
           recorderState: 'RUNNING',
         },
         select: {

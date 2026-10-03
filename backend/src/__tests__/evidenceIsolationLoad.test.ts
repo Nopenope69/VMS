@@ -1,5 +1,5 @@
 import { handleSegmentComplete } from '../routes/internal.routes';
-import { EvidenceManifestService } from '../services/evidence/evidenceManifest.service';
+import { EvidenceArchive } from '../services/evidence/archive';
 import { ChainOfCustodyService } from '../services/evidence/chainOfCustody.service';
 import { RecordingIndexService } from '../services/recording/recordingIndex.service';
 import { AiWorker } from '../../../services/ai-worker/src/worker';
@@ -200,7 +200,7 @@ describe('Architectural Evidence Plane Isolation Under Heavy AI Load', () => {
     } as unknown as RecordingIndexService;
 
     const chainOfCustody = new ChainOfCustodyService(prisma);
-    const manifestService = new EvidenceManifestService(prisma, recordingIndex, chainOfCustody);
+    const manifestService = new EvidenceArchive(prisma, recordingIndex, chainOfCustody);
 
     const custodyPromise = (async () => {
       const manifestResult = await manifestService.createManifest({

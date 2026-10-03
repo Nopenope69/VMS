@@ -4,7 +4,7 @@ import { PrismaClient, SegmentStatus, JobStatus } from '@prisma/client';
 import { generate64CameraTopology, CameraWorkloadProfile } from '../config/soakTopology';
 import { formatSegmentFilename, calculateSegmentBounds } from '../utils/segmentPath';
 import { computeFileSha256 } from '../utils/crypto';
-import config from '../config/env';
+import { setting } from '../config/settings';
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -31,7 +31,7 @@ export class SoakTestHarness {
   constructor(prisma: PrismaClient, baseDir?: string) {
     this.prisma = prisma;
     this.topology = generate64CameraTopology();
-    this.baseDir = baseDir || config.RECORDINGS_DIR || '/var/lib/vigilone/recordings';
+    this.baseDir = baseDir || setting('RECORDINGS_DIR');
   }
 
   /**

@@ -3,14 +3,15 @@
  * Routes take their instances from here instead of constructing their own, and server.ts starts and stops
  * the background services through startBackgroundServices / stopBackgroundServices.
  *
- * One RecordingCatalog serves recording queries, evidence, playback and the alarm workflow. One RelayAdapter
- * (the IncidentOrchestrator's) drives relays for rules, the relay routes and door unlocks.
+ * One RecordingCatalog serves recording queries, evidence, playback, the alarm workflow and the orchestrator's
+ * bookmarks. One IncidentOrchestrator is built here and every event producer is handed its ingestEvent (none of
+ * them imports it). Its RelayAdapter drives relays for rules, the relay routes and door unlocks.
  */
 import prisma from './config/database';
 import { FeatureFlag, isFeatureEnabled } from './config/featureFlags';
 import { RecordingCatalog } from './services/recording/catalog/recordingCatalog.service';
 import { EvidenceArchive } from './services/evidence/archive';
-import { incidentOrchestrator } from './services/incident/orchestrator/incidentOrchestrator.service';
+import { IncidentOrchestrator } from './services/incident/orchestrator/incidentOrchestrator.service';
 import { AlarmWorkflowService } from './services/incident/workflow/alarmWorkflow.service';
 import { NotificationAdapter } from './services/incident/orchestrator/adapters/notificationAdapter';
 import NotificationDispatcherService from './services/notification/notificationDispatcher.service';
@@ -33,6 +34,7 @@ import SegmentJobWorkerService from './services/storage/segmentJobWorker.service
 import StartupReconcilerService from './services/reconciliation/startupReconciler.service';
 import recordingScheduleService from './services/schedule/recordingSchedule.service';
 import streamWatchdogService from './services/watchdog/streamWatchdog.service';
+import sceneChangeDetector from './services/motion/sceneChangeDetector.service';
 import { recordingWatchdogService } from './services/recording/recordingWatchdog.service';
 import cameraConnectionManager from './services/camera/cameraConnectionManager.service';
 import { setting } from './config/settings';
@@ -42,22 +44,26 @@ import { TrackIndexService } from './services/tracks/trackIndex.service';
 // --- Modules shared by routes and background services ---------------------------------------------------
 export const recordingCatalog = new RecordingCatalog(prisma);
 export const cameraRegistry = new CameraRegistry(prisma);
-export { incidentOrchestrator };
+export const incidentOrchestrator = new IncidentOrchestrator(prisma, { recordingCatalog });
 export const relayAdapter = incidentOrchestrator.relay;
+const ingest = (ev: Parameters<IncidentOrchestrator['ingestEvent']>[0]) => incidentOrchestrator.ingestEvent(ev);
 export const evidenceArchive = new EvidenceArchive(prisma, recordingCatalog);
 export const playbackSync = new PlaybackSyncService(prisma, recordingCatalog);
 export const alarmWorkflow = new AlarmWorkflowService(prisma, new NotificationAdapter(prisma), recordingCatalog);
 export const notificationDispatcher = new NotificationDispatcherService(prisma);
 export const plateAggregator = new PlateTrackAggregatorService(prisma);
+plateAggregator.setEventSink(ingest);
+streamWatchdogService.setEventSink(ingest);
+sceneChangeDetector.setEventSink(ingest);
 export const trackIndex = new TrackIndexService(prisma);
 export const edgeAiRuntime = new EdgeAiRuntimeService(prisma);
 export const videoRedactor = new VideoRedactorService(prisma);
 export const redactionQueue = new RedactionQueue(prisma, videoRedactor);
-export const cameraEventManager = new CameraEventManager(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
+export const cameraEventManager = new CameraEventManager(prisma, ingest);
 
 // --- Background-only modules ------------------------------------------------------------------------------
-const storageSentinel = new StorageSentinelService(prisma);
-const doorMonitor = new DoorMonitor(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
+const storageSentinel = new StorageSentinelService(prisma, ingest);
+const doorMonitor = new DoorMonitor(prisma, ingest);
 const retentionPurger = new RetentionPurger(prisma);
 const cropPurger = new CropPurger(prisma);
 let cropWorkers: { stop(): void } | null = null;

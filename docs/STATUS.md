@@ -6,6 +6,26 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 26 (2026-10-02): North Star Bucket 7, housekeeping
+
+Branch `claude/sharp-keller-tq0t8r`, from `master` after #38. Migration `20261012000000_camera_monitored_flag`.
+
+Local runs: backend and frontend `tsc` pass; browser tests 19/19; all six gates exit 0. Backend full suite in band
+(as CI runs it): 155 suites, 1152 passed, 29 skipped, 2 failed: `storageVolumeManager` (fails on `master` in this
+sandbox, disk below 5% free) and `frontendStaticValidation`, which checked the old `operations.spec.ts` for its
+flow titles; it now checks that the rewritten spec is wired into the Playwright run, and passes.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Orchestrator from the composition root | DONE_VERIFIED | `compositionEventSinks.test.ts`: the watchdog, scene detector and plate aggregator sinks reach the one orchestrator (removing one wiring line fails it); no service imports an orchestrator instance; a producer without a sink logs "no event sink wired". The bookmark adapter uses the shared catalog. |
+| Camera liveness | DONE_VERIFIED | `isOnline` was always true. Now `monitored` (what the watchdogs select on) and online = stream seen by the watchdog within 90 s. Watchdog stamps a ready stream and not a dead one; the registry list follows the stamp on the real database; browser test: a never-seen camera is offline (putting back "always online" fails it). |
+| One settings reader | DONE_VERIFIED | `RECORDINGS_DIR`, `EXPORTS_DIR`, `COTURN_*` only through `config/settings`; a test pins that `config/env.ts` does not declare them; the production TURN secret check still refuses defaults (`env.test.ts`). |
+| Unused evidence services | DONE_VERIFIED | Deleted; their tests use `EvidenceArchive` and pass. |
+| Operator browser tests | DONE_VERIFIED | `operations.spec.ts` 4/4 on the seeded tenant: wrong password, role menus, sign-out across a reload, camera liveness, alarm filter / acknowledge / resolve with verdict (checked through the API, viewer refused by the backend), storage figures. |
+| README Smart search row | DONE_VERIFIED | Generated table regenerated; `check:feature-flag-docs` passes. |
+| `main` branch | BLOCKED_HUMAN | Owner chose deletion; agent sessions cannot delete branches. Everything on it is on `master`. |
+| ai-worker on the SDK server | NOT_STARTED | Owner moved it to its own piece of work (ADR 0007). |
+
 ## Session 25 (2026-10-02): North Star Bucket 4 finished, journey on the floor plan and journey to incident
 
 Branch `claude/sharp-keller-tq0t8r`, from `master` after #37. Operations: `docs/operations/INVESTIGATION_WORKSPACE.md`.

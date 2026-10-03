@@ -14,6 +14,7 @@ import { detectVendorFromManufacturer } from '../onvif/quirks';
 import mediaProvider from '../media/mediamtx.provider';
 import sceneChangeDetector from '../motion/sceneChangeDetector.service';
 import { AuditChainService } from '../audit/auditChain.service';
+import { isLive } from './liveness';
 
 /** A missing camera, preset, tour or zone (or one of another tenant). Routes answer 404 with its message. */
 export class CameraNotFoundError extends Error {
@@ -87,8 +88,9 @@ export class CameraRegistry {
     return { hostname: camera.ipAddress, port: camera.onvifPort, username: creds.username, password: creds.password };
   }
 
-  list(tenantId: string) {
-    return this.prisma.camera.findMany({
+  /** Cameras with isOnline computed from the stream watchdog's last sighting (see liveness.ts). */
+  async list(tenantId: string) {
+    const rows = await this.prisma.camera.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -102,11 +104,11 @@ export class CameraRegistry {
         hasPtz: true,
         recordingMode: true,
         recorderState: true,
-        isOnline: true,
         lastSeenAt: true,
         site: { select: { id: true, name: true, timezone: true } },
       },
     });
+    return rows.map((c) => ({ ...c, isOnline: isLive(c.lastSeenAt) }));
   }
 
   /**
@@ -170,9 +172,8 @@ export class CameraRegistry {
         subRtspUri,
         recordingMode: recordingMode as any,
         recorderState: isContinuous ? RecorderState.RUNNING : RecorderState.STOPPED,
-        // isOnline is the "monitored" flag the stream and recording watchdogs select on; nothing updates it later.
-        isOnline: true,
-        lastSeenAt: new Date(),
+        // Watched by the stream and recording watchdogs; it is live once the stream watchdog sees its stream.
+        monitored: true,
       },
     });
 

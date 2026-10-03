@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AiProvenanceV1 } from '../../contracts/events.v1';
 import { MetricsService } from '../observability/metrics.service';
 import { automationRulesVersion } from '../automation/ruleCache';
-import { incidentOrchestrator, IncidentOrchestrator, canonicalRow } from '../incident/orchestrator/incidentOrchestrator.service';
+import { IncidentOrchestrator, canonicalRow } from '../incident/orchestrator/incidentOrchestrator.service';
 import {
   fromAiObjectDetection,
   fromLoiteringResult,
@@ -90,7 +90,7 @@ export class DetectionIngestionService {
   constructor(
     private prisma: PrismaClient,
     private getSpatialEngine: () => SpatialEngineLike,
-    private orchestrator: Pick<IncidentOrchestrator, 'ingestEvent'> = incidentOrchestrator,
+    private orchestrator: Pick<IncidentOrchestrator, 'ingestEvent'>,
     private cropCapture: Pick<CropCaptureService, 'captureSafely'> = new CropCaptureService(prisma),
     private trackIndex: Pick<TrackIndexService, 'observeSafely'> | null = null
   ) {}

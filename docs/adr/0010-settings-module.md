@@ -31,11 +31,12 @@ A test fails if code outside these places reads `process.env`:
   VLM, crop and archive workers, federation uplink, alarm workflow, go-live check). Their own tests pin their
   error messages.
 
-## Not done
-`RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` are also loaded once by `config/env.ts`, and about ten tests
-patch that object. Their live readers now use `settingIfSet(...) ?? config.X`, and a test pins that both
-places declare the same defaults. Collapsing them into one reader means changing how those tests set
-directories, which is left as follow-up work.
+## Done later (Bucket 7, 2026-10-02)
+`RECORDINGS_DIR`, `EXPORTS_DIR` and `COTURN_*` were also loaded once by `config/env.ts`, which about ten tests
+patched. They are now read only through `setting(...)`, at the time of use; `config/env.ts` no longer declares
+them (its production check of `COTURN_SECRET` calls `setting` too) and `settingIfSet` is gone. Tests set the
+environment variable instead of patching an object. A test pins that the boot configuration does not declare
+them.
 
 ## Consequences
 * Invalid settings fail at start-up with the variable named, instead of misbehaving at runtime.

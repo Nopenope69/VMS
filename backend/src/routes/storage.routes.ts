@@ -8,7 +8,7 @@ import StorageVolumeService from '../services/storage/storageVolume.service';
 import StorageDegradeManagerService from '../services/storage/storageDegradeManager.service';
 import StorageEpochService from '../services/storage/storageEpoch.service';
 import CrashRecoveryService from '../services/reconciliation/crashRecovery.service';
-import config from '../config/env';
+import { setting } from '../config/settings';
 
 const router = Router();
 
@@ -32,7 +32,7 @@ router.get(
       const tenantId = req.user!.tenantId;
 
       // 1. Storage rate & vitals evaluation
-      const vitals = await degradeManager.evaluateStorageVitals(config.RECORDINGS_DIR);
+      const vitals = await degradeManager.evaluateStorageVitals(setting('RECORDINGS_DIR'));
 
       // 2. Camera stats
       const allCameras = await prisma.camera.findMany({

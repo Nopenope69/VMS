@@ -1,4 +1,5 @@
 import defaultPrisma from '../../../config/database';
+import { isLive } from '../../camera/liveness';
 import {
   CameraSpatialPlacement,
   DetectionZone,
@@ -436,7 +437,7 @@ export class SpatialEngine {
         return {
           ...cp,
           cameraName: (cp as any).camera?.name,
-          isOnline: (cp as any).camera?.isOnline,
+          isOnline: isLive((cp as any).camera?.lastSeenAt),
           fovGeometry,
         };
       });

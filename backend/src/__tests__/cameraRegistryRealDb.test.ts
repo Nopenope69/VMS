@@ -104,6 +104,16 @@ describe('camera registry (real database, real API)', () => {
     expect(list.json.cameras.map((x: any) => x.id).sort()).toEqual([a.cameraId, a2CameraId].sort());
   });
 
+  it('shows a camera online only while the stream watchdog keeps seeing its stream', async () => {
+    const online = async () => (await call(adminA, 'GET', '')).json.cameras.find((x: any) => x.id === a.cameraId).isOnline;
+    await prisma.camera.update({ where: { id: a.cameraId }, data: { lastSeenAt: null } });
+    expect(await online()).toBe(false); // never seen
+    await prisma.camera.update({ where: { id: a.cameraId }, data: { lastSeenAt: new Date() } });
+    expect(await online()).toBe(true);
+    await prisma.camera.update({ where: { id: a.cameraId }, data: { lastSeenAt: new Date(Date.now() - 5 * 60_000) } });
+    expect(await online()).toBe(false); // seen five minutes ago, not since
+  });
+
   it('reports no diagnostic measurement as null instead of an invented healthy stream', async () => {
     const r = await call(adminA, 'GET', `/${a.cameraId}/diagnostic`);
     expect(r.status).toBe(200);

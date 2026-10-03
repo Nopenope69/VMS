@@ -10,8 +10,8 @@ import { ensureFrontendDist } from './helpers/ensureFrontendDist';
  * and the structural presence of Playwright test definitions.
  *
  * It validates static artifacts on disk. It DOES NOT execute a live headless browser.
- * Real browser-based end-to-end execution is performed via Playwright separately
- * (frontend/e2e/operations.spec.ts) in environments with browser dependencies installed.
+ * The browser tests (frontend/e2e/*.spec.ts, operations.spec.ts among them) run against the real backend in the
+ * frontend-browser-tests CI job (scripts/e2e/frontend-browser.sh); this suite only checks they are wired in.
  */
 
 describe('Frontend Static Distribution & Contract Validation Test Suite', () => {
@@ -37,17 +37,15 @@ describe('Frontend Static Distribution & Contract Validation Test Suite', () => 
     expect(indexHtml).toMatch(/\/assets\/index-.*\.css/);
   });
 
-  it('verifies Playwright E2E test file exists and defines operator workflow specifications', () => {
+  it('the operator browser tests exist, define tests and are in the Playwright run (not left unexecuted)', () => {
     expect(fs.existsSync(frontendE2E)).toBe(true);
     const e2eContent = fs.readFileSync(frontendE2E, 'utf8');
-
-    // Verify operator flow definitions are present in spec file
-    expect(e2eContent).toContain('Flow 1: Operator Authentication & Local RBAC');
-    expect(e2eContent).toContain('Flow 2: Live View Grid Layout & Multi-Camera Rendering');
-    expect(e2eContent).toContain('Flow 3: Playback Timeline Scrubber & Filename-Derived Seek Target');
-    expect(e2eContent).toContain('Flow 4: Section 63 BSA Evidence Packaging & Legal Hold');
-    expect(e2eContent).toContain('Flow 5: Storage Management & Mount Guard Telemetry');
-    expect(e2eContent).toContain('Flow 6: System Alarms & Severity Filtering');
+    expect((e2eContent.match(/^test\(/gm) || []).length).toBeGreaterThanOrEqual(4);
+    // They use the seeded tenant, not a hard-coded account.
+    expect(e2eContent).toContain('E2E_SEED_FILE');
+    expect(e2eContent).not.toContain('admin123');
+    const config = fs.readFileSync(path.join(rootDir, 'frontend/playwright.config.ts'), 'utf8');
+    expect(config).toContain("'operations.spec.ts'");
   });
 
   it('verifies client API configuration routes to /api/v1 and maintains local credential auth', () => {

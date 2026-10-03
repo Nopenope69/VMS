@@ -5,7 +5,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { SETTINGS, SELF_CHECKED_SETTINGS, SettingError, setting, settingIfSet, settingProblems } from '../config/settings';
+import { SETTINGS, SELF_CHECKED_SETTINGS, SettingError, setting, settingProblems } from '../config/settings';
 import { envSchema } from '../config/env';
 
 describe('settings', () => {
@@ -41,17 +41,17 @@ describe('settings', () => {
     expect(settingProblems({ [name]: raw })).toEqual([expect.stringMatching(new RegExp(`^${name}: `))]);
   });
 
-  it('settingIfSet is undefined only when the variable is unset or empty', () => {
-    expect(settingIfSet('EXPORTS_DIR', {})).toBeUndefined();
-    expect(settingIfSet('EXPORTS_DIR', { EXPORTS_DIR: '  ' })).toBeUndefined();
-    expect(settingIfSet('EXPORTS_DIR', { EXPORTS_DIR: '/x' })).toBe('/x');
+  it('has one reader per setting: the boot configuration does not declare the settings this module owns', () => {
+    const boot = Object.keys(envSchema.shape);
+    for (const name of ['RECORDINGS_DIR', 'EXPORTS_DIR', 'COTURN_SECRET', 'COTURN_HOST', 'COTURN_PORT']) {
+      expect([name, boot.includes(name)]).toEqual([name, false]);
+      expect(name in SETTINGS).toBe(true);
+    }
   });
 
-  it('agrees with the boot configuration on the defaults both declare', () => {
-    const boot = envSchema.parse({});
-    for (const name of ['RECORDINGS_DIR', 'EXPORTS_DIR', 'COTURN_SECRET', 'COTURN_HOST', 'COTURN_PORT'] as const) {
-      expect([name, setting(name, {})]).toEqual([name, (boot as any)[name]]);
-    }
+  it('reads the environment when called, so a changed directory takes effect without a restart of the module', () => {
+    expect(setting('EXPORTS_DIR', { EXPORTS_DIR: '/x' })).toBe('/x');
+    expect(setting('EXPORTS_DIR', { EXPORTS_DIR: '  ' })).toBe('/recordings/exports');
   });
 
   it('documents every setting', () => {

@@ -3,6 +3,7 @@ import { EventType, EventSeverity } from '@prisma/client';
 import prisma from '../../config/database';
 import mediaProvider from '../media/mediamtx.provider';
 import EventRateLimiter from '../events/eventRateLimiter.service';
+import type { EventSink } from '../incident/orchestrator/types';
 import DetectionZoneService, { Point2D, BoundingBox2D } from './detectionZone.service';
 
 
@@ -20,8 +21,13 @@ export class SceneChangeDetectorService {
   private activeProbes = new Map<string, ChildProcess>();
   private cooldownDurationMs = 60000; // 60 seconds debounce
 
-  constructor(cooldownMs = 60000) {
+  constructor(cooldownMs = 60000, private eventSink: EventSink | null = null) {
     this.cooldownDurationMs = cooldownMs;
+  }
+
+  /** The orchestrator's ingestEvent, set by the composition root. */
+  setEventSink(sink: EventSink | null): void {
+    this.eventSink = sink;
   }
 
   /**
@@ -112,8 +118,8 @@ export class SceneChangeDetectorService {
                 select: { tenantId: true, siteId: true },
               })
             : null;
-          const { incidentOrchestrator } = await import('../incident/orchestrator/incidentOrchestrator.service');
-          await incidentOrchestrator.ingestEvent({
+          if (!this.eventSink) throw new Error('no event sink wired (composition root not loaded); event not routed to the orchestrator');
+          await this.eventSink({
             id: event.id,
             source: 'VISION_AI',
             type: 'MOTION',

@@ -1,13 +1,14 @@
 import checkDiskSpace from 'check-disk-space';
 import fs from 'fs';
 import { PrismaClient, EventSeverity } from '@prisma/client';
-import config from '../config/env';
 import EvidencePinManager from './storage/evidencePinManager.service';
 import StorageDegradeManagerService, {
   AdaptiveStorageState,
   StorageRateAnalysis,
 } from './storage/storageDegradeManager.service';
 import StorageVolumeService from './storage/storageVolume.service';
+import type { EventSink } from './incident/orchestrator/types';
+import { setting } from '../config/settings';
 
 export type StorageHealthState =
   | 'AVAILABLE'
@@ -26,7 +27,7 @@ export class StorageSentinelService {
   private degradeManager: StorageDegradeManagerService;
   private volumeService: StorageVolumeService;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, private eventSink: EventSink | null = null) {
     this.prisma = prisma;
     this.degradeManager = new StorageDegradeManagerService(prisma);
     this.volumeService = StorageVolumeService.getInstance(prisma);
@@ -78,7 +79,7 @@ export class StorageSentinelService {
       await this.volumeService.checkAllVolumes();
 
       // 3. Multi-signal analysis & adaptive ingestion evaluation
-      const diskPath = fs.existsSync(config.RECORDINGS_DIR) ? config.RECORDINGS_DIR : '/';
+      const diskPath = fs.existsSync(setting('RECORDINGS_DIR')) ? setting('RECORDINGS_DIR') : '/';
       const analysis: StorageRateAnalysis = await this.degradeManager.evaluateStorageVitals(diskPath);
 
       const diskInfo = await checkDiskSpace(diskPath);
@@ -160,10 +161,11 @@ export class StorageSentinelService {
               if (tenants.length === 0) {
                 console.error(`[StorageSentinel] ${alertCode}: no tenant exists yet (appliance not bootstrapped); alarm not raised`);
               }
-              const { incidentOrchestrator } = await import('./incident/orchestrator/incidentOrchestrator.service');
+              if (!this.eventSink) throw new Error('no event sink wired (composition root not loaded); event not routed to the orchestrator');
+              const sink = this.eventSink;
               for (const tenant of tenants) {
                 const alertId = `storage-${alertCode}-${tenant.id}-${Date.now()}`;
-                await incidentOrchestrator.ingestEvent({
+                await sink({
                   id: alertId,
                   correlationId: alertId,
                   source: 'SYSTEM',

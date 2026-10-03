@@ -255,16 +255,12 @@ From `PROJECT_STATE.md` section 9 and `docs/BACKLOG.md`:
    - an exportable record of processing (`GET /privacy/dpdp/ropa`);
    - a breach register.
 2. **Search P0:** items 2 and 3 in section 5 above.
-3. **Architecture follow-ups:**
-   - inject the incident orchestrator from the composition root;
-   - `Camera.isOnline`;
-   - settings with two readers;
-   - the ai-worker on the SDK server;
-   - unused evidence services.
-4. **Tests and repo:** browser tests for the remaining operator flows (`operations.spec.ts`); retire the stale
-   `main` branch.
-5. **README:** the "Smart search" row describes the old SQL-only search. Point readers to the semantic crop
-   search row, so the README stops reading as "no semantic search".
+3. **Architecture follow-ups:** done in Bucket 7 (orchestrator injected, `Camera.isOnline` split into
+   `monitored` and real liveness, one settings reader, unused evidence services deleted), except the ai-worker on
+   the SDK server, which the owner moved to its own piece of work.
+4. **Tests and repo:** `operations.spec.ts` rewritten and running (Bucket 7). The stale `main` branch is for the
+   owner to delete on GitHub (agent sessions cannot delete branches).
+5. **README:** the "Smart search" row now says what it covers and points to semantic and track search (Bucket 7).
 
 ## 8. Open decisions (owner)
 
