@@ -1,6 +1,7 @@
 import { AdapterError, decodeJpeg } from '../adapter/adapterCore';
-import { InferenceRequestV1, ModelCardV1 } from '../adapter/contract';
+import { ModelCardV1 } from '../adapter/contract';
 import { PipelineAdapterCore, PipelineAdapterOptions, PipelineCardBase } from '../adapter/pipelineAdapterCore';
+import { Frame, InferContext } from '../sdk/core';
 import { LoadedVlmPipeline } from './vlmPipeline';
 
 /**
@@ -14,10 +15,8 @@ export class VlmAdapterCore extends PipelineAdapterCore<LoadedVlmPipeline> {
     super(loaded, opts, ['vlm_verification'], 'VLM pipeline');
   }
 
-  protected failure(): string | null {
-    if (!this.loaded) return this.opts.failure || 'VLM pipeline not loaded';
-    if (!this.loaded.alive()) return 'llama-server is not running';
-    return null;
+  protected liveness(l: LoadedVlmPipeline): string | null {
+    return l.alive() ? null : 'llama-server is not running';
   }
 
   protected card(l: LoadedVlmPipeline, base: PipelineCardBase): ModelCardV1 {
@@ -40,21 +39,13 @@ export class VlmAdapterCore extends PipelineAdapterCore<LoadedVlmPipeline> {
     };
   }
 
-  protected async run(req: InferenceRequestV1) {
-    const loaded = this.loaded!;
-    const targetClass = req.vlmQuery!.targetClass;
-    if (!loaded.definition.targetClasses.includes(targetClass)) throw new AdapterError('UNSUPPORTED_TASK', `target class '${targetClass}' is not one this adapter checks`);
-    const f = req.frame;
-    if (f.format !== 'jpeg' || f.data.kind !== 'inline_base64') throw new AdapterError('INVALID_FRAME', 'vlm_verification needs an inline_base64 jpeg frame');
-    const data = f.data.value;
-    const { value: a, latencyMs } = await this.inSlot(req.deadlineMs, async () => {
-      const jpeg = Buffer.from(data, 'base64');
-      await decodeJpeg(jpeg, f.width, f.height); // a real JPEG of the declared size, or INVALID_FRAME
-      return loaded.ask(jpeg, targetClass, req.deadlineMs);
-    });
+  /** The SDK core has checked the target class against the card (= the pipeline's target classes). */
+  protected async infer(l: LoadedVlmPipeline, f: Frame, ctx: InferContext) {
+    const targetClass = ctx.vlmQuery!.targetClass;
+    if (f.format !== 'jpeg') throw new AdapterError('INVALID_FRAME', 'vlm_verification needs an inline_base64 jpeg frame');
+    await decodeJpeg(f.data, f.width, f.height); // a real JPEG of the declared size, or INVALID_FRAME
+    const a = await l.ask(f.data, targetClass, ctx.deadlineMs);
     this.metrics.inc('vigilone_vlm_answers_total', 'Second-opinion answers', { answer: a.answer });
-    return this.ok(req.requestId, f.timestampUtc, latencyMs, {
-      verification: { targetClass, answer: a.answer, reason: a.reason, promptSha256: a.promptSha256 },
-    });
+    return { verification: { targetClass, answer: a.answer, reason: a.reason, promptSha256: a.promptSha256 } };
   }
 }

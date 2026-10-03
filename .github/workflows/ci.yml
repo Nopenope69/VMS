@@ -269,6 +269,11 @@ jobs:
           fi
           scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-q4km && scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-mmproj-q8
 
+      # The pipeline adapters run on the adapter SDK's core; the worker ships a copy of it (ADR 0007).
+      - name: AI Worker SDK copy matches sdk/ai-adapter
+        working-directory: ./services/ai-worker
+        run: npm run check-sdk
+
       - name: AI Worker Build (tsc)
         working-directory: ./services/ai-worker
         run: npm run build

@@ -418,17 +418,17 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   (#35).
 - Buckets 1 to 5 and 7 are done. Left: **Bucket 6** (privacy tools: data-principal access/erasure requests,
   exportable record of processing, breach register), **Bucket 8** (V1.0 understand-and-act; several items need a
-  local language model and a licence decision first) and the **ai-worker on the SDK server** (its own piece of
-  work, owner's decision). Bucket H (bench, clean-install drill, footage, licences, DPDP choices, pilot site) is
+  local language model and a licence decision first). The **ai-worker on the SDK server** is done (Session 27,
+  ADR 0007). Bucket H (bench, clean-install drill, footage, licences, DPDP choices, pilot site) is
   the owner's field track.
-- **Next:** the owner picks Bucket 6, Bucket 8 or the ai-worker/SDK change in a new session. Start from `master`.
+- **Next:** Bucket 6 (the owner's next pick, 2026-10-03), then Bucket 8. Start from `master`.
 
 **Open follow-ups, all known and documented:**
 
 | Follow-up | Detail | Recorded in |
 | --- | --- | --- |
 | Out-of-order track path (bug) | **Fixed** on `claude/amazing-hypatia-hkgolw`: in `appendPath` (`backend/src/services/tracks/trackMath.ts`) a point earlier than the path's start now becomes the new start, so a burst applied latest-first keeps its beginning and its direction. Other late points (inside the path) are still ignored. Unit tests cover start-replacement, a late inner point and a latest-first burst; `trackIndexRealDb` passed 10 runs in a row. | PR #39 comment |
-| ai-worker on the SDK server | The SDK `createAdapter` needs VLM answers, component provenance and a liveness hook, and the worker image would have to ship the SDK. The owner moved it to its own piece of work. | ADR 0007 |
+| ai-worker on the SDK server | **Done** on `claude/amazing-hypatia-hkgolw` (Session 27): SDK 0.2.0 adds `createAdapterCore` and the VLM answer, component provenance, liveness and multi-task hooks; the worker ships a checked copy of it (`services/ai-worker/src/sdk/`, `npm run check-sdk` in CI) and its ANPR, redaction, embedding and VLM pipelines run on it. The object-detection core keeps its own queue. | ADR 0007 |
 | Data-principal requests | There is no workflow for an individual's access or erasure request (DPDP s.11–13). Bucket 6. | `docs/BACKLOG.md`; the compliance audit, section 4 |
 | No record of processing or breach register | There is no exportable Art. 30 record and no breach register or notification workflow. Bucket 6. | Compliance audit, sections 1 and 6 |
 | `main` branch | Still on GitHub (holds the unfixed Antigravity commit; everything on it is on `master`). The owner decided to delete it; agent sessions cannot delete branches, so the owner does it on GitHub (Branches page). `chore/repo-skills` is already gone. | Section 8 |

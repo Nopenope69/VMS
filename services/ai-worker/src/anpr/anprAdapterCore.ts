@@ -1,6 +1,7 @@
 import { AdapterError } from '../adapter/adapterCore';
-import { decodeRequestFrame } from '../adapter/frameDecode';
-import { AiProvenanceV1, DetectionV1, InferenceRequestV1, ModelCardV1 } from '../adapter/contract';
+import { decodeFrame } from '../adapter/frameDecode';
+import { AiProvenanceV1, DetectionV1, ModelCardV1 } from '../adapter/contract';
+import { Frame } from '../sdk/core';
 import { PipelineAdapterCore, PipelineAdapterOptions, PipelineCardBase } from '../adapter/pipelineAdapterCore';
 import { LoadedAnprPipeline } from './anprService';
 import { PlateRead, AnprOptions } from './anprPipeline';
@@ -32,20 +33,23 @@ export class AnprAdapterCore extends PipelineAdapterCore<LoadedAnprPipeline> {
     return { runtime: ortRuntimeLabel() };
   }
 
-  /** Runs the pipeline on one RGB frame under the concurrency limit and deadline. */
-  async recognize(img: Image3, frameTimestampUtc: string, deadlineMs: number, opts?: Partial<AnprOptions>): Promise<{ plates: PlateRead[]; provenance: AiProvenanceV1; latencyMs: number }> {
-    const loaded = this.loaded;
-    if (!loaded) throw new AdapterError('MODEL_NOT_LOADED', this.failure()!);
-    const { value, latencyMs } = await this.inSlot(deadlineMs, () => loaded.pipeline.read(img, { ...loaded.definition.recognition, ...(opts || {}) }));
-    this.metrics.inc('vigilone_anpr_plates_read_total', 'Plates read (valid Indian format, above threshold)', undefined, value.plates.length);
-    return { plates: value.plates, provenance: this.provenance(frameTimestampUtc), latencyMs };
+  private async read(l: LoadedAnprPipeline, img: Image3, opts?: Partial<AnprOptions>): Promise<PlateRead[]> {
+    const { plates } = await l.pipeline.read(img, { ...l.definition.recognition, ...(opts || {}) });
+    this.metrics.inc('vigilone_anpr_plates_read_total', 'Plates read (valid Indian format, above threshold)', undefined, plates.length);
+    return plates;
   }
 
-  protected async run(req: InferenceRequestV1) {
-    const f = req.frame;
-    const img = await decodeRequestFrame(f as any);
-    const r = await this.recognize(img, f.timestampUtc, req.deadlineMs);
-    const detections: DetectionV1[] = r.plates.map((p) => ({
+  /** The camera LPR path: runs the pipeline on one RGB frame under the same concurrency limit and deadline. */
+  async recognize(img: Image3, frameTimestampUtc: string, deadlineMs: number, opts?: Partial<AnprOptions>): Promise<{ plates: PlateRead[]; provenance: AiProvenanceV1; latencyMs: number }> {
+    const loaded = this.loaded;
+    if (!loaded) throw new AdapterError('MODEL_NOT_LOADED', this.opts.failure || `${this.label} not loaded`);
+    const { value: plates, latencyMs } = await this.inSlot(deadlineMs, () => this.read(loaded, img, opts));
+    return { plates, provenance: this.provenance(frameTimestampUtc), latencyMs };
+  }
+
+  protected async infer(l: LoadedAnprPipeline, f: Frame) {
+    const plates = await this.read(l, await decodeFrame(f));
+    const detections: DetectionV1[] = plates.map((p) => ({
       objectClass: 'license_plate',
       classId: 0,
       confidence: Math.max(0, Math.min(1, p.confidence)),
@@ -61,7 +65,6 @@ export class AnprAdapterCore extends PipelineAdapterCore<LoadedAnprPipeline> {
         corrections: p.plate.corrections,
       },
     }));
-    return this.ok(req.requestId, f.timestampUtc, r.latencyMs, { detections, provenance: r.provenance });
+    return { detections };
   }
 }
-
