@@ -48,6 +48,23 @@ function payloadSentence(payload: Payload | null): string | null {
       if (!track || !zone || dwell === null || limit === null) return generic();
       return `Track ${q(track)} stayed in zone ${q(zone)} for ${num(dwell)} seconds; the configured threshold is ${num(limit)} seconds.`;
     }
+    case 'UNATTENDED_OBJECT': {
+      const track = str(payload, 'trackId');
+      const zone = str(payload, 'zoneId');
+      const cls = str(payload, 'objectClass');
+      const secs = numeric(payload, 'unattendedSeconds');
+      const limit = numeric(payload, 'thresholdSeconds');
+      if (!track || !zone || !cls || secs === null || limit === null) return generic();
+      return `A ${q(cls)} (track ${q(track)}) lay still in zone ${q(zone)} with no person near it for ${num(secs)} seconds; the configured threshold is ${num(limit)} seconds.`;
+    }
+    case 'WRONG_WAY': {
+      const track = str(payload, 'trackId');
+      const zone = str(payload, 'zoneId');
+      const angle = numeric(payload, 'angleDegrees');
+      const travel = numeric(payload, 'travel');
+      if (!track || !zone || angle === null || travel === null) return generic();
+      return `Track ${q(track)} moved ${num(angle)} degrees against the allowed direction of zone ${q(zone)} over a distance of ${num(travel)} of the picture.`;
+    }
     case 'ANPR_MATCH': {
       const plate = str(payload, 'plateText');
       const conf = numeric(payload, 'confidence');

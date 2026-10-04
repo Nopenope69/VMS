@@ -263,6 +263,9 @@ listing weapon detection.
 | **Vandalism / graffiti, stray animals, wrong-way** | Detector classes (animals) or rules (wrong way on a track) | Animal classes need licensed data | Vehant OKEAN | S–M | Wrong-way is rules on our track direction |
 | **Gunshot, scream, glass break** | Audio classifier on the camera's audio | Licensed audio sets | Axis, Avigilon (abroad); none found in India | L | Needs audio ingestion and stricter privacy handling |
 
+**Progress (4 Oct 2026):** the owner chose threat detections first. Unattended bag and wrong way are built
+(Session 28 in `docs/STATUS.md`); person down and fence climbing wait for a pose model.
+
 **Suggested order if the owner wants threat detection now:** first the things our tracks and rules can already
 carry (unattended object, wrong way, perimeter climb with pose, person down with pose). Then fire/smoke. Then
 weapons (gun, knife) as a governed pilot with human confirmation, our own staged evaluation footage, and a

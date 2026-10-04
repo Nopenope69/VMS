@@ -8,11 +8,23 @@ import {
   fromAiObjectDetection,
   fromLoiteringResult,
   fromTripwireCrossing,
+  fromUnattendedObject,
+  fromWrongWay,
 } from '../incident/orchestrator/events';
 import { AiProvenance, VigilOneEvent } from '../incident/orchestrator/types';
 import { FeatureFlag, isFeatureEnabled } from '../../config/featureFlags';
 import { CropCaptureService } from '../crops/cropCapture.service';
-import { Point2D, TripwireRuleInput, LoiteringRuleInput } from '../spatial/engine';
+import {
+  Box as SpatialBox,
+  Point2D,
+  TripwireRuleInput,
+  LoiteringRuleInput,
+  UnattendedObjectRuleInput,
+  UnattendedObjectResult,
+  WrongWayRuleInput,
+  WrongWayResult,
+} from '../spatial/engine';
+import { parseThreatParams } from '../spatial/threatRuleParams';
 import type { TrackIndexService } from '../tracks/trackIndex.service';
 
 /**
@@ -69,7 +81,13 @@ export type DetectionSubmission = z.infer<typeof DetectionSubmission>;
 export interface SpatialEngineLike {
   evaluateTripwire(rule: TripwireRuleInput, obs: any, nowMs: number): any;
   evaluateLoitering(rule: LoiteringRuleInput, obs: any, nowMs: number): any;
+  notePerson?(cameraId: string, trackId: string, box: SpatialBox, nowMs: number): void;
+  evaluateUnattendedObject?(rule: UnattendedObjectRuleInput, cameraId: string, trackId: string, centre: Point2D, nowMs: number): UnattendedObjectResult | null;
+  evaluateWrongWay?(rule: WrongWayRuleInput, trackId: string, at: Point2D, nowMs: number): WrongWayResult | null;
 }
+
+/** Carried objects the unattended-object rule watches (the worker reports them as OBJECT_DETECTED). */
+const BAG_CLASSES = ['backpack', 'handbag', 'suitcase'];
 
 export interface IngestOutcome {
   detectionId: string;
@@ -282,6 +300,7 @@ export class DetectionIngestionService {
     const nowMs = at.getTime();
     const obs = { trackId: d.trackId!, centroid, timestamp: at, cameraId };
     let created = 0;
+    if (d.objectClass === 'person' && d.boundingBox) engine.notePerson?.(cameraId, d.trackId!, d.boundingBox, nowMs);
 
     for (const rule of rules) {
       let ev: VigilOneEvent | null = null;
@@ -335,6 +354,66 @@ export class DetectionIngestionService {
           thresholdSeconds: threshold,
           provenance: prov,
           title: `Loitering: ${rule.name}`,
+        });
+      } else if (rule.type === 'UNATTENDED_OBJECT' && rule.polygonCoordinatesJson && engine.evaluateUnattendedObject) {
+        if (!d.objectClass || !BAG_CLASSES.includes(d.objectClass)) continue;
+        const params = parseThreatParams('UNATTENDED_OBJECT', rule.paramsJson);
+        const threshold = rule.dwellThresholdSeconds ?? 60;
+        const result = engine.evaluateUnattendedObject(
+          { id: rule.id, polygon: rule.polygonCoordinatesJson as unknown as Point2D[], thresholdSeconds: threshold, ownerRadius: params.ownerRadius, moveTolerance: params.moveTolerance },
+          cameraId,
+          d.trackId!,
+          centroid,
+          nowMs
+        );
+        if (!result) continue;
+        const cooldownSec = rule.cooldownSeconds || 60;
+        incidentData = {
+          ruleType: 'UNATTENDED_OBJECT',
+          cooldownBucket: BigInt(Math.floor(nowMs / (cooldownSec * 1000))),
+          title: `Unattended ${d.objectClass}: ${rule.name}`,
+          description: `A ${d.objectClass} (track ${d.trackId}) has been left in ${rule.name} with nobody near it for ${result.unattendedSeconds}s`,
+          metadataJson: { unattendedSeconds: result.unattendedSeconds, stillSeconds: result.stillSeconds, ruleName: rule.name, centroid, inferenceId: d.inferenceId, objectClass: d.objectClass, provenance: prov },
+        };
+        ev = fromUnattendedObject({
+          tenantId: d.tenantId,
+          cameraId,
+          zoneId: rule.id,
+          trackId: d.trackId!,
+          objectClass: d.objectClass,
+          unattendedSeconds: result.unattendedSeconds,
+          thresholdSeconds: threshold,
+          provenance: prov,
+          title: `Unattended ${d.objectClass}: ${rule.name}`,
+        });
+      } else if (rule.type === 'WRONG_WAY' && rule.polygonCoordinatesJson && rule.lineCoordinatesJson && engine.evaluateWrongWay) {
+        const params = parseThreatParams('WRONG_WAY', rule.paramsJson);
+        if (params.objectClasses && params.objectClasses.length > 0 && (!d.objectClass || !(params.objectClasses as string[]).includes(d.objectClass))) continue;
+        const result = engine.evaluateWrongWay(
+          { id: rule.id, polygon: rule.polygonCoordinatesJson as unknown as Point2D[], allowed: rule.lineCoordinatesJson as unknown as [Point2D, Point2D], minTravel: params.minTravel },
+          d.trackId!,
+          centroid,
+          nowMs
+        );
+        if (!result) continue;
+        const cooldownSec = rule.cooldownSeconds || 10;
+        incidentData = {
+          ruleType: 'WRONG_WAY',
+          cooldownBucket: BigInt(Math.floor(nowMs / (cooldownSec * 1000))),
+          title: `Wrong way: ${rule.name}`,
+          description: `Track ${d.trackId}${d.objectClass ? ` (${d.objectClass})` : ''} moved against the allowed direction in ${rule.name} (${result.angleDegrees} degrees off)`,
+          metadataJson: { angleDegrees: result.angleDegrees, travel: result.travel, ruleName: rule.name, centroid, inferenceId: d.inferenceId, objectClass: d.objectClass ?? null, provenance: prov },
+        };
+        ev = fromWrongWay({
+          tenantId: d.tenantId,
+          cameraId,
+          zoneId: rule.id,
+          trackId: d.trackId!,
+          objectClass: d.objectClass,
+          angleDegrees: result.angleDegrees,
+          travel: result.travel,
+          provenance: prov,
+          title: `Wrong way: ${rule.name}`,
         });
       }
       if (!ev || !incidentData) continue;

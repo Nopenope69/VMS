@@ -51,7 +51,7 @@ export interface AiProvenanceDocument {
 }
 
 /** DetectionEvent types that only an AI model produces (MOTION and camera/storage events are not AI). */
-const AI_EVENT_TYPES = ['PERSON_DETECTED', 'VEHICLE_DETECTED'];
+const AI_EVENT_TYPES = ['PERSON_DETECTED', 'VEHICLE_DETECTED', 'OBJECT_DETECTED'];
 
 export async function collectAiProvenance(prisma: PrismaClient, tenantId: string, cameraId: string, start: Date, end: Date): Promise<AiProvenanceDocument> {
   const dets = await prisma.detectionEvent.findMany({

@@ -51,6 +51,10 @@ export function normalizeTrackClass(labelOrType?: string): string {
   ) {
     return 'vehicle';
   }
+  // A carried object can read as a backpack in one frame and a handbag in the next; keep one track.
+  if (lower.includes('backpack') || lower.includes('handbag') || lower.includes('suitcase') || lower === 'bag') {
+    return 'bag';
+  }
   return lower || 'unknown';
 }
 

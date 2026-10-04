@@ -77,6 +77,28 @@ const LoiteringPayload = z
   })
   .strict();
 
+/** v1.1 (additive): a carried object left still in a zone with nobody near it. */
+const UnattendedObjectPayload = z
+  .object({
+    zoneId: NonEmptyId,
+    trackId: NonEmptyId,
+    objectClass: z.string().min(1),
+    unattendedSeconds: z.number().nonnegative(),
+    thresholdSeconds: z.number().positive(),
+  })
+  .strict();
+
+/** v1.1 (additive): a tracked object moving against a zone's allowed direction. */
+const WrongWayPayload = z
+  .object({
+    zoneId: NonEmptyId,
+    trackId: NonEmptyId,
+    objectClass: z.string().min(1).optional(),
+    angleDegrees: z.number().min(0).max(180),
+    travel: z.number().nonnegative(),
+  })
+  .strict();
+
 const PlatePayload = z
   .object({
     plateText: z.string().min(1).max(20),
@@ -145,6 +167,8 @@ export const EVENT_PAYLOADS_V1 = {
   'ai.vehicle_detected': ObjectDetectionPayload,
   'ai.line_crossing': LineCrossingPayload,
   'ai.loitering': LoiteringPayload,
+  'ai.unattended_object': UnattendedObjectPayload,
+  'ai.wrong_way': WrongWayPayload,
   'ai.plate_detected': PlatePayload,
   'access.door_opened': DoorPayload,
   'access.door_closed': DoorStatePayload,

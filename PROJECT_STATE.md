@@ -421,7 +421,12 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   local language model and a licence decision first). The **ai-worker on the SDK server** is done (Session 27,
   ADR 0007). Bucket H (bench, clean-install drill, footage, licences, DPDP choices, pilot site) is
   the owner's field track.
-- **Next:** Bucket 6 (the owner's next pick, 2026-10-03), then Bucket 8. Start from `master`.
+- **AI features (owner, 2026-10-04):** threat detections first, then the five software features of
+  `docs/strategy/vigilone-ai-features-landscape-2026-10-03.md` (natural-language search, describe-what-to-watch
+  rules, cited incident summary, alarm triage, footage integrity). Threat detections without a new model
+  (unattended bag, wrong way) are on `claude/amazing-hypatia-hkgolw` (Session 28); person down and fence climbing
+  need a pose model and a licence decision. Bucket 6 (privacy tools) is parked.
+- **Next:** the five software features, one PR each, from `master`.
 
 **Open follow-ups, all known and documented:**
 

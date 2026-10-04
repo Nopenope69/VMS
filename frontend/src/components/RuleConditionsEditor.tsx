@@ -43,7 +43,7 @@ export const emptyRuleDraft = (): RuleDraft => ({
 const AI_TRIGGERS = ['PERSON_DETECTED', 'VEHICLE_DETECTED'];
 const VEHICLE_CLASSES = ['bicycle', 'motorcycle', 'car', 'bus', 'truck'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const CORRELATABLE = ['DI_TRIGGER', 'AI_OBJECT_DETECTED', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'MOTION', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE'];
+const CORRELATABLE = ['DI_TRIGGER', 'AI_OBJECT_DETECTED', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'UNATTENDED_OBJECT', 'WRONG_WAY', 'MOTION', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE'];
 
 /** triggerConfig and conditions exactly as the API expects them. */
 export function buildRuleParts(triggerType: string, d: RuleDraft): { triggerConfig: Record<string, unknown>; conditions: unknown[] } {
@@ -88,7 +88,7 @@ export const RuleConditionsEditor: React.FC<{ triggerType: string; draft: RuleDr
     <div className="pt-2 border-t border-vms-border space-y-3 text-xs">
       <span className="font-semibold text-vms-accent font-mono text-xs uppercase tracking-wider">Filters &amp; Conditions</span>
 
-      {(isAi || ['TRIPWIRE_CROSS', 'LOITERING_DWELL', 'ANPR_WATCHLIST', 'MOTION_ZONE'].includes(triggerType)) && (
+      {(isAi || ['TRIPWIRE_CROSS', 'LOITERING_DWELL', 'UNATTENDED_OBJECT', 'WRONG_WAY', 'ANPR_WATCHLIST', 'MOTION_ZONE'].includes(triggerType)) && (
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={label}>Minimum confidence (0-1)</label>

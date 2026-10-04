@@ -6,6 +6,28 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 28 (2026-10-04): threat detections without a new model (unattended bag, wrong way)
+
+Branch `claude/amazing-hypatia-hkgolw`, from `master` after #42. Migration `20261013000000_threat_rules`
+(`EventType.OBJECT_DETECTED`, `RuleTriggerType.UNATTENDED_OBJECT` and `WRONG_WAY`, `SpatialAnalyticsRule.paramsJson`).
+events.v1.1 adds `ai.unattended_object` and `ai.wrong_way` (additive). Also carries the AI feature research
+(`docs/strategy/vigilone-ai-features-landscape-2026-10-03.md`).
+
+Local runs: see the PR for the backend full suite and the six gates. Worker 30/31 suites, 308 passed, 2 skipped
+(RF-DETR, model not fetched), all real models present; SDK `check-contract` and worker `check-sdk` pass; frontend
+`tsc` passes; browser test `threat-rules.spec.ts` passes, and the other 19 browser tests pass.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Bags tracked | DONE_VERIFIED on unit tests | The worker keeps COCO backpack, handbag and suitcase (were dropped) as `OBJECT_DETECTED`, one track group so a bag read as a backpack then a handbag stays one track (`decoders.test.ts`, `tracker.test.ts`). Bags never fire person or vehicle automation rules (`threatRulesRealDb.test.ts`; mapping a bag to the vehicle trigger again fails it). Detection quality of bags on site footage is not measured; COCO-trained weights still need the owner's licence decision. |
+| Unattended bag rule | DONE_VERIFIED on synthetic tracks | `threatRules.test.ts` (15 tests with wrong way): alert after the threshold with nobody near, once; owner beside it keeps it quiet and the clock starts after a 3 s grace; a far person does not attend it; carrying restarts the clock, box jitter does not; outside the zone nothing; re-left after a move alerts again; owner radius honoured; memory bounded. `threatRulesRealDb.test.ts` through the internal endpoint: one incident, canonical event, alarm with provenance, events.v1 `ai.unattended_object`; owner beside it and a still person give nothing. |
+| Wrong-way rule | DONE_VERIFIED on synthetic tracks | Against the arrow (more than 120 degrees) for the minimum travel alerts once per track; with the arrow, crossing at right angles, short jitter and leaving the zone do not; a U-turn is caught. Real DB: a car against the arrow gives one incident and alarm; a car with it and a person (not in the rule's classes) give nothing. |
+| Rule API | DONE_VERIFIED | `POST /spatial-rules` validates every type (points 0..1, polygon 3–32 points, arrow points apart, thresholds and settings ranges) and refuses another tenant's camera (404, before: accepted) and a viewer (403). |
+| Rule screen | DONE_VERIFIED in a browser | Rewritten: before, it loaded rules from a URL that does not exist, saved canvas pixels (no track could ever match) and sent the tripwire direction under the wrong name. Now four rule types, 0..1 coordinates, a zone and an arrow for wrong way, classes to watch. `threat-rules.spec.ts` checks what the backend stored. |
+| Explanations and verifier | DONE_VERIFIED | Both renderers describe the two new kinds; `explanationTemplateParity.test.ts` covers them. |
+| On real cameras | NOT_STARTED / BLOCKED_HUMAN | Needs the pilot: how often a left bag is caught and how often a still bag next to a seated person is wrongly flagged. |
+| Person down, fence climbing | NOT_STARTED | Need a pose model (licence decision). |
+
 ## Session 27 (2026-10-03): the ai-worker on the adapter SDK
 
 Branch `claude/amazing-hypatia-hkgolw`, from `master` after #41 (the track-path fix). ADR 0007 updated. No schema

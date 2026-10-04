@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { TripwireDirection } from '@prisma/client';
+import { z } from 'zod';
+import { UnattendedObjectParams, WrongWayParams } from '../services/spatial/threatRuleParams';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
@@ -26,9 +29,45 @@ router.get(
   }
 );
 
+const Pt = z.object({ x: z.number().finite().min(0).max(1), y: z.number().finite().min(0).max(1) }).strict();
+const Polygon = z.array(Pt).min(3).max(32);
+const Line = z.tuple([Pt, Pt]).refine(([a, b]) => Math.hypot(a.x - b.x, a.y - b.y) >= 0.01, 'the two points must be apart');
+const common = {
+  cameraId: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+  cooldownSeconds: z.coerce.number().int().min(1).max(86400).optional(),
+  enabled: z.boolean().optional(),
+};
+
+/** The rule body per type. Coordinates are normalised to the camera image (0..1). */
+export const SpatialRuleBody = z.discriminatedUnion('type', [
+  z.object({ ...common, type: z.literal('TRIPWIRE'), direction: z.nativeEnum(TripwireDirection).optional(), lineCoordinates: Line }).strict(),
+  z.object({ ...common, type: z.literal('LOITERING'), polygonCoordinates: Polygon, dwellThresholdSeconds: z.coerce.number().int().min(1).max(86400).optional() }).strict(),
+  z
+    .object({
+      ...common,
+      type: z.literal('UNATTENDED_OBJECT'),
+      polygonCoordinates: Polygon,
+      /** How long a bag must lie there with nobody near it. */
+      dwellThresholdSeconds: z.coerce.number().int().min(10).max(86400).optional(),
+      params: UnattendedObjectParams.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...common,
+      type: z.literal('WRONG_WAY'),
+      polygonCoordinates: Polygon,
+      /** The allowed direction: an arrow from the first point to the second. */
+      lineCoordinates: Line,
+      params: WrongWayParams.optional(),
+    })
+    .strict(),
+]);
+
 /**
  * POST /api/v1/spatial-rules
- * Create or update a spatial analytics rule
+ * Create a spatial analytics rule: TRIPWIRE, LOITERING, UNATTENDED_OBJECT or WRONG_WAY.
  */
 router.post(
   '/',
@@ -37,41 +76,38 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId;
-      const {
-        cameraId,
-        name,
-        type,
-        direction,
-        lineCoordinates,
-        polygonCoordinates,
-        dwellThresholdSeconds,
-        cooldownSeconds,
-        enabled,
-      } = req.body;
-
-      if (!cameraId || !name || !type) {
-        res.status(400).json({ error: 'cameraId, name, and type are required' });
+      const p = SpatialRuleBody.safeParse(req.body);
+      if (!p.success) {
+        res.status(400).json({ error: 'INVALID_SPATIAL_RULE', details: p.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`) });
         return;
       }
+      const b = p.data;
+      const camera = await prisma.camera.findFirst({ where: { id: b.cameraId, tenantId }, select: { id: true } });
+      if (!camera) {
+        res.status(404).json({ error: 'CAMERA_NOT_FOUND' });
+        return;
+      }
+      const defaults = { TRIPWIRE: { cooldown: 10, dwell: 30 }, LOITERING: { cooldown: 30, dwell: 30 }, UNATTENDED_OBJECT: { cooldown: 300, dwell: 60 }, WRONG_WAY: { cooldown: 10, dwell: 30 } }[b.type];
 
       const rule = await prisma.spatialAnalyticsRule.create({
         data: {
           tenantId,
-          cameraId,
-          name,
-          type,
-          direction: direction || 'BIDIRECTIONAL',
-          lineCoordinatesJson: lineCoordinates || null,
-          polygonCoordinatesJson: polygonCoordinates || null,
-          dwellThresholdSeconds: dwellThresholdSeconds ? Number(dwellThresholdSeconds) : 30,
-          cooldownSeconds: cooldownSeconds ? Number(cooldownSeconds) : 10,
-          enabled: enabled !== undefined ? Boolean(enabled) : true,
+          cameraId: b.cameraId,
+          name: b.name,
+          type: b.type,
+          direction: b.type === 'TRIPWIRE' && b.direction ? b.direction : 'BIDIRECTIONAL',
+          lineCoordinatesJson: 'lineCoordinates' in b ? (b.lineCoordinates as any) : undefined,
+          polygonCoordinatesJson: 'polygonCoordinates' in b ? (b.polygonCoordinates as any) : undefined,
+          dwellThresholdSeconds: 'dwellThresholdSeconds' in b && b.dwellThresholdSeconds ? b.dwellThresholdSeconds : defaults.dwell,
+          paramsJson: 'params' in b && b.params ? (b.params as any) : undefined,
+          cooldownSeconds: b.cooldownSeconds ?? defaults.cooldown,
+          enabled: b.enabled ?? true,
         },
       });
 
       res.status(201).json({ rule });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
   }
 );
