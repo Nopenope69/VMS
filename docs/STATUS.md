@@ -13,7 +13,9 @@ Branch `claude/amazing-hypatia-hkgolw`, from `master` after #42. Migration `2026
 events.v1.1 adds `ai.unattended_object` and `ai.wrong_way` (additive). Also carries the AI feature research
 (`docs/strategy/vigilone-ai-features-landscape-2026-10-03.md`).
 
-Local runs: see the PR for the backend full suite and the six gates. Worker 30/31 suites, 308 passed, 2 skipped
+Local runs: backend `tsc` and build pass; backend full suite in band 157 suites, 1169 passed, 36 skipped, 2 failed
+(the two pinned event-kind lists, `eventKinds.test.ts` and `events.v1.test.ts`, which then got the new kinds and pass);
+all six gates exit 0. Worker 30/31 suites, 308 passed, 2 skipped
 (RF-DETR, model not fetched), all real models present; SDK `check-contract` and worker `check-sdk` pass; frontend
 `tsc` passes; browser test `threat-rules.spec.ts` passes, and the other 19 browser tests pass.
 
