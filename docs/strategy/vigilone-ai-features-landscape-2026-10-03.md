@@ -172,6 +172,50 @@ already built.
 - **Weapon detection, audio events, gait re-ID:** still gaps in India (28 Sept), but need cleared data, audio
   ingestion or careful governance.
 
+### Threat and safety detections (weapons and similar), added 4 Oct 2026
+
+The owner asked specifically about knife and gun detection and similar features. These are **new detectors**,
+so unlike Tier 1 they need training data, a fine-tuned model and site evaluation. Our pipeline can carry them as
+they are: the detector, tracker, zones, rule engine, VLM second opinion, provenance and evidence chain all exist.
+Each one becomes a new model behind ai-adapter.v1, a new class, and rule triggers.
+
+**How the market does it.** ZeroEyes and Omnilert sell gun detection on existing IP cameras, and **every alert is
+checked by a person** in a staffed centre before anyone is called. ZeroEyes added knife detection and suspect
+tracking. Eagle Eye ships gun detection. A 2025 survey puts weapon detectors at 78–99.5% precision and 83–97%
+recall on benchmarks. At camera scale even a tiny error rate gives daily false alerts, and a gun that is not
+visibly held is missed (Omnilert, Antioch High School, Jan 2025). The 28 Sept research found no Indian VMS vendor
+listing weapon detection.
+
+**Our design for all of them (same pattern):**
+1. A fast detector on the substream proposes (high recall).
+2. It must persist over several frames on one track (the tracker removes one-frame flickers).
+3. A VLM second opinion on the crop: "is the person holding a knife?" (the adapter already exists).
+4. An **operator confirms** before anything leaves the site; alarms carry "AI-proposed, unconfirmed" until then.
+5. Precision and recall are published per site before it is sold. No autonomous dispatch, ever.
+
+| Detection | Approach | Data (licence to check) | Competitors | Effort | Notes |
+| --- | --- | --- | --- | --- | --- |
+| **Gun (handgun, long gun)** | Fine-tune RF-DETR / YOLOX on a weapon class, small objects need the main stream or a crop zoom | CC BY 4.0 sets on Roboflow/Hugging Face (e.g. Simuletic CCTV knife/weapon, pistol-knife sets); OD-WeaponDetection (CC BY-SA 4.0, share-alike: check) | ZeroEyes, Omnilert, Eagle Eye, Scylla | L | Highest stakes. Needs our own staged footage (props, Indian settings) for evaluation; CC BY sets on Roboflow are user uploads whose image sources must be checked |
+| **Knife / machete / sickle / rod** | Same detector, extra classes | Same; Indian edged tools (sickle, machete, lathi) need our own data | ZeroEyes (knife) | L | Knives are small and often hidden; expect lower recall than guns. Say so |
+| **Fight / violence** | Pose + motion over a short clip, or a clip classifier; VLM check on the clip | RWF-2000 (YouTube clips, licence unclear: research only); synthetic sets | Videonetics (fight/riot) | L | Overlaps item 6 (VLM on clips) |
+| **Person down / fall / medical emergency** | Pose estimation + "lying, not moving for N seconds" on a track | Simuletic CCTV fall dataset (CC BY 4.0, synthetic); pose model licence to check | Factory-safety vendors, Vehant (person in distress) | M | Useful in factories, hospitals, elder care, lone workers |
+| **Fire and smoke** | Detector or classifier on the frame; VLM check | Several public sets, licences vary | Staqu, Videonetics, AllGoVision | M | Table stakes in tenders; smoke false positives (steam, fog, dust) are the main problem |
+| **Unattended / abandoned object** | Static-object rule on our tracks: a bag appears, its owner track leaves, it stays N minutes in a zone | No new model needed for "bag"; COCO-style classes exist | Railways asks for it; AllGoVision, Videonetics | M | Mostly rules on what we have. Strong fit for Railways |
+| **Perimeter climb / fence jump / track intrusion** | Zones + tripwire (built) + pose for "climbing" | Pose model | Most vendors | S–M | Intrusion works today; "climbing" needs pose |
+| **Tailgating / piggybacking** | Count people through a door per access event | Needs the access-control integration (not built) | Genetec, AllGoVision | M | Waits for access control |
+| **Vandalism / graffiti, stray animals, wrong-way** | Detector classes (animals) or rules (wrong way on a track) | Animal classes need licensed data | Vehant OKEAN | S–M | Wrong-way is rules on our track direction |
+| **Gunshot, scream, glass break** | Audio classifier on the camera's audio | Licensed audio sets | Axis, Avigilon (abroad); none found in India | L | Needs audio ingestion and stricter privacy handling |
+
+**Suggested order if the owner wants threat detection now:** first the things our tracks and rules can already
+carry (unattended object, wrong way, perimeter climb with pose, person down with pose). Then fire/smoke. Then
+weapons (gun, knife) as a governed pilot with human confirmation, our own staged evaluation footage, and a
+published false-alert rate. Fight and audio come after item 6 (VLM on clips) and audio ingestion.
+
+**Quick path before training anything:** item 2's open-vocabulary check (SigLIP 2 text-vs-crop, then the VLM) can
+flag "person holding a knife" or "smoke" on existing person crops today as an **advisory** search and alert.
+It gives early coverage and real example frames for labelling. It must never be sold as weapon detection until
+a trained detector is measured.
+
 ### Do not build (unchanged)
 
 1:N face recognition as a core feature; anything cloud-only; YOLO-World (GPL-3.0) or other non-permissive models;
@@ -216,5 +260,6 @@ racing to "100 analytics".
 - NVIDIA: [VSS repository](https://github.com/NVIDIA-AI-Blueprints/video-search-and-summarization), [agents and skills blog](https://developer.nvidia.com/blog/transform-video-into-instantly-searchable-actionable-intelligence-with-ai-agents-and-skills/)
 - India: [CP Plus × Qualcomm](https://cpplusworld.com/news/238), [The Fast Mode](https://www.thefastmode.com/technology-solutions/46357-cp-plus-qualcomm-launch-next-gen-video-security-platform-with-on-device-ai-real-time-insights), [Staqu 2026](https://www.staqu.com/blog-ai-powered-video-analytics-adoption-2026/), [Videonetics award](https://www.securitylinkindia.com/business/15/videonetics-has-been-honoured-as-ai-company-of-the-year-ai-powered-video-intelligence-2026/), [Delhi Safe City (IFF)](https://internetfreedom.in/delhis-safe-city-project-and-the-expansion-of-ai-enabled-surveillance/), [Railways AI CCTV](https://metrorailtoday.com/news/indian-railways-to-invest-75000-crore-to-procure-75000-ai-based-cctv-cameras), [Railways AI and drones](https://theindianeye.com/2026/05/21/railways-to-use-ai-drones-cctv-to-boost-safety-urges-passenger-to-stay-vigilant/), [manufacturing use cases](https://www.agrexai.com/ai-video-analytics-manufacturing-india-use-cases/)
 - Trends: [Brivo 2026 trends](https://www.brivo.com/2026-trends-in-video-surveillance/), [Arcadian alarm monitoring guide](https://www.arcadian.ai/blogs/blogs/alarm-monitoring-for-video-surveillance-the-2026-guide-to-accuracy-compliance-and-ai-driven-operations), [SDM 2026 predictions](https://www.sdmmag.com/articles/104966-2026-predictions-security-experts-talk-ai-proactive-deterrence-video-analytics-and-more), [Intellisee provenance briefing](https://intellisee.com/intelligence/surveillance-footage-authentication-deepfake-evidentiary-c2pa-nist-fre-707-2026-standards-compliance/)
+- Weapons and threats: [weapon detection survey 2016–2025 (MDPI)](https://www.mdpi.com/2079-9292/14/23/4609), [ZeroEyes adds knife detection (Police Magazine)](https://www.policemag.com/news/zeroeyes-expands-from-ai-gun-detection-to-knife-detection-suspect-tracking), [Omnilert vs ZeroEyes (Coram)](https://www.coram.ai/post/omnilert-vs-zeroeyes), [Simuletic knife dataset (HF)](https://huggingface.co/datasets/Simuletic/Surveillance-VLM-Weapon-Knife-Detection-Dataset), [OD-WeaponDetection](https://github.com/ari-dasci/OD-WeaponDetection), [RWF-2000](https://arxiv.org/pdf/1911.05913), [Simuletic fall dataset (Kaggle)](https://www.kaggle.com/datasets/simuletic/cctv-incident-dataset-fall-and-lying-down-detection)
 - Models: [small local VLMs 2026](https://tinyweights.dev/posts/best-local-vision-language-models-2026/), [Qwen3-VL overview](https://docs.kanaries.net/articles/qwen3-vl)
 - Earlier research in this folder: `vigilone-ai-features-and-research-2026-09-23.md`, `vigilone-first-in-india-ai-features-2026-09-28.md`, `vigilone-ai-strategy-collated-2026-09-28.md`, `00-north-star-v0.1-and-v1.0-plan-2026-09-29.md`.
