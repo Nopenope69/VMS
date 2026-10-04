@@ -7,6 +7,8 @@ import {
   MotionEventPayload,
   TripwireEventPayload,
   LoiteringEventPayload,
+  UnattendedObjectPayload,
+  WrongWayPayload,
   AnprEventPayload,
   CameraOfflinePayload,
   StreamDegradedPayload,
@@ -172,6 +174,46 @@ export function fromLoiteringResult(
       trackId: params.trackId,
       dwellTimeSeconds: params.dwellTimeSeconds,
       thresholdSeconds: params.thresholdSeconds,
+    },
+  });
+}
+
+export function fromUnattendedObject(
+  params: BaseEventParams & { zoneId: string; trackId: string; objectClass: string; unattendedSeconds: number; thresholdSeconds: number }
+): VigilOneEvent<UnattendedObjectPayload> {
+  return createVigilOneEvent<UnattendedObjectPayload>({
+    ...params,
+    source: params.source || 'SPATIAL_ANALYTICS',
+    type: 'UNATTENDED_OBJECT',
+    severity: params.severity || EventSeverity.CRITICAL,
+    title: params.title || `Unattended ${params.objectClass} (${params.unattendedSeconds}s)`,
+    payload: {
+      kind: 'UNATTENDED_OBJECT',
+      zoneId: params.zoneId,
+      trackId: params.trackId,
+      objectClass: params.objectClass,
+      unattendedSeconds: params.unattendedSeconds,
+      thresholdSeconds: params.thresholdSeconds,
+    },
+  });
+}
+
+export function fromWrongWay(
+  params: BaseEventParams & { zoneId: string; trackId: string; objectClass?: string; angleDegrees: number; travel: number }
+): VigilOneEvent<WrongWayPayload> {
+  return createVigilOneEvent<WrongWayPayload>({
+    ...params,
+    source: params.source || 'SPATIAL_ANALYTICS',
+    type: 'WRONG_WAY',
+    severity: params.severity || EventSeverity.WARNING,
+    title: params.title || `Wrong way in zone ${params.zoneId}`,
+    payload: {
+      kind: 'WRONG_WAY',
+      zoneId: params.zoneId,
+      trackId: params.trackId,
+      objectClass: params.objectClass,
+      angleDegrees: params.angleDegrees,
+      travel: params.travel,
     },
   });
 }

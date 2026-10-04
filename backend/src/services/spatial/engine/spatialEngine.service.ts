@@ -28,6 +28,14 @@ import {
   TripwireRuleInput,
 } from './trackStateLedger';
 import {
+  Box,
+  ThreatRuleLedger,
+  UnattendedObjectResult,
+  UnattendedObjectRuleInput,
+  WrongWayResult,
+  WrongWayRuleInput,
+} from './threatRules';
+import {
   ZoneConfigSnapshot,
   ZoneEvaluationResult,
   ZoneEvaluator,
@@ -118,6 +126,7 @@ export interface SpatialSearchResult {
 export class SpatialEngine {
   private prisma: PrismaClient;
   private trackLedger: TrackStateLedger;
+  private threatLedger = new ThreatRuleLedger();
 
   constructor(
     prisma?: PrismaClient,
@@ -190,6 +199,25 @@ export class SpatialEngine {
     return this.trackLedger.evaluateLoitering(rule, track, currentTimeMs, options);
   }
 
+  /** Unattended-object rules ask who is near a bag; every confirmed person observation is noted here. */
+  public notePerson(cameraId: string, trackId: string, box: Box, currentTimeMs: number = Date.now()): void {
+    this.threatLedger.notePerson(cameraId, trackId, box, currentTimeMs);
+  }
+
+  public evaluateUnattendedObject(
+    rule: UnattendedObjectRuleInput,
+    cameraId: string,
+    trackId: string,
+    centre: Point2D,
+    currentTimeMs: number = Date.now()
+  ): UnattendedObjectResult | null {
+    return this.threatLedger.evaluateUnattended(rule, cameraId, trackId, centre, currentTimeMs);
+  }
+
+  public evaluateWrongWay(rule: WrongWayRuleInput, trackId: string, at: Point2D, currentTimeMs: number = Date.now()): WrongWayResult | null {
+    return this.threatLedger.evaluateWrongWay(rule, trackId, at, currentTimeMs);
+  }
+
   public handleObservationLoss(
     ruleId: string,
     trackId: string,
@@ -205,6 +233,7 @@ export class SpatialEngine {
 
   public clearTrackState(): void {
     this.trackLedger.clear();
+    this.threatLedger.clear();
   }
 
   // ==========================================

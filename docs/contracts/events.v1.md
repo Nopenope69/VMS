@@ -37,6 +37,8 @@ producer without real provenance must not emit an `ai.*` event.
 | `ai.person_detected`, `ai.vehicle_detected` | `objectClass`, `confidence`, `bbox`, `trackId?` |
 | `ai.line_crossing` | `ruleId`, `trackId`, `direction` (`A_TO_B` \| `B_TO_A` \| `UNSPECIFIED`), `objectClass?` |
 | `ai.loitering` | `zoneId`, `trackId`, `dwellSeconds`, `thresholdSeconds` |
+| `ai.unattended_object` (v1.1) | `zoneId` (the rule), `trackId`, `objectClass` (backpack, handbag, suitcase), `unattendedSeconds`, `thresholdSeconds` |
+| `ai.wrong_way` (v1.1) | `zoneId` (the rule), `trackId`, `objectClass?`, `angleDegrees` (0..180 from the allowed direction), `travel` (normalised) |
 | `ai.plate_detected` | `plateText`, `confidence`, `watchlistMatchId?`, `watchlistCategory?`, `vehicleColor?` |
 | `access.door_opened` | `doorId`, `credentialId?`, `forced?` |
 | `alarm.fire` | `panelId`, `zone`, `state` (`ALARM` \| `TROUBLE` \| `RESTORED`) |
@@ -52,6 +54,8 @@ Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`; the 
 | `MOTION` | `motion.detected` | `method: SCENE_DIFF` (today's producer is the classical ffmpeg scene detector). The internal `bbox` tuple has no declared coordinate space, so it is only carried when all values are within [0,1]. |
 | `TRIPWIRE_CROSS` | `ai.line_crossing` | `tripwireId` becomes `ruleId`; `FORWARD`/`BACKWARD` become `A_TO_B`/`B_TO_A`, `BIDIRECTIONAL` becomes `UNSPECIFIED`. **Requires provenance.** |
 | `LOITERING_DWELL` | `ai.loitering` | `dwellTimeSeconds` becomes `dwellSeconds`. **Requires provenance.** |
+| `UNATTENDED_OBJECT` | `ai.unattended_object` | **Requires provenance.** |
+| `WRONG_WAY` | `ai.wrong_way` | **Requires provenance.** |
 | `ANPR_MATCH` | `ai.plate_detected` | **Requires provenance.** |
 | `CAMERA_OFFLINE` | `camera.offline` | |
 | `STREAM_DEGRADED` | `camera.degraded` | `reason: STREAM_DEGRADED`. |

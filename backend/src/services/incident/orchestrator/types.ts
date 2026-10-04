@@ -4,6 +4,8 @@ export type VigilOneEventType =
   | 'MOTION'
   | 'TRIPWIRE_CROSS'
   | 'LOITERING_DWELL'
+  | 'UNATTENDED_OBJECT'
+  | 'WRONG_WAY'
   | 'ANPR_MATCH'
   | 'CAMERA_OFFLINE'
   | 'STREAM_DEGRADED'
@@ -50,6 +52,26 @@ export interface LoiteringEventPayload {
   trackId: string;
   dwellTimeSeconds: number;
   thresholdSeconds: number;
+}
+
+/** A carried object (bag) still in a zone with no person near it for the rule's threshold. */
+export interface UnattendedObjectPayload {
+  kind: 'UNATTENDED_OBJECT';
+  zoneId: string;
+  trackId: string;
+  objectClass: string;
+  unattendedSeconds: number;
+  thresholdSeconds: number;
+}
+
+/** A tracked object moving against a zone's allowed direction (angle from the allowed direction, normalised travel). */
+export interface WrongWayPayload {
+  kind: 'WRONG_WAY';
+  zoneId: string;
+  trackId: string;
+  objectClass?: string;
+  angleDegrees: number;
+  travel: number;
 }
 
 export interface AnprEventPayload {
@@ -165,6 +187,8 @@ export type VigilOneEventPayload =
   | MotionEventPayload
   | TripwireEventPayload
   | LoiteringEventPayload
+  | UnattendedObjectPayload
+  | WrongWayPayload
   | AnprEventPayload
   | CameraOfflinePayload
   | StreamDegradedPayload
@@ -236,7 +260,7 @@ export interface RuleTriggerConfig {
   objectClasses?: string[];
   /** AI_OBJECT_DETECTED: fire only once the object has been tracked this long (P3.7). */
   minDwellSeconds?: number;
-  /** TRIPWIRE_CROSS / LOITERING_DWELL: only this spatial rule. */
+  /** TRIPWIRE_CROSS / LOITERING_DWELL / UNATTENDED_OBJECT / WRONG_WAY: only this spatial rule. */
   spatialRuleId?: string;
   /** DOOR_EVENT: only these doors / actions (empty or absent = any). */
   doorIds?: string[];

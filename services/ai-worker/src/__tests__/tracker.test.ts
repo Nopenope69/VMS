@@ -461,3 +461,12 @@ describe('MultiObjectTracker (MOT Engine & Track State Management)', () => {
     });
   });
 });
+
+describe('normalizeTrackClass', () => {
+  it('keeps people, vehicles and bags in separate groups, and one group for every kind of bag', () => {
+    expect(normalizeTrackClass('person')).toBe('person');
+    expect(normalizeTrackClass('truck')).toBe('vehicle');
+    // A bag read as a backpack in one frame and a handbag in the next stays one track.
+    expect(['backpack', 'handbag', 'suitcase'].map(normalizeTrackClass)).toEqual(['bag', 'bag', 'bag']);
+  });
+});

@@ -51,7 +51,7 @@ interface Result {
   matchedCrops?: number;
 }
 
-const CLASSES = ['person', 'car', 'motorcycle', 'bus', 'truck', 'bicycle'];
+const CLASSES = ['person', 'car', 'motorcycle', 'bus', 'truck', 'bicycle', 'backpack', 'handbag', 'suitcase'];
 const COLOURS = ['black', 'white', 'grey', 'red', 'orange', 'brown', 'yellow', 'green', 'blue', 'purple', 'pink'];
 const DIRECTIONS = ['UP', 'UP_RIGHT', 'RIGHT', 'DOWN_RIGHT', 'DOWN', 'DOWN_LEFT', 'LEFT', 'UP_LEFT', 'STATIONARY'];
 

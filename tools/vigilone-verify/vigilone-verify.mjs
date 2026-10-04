@@ -222,6 +222,23 @@ function payloadSentence(payload) {
       if (!track || !zone || dwell === null || limit === null) return generic();
       return `Track ${xq(track)} stayed in zone ${xq(zone)} for ${xnum(dwell)} seconds; the configured threshold is ${xnum(limit)} seconds.`;
     }
+    case 'UNATTENDED_OBJECT': {
+      const track = xstr(payload, 'trackId');
+      const zone = xstr(payload, 'zoneId');
+      const cls = xstr(payload, 'objectClass');
+      const secs = xnumeric(payload, 'unattendedSeconds');
+      const limit = xnumeric(payload, 'thresholdSeconds');
+      if (!track || !zone || !cls || secs === null || limit === null) return generic();
+      return `A ${xq(cls)} (track ${xq(track)}) lay still in zone ${xq(zone)} with no person near it for ${xnum(secs)} seconds; the configured threshold is ${xnum(limit)} seconds.`;
+    }
+    case 'WRONG_WAY': {
+      const track = xstr(payload, 'trackId');
+      const zone = xstr(payload, 'zoneId');
+      const angle = xnumeric(payload, 'angleDegrees');
+      const travel = xnumeric(payload, 'travel');
+      if (!track || !zone || angle === null || travel === null) return generic();
+      return `Track ${xq(track)} moved ${xnum(angle)} degrees against the allowed direction of zone ${xq(zone)} over a distance of ${xnum(travel)} of the picture.`;
+    }
     case 'ANPR_MATCH': {
       const plate = xstr(payload, 'plateText');
       const conf = xnumeric(payload, 'confidence');

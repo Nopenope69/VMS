@@ -223,13 +223,16 @@ describe('geometry: top-left letterbox and stretch', () => {
 });
 
 describe('COCO -> VigilOne v1 classes', () => {
-  it('maps the six v1 classes and drops everything else', () => {
+  it('maps the six v1 classes and the three bag classes, and drops everything else', () => {
     const coco = coco80ClassMapping();
     const v1 = Object.values(coco).map(toVigilOneClass).filter(Boolean);
-    expect(new Set(v1)).toEqual(new Set(['person', 'bicycle', 'motorcycle', 'car', 'bus', 'truck']));
+    expect(new Set(v1)).toEqual(new Set(['person', 'bicycle', 'motorcycle', 'car', 'bus', 'truck', 'backpack', 'handbag', 'suitcase']));
     expect(toVigilOneClass('dining table')).toBeNull();
     expect(eventTypeForClass('person')).toBe('PERSON_DETECTED');
     expect(eventTypeForClass('truck')).toBe('VEHICLE_DETECTED');
+    // Bags feed the unattended-object rule, never the person or vehicle triggers.
+    expect(eventTypeForClass('suitcase')).toBe('OBJECT_DETECTED');
+    expect(toVigilOneClass('knife')).toBeNull();
   });
 
   it('COCO91 category ids follow the official sparse layout', () => {

@@ -40,11 +40,13 @@ export function coco91ClassMapping(): ModelClassMapping {
 }
 
 /**
- * VigilOne v1 object classes (action plan section 3: person, bicycle, motorcycle, car, bus, truck)
- * and the events.v1 type each one feeds. Anything else a COCO model detects is dropped before
- * tracking: it is never tracked, stored or emitted.
+ * VigilOne v1 object classes (action plan section 3: person, bicycle, motorcycle, car, bus, truck), plus the
+ * carried objects the unattended-object rule watches (backpack, handbag, suitcase), and the events.v1 type each
+ * one feeds. Anything else a COCO model detects is dropped before tracking: it is never tracked, stored or
+ * emitted.
  */
-export const VIGILONE_V1_CLASSES = ['person', 'bicycle', 'motorcycle', 'car', 'bus', 'truck'] as const;
+export const BAG_CLASSES = ['backpack', 'handbag', 'suitcase'] as const;
+export const VIGILONE_V1_CLASSES = ['person', 'bicycle', 'motorcycle', 'car', 'bus', 'truck', ...BAG_CLASSES] as const;
 export type VigilOneV1Class = (typeof VIGILONE_V1_CLASSES)[number];
 
 export function toVigilOneClass(label: string): VigilOneV1Class | null {
@@ -52,7 +54,12 @@ export function toVigilOneClass(label: string): VigilOneV1Class | null {
   return (VIGILONE_V1_CLASSES as readonly string[]).includes(l) ? (l as VigilOneV1Class) : null;
 }
 
+export function isBagClass(cls: string): boolean {
+  return (BAG_CLASSES as readonly string[]).includes(cls);
+}
+
 /** Legacy DetectionEvent.type values used by the backend (Prisma EventType). */
-export function eventTypeForClass(cls: VigilOneV1Class): 'PERSON_DETECTED' | 'VEHICLE_DETECTED' {
-  return cls === 'person' ? 'PERSON_DETECTED' : 'VEHICLE_DETECTED';
+export function eventTypeForClass(cls: VigilOneV1Class): 'PERSON_DETECTED' | 'VEHICLE_DETECTED' | 'OBJECT_DETECTED' {
+  if (cls === 'person') return 'PERSON_DETECTED';
+  return isBagClass(cls) ? 'OBJECT_DETECTED' : 'VEHICLE_DETECTED';
 }

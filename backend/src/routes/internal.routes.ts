@@ -201,7 +201,7 @@ export async function handleGetAiActivity(_req: Request, res: Response) {
     const cameras = await prisma.camera.findMany({ select: { id: true, tenantId: true } });
     const spatial = await prisma.spatialAnalyticsRule.findMany({ where: { enabled: true }, select: { cameraId: true } });
     const aiRules = await prisma.automationRule.findMany({
-      where: { enabled: true, triggerType: { in: ['PERSON_DETECTED', 'VEHICLE_DETECTED', 'TRIPWIRE_CROSS', 'LOITERING_DWELL'] } },
+      where: { enabled: true, triggerType: { in: ['PERSON_DETECTED', 'VEHICLE_DETECTED', 'TRIPWIRE_CROSS', 'LOITERING_DWELL', 'UNATTENDED_OBJECT', 'WRONG_WAY'] } },
       select: { tenantId: true, triggerConfigJson: true },
     });
     const since = new Date(Date.now() - 10 * 60 * 1000);

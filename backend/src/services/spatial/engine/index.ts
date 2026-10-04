@@ -1,5 +1,6 @@
 export * from './geometry';
 export * from './trackStateLedger';
+export * from './threatRules';
 export * from './zoneEvaluator';
 export * from './floorplanProjector';
 export * from './spatialEngine.service';

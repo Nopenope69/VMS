@@ -95,6 +95,26 @@ export const EVENT_KINDS: { [K in VigilOneEventType]: EventKind<K> } = {
     },
   },
 
+  UNATTENDED_OBJECT: {
+    triggers: { UNATTENDED_OBJECT: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict() },
+    matches: genericConfidence,
+    spatialRuleRef: (p) => p.zoneId,
+    v1: {
+      type: 'ai.unattended_object',
+      payload: (p) => ({ zoneId: p.zoneId, trackId: p.trackId, objectClass: p.objectClass, unattendedSeconds: p.unattendedSeconds, thresholdSeconds: p.thresholdSeconds }),
+    },
+  },
+
+  WRONG_WAY: {
+    triggers: { WRONG_WAY: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict() },
+    matches: genericConfidence,
+    spatialRuleRef: (p) => p.zoneId,
+    v1: {
+      type: 'ai.wrong_way',
+      payload: (p) => ({ zoneId: p.zoneId, trackId: p.trackId, ...(p.objectClass ? { objectClass: p.objectClass } : {}), angleDegrees: p.angleDegrees, travel: p.travel }),
+    },
+  },
+
   ANPR_MATCH: {
     triggers: { ANPR_WATCHLIST: z.object({ ...base, watchlistCategories: z.array(z.string().min(1)).max(20).optional(), minConfidence: confidence }).strict() },
     matches: (config, p) => {
@@ -188,7 +208,9 @@ export const EVENT_KINDS: { [K in VigilOneEventType]: EventKind<K> } = {
         })
         .strict(),
     },
-    triggerTypeFor: (p) => (!p.objectClass ? null : p.objectClass === 'person' ? RuleTriggerType.PERSON_DETECTED : RuleTriggerType.VEHICLE_DETECTED),
+    // Carried objects (bags) feed the unattended-object rule, not the person or vehicle triggers.
+    triggerTypeFor: (p) =>
+      p.objectClass === 'person' ? RuleTriggerType.PERSON_DETECTED : VEHICLE_CLASSES.includes(p.objectClass) ? RuleTriggerType.VEHICLE_DETECTED : null,
     matches: (config, p) => {
       if (config.objectClasses && config.objectClasses.length > 0 && !config.objectClasses.includes(p.objectClass)) return false;
       if (config.minConfidence !== undefined && p.confidence < config.minConfidence) return false;

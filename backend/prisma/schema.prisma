@@ -108,6 +108,7 @@ enum EventType {
   TAMPER
   PERSON_DETECTED
   VEHICLE_DETECTED
+  OBJECT_DETECTED
   STORAGE_FAILOVER
   STORAGE_DEGRADED_MODE_ACTIVE
   STORAGE_DEGRADED_MODE_CLEARED
@@ -200,6 +201,8 @@ enum RuleTriggerType {
   VEHICLE_DETECTED
   TRIPWIRE_CROSS
   LOITERING_DWELL
+  UNATTENDED_OBJECT
+  WRONG_WAY
   CAMERA_OFFLINE
   SCENE_CHANGE
   DIGITAL_INPUT_STATE
@@ -1348,12 +1351,14 @@ model SpatialAnalyticsRule {
   cameraId               String
   camera                 Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   name                   String
-  type                   String // TRIPWIRE, LOITERING
+  type                   String // TRIPWIRE, LOITERING, UNATTENDED_OBJECT, WRONG_WAY
   enabled                Boolean           @default(true)
   direction              TripwireDirection @default(BIDIRECTIONAL)
   lineCoordinatesJson    Json? // [{x, y}, {x, y}] for Tripwire
   polygonCoordinatesJson Json? // [{x, y}, ...] for Loitering
   dwellThresholdSeconds  Int?              @default(30) // Continuous dwell threshold
+  /// Type-specific settings: UNATTENDED_OBJECT { ownerRadius, moveTolerance }, WRONG_WAY { minTravel, objectClasses }.
+  paramsJson             Json?
   cooldownSeconds        Int               @default(10)
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
