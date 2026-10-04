@@ -92,6 +92,63 @@ capture.
 | **Vehant OKEAN, AllGoVision, SrivisifAI** | Broad analytics, attribute and text search (SrivisifAI), video summarisation (Vehant); no VLM, audio or weapon features found (28 Sept research). |
 | **Public buyers** | Safe City (8 metros, Nirbhaya Fund): AI "abnormal activity" alerts into command centres. Indian Railways: AI CCTV at major stations, facial recognition at CST and New Delhi, unattended luggage, unusual behaviour, track/yard intrusion; a reported ₹75,000 crore plan for AI cameras in coaches and locomotives. |
 
+### Vendor by vendor: what they sell, and how we compare (added 4 Oct 2026)
+
+✔ = we have it, ◐ = partly, ✘ = we do not. "What they sell" is from vendor material (2026 sweep, 23 and 28
+Sept research). Some long-standing product lines (Verkada face search and occupancy, Genetec AutoVu, Ambient's
+threat signatures, Avigilon unusual-activity detection, Hikvision counting and heat maps, Axis audio analytics)
+are general product knowledge, not re-checked in this sweep. None of it was tried hands-on.
+
+**International**
+
+| Vendor | What they sell (AI) | ✔ We match | ✘ We lack |
+| --- | --- | --- | --- |
+| **Verkada** (cloud) | AI search by description; person/vehicle attributes; LPR; face search; occupancy and people counting; AI-powered deterrence (escalating talk-down); compound alerts (motion + attributes, e.g. no PPE near machinery); inactivity detection; natural-language audit-log search and schedules; live intercom translation (incl. Hindi); Catalyst (ChatGPT/Claude/Gemini over MCP); fleet video; audio sensors | Search by description, attributes (colour), LPR, zones and loitering, alarms | Face search (by choice), NL rules/compound alerts, deterrence, people counting/occupancy, NL audit search, translation, MCP agents, fleet, audio |
+| **Genetec** (Security Center) | NL search across sites and brands; similarity search; entry/exit detection; visual trajectory search; case and evidence management with AI video summaries; ALPR (AutoVu); access control unified with video | Similarity search, trajectories (journeys), entry/exit (zone visits), evidence packages, ANPR | NL query parsing, AI-written case summaries, access-control unification (not built) |
+| **Milestone** (XProtect + BriefCam) | Video summarisation (clip + prompt → report); Hafnia VLM as a service; VLM alarm verification; BriefCam forensic search, video synopsis, dashboards; anonymisation; AI Search (end 2026) | Forensic search, VLM verification (snapshot), anonymisation (redaction) | Clip summarisation, video synopsis, analytics dashboards, NL search |
+| **Brivo / Eagle Eye** (cloud) | Smart Video Search (type a description); Eeva (type what to watch, VLM monitors); gun detection; LPR; people/object detection; heat maps; perimeter alerts; BI dashboards | Search by description, LPR, detection, perimeter (zones/tripwire) | Eeva-style NL monitoring, gun detection, heat maps, BI dashboards |
+| **Ambient.ai** | Agentic video walls (AI decides what operators see); 150+ threat signatures (tailgating, loitering, perimeter, person down, weapons…); case management (one incident story); alarm reduction on access-control alarms | Loitering, perimeter, cases (journey to incident) | Prioritised video wall, threat signatures (person down, weapons, tailgating), AI incident story, access-alarm reduction |
+| **Spot AI** | Video AI agents that detect and act (alerts, lights, sound, voice, machinery); safety (PPE, forklift), security guard, operations assistant; search | Detection, rule actions (relays, notifications) | PPE/forklift safety, voice/sound deterrence, operations analytics |
+| **Avigilon / Motorola** | Appearance search; unusual-motion and unusual-activity detection; face; LPR; Alta cloud and Unity on-site | Appearance search, LPR, on-site | Unusual-activity (learned normal) detection, face |
+| **Hikvision** | AcuSeek NL search on the Guanlan multimodal model; perimeter (AcuSense); face; ANPR; people counting; heat maps; fire/smoke (thermal) | Perimeter, ANPR, search by description | Open-vocabulary NL search, people counting, heat maps, fire/smoke, face |
+| **i-PRO / Hanwha / Axis** (cameras) | On-camera AI: object/attribute detection, LPR, people counting; i-PRO free-text detection on the camera (generative AI); Axis ARTPEC analytics, audio analytics | Server-side detection and LPR | On-camera NL detection, audio analytics, people counting |
+| **ZeroEyes / Omnilert** | Gun detection (ZeroEyes now also knives, suspect tracking), with human verification in a staffed centre and automatic lockdown/911 | Human-confirmed alarms (operator verdicts), relays | Weapon detection |
+| **Frigate** (open source) | Object detection, semantic search, face recognition, LPR, GenAI descriptions, review summaries | All except face and GenAI descriptions | GenAI descriptions of events |
+
+**India**
+
+| Vendor | What they sell (AI) | ✔ We match | ✘ We lack |
+| --- | --- | --- | --- |
+| **Videonetics** | VMS + analytics + traffic + face (FRS); people/object/crowd/vehicle analytics; ANPR; fight/riot; women-safety analytics (isolation, encirclement, chain-snatching, SOS gesture); attribute search; video summarisation; claims semantic search and cross-camera correlation | VMS, ANPR, attribute and semantic search, cross-camera following | Face, crowd, fight, women safety, video summarisation, traffic violations |
+| **Staqu (JARVIS)** | 50+ use cases: PPE, fire/smoke, hygiene, face access and attendance, ANPR access, footfall with age/gender, queues, dwell heat maps, intrusion, patient safety | ANPR, intrusion, dwell (track index) | PPE, fire/smoke, face, footfall/demographics, queues, heat maps, hygiene, patient safety |
+| **CP Plus × Qualcomm** | Gen-AI assistant (NL event queries), "Merlin" audits, video search and summarisation, PPE, crowd density, blocked pathways, on device | Video search | NL assistant, summarisation, PPE, crowd density, blocked pathways |
+| **Vehant** (ITMS + OKEAN DeepVue) | Traffic: red light, speed, no helmet, triple riding, wrong way, seatbelt, phone use, no parking, accidents; OKEAN: 25 modules incl. women safety, person in distress, PPE, graffiti, stray animals, odd-hour movement, attribute search, video summarisation | ANPR, attribute search, wrong-way (from track direction, not yet a rule) | Traffic violations, women safety, person in distress, PPE, graffiti, stray animals, summarisation |
+| **AllGoVision** | Face, LPR, intrusion, crowd and flow/counter-flow, multi-camera subject search, loitering, tailgating, left object, fire/smoke, heat maps, demographics, privacy masking | LPR, intrusion, loitering, multi-camera search, privacy masking | Face, crowd/flow, tailgating, left object, fire/smoke, heat maps, demographics |
+| **SrivisifAI** (IIT Bombay) | Real-time alerts, text-based search of stored video, compliance MIS reports, intrusion, face, ANPR | Text search, intrusion, ANPR | Face, compliance MIS reports |
+| **Awiros** | App-store of analytics; crowd-density estimation (threshold), used in Telangana policing | — | Crowd density, analytics marketplace |
+| **Wobot.ai** | Retail operations: people/vehicle/object detection, customer journey, dashboards, reports | Detection | Retail dashboards, customer journey |
+
+**Where we are ahead of every vendor listed:** fully on-site AI with no cloud; a permissive-licence model stack;
+per-inference provenance; AI outputs hashed into a court-grade evidence chain (BSA s.63) with a standalone
+verifier; purpose-gated, audited person and plate queries (DPDP); and Indian plate rules (BH, state codes,
+two-line plates).
+
+**Features competitors sell that we lack, grouped:**
+
+- **Natural language and generative AI:** NL query parsing; NL-defined alerts; incident and clip summaries;
+  AI assistant and MCP agents; NL audit search.
+- **Threat and safety detections:** weapons (gun, knife); fight/violence; person down / fall / distress;
+  fire/smoke; left or unattended object; tailgating; PPE; crowd density and flow; women-safety analytics;
+  blocked pathways; graffiti; stray animals.
+- **Operations analytics:** people counting and occupancy; heat maps; queues; footfall and demographics;
+  dashboards and BI; compliance and MIS reports.
+- **Traffic (ITMS):** red light, speed, no helmet, triple riding, seatbelt, phone use, no parking, accidents.
+- **Response:** talk-down deterrence; prioritised alarm wall; access-control alarm reduction (needs access
+  control); automatic lockdown flows.
+- **Identity:** face recognition and face search. Not built on purpose; at most one governed, off-by-default
+  capability.
+- **Other:** audio analytics; unusual-activity (learned "normal") detection; video synopsis; on-camera AI.
+
 ## 4. Gap matrix
 
 ✔ shipped · ◐ partial or announced · ✘ not found
