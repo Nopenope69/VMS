@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-03T20:13:42.654Z",
-  "commit": "2f250ad958e6d354180f53b218ae9f2f1c7c1749",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37150443661",
+  "generatedAt": "2026-10-04T18:20:57.696Z",
+  "commit": "dd1f3609bbbe2797a3f1bb21ff3d3394a72642ee",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37223749550",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 155,
-        "passed": 155,
+        "total": 157,
+        "passed": 157,
         "failed": 0
       },
       "tests": {
-        "total": 1185,
-        "passed": 1149,
+        "total": 1207,
+        "passed": 1171,
         "failed": 0,
         "skipped": 36
       },
@@ -1049,6 +1049,20 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/threatRules.test.ts",
+          "status": "passed",
+          "passed": 15,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/threatRulesRealDb.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/trackerValidation.test.ts",
           "status": "passed",
           "passed": 6,
@@ -1114,8 +1128,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 309,
-        "passed": 304,
+        "total": 310,
+        "passed": 305,
         "failed": 0,
         "skipped": 5
       },
@@ -1313,7 +1327,7 @@
         {
           "file": "services/ai-worker/src/__tests__/tracker.test.ts",
           "status": "passed",
-          "passed": 13,
+          "passed": 14,
           "failed": 0,
           "skipped": 0
         },
@@ -1342,9 +1356,9 @@
     }
   ],
   "totals": {
-    "suites": 186,
-    "tests": 1494,
-    "passed": 1453,
+    "suites": 188,
+    "tests": 1517,
+    "passed": 1476,
     "failed": 0,
     "skipped": 41
   },
