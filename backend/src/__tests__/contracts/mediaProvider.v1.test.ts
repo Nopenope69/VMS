@@ -29,19 +29,19 @@ describe('contract media-provider.v1', () => {
   });
 
   it('wraps a ready path from the existing provider', async () => {
-    const adapter = new MediaProviderV1Adapter(fakeInner({ ready: true, readersCount: 1, tracks: ['H264'], bytesReceived: 10 }), fixedNow);
+    const adapter = new MediaProviderV1Adapter(fakeInner({ kind: 'OBSERVED', ready: true, readersCount: 1, tracks: ['H264'], bytesReceived: 10 }), fixedNow);
     const s = await adapter.getStreamStatus('cam_01');
     expect(s).toMatchObject({ state: 'READY', readersCount: 1, observedAtUtc: '2026-09-26T10:00:00.000Z' });
   });
 
-  it('reports NOT_FOUND_OR_UNAVAILABLE with no invented telemetry when the provider returns null', async () => {
-    const adapter = new MediaProviderV1Adapter(fakeInner(null), fixedNow);
+  it.each(['NOT_FOUND', 'ENGINE_UNAVAILABLE'] as const)('reports %s with no invented telemetry when the provider cannot observe a path', async (kind) => {
+    const adapter = new MediaProviderV1Adapter(fakeInner({ kind }), fixedNow);
     const s = await adapter.getStreamStatus('cam_01');
-    expect(s).toMatchObject({ state: 'NOT_FOUND_OR_UNAVAILABLE', readersCount: null, tracks: null, bytesReceived: null });
+    expect(s).toMatchObject({ state: kind, readersCount: null, tracks: null, bytesReceived: null });
   });
 
   it('validates configs and paths before they reach the engine', async () => {
-    const inner = fakeInner(null);
+    const inner = fakeInner({ kind: 'NOT_FOUND' });
     const adapter = new MediaProviderV1Adapter(inner, fixedNow);
     await expect(adapter.createOrUpdateStream({ path: '../x', sourceRtspUrl: 'rtsp://1.2.3.4/s', record: true })).rejects.toThrow();
     await expect(adapter.createOrUpdateStream({ path: 'cam_01', sourceRtspUrl: 'http://1.2.3.4/s', record: true })).rejects.toThrow();
