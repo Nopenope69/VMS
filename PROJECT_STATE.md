@@ -432,6 +432,10 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   Measured in `docs/ai/nl-search-evaluation.md`.
 - **Next:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm triage,
   footage integrity), one PR each, from `master`.
+- **Built from the reference study (2026-10-05, branch `claude/elegant-albattani-4krihk`):** incident window (ADR 0014:
+  one incident, one alarm, per rule via `incidentWindowSeconds`) and alarm triage (ADR 0015, flag `ALARM_TRIAGE`:
+  ordered queue with reasons and proposed rule changes, nothing applied; API only, no queue page yet). Left of the
+  four features: cited incident summary, describe-what-to-watch rules, footage integrity.
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.

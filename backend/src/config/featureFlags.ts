@@ -31,6 +31,7 @@ export enum FeatureFlag {
   TRACK_INDEX = 'TRACK_INDEX',
   INVESTIGATION_TIMING = 'INVESTIGATION_TIMING',
   NL_SEARCH = 'NL_SEARCH',
+  ALARM_TRIAGE = 'ALARM_TRIAGE',
 }
 
 export interface FeatureFlagDefinition {
@@ -184,6 +185,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: [],
     status:
       'A request typed in plain English, Hinglish or Hindi ("white SUV at Gate 3 between 8 and 10 pm yesterday, not a taxi") is turned into the track search\'s filters by rules, with the site\'s own camera and zone names and its time zone; the operator sees and can change them before searching. Only a request the word list cannot read (Devanagari place names) is rewritten into English by a local Qwen3-4B model (QUERY_LLM_ADAPTER_URL, needs a human licence approval), and the rules still set every filter. Measured on labelled requests (docs/ai/nl-search-evaluation.md); not yet on real operators\' requests.',
+  },
+  [FeatureFlag.ALARM_TRIAGE]: {
+    flag: FeatureFlag.ALARM_TRIAGE,
+    envVar: envVarFor(FeatureFlag.ALARM_TRIAGE),
+    title: 'Alarm triage',
+    routePrefixes: ['/api/v1/alarm-triage'],
+    workers: [],
+    status:
+      'Open alarms are listed most important first, each with the reasons for its place: severity first, then repeat activity, a passed acknowledge deadline, the advisory second-opinion answer and how operators judged earlier alarms of the same rule on the same camera. Nothing is hidden and nothing changes state. A false-alarm report per camera proposes rule changes (an incident window, or a review of the rule) with the numbers behind them; none is applied. Tested on the real database with synthetic alarms and verdicts; not yet used by operators on a live site.',
   },
 });
 
