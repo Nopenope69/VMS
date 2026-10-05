@@ -196,6 +196,36 @@ export class ActionOutbox {
           orderBy: { triggeredAt: 'desc' },
         });
         if (!alarm) {
+          // ADR 0014: this trigger may have joined an open alarm instead of raising its own.
+          const joinedAlarm = await this.prisma.alarm.findFirst({
+            where: { tenantId: context.tenantId, lastCanonicalEventId: context.triggerEventId, automationRuleId: context.ruleId },
+            select: { id: true, metadataJson: true },
+            orderBy: { lastActivityAt: 'desc' },
+          });
+          if (joinedAlarm) {
+            const list = ((joinedAlarm.metadataJson as any)?.continuations as any[]) || [];
+            const mine = list.find((c) => c.eventId === context.triggerEventId);
+            // A trigger that only continues the incident does not notify again; one that raised its severity does.
+            if (!mine?.escalated) {
+              return { alarmId: joinedAlarm.id, notificationsQueued: 0, suppressed: 'INCIDENT_CONTINUATION' };
+            }
+            const escalated = await this.prisma.alarm.findUnique({
+              where: { id: joinedAlarm.id },
+              include: { camera: { select: { name: true } } },
+            });
+            if (escalated) {
+              const queuedEscalation = await this.notificationAdapter.enqueueAlarmNotifications({
+                tenantId: context.tenantId,
+                alarmId: escalated.id,
+                title: actionConfig.config.title || escalated.title,
+                description: actionConfig.config.description ?? escalated.description,
+                severity: actionConfig.config.severity || escalated.severity,
+                cameraName: escalated.camera?.name,
+                metadataJson: escalated.metadataJson,
+              });
+              return { alarmId: escalated.id, notificationsQueued: queuedEscalation, escalated: true };
+            }
+          }
           throw new Error(
             'NOTIFICATION_REQUIRES_ALARM: DISPATCH_NOTIFICATION needs a TRIGGER_ALARM action earlier in the same rule'
           );
@@ -223,6 +253,7 @@ export class ActionOutbox {
             title: actionConfig.config.title || (context.ruleName ? `Rule: ${context.ruleName}` : 'Rule Triggered Alarm'),
             description: actionConfig.config.description,
             severity: actionConfig.config.severity,
+            incidentWindowSeconds: Number(actionConfig.config.incidentWindowSeconds) || undefined,
             metadataJson: {
               triggerEventId: context.triggerEventId,
               eventType: canonical?.type ?? null,
