@@ -82,6 +82,9 @@ export abstract class PipelineAdapterCore<L extends LoadedPipelineLike> {
   /** Optional text tower (POST /v1/embed-text). */
   protected embedText?(l: L, text: string, ctx: InferContext): Promise<Float32Array>;
 
+  /** Optional text rewrite (POST /v1/rewrite-text, query_rewrite models). */
+  protected rewriteText?(l: L, text: string, vocabulary: string[], ctx: InferContext): Promise<{ text: string; promptSha256: string }>;
+
   /** The SDK core, built on first use (the model card comes from the subclass). */
   protected get core(): AdapterCore {
     if (this.sdk) return this.sdk;
@@ -98,6 +101,7 @@ export abstract class PipelineAdapterCore<L extends LoadedPipelineLike> {
         failure: () => this.liveness(l),
         infer: (frame, ctx) => this.infer(l, frame, ctx),
         ...(this.embedText ? { embedText: (text: string, ctx: InferContext) => this.embedText!(l, text, ctx) } : {}),
+        ...(this.rewriteText ? { rewriteText: (text: string, vocabulary: string[], ctx: InferContext) => this.rewriteText!(l, text, vocabulary, ctx) } : {}),
       });
     }
     this.sdk = createAdapterCore({

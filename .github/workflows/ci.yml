@@ -269,6 +269,17 @@ jobs:
           fi
           scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-q4km && scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-mmproj-q8
 
+      # Qwen3-4B for plain-language search (rewrites requests the word list cannot read). It runs on the same
+      # llama-server build; its own cache is keyed on its pipeline file.
+      - name: Cache query-rewrite model file
+        uses: actions/cache@v4
+        with:
+          path: .cache/models/Qwen3-4B-Q4_K_M.gguf
+          key: query-rewrite-${{ hashFiles('scripts/models/pipelines/query-rewrite-qwen3-4b-v1.json') }}
+
+      - name: Fetch Qwen3-4B (SHA-256 verified; a candidate, tests and evaluation only)
+        run: scripts/models/fetch-model.sh qwen3-4b-q4km
+
       # The pipeline adapters run on the adapter SDK's core; the worker ships a copy of it (ADR 0007).
       - name: AI Worker SDK copy matches sdk/ai-adapter
         working-directory: ./services/ai-worker

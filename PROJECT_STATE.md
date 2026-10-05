@@ -425,8 +425,13 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   `docs/strategy/vigilone-ai-features-landscape-2026-10-03.md` (natural-language search, describe-what-to-watch
   rules, cited incident summary, alarm triage, footage integrity). Threat detections without a new model
   (unattended bag, wrong way) are on `claude/amazing-hypatia-hkgolw` (Session 28); person down and fence climbing
-  need a pose model and a licence decision. Bucket 6 (privacy tools) is parked.
-- **Next:** the five software features, one PR each, from `master`.
+  need a pose model and a licence decision (merged, #43). Bucket 6 (privacy tools) is parked.
+- **Plain-language search** (first of the five, Session 29, feature `NL_SEARCH`): rules with an English, Hinglish
+  and Devanagari word list fill the Find form; Qwen3-4B (candidate, needs the owner's approval to run in the
+  product) only rewrites requests the word list cannot read, and what the rules read in the original wins.
+  Measured in `docs/ai/nl-search-evaluation.md`.
+- **Next:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm triage,
+  footage integrity), one PR each, from `master`.
 
 **Open follow-ups, all known and documented:**
 

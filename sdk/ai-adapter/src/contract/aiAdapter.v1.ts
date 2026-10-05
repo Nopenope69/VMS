@@ -17,7 +17,7 @@ import { AiProvenanceV1 } from './events.v1';
 
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding', 'vlm_verification']);
+export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding', 'vlm_verification', 'query_rewrite']);
 
 export const ModelCardV1 = z
   .object({
@@ -155,6 +155,35 @@ export const TextEmbeddingRequestV1 = z
   .strict();
 export type TextEmbeddingRequestV1 = z.infer<typeof TextEmbeddingRequestV1>;
 
+/**
+ * v1.2 (additive, optional): a plain-language search request rewritten into plain English, `POST /v1/rewrite-text`,
+ * served only by a `query_rewrite` model (an adapter without one answers 404). The adapter builds the prompt from a
+ * fixed, versioned template; the caller gives only the request and, optionally, the site's camera and zone names
+ * so the model can use them. The answer is an ordinary ok InferenceResultV1 with `rewrite` set and empty
+ * `detections`. VigilOne's own rules then read the English text; the model never sets search filters itself.
+ */
+export const TextRewriteRequestV1 = z
+  .object({
+    contract: z.literal(AI_ADAPTER_CONTRACT),
+    requestId: NonEmptyId,
+    tenantId: NonEmptyId,
+    modelId: NonEmptyId,
+    text: z.string().min(1).max(512),
+    vocabulary: z.array(z.string().min(1).max(60)).max(64).optional(),
+    deadlineMs: z.number().int().positive().max(60000),
+  })
+  .strict();
+export type TextRewriteRequestV1 = z.infer<typeof TextRewriteRequestV1>;
+
+export const RewriteV1 = z
+  .object({
+    text: z.string().min(1).max(512),
+    /** SHA-256 of the exact prompt (template version, instructions, vocabulary, generation settings). */
+    promptSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type RewriteV1 = z.infer<typeof RewriteV1>;
+
 export const DetectionV1 = z
   .object({
     objectClass: z.string().min(1),
@@ -205,6 +234,8 @@ export const InferenceResultV1 = z.discriminatedUnion('status', [
       embedding: EmbeddingV1.optional(),
       /** v1.1, optional: present for the `vlm_verification` task. */
       verification: VerificationV1.optional(),
+      /** v1.2, optional: present for a `POST /v1/rewrite-text` answer. */
+      rewrite: RewriteV1.optional(),
       provenance: AiProvenanceV1,
       latencyMs: z.number().nonnegative(),
     })

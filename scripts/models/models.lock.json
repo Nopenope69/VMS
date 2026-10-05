@@ -881,6 +881,34 @@
     "status": "PENDING_HUMAN_REVIEW",
     "question": "SmolVLM2 weights are Apache-2.0, but its training mix has mixed or unclear licences (some model-generated instruction data, video sources). Used only as an advisory second opinion on alarms."
    }
+  },
+  {
+   "key": "qwen3-4b-q4km",
+   "name": "qwen3-4b-q4_k_m",
+   "role": "query_rewrite_model",
+   "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf",
+   "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+   "sizeBytes": 2497280256,
+   "runtimeConfig": {
+    "runtime": "llama.cpp",
+    "modelFormat": "GGUF",
+    "quantization": "Q4_K_M"
+   },
+   "version": "Qwen@bc640142c66e",
+   "task": "query_rewrite",
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "Qwen/Qwen3-4B-GGUF (Apache-2.0, official GGUF from the Qwen team) at commit bc640142c66e1fdd12af0bd68f40445458f3869b (SHA-256 matches the Hugging Face LFS record)",
+   "trainingData": {
+    "source": "Qwen3 pre-training corpus of about 36 trillion tokens in 119 languages (Qwen3 technical report); the individual sources are not published",
+    "license": "MIXED/UNCLEAR",
+    "provenance": "Undisclosed web, code, book and synthetic data; the weights are Apache-2.0, the data rights are not documented.",
+    "commercialUse": null
+   },
+   "governance": {
+    "status": "PENDING_HUMAN_REVIEW",
+    "question": "Qwen3-4B weights are Apache-2.0, but its training data is undisclosed. Used only to rewrite a search request into English on site; VigilOne's own rules set every filter and the operator sees them before searching."
+   }
   }
  ]
 }

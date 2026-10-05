@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, X, Users, Car, ArrowLeft, Check, Ban, Play, ShieldCheck, Route, Map as MapIcon, Siren, Image as ImageIcon } from 'lucide-react';
+import { Search, X, MessageSquare, Users, Car, ArrowLeft, Check, Ban, Play, ShieldCheck, Route, Map as MapIcon, Siren, Image as ImageIcon } from 'lucide-react';
 import JourneyMap from './JourneyMap';
 import Button from '../ui/Button';
 import {
@@ -16,6 +16,8 @@ import {
   journeyFloorplan,
   openJourneyIncident,
   listTracks,
+  ParsedRequest,
+  parseQuery,
   refusalText,
   sealJourney,
   searchTracks,
@@ -28,12 +30,16 @@ import {
  *   cameras (confirm or reject each suggestion) -> its journey (play it, see it on the floor plan, seal it as one
  *   evidence package, open an incident from it).
  *
+ * "Ask in plain words" (NL_SEARCH) fills the form from a request such as "man in a blue shirt at Gate 3 last night" and
+ * lists what it understood; the operator checks or changes the fields, then searches. It never searches by itself.
+ *
  * People and plates need a declared purpose, chosen at the top and sent with every request that needs it. Every
  * refusal from the backend is shown as it is, never hidden.
  */
 interface Props {
   cameras: Array<{ id: string; name: string }>;
   semanticSearch: boolean;
+  plainLanguage?: boolean;
   canSealEvidence: boolean;
   canOpenIncident: boolean;
   onSearch: () => void;
@@ -107,7 +113,7 @@ function PathSketch({ path }: { path: TrackRecord['path'] }) {
   );
 }
 
-export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvidence, canOpenIncident, onSearch, onOpenTrack, onPlayJourney, onSealed, onIncident, onClose }) => {
+export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, plainLanguage = false, canSealEvidence, canOpenIncident, onSearch, onOpenTrack, onPlayJourney, onSealed, onIncident, onClose }) => {
   const camName = useMemo(() => new Map(cameras.map((c) => [c.id, c.name])), [cameras]);
   const name = (id: string) => camName.get(id) || `Camera ${id.slice(0, 6)}`;
 
@@ -132,7 +138,8 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
   const [notText, setNotText] = useState('');
   const [photo, setPhoto] = useState<{ name: string; base64: string } | null>(null);
   const [camerasSel, setCamerasSel] = useState<string[]>([]);
-  const [objectClass, setObjectClass] = useState('');
+  const [classes, setClasses] = useState<string[]>([]);
+  const [zone, setZone] = useState<{ id: string; name: string } | null>(null);
   const [includePersons, setIncludePersons] = useState(false);
   const [colour, setColour] = useState({ upper: '', lower: '', body: '' });
   const [direction, setDirection] = useState('');
@@ -140,6 +147,11 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
   const [hasPlate, setHasPlate] = useState('');
   const [from, setFrom] = useState(localInput(new Date(Date.now() - 24 * 3_600_000)));
   const [to, setTo] = useState(localInput(new Date()));
+
+  // Plain-language request (NL_SEARCH): what was read, shown as removable parts.
+  const [ask, setAsk] = useState('');
+  const [asked, setAsked] = useState<ParsedRequest | null>(null);
+  const [reading, setReading] = useState(false);
 
   const [results, setResults] = useState<Result[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -156,13 +168,14 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
   const [incident, setIncident] = useState<{ title: string; severity: 'INFO' | 'WARNING' | 'CRITICAL'; description: string; attach: boolean } | null>(null);
   const [incidentId, setIncidentId] = useState<string | null>(null);
 
-  const isPersonQuery = includePersons || objectClass === 'person' || !!colour.upper || !!colour.lower;
+  const isPersonQuery = includePersons || classes.includes('person') || !!colour.upper || !!colour.lower;
 
   const filters = (): Filters => ({
     cameraIds: camerasSel.length ? camerasSel : undefined,
+    zoneId: zone?.id,
     from: from ? new Date(from).toISOString() : undefined,
     to: to ? new Date(to).toISOString() : undefined,
-    objectClasses: objectClass ? [objectClass] : undefined,
+    objectClasses: classes.length ? classes : undefined,
     direction: direction || undefined,
     upperColour: colour.upper || undefined,
     lowerColour: colour.lower || undefined,
@@ -195,6 +208,77 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
     } finally {
       setBusy(false);
     }
+  };
+
+  const lastDay = () => {
+    setFrom(localInput(new Date(Date.now() - 24 * 3_600_000)));
+    setTo(localInput(new Date()));
+  };
+
+  /** Reads the request and fills the form with it (everything not mentioned goes back to its default). */
+  const readRequest = async () => {
+    if (!ask.trim()) return;
+    setReading(true);
+    setError(null);
+    try {
+      const r = await parseQuery(ask.trim());
+      const f = r.filters;
+      setAsked(r);
+      setText(semanticSearch ? r.text : '');
+      setPhoto(null);
+      setAndText(r.and.join(', '));
+      setNotText(r.not.join(', '));
+      setCamerasSel(f.cameraIds || []);
+      const z = r.understood.find((u) => u.field === 'zone');
+      setZone(f.zoneId ? { id: f.zoneId, name: z?.label || 'zone' } : null);
+      setClasses(f.objectClasses || []);
+      setIncludePersons(!!f.objectClasses?.includes('person'));
+      setColour({ upper: f.upperColour || '', lower: f.lowerColour || '', body: f.bodyColour || '' });
+      setDirection(f.direction || '');
+      setMinDwell(f.minDwellSeconds !== undefined ? String(f.minDwellSeconds) : '');
+      setHasPlate(f.hasPlate === undefined ? '' : f.hasPlate ? 'yes' : 'no');
+      if (f.from || f.to) {
+        setFrom(f.from ? localInput(new Date(f.from)) : '');
+        setTo(f.to ? localInput(new Date(f.to)) : '');
+      } else lastDay();
+    } catch (err) {
+      setAsked(null);
+      setError(refusalText(err, 'Could not read the request'));
+    } finally {
+      setReading(false);
+    }
+  };
+
+  /** Removing an understood part clears that field of the form. */
+  const dropPart = (i: number) => {
+    if (!asked) return;
+    const part = asked.understood[i];
+    const clear: Record<string, () => void> = {
+      camera: () => {
+        const c = cameras.find((x) => x.name === part.label);
+        setCamerasSel((sel) => (c ? sel.filter((id) => id !== c.id) : sel));
+      },
+      zone: () => setZone(null),
+      class: () => setClasses([]),
+      upperColour: () => setColour((c) => ({ ...c, upper: '' })),
+      lowerColour: () => setColour((c) => ({ ...c, lower: '' })),
+      bodyColour: () => setColour((c) => ({ ...c, body: '' })),
+      direction: () => setDirection(''),
+      minDwellSeconds: () => setMinDwell(''),
+      hasPlate: () => setHasPlate(''),
+      time: lastDay,
+      not: () => setNotText(''),
+      and: () => setAndText(''),
+    };
+    clear[part.field]?.();
+    setAsked({ ...asked, understood: asked.understood.filter((_, j) => j !== i) });
+  };
+
+  const rewriteNote = (r: ParsedRequest) => {
+    if (r.rewrite.used) return `Read in English by the local model (${r.rewrite.model.name}): "${r.rewrite.english}"`;
+    if (!r.unread) return null;
+    const why = r.rewrite.reason === 'REWRITE_NOT_CONFIGURED' ? 'no local language model is set up' : `the local language model is not available${r.rewrite.reason ? ` (${r.rewrite.reason})` : ''}`;
+    return `Some words could not be read: ${why}. Check the fields below.`;
   };
 
   const readPhoto = (file: File | undefined) => {
@@ -365,6 +449,59 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 min-h-0">
         {view === 'search' && (
           <>
+            {plainLanguage && (
+              <div className="space-y-1.5 pb-2 border-b border-vms-border">
+                <span className={lbl}>Ask in plain words</span>
+                <div className="flex space-x-2">
+                  <input
+                    aria-label="Ask in plain words"
+                    placeholder='e.g. "man in a blue shirt at Gate 3 last night"'
+                    value={ask}
+                    onChange={(e) => setAsk(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && readRequest()}
+                    maxLength={512}
+                    className={sel}
+                  />
+                  <Button variant="secondary" size="sm" icon={MessageSquare} onClick={readRequest} disabled={reading || !ask.trim()}>
+                    {reading ? 'Reading' : 'Read'}
+                  </Button>
+                </div>
+                {asked && (
+                  <div aria-label="Understood" className="space-y-1">
+                    {asked.understood.length === 0 && !asked.text && <p className="text-xs text-vms-muted">Nothing in the request could be turned into a filter.</p>}
+                    <div className="flex flex-wrap gap-1">
+                      {asked.understood.map((u, i) => (
+                        <span key={`${u.field}-${u.label}`} className="inline-flex items-center px-2 py-0.5 rounded border border-sky-500/40 bg-sky-500/10 text-[11px] text-sky-200">
+                          {u.field === 'camera' ? `camera: ${u.label}` : u.field === 'zone' ? `zone: ${u.label}` : u.label}
+                          <button onClick={() => dropPart(i)} aria-label={`Remove ${u.label}`} className="ml-1 text-sky-300 hover:text-white">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                      {asked.text && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded border border-vms-border text-[11px] text-vms-text">
+                          looks like: {asked.text}
+                          <button
+                            onClick={() => {
+                              setText('');
+                              setAsked({ ...asked, text: '' });
+                            }}
+                            aria-label="Remove description"
+                            className="ml-1 text-vms-muted hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    {asked.unknownPlaces.length > 0 && <p className="text-xs text-amber-300">No camera or zone called {asked.unknownPlaces.map((p) => `"${p}"`).join(', ')}.</p>}
+                    {asked.text && !semanticSearch && <p className="text-xs text-vms-muted">The description needs semantic search; only the filters are used.</p>}
+                    {rewriteNote(asked) && <p className={`text-xs ${asked.rewrite.used ? 'text-vms-muted' : 'text-amber-300'}`}>{rewriteNote(asked)}</p>}
+                    <p className="text-[11px] text-vms-dim">The fields below are filled in; change anything, then search.</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               {semanticSearch && (
                 <>
@@ -398,8 +535,9 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
               </div>
               <div>
                 <span className={lbl}>Type</span>
-                <select aria-label="Object type" value={objectClass} onChange={(e) => setObjectClass(e.target.value)} className={sel}>
+                <select aria-label="Object type" value={classes.length > 1 ? 'several' : classes[0] || ''} onChange={(e) => setClasses(e.target.value && e.target.value !== 'several' ? [e.target.value] : [])} className={sel}>
                   <option value="">any</option>
+                  {classes.length > 1 && <option value="several">{classes.join(', ')}</option>}
                   {CLASSES.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -444,6 +582,17 @@ export const FindPanel: React.FC<Props> = ({ cameras, semanticSearch, canSealEvi
                 </select>
               </div>
             </div>
+
+            {zone && (
+              <div className="flex items-center justify-between text-xs">
+                <span>
+                  <span className={lbl}>Zone</span> {zone.name}
+                </span>
+                <button className="text-rose-300" onClick={() => setZone(null)} aria-label="Remove zone">
+                  remove
+                </button>
+              </div>
+            )}
 
             <div>
               <span className={lbl}>Cameras</span>

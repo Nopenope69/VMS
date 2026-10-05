@@ -44,6 +44,7 @@ export interface Candidate {
 
 export interface Filters {
   cameraIds?: string[];
+  zoneId?: string;
   from?: string;
   to?: string;
   objectClasses?: string[];
@@ -74,6 +75,7 @@ export async function allowedPurposes(): Promise<{ allowed: string[]; needRefere
 export async function listTracks(f: Filters, includePersons: boolean, p?: Purpose | null): Promise<TrackRecord[]> {
   const params: Record<string, string> = { limit: '50' };
   if (f.cameraIds?.length) params.cameraIds = f.cameraIds.join(',');
+  if (f.zoneId) params.zoneId = f.zoneId;
   if (f.from) params.from = f.from;
   if (f.to) params.to = f.to;
   if (f.objectClasses?.length) params.objectClasses = f.objectClasses.join(',');
@@ -93,6 +95,24 @@ export async function searchTracks(
 ): Promise<SearchResult[]> {
   const res = await api.post('/tracks/search', { ...q, filters: f, includePersons: includePersons || undefined, limit: 30 }, { headers: headers(includePersons ? p : null) });
   return res.data.results;
+}
+
+/** What POST /tracks/parse-query read in a plain-language request (NL_SEARCH). Nothing is searched by this call. */
+export interface ParsedRequest {
+  text: string;
+  and: string[];
+  not: string[];
+  filters: Filters;
+  understood: Array<{ field: string; label: string }>;
+  unknownPlaces: string[];
+  /** True when part of the request could not be read (non-English words the local model did not rewrite). */
+  unread: boolean;
+  rewrite: { used: true; english: string; model: { name: string; version: string } } | { used: false; reason?: string; message?: string };
+}
+
+export async function parseQuery(text: string): Promise<ParsedRequest> {
+  const res = await api.post('/tracks/parse-query', { text });
+  return res.data;
 }
 
 export async function candidates(trackId: string, method: 'appearance' | 'plate', p?: Purpose | null) {

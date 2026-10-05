@@ -35,7 +35,7 @@ export VIGILONE_LICENSE_TEST_PUBLIC_KEY="$(node -e 'process.stdout.write(JSON.pa
 
 echo "== backend on :$API_PORT"
 (cd "$ROOT/backend" && npm run -s build >"$WORK/backend-build.log" 2>&1) || { echo "backend build failed:"; tail -30 "$WORK/backend-build.log"; exit 1; }
-(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_SMART_SEARCH=true VIGILONE_FEATURE_INVESTIGATION_TIMING=true VIGILONE_FEATURE_TRACK_INDEX=true VIGILONE_FEATURE_SEMANTIC_SEARCH=true \
+(cd "$ROOT/backend" && NODE_ENV=test PORT="$API_PORT" VIGILONE_FEATURE_REDACTION=true VIGILONE_FEATURE_SMART_SEARCH=true VIGILONE_FEATURE_INVESTIGATION_TIMING=true VIGILONE_FEATURE_TRACK_INDEX=true VIGILONE_FEATURE_SEMANTIC_SEARCH=true VIGILONE_FEATURE_NL_SEARCH=true \
   JWT_SECRET="${JWT_SECRET:-vigilone_e2e_jwt_signing_key_32bytes_min!!}" \
   exec node dist/server.js > "$WORK/backend.log" 2>&1) &
 PIDS+=($!)

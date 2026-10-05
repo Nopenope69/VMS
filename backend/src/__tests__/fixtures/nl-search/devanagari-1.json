@@ -1,0 +1,28 @@
+{
+  "$comment": "Requests in Devanagari, with place names in Devanagari, to measure the query-rewrite model (the word list cannot read them). Written on 2026-10-05 before any run. Do not tune on it.",
+  "now": "2026-10-04T15:30",
+  "cameras": ["Gate 3", "Main Gate", "Lobby", "Parking B1", "Loading Dock", "Server Room Corridor", "Platform 1"],
+  "zones": ["Entry Lane", "Exit Lane", "Visitor Bay", "Fence Line"],
+  "cases": [
+    { "q": "लॉबी में नीली शर्ट वाला आदमी", "e": { "cameras": ["Lobby"], "objectClasses": ["person"], "upperColour": "blue" } },
+    { "q": "मुख्य गेट पर सफेद कार", "e": { "cameras": ["Main Gate"], "objectClasses": ["car"], "bodyColour": "white" } },
+    { "q": "लोडिंग डॉक पर लाल ट्रक", "e": { "cameras": ["Loading Dock"], "objectClasses": ["truck"], "bodyColour": "red" } },
+    { "q": "पार्किंग बी1 में काली बाइक", "e": { "cameras": ["Parking B1"], "objectClasses": ["motorcycle"], "bodyColour": "black" } },
+    { "q": "प्लेटफॉर्म 1 पर सूटकेस", "e": { "cameras": ["Platform 1"], "objectClasses": ["suitcase"] } },
+    { "q": "सर्वर रूम कॉरिडोर में कोई आदमी", "e": { "cameras": ["Server Room Corridor"], "objectClasses": ["person"] } },
+    { "q": "गेट 3 पर पीली बस आज सुबह", "e": { "cameras": ["Gate 3"], "objectClasses": ["bus"], "bodyColour": "yellow", "from": "2026-10-04T06:00", "to": "2026-10-04T12:00" } },
+    { "q": "लॉबी में लाल साड़ी वाली औरत", "e": { "cameras": ["Lobby"], "objectClasses": ["person"], "upperColour": "red" } },
+    { "q": "विज़िटर बे में बच्चे", "e": { "zone": "Visitor Bay", "objectClasses": ["person"] } },
+    { "q": "फेंस लाइन के पास कल रात कोई", "e": { "zone": "Fence Line", "from": "2026-10-03T18:00", "to": "2026-10-04T06:00" } },
+    { "q": "मुख्य गेट पर हरी जैकेट वाला लड़का", "e": { "cameras": ["Main Gate"], "objectClasses": ["person"], "upperColour": "green" } },
+    { "q": "पार्किंग बी1 में बिना नंबर प्लेट की गाड़ी", "e": { "cameras": ["Parking B1"], "objectClasses": ["car"], "hasPlate": false } },
+    { "q": "एंट्री लेन में सफेद ट्रक", "e": { "zone": "Entry Lane", "objectClasses": ["truck"], "bodyColour": "white" } },
+    { "q": "लॉबी में बैग वाली लड़की", "e": { "cameras": ["Lobby"], "objectClasses": ["person"] } },
+    { "q": "गेट 3 पर कल शाम नीली कार", "e": { "cameras": ["Gate 3"], "objectClasses": ["car"], "bodyColour": "blue", "from": "2026-10-03T00:00", "to": "2026-10-04T00:00" } },
+    { "q": "प्लेटफॉर्म 1 पर सफेद कुर्ता और काली पैंट वाला आदमी", "e": { "cameras": ["Platform 1"], "objectClasses": ["person"], "upperColour": "white", "lowerColour": "black" } },
+    { "q": "लोडिंग डॉक पर साइकिल", "e": { "cameras": ["Loading Dock"], "objectClasses": ["bicycle"] } },
+    { "q": "एग्ज़िट लेन में स्कूटी", "e": { "zone": "Exit Lane", "objectClasses": ["motorcycle"] } },
+    { "q": "मुख्य गेट पर पिछले एक घंटे में ट्रक", "e": { "cameras": ["Main Gate"], "objectClasses": ["truck"], "from": "2026-10-04T14:30", "to": "2026-10-04T15:30" } },
+    { "q": "लॉबी में गुलाबी दुपट्टा वाली महिला", "e": { "cameras": ["Lobby"], "objectClasses": ["person"], "upperColour": "pink" } }
+  ]
+}

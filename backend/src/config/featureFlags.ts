@@ -30,6 +30,7 @@ export enum FeatureFlag {
   VLM_VERIFICATION = 'VLM_VERIFICATION',
   TRACK_INDEX = 'TRACK_INDEX',
   INVESTIGATION_TIMING = 'INVESTIGATION_TIMING',
+  NL_SEARCH = 'NL_SEARCH',
 }
 
 export interface FeatureFlagDefinition {
@@ -174,6 +175,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: [],
     status:
       'An operator starts a stopwatch on the Investigation page when taking a question and stops it as answered or abandoned; searches, opened results, viewed cameras and exports are counted. Times come from the server clock. The site report gives median and 90th-percentile time to answer and the share within 60 s, with no per-operator breakdown. Tested on the real database; no pilot measurement exists yet.',
+  },
+  [FeatureFlag.NL_SEARCH]: {
+    flag: FeatureFlag.NL_SEARCH,
+    envVar: envVarFor(FeatureFlag.NL_SEARCH),
+    title: 'Plain-language search',
+    routePrefixes: ['/api/v1/tracks/parse-query'],
+    workers: [],
+    status:
+      'A request typed in plain English, Hinglish or Hindi ("white SUV at Gate 3 between 8 and 10 pm yesterday, not a taxi") is turned into the track search\'s filters by rules, with the site\'s own camera and zone names and its time zone; the operator sees and can change them before searching. Only a request the word list cannot read (Devanagari place names) is rewritten into English by a local Qwen3-4B model (QUERY_LLM_ADAPTER_URL, needs a human licence approval), and the rules still set every filter. Measured on labelled requests (docs/ai/nl-search-evaluation.md); not yet on real operators\' requests.',
   },
 });
 

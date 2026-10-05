@@ -105,6 +105,15 @@ jobs:
           fi
           scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-q4km && scripts/models/fetch-model.sh smolvlm2-2.2b-instruct-mmproj-q8
 
+      - name: Cache query-rewrite model file
+        uses: actions/cache@v4
+        with:
+          path: .cache/models/Qwen3-4B-Q4_K_M.gguf
+          key: query-rewrite-${{ hashFiles('scripts/models/pipelines/query-rewrite-qwen3-4b-v1.json') }}
+
+      - name: Fetch Qwen3-4B (SHA-256 verified; a candidate, tests and evaluation only)
+        run: scripts/models/fetch-model.sh qwen3-4b-q4km
+
       - name: Backend suite (JSON report; failures are recorded, not hidden)
         working-directory: ./backend
         run: npx jest --runInBand --forceExit --json --outputFile=/tmp/backend-jest.json || echo "BACKEND_FAILED=1" >> "$GITHUB_ENV"

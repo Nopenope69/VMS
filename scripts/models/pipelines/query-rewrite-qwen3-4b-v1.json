@@ -1,0 +1,36 @@
+{
+  "$comment": "Plain-language search: Qwen3-4B served by llama.cpp's llama-server, started by the ai-worker with the file it verified. It only rewrites a request the backend's word list cannot read (Devanagari place names, unusual wording) into plain English; the backend's rules then set every filter, and the operator sees them before searching. The SHA-256 of this file is the model identity stored with every rewrite, so the prompt, generation settings and llama.cpp build are part of it.",
+  "name": "qwen3-4b-query-rewrite",
+  "version": "1.0.0",
+  "tasks": ["query_rewrite"],
+  "components": [
+    {
+      "role": "query_rewrite_model",
+      "key": "qwen3-4b-q4km",
+      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
+    }
+  ],
+  "llamaCpp": {
+    "tag": "b11277",
+    "commit": "eae11d2217fe9225d1aaba48773b6cca45ae4de9",
+    "repository": "https://github.com/ggml-org/llama.cpp"
+  },
+  "generation": {
+    "temperature": 0,
+    "seed": 42,
+    "maxTokens": 120,
+    "contextSize": 4096,
+    "thinking": false
+  },
+  "prompt": {
+    "templateVersion": "query-rewrite.v1",
+    "system": "You translate a security operator's video search request into plain English. The request may be in Hindi, Hinglish or English. Keep every colour, piece of clothing, object, vehicle, number, time and day. Write place names exactly as given in this list when the request means one of them: {vocabulary}. Do not add anything the request does not say. Reply with JSON only: {\"english\": \"...\"}.",
+    "examples": [
+      { "request": "नीली कार गेट 3 पर कल रात", "english": "blue car at Gate 3 last night" },
+      { "request": "canteen ke paas laal shirt wala aadmi", "english": "man in a red shirt near the canteen" },
+      { "request": "पार्किंग में सफेद ट्रक आज सुबह", "english": "white truck in the parking this morning" }
+    ],
+    "englishMaxChars": 300,
+    "vocabularyMax": 64
+  }
+}

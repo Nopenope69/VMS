@@ -13,6 +13,10 @@
  *  - vlm / vlm-adapter-only: alarm second opinion (Phase 5 Wave C), SmolVLM2 via a llama-server child
  *    process the worker starts with verified files, default port 7014. 'vlm' registers the pipeline.
  *    Needs VLM_LLAMA_SERVER_BIN (llama-server built from the pinned llama.cpp commit); VLM_THREADS.
+ *  - query-rewrite / query-rewrite-adapter-only: plain-language search (Qwen3-4B via a llama-server child process
+ *    the worker starts with the verified file), default port 7015. It only rewrites a search request into English;
+ *    the backend's rules set the filters. 'query-rewrite' registers the pipeline. Needs QUERY_LLM_LLAMA_SERVER_BIN
+ *    (or VLM_LLAMA_SERVER_BIN), the same pinned llama.cpp build; QUERY_LLM_THREADS.
  *  - embedding / embedding-adapter-only: SigLIP 2 crop and text embeddings (Phase 5), default port
  *    7013. 'embedding' registers the pipeline manifest with the backend; the backend's crop embedder
  *    and text search call this adapter over HTTP. No cameras are read in this mode.
@@ -40,6 +44,8 @@
 import fs from 'fs';
 import { AiWorker } from './worker';
 import { createAdapterServer } from './adapter/httpServer';
+import { LoadedQueryRewritePipeline, loadQueryRewritePipeline } from './textllm/queryRewritePipeline';
+import { QueryRewriteAdapterCore } from './textllm/queryRewriteAdapterCore';
 import { findLockEntry, artifactPathFor, manifestFromLockEntry, readModelLock, ModelLockEntry } from './modelCatalog';
 import { ModelRefusalError } from './modelLoader';
 import { StreamSupervisor } from './streamSupervisor';
@@ -83,6 +89,7 @@ export async function boot(): Promise<BootResult> {
   if (mode === 'redaction' || mode === 'redaction-adapter-only') return bootRedaction(mode);
   if (mode === 'embedding' || mode === 'embedding-adapter-only') return bootEmbedding(mode);
   if (mode === 'vlm' || mode === 'vlm-adapter-only') return bootVlm(mode);
+  if (mode === 'query-rewrite' || mode === 'query-rewrite-adapter-only') return bootQueryRewrite(mode);
   const lock = readModelLock();
   const key = env('AI_MODEL_KEY', lock.default)!;
   const localEntry = findLockEntry(key, lock);
@@ -509,5 +516,67 @@ async function bootVlm(mode: 'vlm' | 'vlm-adapter-only'): Promise<BootResult> {
   });
   core.setModelId(registered.id);
   log('info', 'VLM pipeline registered', { modelId: registered.id });
+  return { worker: null as any, close, port: boundPort };
+}
+
+/**
+ * Plain-language search (query rewrite): Qwen3-4B behind POST /v1/rewrite-text. A candidate model: without a human
+ * approval for its SHA-256 the service refuses to start (LICENSE_REJECTED) and serves FAILED health.
+ */
+async function bootQueryRewrite(mode: 'query-rewrite' | 'query-rewrite-adapter-only'): Promise<BootResult> {
+  const adapterId = env('AI_ADAPTER_ID', 'vigilone-query-rewrite')!;
+  let loaded: LoadedQueryRewritePipeline | null = null;
+  let failure: string | undefined;
+  try {
+    loaded = await loadQueryRewritePipeline();
+    log('info', 'query rewrite pipeline loaded', { pipeline: `${loaded.definition.name}@${loaded.definition.version}`, sha256: loaded.definitionSha256, llamaServer: loaded.runtime.buildInfo });
+  } catch (e: any) {
+    failure = e.message;
+    log('error', 'query rewrite pipeline refused', { error: e.message });
+  }
+  const core = new QueryRewriteAdapterCore(loaded, { adapterId, adapterVersion: '1.0.0-nl-search', failure });
+  const server = createAdapterServer(core, { maxBodyBytes: 64 * 1024 });
+  const host = env('AI_ADAPTER_HOST', '127.0.0.1')!;
+  const port = Number(env('AI_ADAPTER_PORT', '7015'));
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  const boundPort = (server.address() as any).port as number;
+  log('info', 'ai-adapter.v1 (query_rewrite) listening', { host, port: boundPort, mode });
+  const close = async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await loaded?.close();
+  };
+  if (!loaded) {
+    if (env('AI_EXIT_ON_REFUSAL', 'true') === 'true') {
+      await close();
+      process.exit(EXIT_MODEL_REFUSED);
+    }
+    return { worker: null as any, close, port: boundPort };
+  }
+  if (mode === 'query-rewrite-adapter-only') return { worker: null as any, close, port: boundPort };
+
+  if (!env('INTERNAL_API_SECRET')) throw new Error('INTERNAL_API_SECRET is required in query-rewrite mode');
+  const api = new ApiClient({ baseUrl: env('BACKEND_INTERNAL_URL', 'http://127.0.0.1:4000/api/v1/internal')!, internalSecret: env('INTERNAL_API_SECRET')! });
+  const l = loaded;
+  const approvals = l.components.map((c) => c.approval!).filter(Boolean);
+  const registered = await api.registerPipelineManifest({
+    name: l.definition.name,
+    version: l.definition.version,
+    sha256: l.definitionSha256,
+    task: 'query_rewrite',
+    codeLicense: 'MIT AND Apache-2.0',
+    weightLicense: [...new Set(l.components.map((c) => c.entry.weightLicense))].join(' AND '),
+    weightsSource: l.components.map((c) => `${c.role}: ${c.entry.weightsSource}`).join('; '),
+    trainingData: {
+      source: l.components.map((c) => `${c.role}: ${c.entry.trainingData.source}`).join('; '),
+      license: 'HUMAN-APPROVED EXCEPTION',
+      provenance: approvals.map((a) => `${a.key} approved by ${a.approvedBy} on ${a.approvedAt}: ${a.reason}`).join('; '),
+      commercialUse: true,
+    },
+    runtimeConfig: { runtime: 'llama.cpp', runtimeVersion: `${l.definition.llamaCpp.tag} (${l.definition.llamaCpp.commit})`, executionProvider: 'cpu', inputWidth: 1, inputHeight: 1, colorSpace: 'RGB', modelFormat: 'GGUF' },
+    modelSignature: { decoder: 'query_rewrite_pipeline', components: l.definition.components, promptTemplate: l.definition.prompt.templateVersion },
+    classes: { '0': 'text' },
+  });
+  core.setModelId(registered.id);
+  log('info', 'query rewrite pipeline registered', { modelId: registered.id });
   return { worker: null as any, close, port: boundPort };
 }
