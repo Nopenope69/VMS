@@ -51,6 +51,12 @@ export interface SeekTargetResult {
   gapDurationMs?: number | null;
 }
 
+/** A segment is only compared with its file clock while the file is this fresh (a restore from backup resets mtimes). */
+const CLOCK_CHECK_FRESH_MS = 3600_000;
+/** Segment end per its file name versus the file's last write: more than this apart means a clock or time zone problem. */
+const CLOCK_TOLERANCE_MS = 5 * 60_000;
+const CLOCK_WARNING_TITLE = 'Segment time does not match the file clock';
+
 /**
  * A frame step needs the segment's frame rate (or a real keyframe to step to). When neither is known the step is
  * refused with this error instead of assuming 25 fps. HTTP 409, code FRAME_RATE_UNKNOWN.
@@ -175,6 +181,15 @@ export class RecordingCatalog {
     }
     const endTime = unusable ? startTime : input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
 
+    // A segment that has just finished should end about when its file was last written. A big difference means the
+    // recorder's clock or time zone is wrong. It is reported, never corrected: nothing may rewrite the evidence clock.
+    if (!unusable && fileStat.exists && Date.now() - fileStat.mtime.getTime() < CLOCK_CHECK_FRESH_MS) {
+      const driftMs = fileStat.mtime.getTime() - endTime.getTime();
+      if (Math.abs(driftMs) > CLOCK_TOLERANCE_MS) {
+        await this.noteClockMismatch(input.cameraId, input.filePath, endTime, fileStat.mtime, driftMs);
+      }
+    }
+
     // Compute presentation timestamps
     const startPts = input.startPts ?? 0n;
     const ptsDelta = SegmentIndexer.calculatePtsDelta(safeDurationMs, timebaseNum, timebaseDen);
@@ -213,6 +228,35 @@ export class RecordingCatalog {
       storageVolumeId: input.storageVolumeId,
       storageEpochId: input.storageEpochId,
     });
+  }
+
+  /** One warning per camera per hour, however many segments are off. Never throws: indexing must not fail on a report. */
+  private async noteClockMismatch(cameraId: string, filePath: string, endTime: Date, mtime: Date, driftMs: number): Promise<void> {
+    const minutes = Math.round(Math.abs(driftMs) / 60000);
+    console.warn(`[RecordingCatalog] ${filePath}: name says the segment ended ${endTime.toISOString()}, file last written ${mtime.toISOString()} (${minutes} min apart)`);
+    try {
+      if (typeof (this.prisma as any).event?.findFirst !== 'function') return;
+      const recent = await this.prisma.event.findFirst({
+        where: { cameraId, type: 'RECORDING_FAILURE', title: CLOCK_WARNING_TITLE, firstDetectedAt: { gte: new Date(Date.now() - 3600_000) } },
+        select: { id: true },
+      });
+      if (recent) return;
+      await this.prisma.event.create({
+        data: {
+          cameraId,
+          type: 'RECORDING_FAILURE',
+          severity: 'WARNING',
+          title: CLOCK_WARNING_TITLE,
+          description:
+            `The file name says this segment ended at ${endTime.toISOString()} (read as UTC) but the file was last written at ${mtime.toISOString()}, ` +
+            `${minutes} minutes ${driftMs > 0 ? 'later' : 'earlier'}. The recorder's time zone or clock may be wrong: check that the MediaMTX container runs ` +
+            `with TZ=UTC and that the appliance clock is correct. Recorded times have not been changed. ${filePath}`,
+          metadata: { filePath, nameEndUtc: endTime.toISOString(), fileWrittenUtc: mtime.toISOString(), driftMs } as any,
+        },
+      });
+    } catch (err: any) {
+      console.error('[RecordingCatalog] could not raise the clock warning:', err.message);
+    }
   }
 
   /**

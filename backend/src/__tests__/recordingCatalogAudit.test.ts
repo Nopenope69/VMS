@@ -382,3 +382,49 @@ describe('The segment-complete worker registers through the catalog (the product
     expect(await prisma.recordingSegment.count({ where: { cameraId, filePath: f } })).toBe(0);
   });
 });
+
+describe('F6: a segment whose file-name time disagrees with the file clock is reported, never corrected', () => {
+  const warnings = () => prisma.event.findMany({ where: { cameraId, type: 'RECORDING_FAILURE', title: 'Segment time does not match the file clock' } });
+  const stamp = (ms: number) => new Date(ms).toISOString().replace('T', '_').replace(/:/g, '-').replace(/\.(\d{3})Z$/, '-$1000');
+  const justFinished = (startMs: number, name = stamp(startMs)) => {
+    const f = path.join(camDir, `${name}.mp4`);
+    fs.writeFileSync(f, crypto.randomBytes(2048)); // written now, as MediaMTX finishes a segment
+    return f;
+  };
+  const NOW = () => Date.now() - 600_000; // a segment that started 10 minutes ago and has just ended
+  afterEach(async () => {
+    await prisma.event.deleteMany({ where: { cameraId } });
+  });
+
+  it('a name five and a half hours off (a +05:30 zone read as UTC) raises one warning and keeps the recorded time', async () => {
+    const shifted = NOW() + 5.5 * 3600_000; // the name carries local time, five and a half hours ahead
+    const f = justFinished(shifted);
+    const catalog = new RecordingCatalog(prisma, undefined, new CountingProbe({ ...GOOD_PROBE, durationMs: 600_000 }));
+    const seg = await catalog.registerSegment({ tenantId, cameraId, filePath: f });
+    expect(seg.startTime.getTime()).toBe(shifted); // not corrected: nothing may rewrite the evidence clock silently
+    const ev = await warnings();
+    expect(ev).toHaveLength(1);
+    expect(ev[0].severity).toBe('WARNING');
+    expect(ev[0].description).toMatch(/TZ=UTC/);
+    expect(ev[0].description).toMatch(/not been changed/);
+  });
+
+  it('says it once an hour per camera, however many segments are shifted', async () => {
+    const catalog = new RecordingCatalog(prisma, undefined, new CountingProbe({ ...GOOD_PROBE, durationMs: 600_000 }));
+    for (let i = 0; i < 3; i++) await catalog.registerSegment({ tenantId, cameraId, filePath: justFinished(NOW() + 5.5 * 3600_000 + i * 1000, stamp(NOW() + 5.5 * 3600_000 + i * 1000)) });
+    expect(await warnings()).toHaveLength(1);
+  });
+
+  it('says nothing for a segment whose name agrees with the file clock', async () => {
+    const catalog = new RecordingCatalog(prisma, undefined, new CountingProbe({ ...GOOD_PROBE, durationMs: 600_000 }));
+    await catalog.registerSegment({ tenantId, cameraId, filePath: justFinished(NOW()) });
+    expect(await warnings()).toHaveLength(0);
+  });
+
+  it('does not judge an old file: a restore from backup resets modification times', async () => {
+    const f = justFinished(Date.parse('2026-01-01T00:00:00Z'));
+    ageFile(f, 3 * 86400);
+    await new RecordingCatalog(prisma, undefined, new CountingProbe({ ...GOOD_PROBE, durationMs: 600_000 })).registerSegment({ tenantId, cameraId, filePath: f });
+    expect(await warnings()).toHaveLength(0);
+  });
+});

@@ -445,8 +445,10 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   Fix 3 is done: frame steps land on the next real frame read from the file (exact on variable frame rate, crossing
   segment boundaries, `precision` and `clamped` in the answer); the segment-complete hook retries for about two minutes;
   and a scheduled integrity check re-verifies footage while running (`docs/operations/RECORDING_INTEGRITY.md`, settings
-  `INTEGRITY_*`; migration 20261015000000). Still open: F6 (time zone and clock-bound statement), and stepping every camera
-  of a synchronized session onto its own frame (only the reference camera is frame-exact).
+  `INTEGRITY_*`; migration 20261015000000). Fix 4 is done (F6): the recording container is pinned to `TZ=UTC`, a segment whose file name and file clock
+  disagree by more than five minutes raises a warning (the time is never altered), and `EVIDENCE_VERIFICATION.md` states what
+  the recorded times mean and their limits. Still open: stepping every camera of a synchronized session onto its own frame
+  (only the reference camera is frame-exact), and a measured stream delay from RTCP sender reports.
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.

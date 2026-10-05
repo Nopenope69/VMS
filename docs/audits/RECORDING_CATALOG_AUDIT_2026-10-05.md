@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec) and Fix 3 (F5, F7, F12) are done**; F6 and F8 are open, in the order at the end. Status of each finding is in the table below.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec), Fix 3 (F5, F7, F12) and Fix 4 (F6) are done**; only F8 (known, no change) and multi-camera frame exactness remain. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -20,7 +20,7 @@ what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a 
 | F3 file still being written indexed as FINALIZED | **Fixed (Fix 1)** |
 | F4 unreadable file indexed as FINALIZED with invented details | **Fixed (Fix 1)** |
 | F5 completion notice | **Fixed (Fix 3)**: the hook retries for about two minutes; the worker registers through the catalog (Fix 2) |
-| F6 time assumptions | Open |
+| F6 time assumptions | **Fixed (Fix 4)**: the recorder is pinned to UTC, a mismatch is reported, the limits are written down |
 | F7 integrity only at boot | **Fixed (Fix 3)**: periodic presence/size and budgeted hash checks |
 | F8 orphan after crash during retention | Known, no change |
 | F9 coverage, seek and listing ignored segment status | **Found and fixed with Fix 1** |
@@ -79,7 +79,7 @@ job fails instead of indexing). A lost notice (backend restarting) is still caug
 mattered. Left over: the worker is a third indexing implementation with its own rules, and it still falls back to 1920x1080,
 25 fps and h264 when the probe omits them. Folding it into `registerSegment` is the clean follow-up.
 
-### F6. Time rests on two assumptions that are not stated anywhere a test can hold (no test)
+### F6. Time rests on two assumptions that are not stated anywhere a test can hold (fixed, Fix 4)
 1. The file name's time is MediaMTX's own wall clock, parsed as UTC. The compose file does not set a time zone for the
    MediaMTX container; the official image defaults to UTC, but a custom image or a changed default would shift every
    segment by the zone offset with no error. Cheap guard: set `TZ=UTC` on the container and log a warning at start if a
@@ -180,13 +180,26 @@ the next KEYFRAME (a whole GOP), not a frame. See Fix 3.
   CRITICAL alarm. It never deletes, moves or repairs a file. A first version let the pinned evidence use the whole budget every
   run and starve everything else; a test caught it and held evidence now goes first only when due.
 
+## Fix 4 (done): the time assumptions are pinned, checked and written down
+
+* MediaMTX formats a segment's file name in the local time of its own process (read from its source,
+  `internal/recordstore/path.go`: `Path.Encode` formats `p.Start` in its own zone). The catalog reads the name as UTC. The
+  compose file now sets `TZ=UTC` on the recording container, and a test fails if it is removed or the production override changes it.
+* A segment that has just finished (file written in the last hour) whose name-derived end differs from the file's last write by
+  more than five minutes raises one `RECORDING_FAILURE` warning per camera per hour, `Segment time does not match the file
+  clock`, telling the operator to check `TZ=UTC` and the appliance clock. The recorded time is **not** changed. Old files are not
+  judged (a restore from backup resets modification times).
+* The limits are in `docs/operations/EVIDENCE_VERIFICATION.md`, section "What the times in a recording mean": the time is the
+  appliance's clock, not the camera's; inside a segment the spacing is the camera's; between cameras alignment is only as good
+  as the appliance clock plus each stream's delay (not measured), so no sub-frame claim across cameras.
+* Not done: using the camera's RTCP sender-report time to measure the stream delay (the idea in MediaMTX's `ntpestimator`). That
+  is what would let a site state a measured bound.
+
 ## Recommended fixes, in order
 
 Each is its own small change with its own tests.
 
-1. ~~F4, F3~~ done (Fix 1). 2. ~~F2~~ and 3. ~~F1~~ done (Fix 2). 5. ~~F5, F7~~ and 6. ~~F12~~ done (Fix 3).
-4. **F6:** set `TZ=UTC` on the MediaMTX container and add the start-time versus file-time warning; write the clock-bound
-   statement into `docs/operations/EVIDENCE_VERIFICATION.md`.
+1. ~~F4, F3~~ done (Fix 1). 2. ~~F2~~ and 3. ~~F1~~ done (Fix 2). 5. ~~F5, F7~~ and 6. ~~F12~~ done (Fix 3). 4. ~~F6~~ done (Fix 4).
 7. **Per-camera frame exactness for multi-camera stepping** if the product needs every camera on its own frame at once.
 
 ## Not covered
