@@ -6,6 +6,19 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 31 (2026-10-05): open-model research (pose, falls, climbing, fire, weapons, the rest)
+
+Branch `claude/amazing-hypatia-hkgolw`, from `master` after #44 and #45. Documents only: `docs/strategy/model-research-2026-10-05/`
+(a summary and four reports with licence files, model cards, dataset terms and CPU timings measured on 4 vCPU with
+onnxruntime). Some sites were blocked from the research sessions; those facts are marked UNVERIFIED in the reports.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Pose model choice | DONE (research) | RTMPose-s 6.2 ms per person, RTMPose-m 15.5 ms, RTMO-s 77 ms per frame [measured]. Owner chose the ready-made RTMPose (body7) weights and accepts their training-data risk. |
+| Person down, fence climbing | NOT_STARTED | Planned in PROJECT_STATE section 9; next session. |
+| Fire/smoke, weapons, events, other models | DONE (research) | Build plans and owner decisions in the summary. Nothing built. |
+| "Generated Test Status" red on master | DONE_VERIFIED locally | Red since #44: the status job ran the worker suites in parallel, so the SmolVLM2 and new Qwen3-4B golden tests started two llama-servers at once on a 4-core runner and `goldenVlm` failed 5 tests. Reproduced here: in parallel 4 failed of 17; with `--runInBand` (as `ci.yml` already runs them) 17/17. `status.yml` now runs the worker suites in band. |
+
 ## Session 30 (2026-10-05): media-provider status distinction
 
 `IMediaProvider.getStreamStatus` now returns an explicit observed, `NOT_FOUND`, or
