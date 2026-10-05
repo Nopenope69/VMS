@@ -258,6 +258,7 @@ router.post('/sync/sessions/:sessionId/step', async (req: Request, res: Response
 
     return res.json({ ...stepResult, cameras: serializedCameras });
   } catch (err: any) {
+    if (err?.code === 'FRAME_RATE_UNKNOWN') return res.status(409).json({ error: err.message, code: err.code });
     return res.status(500).json({ error: err.message });
   }
 });

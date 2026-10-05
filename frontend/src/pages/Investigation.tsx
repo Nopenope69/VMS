@@ -546,7 +546,7 @@ export const Investigation: React.FC = () => {
                   {/* Telemetry Footer */}
                   <div className="p-1.5 bg-slate-950/85 border-t border-vms-border font-mono text-[10px] text-vms-muted flex items-center justify-between z-10 pointer-events-none">
                     <span className="text-vms-dim">
-                      {state?.codec?.toUpperCase() || 'H.264'} • {state?.fps || 25} FPS
+                      {state?.codec ? state.codec.toUpperCase() : 'codec unknown'} • {state?.fps ? `${state.fps} FPS` : 'frame rate unknown'}
                     </span>
                     <span className="text-sky-400 font-mono font-semibold">
                       {masterUtc.toISOString().slice(11, 23)} UTC

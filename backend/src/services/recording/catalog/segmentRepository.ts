@@ -28,6 +28,8 @@ export interface UpsertSegmentInput {
   timebaseDenominator?: number;
   keyframeIndexJson?: any;
   storageLocation?: string;
+  storageVolumeId?: string;
+  storageEpochId?: string;
 }
 
 export class SegmentRepository {
@@ -67,6 +69,8 @@ export class SegmentRepository {
         timebaseDenominator: input.timebaseDenominator ?? 90000,
         keyframeIndexJson: input.keyframeIndexJson,
         storageLocation: input.storageLocation || 'LOCAL',
+        storageVolumeId: input.storageVolumeId,
+        storageEpochId: input.storageEpochId,
       },
       update: {
         endTime: input.endTime,
@@ -76,6 +80,8 @@ export class SegmentRepository {
         endPts: input.endPts ?? undefined,
         keyframeIndexJson: input.keyframeIndexJson ?? undefined,
         status: input.status ?? undefined,
+        storageVolumeId: input.storageVolumeId,
+        storageEpochId: input.storageEpochId,
         // A file that could not be read earlier and can now (or the reverse) takes the new picture details and reason.
         codec: input.codec ?? null,
         width: input.width ?? null,

@@ -439,7 +439,11 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   four features: cited incident summary, describe-what-to-watch rules, footage integrity. The RecordingCatalog audit
   (`docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`) found defects pinned by tests. Fix 1 is done: the crawler skips files
   still being written, records unreadable files as CORRUPTED with nothing invented, and coverage, seek and listing now count
-  only FINALIZED segments. Still open: invented keyframe index (F1) and the crawler re-reading every file (F2).
+  only FINALIZED segments. Fix 2 is done: the stored keyframe index is read from the file (not guessed), the crawl no longer
+  re-reads known files, the production segment-complete worker registers through the catalog (it had stored no index and
+  `endPts = 0`), and an unknown frame rate or codec stays unknown (a frame step is refused with 409 `FRAME_RATE_UNKNOWN`).
+  Still open: the completion notice, scheduled integrity checks (F7), and frame-exact stepping (F12: today's step is
+  constant-frame-rate arithmetic; it needs a per-frame timestamp index).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.

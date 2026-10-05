@@ -22,16 +22,18 @@ export interface RegisterSegmentInput {
   durationMs?: number;
   sizeBytes?: bigint;
   sha256Hash?: string;
-  codec?: string;
-  width?: number;
-  height?: number;
-  fps?: number;
+  codec?: string | null;
+  width?: number | null;
+  height?: number | null;
+  fps?: number | null;
   startPts?: bigint;
   endPts?: bigint;
   timebaseNumerator?: number;
   timebaseDenominator?: number;
   keyframeIndexJson?: any;
   storageLocation?: string;
+  storageVolumeId?: string;
+  storageEpochId?: string;
 }
 
 export interface SeekTargetResult {
@@ -42,9 +44,22 @@ export interface SeekTargetResult {
   currentPts?: bigint;
   nearestKeyframePts?: bigint;
   offsetMs?: number;
-  codec?: string;
-  fps?: number;
+  /** null = the segment has no recorded value; nothing is assumed (no h264, no 25 fps). */
+  codec?: string | null;
+  fps?: number | null;
   gapDurationMs?: number | null;
+}
+
+/**
+ * A frame step needs the segment's frame rate (or a real keyframe to step to). When neither is known the step is
+ * refused with this error instead of assuming 25 fps. HTTP 409, code FRAME_RATE_UNKNOWN.
+ */
+export class FrameStepUnavailableError extends Error {
+  readonly code = 'FRAME_RATE_UNKNOWN';
+  readonly statusCode = 409;
+  constructor(detail: string) {
+    super(`FRAME_RATE_UNKNOWN: ${detail}`);
+  }
 }
 
 export interface StepFrameResult {
@@ -92,10 +107,10 @@ export class RecordingCatalog {
     const sizeBytes = input.sizeBytes ?? BigInt(fileStat.size);
 
     let durationMs = input.durationMs;
-    let codec = input.codec;
-    let width = input.width;
-    let height = input.height;
-    let fps = input.fps;
+    let codec: string | null | undefined = input.codec;
+    let width: number | null | undefined = input.width;
+    let height: number | null | undefined = input.height;
+    let fps: number | null | undefined = input.fps;
     let timebaseNum = input.timebaseNumerator ?? 1;
     let timebaseDen = input.timebaseDenominator ?? 90000;
     let keyframeIndex = input.keyframeIndexJson;
@@ -126,6 +141,12 @@ export class RecordingCatalog {
     if (!fileStat.exists) unusable = { status: SegmentStatus.FILE_MISSING, reason: 'FILE_NOT_FOUND_AT_REGISTRATION' };
     else if (fileStat.size === 0) unusable = { status: SegmentStatus.CORRUPTED, reason: 'ZERO_BYTE' };
     else if (probeFailed && !input.durationMs) unusable = { status: SegmentStatus.CORRUPTED, reason: 'UNREADABLE_MEDIA' };
+
+    // The real keyframes, read once per file. No index (null) when they cannot be read; seek then uses the
+    // segment start and says nothing finer.
+    if (!unusable && !keyframeIndex && this.mediaProbeAdapter.probeKeyframes) {
+      keyframeIndex = (await this.mediaProbeAdapter.probeKeyframes(input.filePath)) ?? undefined;
+    }
 
     const safeDurationMs = unusable ? 0 : durationMs ?? 0;
     let startTime = input.startTime;
@@ -173,6 +194,8 @@ export class RecordingCatalog {
       timebaseDenominator: timebaseDen,
       keyframeIndexJson: unusable ? null : keyframeIndex || null,
       storageLocation: input.storageLocation || 'LOCAL',
+      storageVolumeId: input.storageVolumeId,
+      storageEpochId: input.storageEpochId,
     });
   }
 
@@ -213,8 +236,8 @@ export class RecordingCatalog {
         currentPts: targetPts,
         nearestKeyframePts,
         offsetMs: elapsedMs,
-        codec: containing.codec || 'h264',
-        fps: containing.fps || 25.0,
+        codec: containing.codec ?? null,
+        fps: containing.fps ?? null,
         gapDurationMs: null,
       };
     }
@@ -234,8 +257,8 @@ export class RecordingCatalog {
         currentPts: nearest.startPts,
         nearestKeyframePts: nearest.startPts,
         offsetMs: 0,
-        codec: nearest.codec || 'h264',
-        fps: nearest.fps || 25.0,
+        codec: nearest.codec ?? null,
+        fps: nearest.fps ?? null,
         gapDurationMs,
       };
     }
@@ -261,11 +284,13 @@ export class RecordingCatalog {
     }
 
     const keyframes = segment.keyframeIndexJson as any[] | undefined;
-    const fallbackDelta = SegmentIndexer.calculateFallbackFrameDelta(
-      segment.fps || 25.0,
-      segment.timebaseNumerator,
-      segment.timebaseDenominator
-    );
+    const fpsKnown = segment.fps != null && segment.fps > 0;
+    if (!fpsKnown && !(keyframes && keyframes.length > 1)) {
+      throw new FrameStepUnavailableError(`segment ${segment.id} has no recorded frame rate and no keyframe index`);
+    }
+    const fallbackDelta = fpsKnown
+      ? SegmentIndexer.calculateFallbackFrameDelta(segment.fps as number, segment.timebaseNumerator, segment.timebaseDenominator)
+      : 0n;
 
     const step = SegmentIndexer.calculateAdjacentFramePts(
       keyframes,
@@ -400,7 +425,29 @@ export class RecordingCatalog {
   }
 
   /**
-   * Low-frequency self-healing crawler: reconciles disk files into catalog
+   * Rows already in the catalog for these files, loaded in batches (one query per few thousand files, not per file).
+   */
+  private async knownSegments(files: string[]): Promise<Map<string, { status: SegmentStatus; sizeBytes: bigint }>> {
+    const known = new Map<string, { status: SegmentStatus; sizeBytes: bigint }>();
+    if (typeof (this.prisma as any).recordingSegment?.findMany !== 'function') return known;
+    const CHUNK = 2000;
+    for (let i = 0; i < files.length; i += CHUNK) {
+      const rows = await this.prisma.recordingSegment.findMany({
+        where: { filePath: { in: files.slice(i, i + CHUNK) } },
+        select: { filePath: true, status: true, sizeBytes: true },
+      });
+      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes });
+    }
+    return known;
+  }
+
+  /**
+   * Low-frequency self-healing crawler: reconciles disk files into catalog.
+   *
+   * It is cheap on a healthy disk (audit finding F2): a file whose row is already FINALIZED with the same size is
+   * not probed or hashed again. Only new files, files that changed size, and files not yet usable (corrupt,
+   * missing) are read, so the crawl does not compete with recording for disk time. Re-checking the content hash of
+   * old files is a separate, slower job and is not done here.
    */
   async reconcileFilesystem(): Promise<number> {
     if (this.isReconciling) return 0;
@@ -410,6 +457,8 @@ export class RecordingCatalog {
     try {
       const recordingsDir = setting('RECORDINGS_DIR');
       const files = await this.storageAdapter.scanDirectory(recordingsDir);
+      const known = await this.knownSegments(files);
+      const cameraByDir = new Map<string, { id: string; tenantId: string } | null>();
 
       for (const filePath of files) {
         // e.g. .../{cameraId}/2026-09-04_01-30-00-123456.mp4
@@ -417,10 +466,20 @@ export class RecordingCatalog {
         const fileName = parts[parts.length - 1];
         const candidateCamId = parts[parts.length - 2];
 
-        const camera = await this.prisma.camera.findFirst({
-          where: { OR: [{ id: candidateCamId }, { streamPath: candidateCamId }] },
-          select: { id: true, tenantId: true },
-        });
+        const existing = known.get(filePath);
+        if (existing?.status === SegmentStatus.FINALIZED) {
+          const st = await this.storageAdapter.stat(filePath);
+          if (st.exists && BigInt(st.size) === existing.sizeBytes) continue;
+        }
+
+        let camera = cameraByDir.get(candidateCamId);
+        if (camera === undefined) {
+          camera = await this.prisma.camera.findFirst({
+            where: { OR: [{ id: candidateCamId }, { streamPath: candidateCamId }] },
+            select: { id: true, tenantId: true },
+          });
+          cameraByDir.set(candidateCamId, camera);
+        }
 
         if (!camera) {
           // Admission Control (C-018): unmappable files must be isolated to .quarantine and never indexed.

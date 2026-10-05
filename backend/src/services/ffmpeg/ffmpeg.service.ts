@@ -5,11 +5,19 @@ import path from 'path';
 
 export interface VideoProbeResult {
   durationSeconds: number;
-  width: number;
-  height: number;
-  videoCodec: string;
-  fps: number;
+  /** null = ffprobe did not report it. Nothing is assumed (no 25 fps, 1280x720 or h264). */
+  width: number | null;
+  height: number | null;
+  videoCodec: string | null;
+  fps: number | null;
   sizeBytes: number;
+}
+
+/** One real keyframe: its presentation time in the 90 kHz clock, counted from the file's first presented frame. */
+export interface KeyframeProbeResult {
+  timebaseNumerator: 1;
+  timebaseDenominator: 90000;
+  keyframePts90k: bigint[];
 }
 
 export class FFmpegService {
@@ -82,8 +90,8 @@ export class FFmpegService {
             parseFloat(videoStream.duration) ||
             0;
 
-          // Parse framerate (e.g. "25/1" or "30000/1001")
-          let fps = 25.0;
+          // Parse framerate (e.g. "25/1" or "30000/1001"); unknown stays null
+          let fps: number | null = null;
           if (videoStream.r_frame_rate) {
             const [num, den] = videoStream.r_frame_rate.split('/').map(Number);
             if (num && den && den !== 0) {
@@ -93,12 +101,58 @@ export class FFmpegService {
 
           resolve({
             durationSeconds: duration,
-            width: videoStream.width || 1280,
-            height: videoStream.height || 720,
-            videoCodec: videoStream.codec_name || 'h264',
+            width: videoStream.width || null,
+            height: videoStream.height || null,
+            videoCodec: videoStream.codec_name || null,
             fps,
             sizeBytes: parseInt(parsed.format?.size || '0', 10),
           });
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  /**
+   * Reads the keyframes that are really in the file (packets flagged K) from the container index, without decoding.
+   * Times are relative to the first presented frame and in the 90 kHz clock the catalog uses. Returns null when the
+   * file cannot be read or has no timestamps: callers must then store "no index", never a guess.
+   */
+  static probeKeyframes(filePath: string, timeoutMs = 120_000): Promise<KeyframeProbeResult | null> {
+    if (!fs.existsSync(filePath)) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const proc = spawn('ffprobe', [
+        '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=time_base:packet=pts,flags', '-of', 'json', filePath,
+      ]);
+      const chunks: Buffer[] = [];
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        resolve(null);
+      }, timeoutMs);
+      proc.stdout.on('data', (d) => chunks.push(d));
+      proc.on('error', () => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code !== 0) return resolve(null);
+        try {
+          const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          const [num, den] = String(parsed.streams?.[0]?.time_base ?? '').split('/').map(Number);
+          if (!num || !den) return resolve(null);
+          const packets: Array<{ pts: number; key: boolean }> = (parsed.packets || [])
+            .filter((p: any) => p.pts !== undefined && p.pts !== 'N/A' && Number.isFinite(Number(p.pts)))
+            .map((p: any) => ({ pts: Number(p.pts), key: String(p.flags || '').includes('K') }));
+          if (packets.length === 0) return resolve(null);
+          const first = Math.min(...packets.map((p) => p.pts));
+          const keyframePts90k = packets
+            .filter((p) => p.key)
+            .map((p) => BigInt(Math.round(((p.pts - first) * 90000 * num) / den)))
+            .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+          if (keyframePts90k.length === 0) return resolve(null);
+          resolve({ timebaseNumerator: 1, timebaseDenominator: 90000, keyframePts90k });
         } catch {
           resolve(null);
         }

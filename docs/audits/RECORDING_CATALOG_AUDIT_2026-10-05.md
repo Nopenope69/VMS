@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, and two related findings F9, F10) is now done**; the other fixes are separate pieces of work, in the order at the end. Status of each finding is in the table below.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10) and Fix 2 (F1, F2, F11, and the assumed frame rate and codec) are done**; the rest are separate pieces of work, in the order at the end. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -15,16 +15,19 @@ what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a 
 
 | Finding | State |
 | --- | --- |
-| F1 invented keyframe index | Open (test `it.failing`) |
-| F2 crawl re-reads every file | Open (test `it.failing`) |
+| F1 invented keyframe index | **Fixed (Fix 2)** |
+| F2 crawl re-reads every file | **Fixed (Fix 2)** |
 | F3 file still being written indexed as FINALIZED | **Fixed (Fix 1)** |
 | F4 unreadable file indexed as FINALIZED with invented details | **Fixed (Fix 1)** |
-| F5 completion notice | Corrected below; open as a small item |
+| F5 completion notice | Corrected below; the worker now registers through the catalog (Fix 2); the notice itself is still one curl |
 | F6 time assumptions | Open |
 | F7 integrity only at boot | Open |
 | F8 orphan after crash during retention | Known, no change |
 | F9 coverage, seek and listing ignored segment status | **Found and fixed with Fix 1** |
 | F10 the crawler pulled quarantined files out of `.quarantine` | **Found and fixed with Fix 1** |
+| F11 the production worker stored no keyframe index and `endPts = 0` | **Found and fixed with Fix 2** |
+| Seek and frame step reported 25 fps and h264 for an unknown value | **Fixed (Fix 2)** |
+| Frame step is constant-frame-rate arithmetic, and with an index it jumps a whole GOP | Open (see F12) |
 
 ## What is already right
 
@@ -37,7 +40,7 @@ what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a 
 
 ## Findings
 
-### F1. The keyframe index is invented, not read from the file (test)
+### F1. The keyframe index is invented, not read from the file (fixed, Fix 2)
 `FfprobeMediaAdapter` builds the index as "one keyframe every 2 seconds" from the clip's duration
 (`mediaProbeAdapter.ts`, comment: "synthetic keyframe entries for standard GOP"). Real cameras use other GOP lengths and
 change them (smart-codec modes). Test: a clip with a keyframe every second has 6 keyframes; the catalog stores 3.
@@ -47,7 +50,7 @@ measured; a player falls back to the real keyframe before the target, so the lik
 and wrong frame-step distances, not a failed seek. Treat as a correctness risk for forensic claims until measured.
 Moonfire stores the real per-frame index (about 2 bytes a frame).
 
-### F2. The 5-minute crawl re-reads every known file (test)
+### F2. The 5-minute crawl re-reads every known file (fixed, Fix 2)
 `reconcileFilesystem` calls `registerSegment` for every file it finds. With no duration, codec or hash supplied, each call
 runs `ffprobe` and hashes the whole file again. Test: two crawls over 3 unchanged files make 6 probe calls (3 expected).
 At 32 cameras with 10-minute segments, 30 days of retention is about 138,000 files; each crawl would re-hash all of them
@@ -126,20 +129,46 @@ the old walk: the quarantined file was gone from its place. Boot recovery alread
 * Evidence of the change: the audit tests F3 and F4 are plain tests now, with seven more in the same file; the full backend
   suite passes.
 
+### F11. The production path stored no keyframe index and `endPts = 0` (found while fixing F1; fixed)
+`SegmentJobWorkerService` (the segment-complete job, the main way footage is indexed) wrote its own row: no keyframe index
+and no PTS bounds, so every such segment had `endPts = 0`. Frame stepping clamps to `endPts`, so a forward step on a segment
+the worker indexed could not move. The worker also fell back to 1920x1080, 25 fps and h264 when the probe omitted them. It now
+registers through `RecordingCatalog.registerSegment`, keeping its own rule that an unreadable file fails the job so the queue
+retries. Proven by a real-database test, and by running that test against the old worker (`endPts` was 0).
+
+### F12. Frame stepping is not frame-exact (open, not changed)
+`stepSessionFrame` steps by `round(1000 / fps)` ms, a constant-frame-rate assumption, although the route's comment says "exact
+PTS delta". A camera with a variable frame rate steps onto the wrong frame. And `stepToAdjacentFrame`, when a keyframe
+index exists, moves to the next KEYFRAME, which is a jump of a whole GOP, not a frame. Exact stepping needs a per-frame
+timestamp index (Moonfire stores one, about 2 bytes a frame), which the catalog does not hold. Until then the forensic claim
+should read "constant-frame-rate stepping", and the step is refused when the frame rate is unknown (done in Fix 2).
+
+## Fix 2 (done): real keyframes, a cheap crawl, no assumed frame rate or codec
+
+* **F1.** `FFmpegService.probeKeyframes` reads the packets flagged as keyframes from the container (no decoding) and the
+  catalog stores them in the 90 kHz clock, counted from the first presented frame. If they cannot be read, no index is stored
+  (null), never a guessed one. Tests compare against ffprobe's own keyframe list within 1 ms for two different GOP lengths.
+  Cost, measured on a 10-minute 1080p, 4 Mbit/s fMP4 (300 MB, 300 keyframes), warm cache: about 0.35 s, against 0.09 s for
+  the plain probe. It runs once per file because of F2. A cold disk will take longer; not measured.
+* **F2.** The crawl loads known rows in batches of 2,000 and skips a file whose row is FINALIZED with the same size. It still
+  reads new files, files that changed size, and unusable files (so they can recover). Camera lookups are cached per folder
+  (one query per camera, not per file). Re-checking the hash of old files is not done here (see F7).
+* **F11.** The segment-complete worker registers through the catalog (above).
+* **Unknown stays unknown.** `FFmpegService.probe` no longer returns 25 fps, 1280x720 or h264 when ffprobe omits them (null).
+  Seek reports null codec and frame rate. A frame step with no frame rate and no keyframes is refused with HTTP 409 and code
+  `FRAME_RATE_UNKNOWN`. The playback console shows "codec unknown" and "frame rate unknown" instead of H.264 and 25 FPS.
+
 ## Recommended fixes, in order
 
 Each is its own small change with its own tests, starting by turning the matching `it.failing` into `it`.
 
 1. ~~**F4 then F3**~~ done (Fix 1 above).
-2. **F2:** skip a file whose row exists with the same size and modification time; run hashing as a separate low-priority
-   verification job (Moonfire's three tiers), not in the crawl.
-3. **F1:** read the real keyframes (`ffprobe -skip_frame nokey`, or the fMP4 `moof` boxes) and record where the index came
-   from. If that is too slow at registration, label the stored index as assumed and have the seek result say so, so nothing
-   presents an assumption as a measurement. Measure the cost on a 10-minute 1080p segment first.
+2. ~~**F2**~~ done (Fix 2). Hashing as a separate low-priority verification job (Moonfire's three tiers) is still open (F7).
+3. ~~**F1**~~ done (Fix 2).
 4. **F6:** set `TZ=UTC` on the MediaMTX container and add the start-time versus file-time warning; write the clock-bound
    statement into `docs/operations/EVIDENCE_VERIFICATION.md`.
-5. **F5, F7:** fold the segment job worker into `registerSegment`; retry the completion notice; run the cheap integrity tier
-   (file still present, size unchanged) on a schedule.
+5. **F5, F7:** retry the completion notice; run the cheap integrity tier (file still present, size unchanged) on a schedule.
+6. **F12:** a per-frame timestamp index, if exact frame stepping is to be claimed.
 
 ## Not covered
 Retention quotas and pruning order beyond the delete ordering above; object-storage archive; the playback API; behaviour under a

@@ -2,11 +2,9 @@
  * Audit of RecordingCatalog against the crash-safety and time ideas read in Moonfire NVR (design only) and
  * MediaMTX: docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md. Real database, real files, real ffmpeg.
  *
- * F3 and F4 were fixed in the crawler (docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md, "Fix 1") and are plain `it` now.
- * Every `it.failing` below states the CORRECT behaviour and currently FAILS, which is how Jest knows the defect is
- * still there: the test passes while the defect exists. When someone fixes a finding, that test starts failing with
- * "Failing test passed even though it was supposed to fail"; the fix then changes `it.failing` to `it`. Nothing here
- * changes behaviour; fixes are separate changes.
+ * F1 to F4, F9 and F10 are fixed and are plain `it` now ("Fix 1" and "Fix 2" in the audit). A finding that is still
+ * open is written as `it.failing`: it states the CORRECT behaviour and currently FAILS, so the suite stays green while
+ * the defect exists and breaks the moment someone fixes it; the fix then changes `it.failing` to `it`.
  */
 import fs from 'fs';
 import os from 'os';
@@ -31,6 +29,7 @@ import { LocalStorageAdapter } from '../services/recording/catalog/storageAdapte
 import { RecordingCatalog } from '../services/recording/catalog/recordingCatalog.service';
 import { FfprobeMediaAdapter, MediaProbeAdapter, MediaProbeResult } from '../services/recording/catalog/mediaProbeAdapter';
 import { createTenantWithCamera } from './helpers/realDb';
+import SegmentJobWorkerService from '../services/storage/segmentJobWorker.service';
 
 jest.setTimeout(60000);
 
@@ -59,7 +58,7 @@ function clip(file: string, seconds: number, gop: number) {
 }
 function actualKeyframeSeconds(file: string): number[] {
   const out = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-skip_frame', 'nokey', '-show_entries', 'frame=pts_time', '-of', 'csv=p=0', file]).toString();
-  return out.split('\n').map((s) => s.trim()).filter(Boolean).map(Number).sort((a, b) => a - b);
+  return out.split('\n').map((s) => s.trim().split(',')[0]).filter(Boolean).map(Number).sort((a, b) => a - b);
 }
 
 class CountingProbe implements MediaProbeAdapter {
@@ -88,27 +87,28 @@ afterAll(async () => {
   else process.env.RECORDINGS_DIR = previousRecordingsDir;
 });
 afterEach(async () => {
+  await prisma.segmentJob.deleteMany({ where: { cameraId } });
   await prisma.recordingSegment.deleteMany({ where: { cameraId } });
   for (const f of fs.readdirSync(camDir)) fs.rmSync(path.join(camDir, f), { force: true, recursive: true });
 });
 
 describe('RecordingCatalog audit (2026-10-05)', () => {
   // F1. The stored keyframe index is invented, not read from the file.
-  it.failing('F1: the keyframe index lists the keyframes that are really in the file', async () => {
+  it('F1: the keyframe index lists the keyframes that are really in the file', async () => {
     const file = nextName();
     clip(file, 6, 25); // a keyframe every second
     ageFile(file, 600);
     const catalog = new RecordingCatalog(prisma, undefined, new FfprobeMediaAdapter());
     const seg = await catalog.registerSegment({ tenantId, cameraId, filePath: file });
     const stored = ((seg.keyframeIndexJson as any[]) || []).map((k) => Number(k.pts) / 90000).sort((a, b) => a - b);
-    const real = actualKeyframeSeconds(file);
+    const real = actualKeyframeSeconds(file).map((t, _i, all) => t - all[0]); // counted from the first frame, as stored
     expect(real.length).toBeGreaterThanOrEqual(5);
     expect(stored.length).toBe(real.length);
     stored.forEach((s, i) => expect(Math.abs(s - real[i])).toBeLessThan(0.001));
   });
 
   // F2. The 5-minute crawl re-reads every known file.
-  it.failing('F2: a second crawl does not probe files the catalog already finalized', async () => {
+  it('F2: a second crawl does not probe files the catalog already finalized', async () => {
     for (let i = 0; i < 3; i++) {
       const f = nextName();
       fs.writeFileSync(f, crypto.randomBytes(2048));
@@ -267,5 +267,118 @@ describe('The crawler follows the boot-recovery rules (audit fix 1)', () => {
     expect(probe.calls).toBe(0);
     expect(await prisma.recordingSegment.count({ where: { cameraId } })).toBe(0);
     expect(new LocalStorageAdapter()).toBeTruthy();
+  });
+});
+
+describe('Fix 2: real keyframes, a cheap crawl, and no assumed frame rate', () => {
+  const rowFor = (f: string) => prisma.recordingSegment.findFirstOrThrow({ where: { cameraId, filePath: f } });
+  const real = new FfprobeMediaAdapter();
+
+  it('keyframe index follows a different GOP too (a keyframe every 2.4 s, not the old 2 s guess)', async () => {
+    const f = nextName();
+    clip(f, 10, 60); // 25 fps, keyframe every 60 frames = 2.4 s
+    ageFile(f, 600);
+    const seg = await new RecordingCatalog(prisma, undefined, real).registerSegment({ tenantId, cameraId, filePath: f });
+    const stored = (seg.keyframeIndexJson as any[]).map((k) => Number(k.pts) / 90000);
+    const truth = actualKeyframeSeconds(f).map((t, _i, all) => t - all[0]);
+    expect(stored.length).toBe(truth.length);
+    expect(stored[1]).toBeCloseTo(2.4, 2);
+    stored.forEach((x, i) => expect(Math.abs(x - truth[i])).toBeLessThan(0.001));
+  });
+
+  it('stores no index at all when the keyframes cannot be read, never a guessed one', async () => {
+    const f = nextName();
+    fs.writeFileSync(f, crypto.randomBytes(4096)); // not a video
+    const seg = await new RecordingCatalog(prisma, undefined, new CountingProbe({ ...GOOD_PROBE })).registerSegment({ tenantId, cameraId, filePath: f });
+    expect(seg.keyframeIndexJson).toBeNull();
+  });
+
+  it('a second crawl reads nothing that is already FINALIZED with the same size, and a changed file is read again', async () => {
+    const a = nextName();
+    const b = nextName();
+    for (const f of [a, b]) {
+      fs.writeFileSync(f, crypto.randomBytes(2048));
+      ageFile(f, 3600);
+    }
+    const probe = new CountingProbe(GOOD_PROBE);
+    const catalog = new RecordingCatalog(prisma, undefined, probe);
+    expect(await catalog.reconcileFilesystem()).toBe(2);
+    expect(await catalog.reconcileFilesystem()).toBe(0);
+    expect(probe.calls).toBe(2);
+    fs.appendFileSync(b, crypto.randomBytes(512)); // the file grew
+    ageFile(b, 3600);
+    expect(await catalog.reconcileFilesystem()).toBe(1);
+    expect(probe.calls).toBe(3);
+    expect((await rowFor(b)).sizeBytes).toBe(2560n);
+  });
+
+  it('a file that was unreadable is tried again on every crawl, so it can recover', async () => {
+    const f = nextName();
+    fs.writeFileSync(f, crypto.randomBytes(2048));
+    ageFile(f, 3600);
+    const probe = new CountingProbe(null);
+    const catalog = new RecordingCatalog(prisma, undefined, probe);
+    await catalog.reconcileFilesystem();
+    await catalog.reconcileFilesystem();
+    expect(probe.calls).toBe(2);
+  });
+
+  it('seek reports unknown codec and frame rate as null, not h264 and 25 fps', async () => {
+    const mk = (cod: string | null, fps: number | null, minute: number) =>
+      prisma.recordingSegment.create({
+        data: { tenantId, cameraId, filePath: path.join(camDir, `k-${minute}.mp4`), startTime: new Date(Date.parse('2026-10-05T00:00:00Z') + minute * 60_000), endTime: new Date(Date.parse('2026-10-05T00:00:00Z') + minute * 60_000 + 55_000), durationMs: 55_000, sizeBytes: 1n, codec: cod, fps },
+      });
+    await mk(null, null, 0);
+    await mk('hevc', 30, 1);
+    const catalog = new RecordingCatalog(prisma);
+    const unknown = await catalog.findSeekTarget(cameraId, new Date('2026-10-05T00:00:10Z'));
+    expect([unknown.status, unknown.codec, unknown.fps]).toEqual(['READY', null, null]);
+    const known = await catalog.findSeekTarget(cameraId, new Date('2026-10-05T00:01:10Z'));
+    expect([known.codec, known.fps]).toEqual(['hevc', 30]);
+  });
+
+  it('a frame step is refused (FRAME_RATE_UNKNOWN, 409) when the frame rate and the keyframes are unknown, and uses the real rate otherwise', async () => {
+    const seg = (fps: number | null, name: string, kf: any) =>
+      prisma.recordingSegment.create({
+        data: { tenantId, cameraId, filePath: path.join(camDir, name), startTime: new Date('2026-10-05T00:00:00Z'), endTime: new Date('2026-10-05T00:00:55Z'), durationMs: 55_000, sizeBytes: 1n, fps, endPts: 4_950_000n, keyframeIndexJson: kf },
+      });
+    const unknown = await seg(null, 'u.mp4', null);
+    const catalog = new RecordingCatalog(prisma);
+    await expect(catalog.stepToAdjacentFrame(cameraId, unknown.id, 90000n, 'FORWARD')).rejects.toMatchObject({ code: 'FRAME_RATE_UNKNOWN', statusCode: 409 });
+    await prisma.recordingSegment.update({ where: { id: unknown.id }, data: { fps: 30 } });
+    const step = await catalog.stepToAdjacentFrame(cameraId, unknown.id, 90000n, 'FORWARD');
+    expect(step.frameDeltaPts).toBe(3000n); // 90000 / 30
+  });
+});
+
+describe('The segment-complete worker registers through the catalog (the production path)', () => {
+  it('stores the real keyframe index and a real end PTS, which it used to leave empty and zero', async () => {
+    const f = nextName();
+    clip(f, 8, 50); // keyframe every 2 s
+    ageFile(f, 600);
+    SegmentJobWorkerService.setPrismaForTesting(prisma);
+    const job = await prisma.segmentJob.create({ data: { tenantId, cameraId, streamPath: 'x', segmentPath: f, status: 'PENDING' } });
+    await SegmentJobWorkerService.processSingleJob(job.id);
+    expect((await prisma.segmentJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('COMPLETED');
+    const row = await prisma.recordingSegment.findFirstOrThrow({ where: { cameraId, filePath: f } });
+    expect(row.status).toBe(SegmentStatus.FINALIZED);
+    expect(Number(row.endPts)).toBeGreaterThan(7 * 90000);
+    const stored = (row.keyframeIndexJson as any[]).map((k) => Number(k.pts) / 90000);
+    const truth = actualKeyframeSeconds(f).map((t, _i, all) => t - all[0]);
+    expect(stored.length).toBe(truth.length);
+    stored.forEach((x, i) => expect(Math.abs(x - truth[i])).toBeLessThan(0.001));
+    expect([row.width, row.height, row.fps, row.codec]).toEqual([320, 240, 25, 'h264']);
+  });
+
+  it('still fails the job for a file it cannot read, so the queue retries instead of indexing it', async () => {
+    const f = nextName();
+    fs.writeFileSync(f, crypto.randomBytes(4096));
+    ageFile(f, 600);
+    SegmentJobWorkerService.setPrismaForTesting(prisma);
+    const job = await prisma.segmentJob.create({ data: { tenantId, cameraId, streamPath: 'x', segmentPath: f, status: 'PENDING' } });
+    await SegmentJobWorkerService.processSingleJob(job.id);
+    const after = await prisma.segmentJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(after.status).not.toBe('COMPLETED');
+    expect(await prisma.recordingSegment.count({ where: { cameraId, filePath: f } })).toBe(0);
   });
 });

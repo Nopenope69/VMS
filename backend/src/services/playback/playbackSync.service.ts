@@ -1,5 +1,5 @@
 import { PlaybackSession, PlaybackSessionState, PrismaClient } from '@prisma/client';
-import { RecordingCatalog, SeekTargetResult } from '../recording/catalog/recordingCatalog.service';
+import { RecordingCatalog, SeekTargetResult, FrameStepUnavailableError } from '../recording/catalog/recordingCatalog.service';
 
 export interface CameraPlaybackState {
   cameraId: string;
@@ -9,8 +9,8 @@ export interface CameraPlaybackState {
   currentPts?: bigint;
   nearestKeyframePts?: bigint;
   offsetMs?: number;
-  codec?: string;
-  fps?: number;
+  codec?: string | null;
+  fps?: number | null;
   gapDurationMs?: number | null;
 }
 
@@ -201,25 +201,19 @@ export class PlaybackSyncService {
     }
 
     const cameraIds = session.cameraIdsJson as string[];
-    let frameStepDeltaMs = 40; // fallback 25fps (1000/25 = 40ms)
+    // The step length comes from a camera's recorded frame rate. When no camera at this moment has one, the step is
+    // refused: assuming 25 fps would put a forensic step on the wrong frame.
+    let frameStepDeltaMs: number | null = null;
 
-    // Inspect the first ready camera to obtain exact frame delta in milliseconds
     for (const cameraId of cameraIds) {
-      const seekTarget = await this.catalog.findSeekTarget(
-        cameraId,
-        session.masterTimeUtc
-      );
-      if (seekTarget.status === 'READY' && seekTarget.segmentId && seekTarget.currentPts !== undefined) {
-        const step = await this.catalog.stepToAdjacentFrame(
-          cameraId,
-          seekTarget.segmentId,
-          seekTarget.currentPts,
-          direction
-        );
-        const fps = seekTarget.fps && seekTarget.fps > 0 ? seekTarget.fps : 25.0;
-        frameStepDeltaMs = Math.max(1, Math.round(1000 / fps));
+      const seekTarget = await this.catalog.findSeekTarget(cameraId, session.masterTimeUtc);
+      if (seekTarget.status === 'READY' && seekTarget.fps && seekTarget.fps > 0) {
+        frameStepDeltaMs = Math.max(1, Math.round(1000 / seekTarget.fps));
         break;
       }
+    }
+    if (frameStepDeltaMs === null) {
+      throw new FrameStepUnavailableError('no camera at this moment has a recorded frame rate');
     }
 
     const signedDelta = direction === 'FORWARD' ? frameStepDeltaMs : -frameStepDeltaMs;
