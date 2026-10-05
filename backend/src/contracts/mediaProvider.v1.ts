@@ -3,9 +3,8 @@
  * Spec: docs/contracts/media-provider.v1.md. This wraps the existing IMediaProvider without
  * refactoring it (P0.7: document and wrap).
  *
- * Known gap (docs/BACKLOG.md): IMediaProvider.getStreamStatus returns null both when a path does
- * not exist and when the engine is unreachable. v1 reports that honestly as
- * NOT_FOUND_OR_UNAVAILABLE instead of guessing which one it was.
+ * The provider distinguishes an absent path from an unavailable engine. Neither state contains
+ * invented telemetry.
  */
 import { z } from 'zod';
 import { IMediaProvider } from '../services/media/mediaProvider.interface';
@@ -30,7 +29,7 @@ export const StreamStatusV1 = z
   .object({
     contract: z.literal(MEDIA_PROVIDER_CONTRACT),
     path: StreamPathV1,
-    state: z.enum(['READY', 'NOT_READY', 'NOT_FOUND_OR_UNAVAILABLE']),
+    state: z.enum(['READY', 'NOT_READY', 'NOT_FOUND', 'ENGINE_UNAVAILABLE']),
     readersCount: z.number().int().nonnegative().nullable(),
     tracks: z.array(z.string()).nullable(),
     bytesReceived: z.number().int().nonnegative().nullable(),
@@ -38,7 +37,7 @@ export const StreamStatusV1 = z
   })
   .strict()
   .superRefine((s, ctx) => {
-    if (s.state === 'NOT_FOUND_OR_UNAVAILABLE' && (s.readersCount !== null || s.tracks !== null || s.bytesReceived !== null)) {
+    if ((s.state === 'NOT_FOUND' || s.state === 'ENGINE_UNAVAILABLE') && (s.readersCount !== null || s.tracks !== null || s.bytesReceived !== null)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'no telemetry may be reported for a path that was not observed' });
     }
   });
@@ -71,11 +70,11 @@ export class MediaProviderV1Adapter implements MediaProviderV1 {
     const validPath = StreamPathV1.parse(path);
     const raw = await this.inner.getStreamStatus(validPath);
     const observedAtUtc = this.now().toISOString();
-    if (raw === null) {
+    if (raw.kind !== 'OBSERVED') {
       return StreamStatusV1.parse({
         contract: MEDIA_PROVIDER_CONTRACT,
         path: validPath,
-        state: 'NOT_FOUND_OR_UNAVAILABLE',
+        state: raw.kind,
         readersCount: null,
         tracks: null,
         bytesReceived: null,

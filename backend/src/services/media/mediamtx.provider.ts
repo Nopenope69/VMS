@@ -50,11 +50,12 @@ export class MediaMTXProvider implements IMediaProvider {
     }
   }
 
-  async getStreamStatus(path: string): Promise<StreamStatus | null> {
+  async getStreamStatus(path: string): Promise<StreamStatus> {
     try {
       const res = await this.client.get(`/v3/paths/get/${path}`);
       const data = res.data;
       return {
+        kind: 'OBSERVED',
         ready: Boolean(data.ready),
         readersCount: data.readers?.length || 0,
         tracks: data.tracks || [],
@@ -62,9 +63,9 @@ export class MediaMTXProvider implements IMediaProvider {
       };
     } catch (err: any) {
       if (err.response?.status === 404) {
-        return null;
+        return { kind: 'NOT_FOUND' };
       }
-      return null;
+      return { kind: 'ENGINE_UNAVAILABLE' };
     }
   }
 
@@ -105,8 +106,8 @@ export class MediaMTXProvider implements IMediaProvider {
   }
 
   /**
-   * Engine reachability probe for health checks. Unlike getStreamStatus (which returns null for
-   * both "no such path" and "engine unreachable"), this throws when the control API cannot be reached.
+   * Engine reachability probe for health checks. Unlike getStreamStatus, this throws when the
+   * control API cannot be reached.
    */
   async ping(): Promise<void> {
     try {

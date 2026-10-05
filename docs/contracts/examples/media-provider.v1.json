@@ -14,7 +14,7 @@
     {
       "contract": "media-provider.v1",
       "path": "cam_01",
-      "state": "NOT_FOUND_OR_UNAVAILABLE",
+      "state": "NOT_FOUND",
       "readersCount": null,
       "tracks": null,
       "bytesReceived": null,
@@ -27,7 +27,7 @@
       "value": {
         "contract": "media-provider.v1",
         "path": "cam_01",
-        "state": "NOT_FOUND_OR_UNAVAILABLE",
+        "state": "NOT_FOUND",
         "readersCount": 2,
         "tracks": [
           "H264"

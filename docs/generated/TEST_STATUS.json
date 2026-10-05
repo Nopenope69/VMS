@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-04T18:20:57.696Z",
-  "commit": "dd1f3609bbbe2797a3f1bb21ff3d3394a72642ee",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37223749550",
+  "generatedAt": "2026-10-05T15:58:19.531Z",
+  "commit": "18a2cbd2520adff2fbe99e5282577fd3461ba4a8",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37335992651",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 157,
-        "passed": 157,
+        "total": 160,
+        "passed": 160,
         "failed": 0
       },
       "tests": {
-        "total": 1207,
-        "passed": 1171,
+        "total": 1226,
+        "passed": 1190,
         "failed": 0,
         "skipped": 36
       },
@@ -197,7 +197,7 @@
         {
           "file": "backend/src/__tests__/contracts/mediaProvider.v1.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 8,
           "failed": 0,
           "skipped": 0
         },
@@ -685,6 +685,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/mediamtxProvider.test.ts",
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/metrics.test.ts",
           "status": "passed",
           "passed": 6,
@@ -744,6 +751,13 @@
           "file": "backend/src/__tests__/modelManifest.test.ts",
           "status": "passed",
           "passed": 17,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/nlSearchRealDb.test.ts",
+          "status": "passed",
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -835,6 +849,13 @@
           "file": "backend/src/__tests__/ptzArbiter.test.ts",
           "status": "passed",
           "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/queryParser.test.ts",
+          "status": "passed",
+          "passed": 11,
           "failed": 0,
           "skipped": 0
         },
@@ -1123,17 +1144,17 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 31,
-        "passed": 30,
-        "failed": 0
+        "total": 33,
+        "passed": 31,
+        "failed": 1
       },
       "tests": {
-        "total": 310,
-        "passed": 305,
-        "failed": 0,
+        "total": 325,
+        "passed": 315,
+        "failed": 5,
         "skipped": 5
       },
-      "success": true,
+      "success": false,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1220,6 +1241,13 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/goldenQueryRewrite.test.ts",
+          "status": "passed",
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "services/ai-worker/src/__tests__/goldenRfdetr.test.ts",
           "status": "other",
           "passed": 0,
@@ -1235,9 +1263,9 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenVlm.test.ts",
-          "status": "passed",
-          "passed": 12,
-          "failed": 0,
+          "status": "failed",
+          "passed": 7,
+          "failed": 5,
           "skipped": 0
         },
         {
@@ -1281,6 +1309,13 @@
           "passed": 13,
           "failed": 0,
           "skipped": 3
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/queryRewrite.test.ts",
+          "status": "passed",
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/redactionAdapter.test.ts",
@@ -1356,11 +1391,11 @@
     }
   ],
   "totals": {
-    "suites": 188,
-    "tests": 1517,
-    "passed": 1476,
-    "failed": 0,
+    "suites": 193,
+    "tests": 1551,
+    "passed": 1505,
+    "failed": 5,
     "skipped": 41
   },
-  "allPassed": true
+  "allPassed": false
 }

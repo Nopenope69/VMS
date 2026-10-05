@@ -23,11 +23,8 @@ Invalid input is rejected before it reaches the engine.
 | --- | --- |
 | `READY` | Engine reports the path is publishing. |
 | `NOT_READY` | Path exists but is not publishing. |
-| `NOT_FOUND_OR_UNAVAILABLE` | The engine returned nothing. Telemetry fields are `null`. |
-
-**Known gap:** the current `MediaMTXProvider.getStreamStatus` returns `null` both for a missing
-path (HTTP 404) and for an unreachable engine, so v1 cannot tell them apart and says so rather
-than guessing. Splitting these into `NOT_FOUND` and `ENGINE_UNAVAILABLE` is in `docs/BACKLOG.md`.
+| `NOT_FOUND` | The engine answered, but the path does not exist. Telemetry fields are `null`. |
+| `ENGINE_UNAVAILABLE` | The media engine could not be reached or did not return a usable response. Telemetry fields are `null`. |
 
 ## Invariants
 

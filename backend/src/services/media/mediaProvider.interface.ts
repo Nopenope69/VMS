@@ -4,12 +4,16 @@ export interface StreamPathConfig {
   record: boolean;
 }
 
-export interface StreamStatus {
+export interface ObservedStreamStatus {
+  kind: 'OBSERVED';
   ready: boolean;
   readersCount: number;
   tracks: string[];
   bytesReceived: number;
 }
+
+/** A stream status is either observed, absent from the engine, or unavailable because the engine could not answer. */
+export type StreamStatus = ObservedStreamStatus | { kind: 'NOT_FOUND' } | { kind: 'ENGINE_UNAVAILABLE' };
 
 export interface IMediaProvider {
   /**
@@ -25,7 +29,7 @@ export interface IMediaProvider {
   /**
    * Fetches the current live status of a stream path.
    */
-  getStreamStatus(path: string): Promise<StreamStatus | null>;
+  getStreamStatus(path: string): Promise<StreamStatus>;
 
   /**
    * Toggles recording on or off for a given camera ID.
