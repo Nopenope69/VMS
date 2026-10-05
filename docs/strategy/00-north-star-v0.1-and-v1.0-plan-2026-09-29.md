@@ -14,6 +14,7 @@ Test and build status is not restated here. See `docs/generated/TEST_STATUS.md` 
 - `vigilone-oss-ai-catalog-2026-09-23.md`
 - `vigilone-vms-review-2026-09-13.md`
 - `vigilone-vms-review-2026-09-14-remediation-round2.md`
+- `vigilone-oss-reference-study-2026-10-05.md` (what open-source VMS and CV projects teach us; sets the order of the next work)
 
 ## 1. The North Star
 

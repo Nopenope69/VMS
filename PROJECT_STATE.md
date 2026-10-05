@@ -432,6 +432,9 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   Measured in `docs/ai/nl-search-evaluation.md`.
 - **Next:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm triage,
   footage integrity), one PR each, from `master`.
+- **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
+  from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
+  endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.
 
 **Open follow-ups, all known and documented:**
 
