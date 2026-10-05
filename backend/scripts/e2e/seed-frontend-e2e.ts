@@ -13,7 +13,7 @@
  * /api/v1/search requires. The licence is signed with a key made here, whose public half goes out in the seed
  * file as licensePublicKey: the runner hands it to the backend as VIGILONE_LICENSE_TEST_PUBLIC_KEY, which the
  * backend trusts only under NODE_ENV=test (utils/license.ts). The investigation workspace data lives in a second
- * tenant (seed-workspace.ts), returned as `workspace`.
+ * tenant (seed-workspace.ts), returned as `workspace`; the alarm triage data in a third (seed-triage.ts), `triage`.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -22,6 +22,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { LicenseClaims, signLicensePayload } from '../../src/utils/license';
 import { seedWorkspace } from './seed-workspace';
+import { seedTriage } from './seed-triage';
 
 const DAY = 86_400_000;
 
@@ -165,9 +166,12 @@ async function main() {
   // The investigation workspace test has a tenant of its own (seed-workspace.ts).
   const workspace = await seedWorkspace(prisma, { password, licencePrivateKey: licenceKey.privateKey, recordingsDir: process.env.RECORDINGS_DIR || path.join(exportsDir, '..', 'recordings') });
 
+  const triage = await seedTriage(prisma, { password, licencePrivateKey: licenceKey.privateKey });
+
   process.stdout.write(
     JSON.stringify({
       workspace,
+      triage,
       tenantId: tenant.id,
       email,
       viewerEmail,

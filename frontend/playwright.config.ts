@@ -8,7 +8,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
-  testMatch: process.env.E2E_ONLY ? [process.env.E2E_ONLY] : ['redaction-dpdp.spec.ts', 'plate-search.spec.ts', 'spatial-search.spec.ts', 'investigation-stopwatch.spec.ts', 'investigation-workspace.spec.ts', 'operations.spec.ts', 'threat-rules.spec.ts', 'plain-language-search.spec.ts'],
+  testMatch: process.env.E2E_ONLY ? [process.env.E2E_ONLY] : ['redaction-dpdp.spec.ts', 'plate-search.spec.ts', 'spatial-search.spec.ts', 'investigation-stopwatch.spec.ts', 'investigation-workspace.spec.ts', 'operations.spec.ts', 'threat-rules.spec.ts', 'plain-language-search.spec.ts', 'alarm-triage.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,

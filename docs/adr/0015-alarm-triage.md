@@ -36,7 +36,8 @@ it in the rule editor.
 ## Not decided here
 * No automatic quieting, no per-operator view, no learning beyond counting verdicts.
 * After-hours and zone risk are not scored: they need each site's schedule, which is not stored per camera.
-* No frontend yet; the endpoints are API only, so the queue page is the next piece.
+* The queue is a "Triage" tab on the Alarms page, shown only when the flag is on. It lists, explains and links back to
+  Active Alarms; it has no buttons that change an alarm or a rule.
 * The thresholds (10 reviewed, 20 for a proposal, 80 % / 90 %) are first guesses. Tune them on pilot verdicts.
 
 ## Consequences

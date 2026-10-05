@@ -23,12 +23,14 @@ import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluationBanner';
 import { AlarmSecondOpinion } from '../components/AlarmSecondOpinion';
+import { AlarmTriagePanel } from '../components/AlarmTriagePanel';
+import { useFeatureFlags } from '../services/features';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
 const describeError = (err: any): string =>
   err?.response?.data?.error || err?.message || 'backend unreachable';
 
-type ConsoleTab = 'ALARMS' | 'EVENTS';
+type ConsoleTab = 'ALARMS' | 'EVENTS' | 'TRIAGE';
 
 interface AlarmItem {
   id: string;
@@ -85,6 +87,8 @@ const SlaBadge: React.FC<{ alarm: AlarmItem }> = ({ alarm }) => {
 /* Modal ARIA dialog semantics: role="dialog" aria-modal="true" handles e.key === 'Escape' */
 export const Events: React.FC = () => {
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('ALARMS');
+  const featureFlags = useFeatureFlags();
+  const [triageRefresh, setTriageRefresh] = useState(0);
 
   // Alarms State
   const [alarms, setAlarms] = useState<AlarmItem[]>([]);
@@ -207,7 +211,7 @@ export const Events: React.FC = () => {
   useEffect(() => {
     if (consoleTab === 'ALARMS') {
       fetchAlarms();
-    } else {
+    } else if (consoleTab === 'EVENTS') {
       fetchEvents();
     }
   }, [consoleTab, alarmStateFilter, alarmSeverityFilter, eventSeverityFilter, unackOnly]);
@@ -473,6 +477,21 @@ export const Events: React.FC = () => {
               )}
             </button>
 
+            {featureFlags.ALARM_TRIAGE && (
+              <button
+                onClick={() => setConsoleTab('TRIAGE')}
+                data-testid="triage-tab"
+                className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium rounded transition-all ${
+                  consoleTab === 'TRIAGE'
+                    ? 'bg-vms-surface text-vms-text font-semibold shadow-sm border border-vms-border'
+                    : 'text-vms-muted hover:text-vms-text hover:bg-vms-surface/50 border border-transparent'
+                }`}
+              >
+                <ListFilter className="w-3.5 h-3.5 text-vms-accent" />
+                <span>Triage</span>
+              </button>
+            )}
+
             <button
               onClick={() => setConsoleTab('EVENTS')}
               className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium rounded transition-all ${
@@ -494,7 +513,7 @@ export const Events: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => (consoleTab === 'ALARMS' ? fetchAlarms() : fetchEvents())}
+            onClick={() => (consoleTab === 'ALARMS' ? fetchAlarms() : consoleTab === 'TRIAGE' ? setTriageRefresh((n) => n + 1) : fetchEvents())}
             isLoading={alarmLoading || eventLoading}
             title="Refresh Incident Feed"
             icon={<RefreshCw className="w-3.5 h-3.5" />}
@@ -503,6 +522,10 @@ export const Events: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {consoleTab === 'TRIAGE' && featureFlags.ALARM_TRIAGE && (
+        <AlarmTriagePanel refreshToken={triageRefresh} onOpenAlarms={() => setConsoleTab('ALARMS')} />
+      )}
 
       {consoleTab === 'ALARMS' && exportNotice && (
         <div role="status" className="px-3 py-2 text-xs font-mono rounded border border-emerald-800 bg-emerald-950/60 text-emerald-300 flex justify-between">

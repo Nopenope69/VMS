@@ -434,7 +434,8 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   footage integrity), one PR each, from `master`.
 - **Built from the reference study (2026-10-05, branch `claude/elegant-albattani-4krihk`):** incident window (ADR 0014:
   one incident, one alarm, per rule via `incidentWindowSeconds`) and alarm triage (ADR 0015, flag `ALARM_TRIAGE`:
-  ordered queue with reasons and proposed rule changes, nothing applied; API only, no queue page yet). Left of the
+  ordered queue with reasons and proposed rule changes, nothing applied; a Triage tab on the Alarms page, tested in a
+  real browser against the real backend). Left of the
   four features: cited incident summary, describe-what-to-watch rules, footage integrity.
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
