@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-05T15:58:19.531Z",
-  "commit": "18a2cbd2520adff2fbe99e5282577fd3461ba4a8",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37335992651",
+  "generatedAt": "2026-10-05T18:59:58.702Z",
+  "commit": "5dadf96bdbac581b32609c91f824367cf789e854",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37359267265",
   "projects": [
     {
       "name": "backend",
@@ -1145,16 +1145,16 @@
       "name": "ai-worker",
       "suites": {
         "total": 33,
-        "passed": 31,
-        "failed": 1
+        "passed": 32,
+        "failed": 0
       },
       "tests": {
         "total": 325,
-        "passed": 315,
-        "failed": 5,
+        "passed": 320,
+        "failed": 0,
         "skipped": 5
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1263,9 +1263,9 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenVlm.test.ts",
-          "status": "failed",
-          "passed": 7,
-          "failed": 5,
+          "status": "passed",
+          "passed": 12,
+          "failed": 0,
           "skipped": 0
         },
         {
@@ -1393,9 +1393,9 @@
   "totals": {
     "suites": 193,
     "tests": 1551,
-    "passed": 1505,
-    "failed": 5,
+    "passed": 1510,
+    "failed": 0,
     "skipped": 41
   },
-  "allPassed": false
+  "allPassed": true
 }
