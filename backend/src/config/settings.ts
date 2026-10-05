@@ -157,6 +157,7 @@ export function settingProblems(env: Env = process.env): string[] {
 export const SELF_CHECKED_SETTINGS = [
   'services/search/embeddingWorkers.ts',
   'services/vlm/vlmWorkers.ts',
+  'services/search/queryRewriteClient.ts',
   'services/crops/cropWorkers.ts',
   'services/crops/cropCapture.service.ts',
   'services/storage/objectStorageArchive.service.ts',
