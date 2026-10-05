@@ -525,6 +525,10 @@ model RecordingSegment {
   storageVolume       StorageVolume? @relation(fields: [storageVolumeId], references: [id], onDelete: SetNull)
   storageEpochId      String?
   storageEpoch        StorageEpoch?  @relation(fields: [storageEpochId], references: [id], onDelete: SetNull)
+  /// Last time the periodic presence and size check looked at this file (ADR: F7 in the RecordingCatalog audit).
+  integrityCheckedAt  DateTime?
+  /// Last time the periodic content-hash check matched this file to its recorded hash.
+  hashVerifiedAt      DateTime?
   originalSha256      String? // Pre-repair original checksum if repaired
   repairedSha256      String? // Post-repair derivative checksum if repaired
   repairedAt          DateTime? // Timestamp of repair operation
@@ -536,6 +540,8 @@ model RecordingSegment {
 
   @@index([cameraId, startTime, endTime])
   @@index([status])
+  @@index([status, integrityCheckedAt])
+  @@index([status, hashVerifiedAt])
   @@index([tenantId, cameraId, startTime])
 }
 

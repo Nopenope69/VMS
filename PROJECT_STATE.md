@@ -442,8 +442,11 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   only FINALIZED segments. Fix 2 is done: the stored keyframe index is read from the file (not guessed), the crawl no longer
   re-reads known files, the production segment-complete worker registers through the catalog (it had stored no index and
   `endPts = 0`), and an unknown frame rate or codec stays unknown (a frame step is refused with 409 `FRAME_RATE_UNKNOWN`).
-  Still open: the completion notice, scheduled integrity checks (F7), and frame-exact stepping (F12: today's step is
-  constant-frame-rate arithmetic; it needs a per-frame timestamp index).
+  Fix 3 is done: frame steps land on the next real frame read from the file (exact on variable frame rate, crossing
+  segment boundaries, `precision` and `clamped` in the answer); the segment-complete hook retries for about two minutes;
+  and a scheduled integrity check re-verifies footage while running (`docs/operations/RECORDING_INTEGRITY.md`, settings
+  `INTEGRITY_*`; migration 20261015000000). Still open: F6 (time zone and clock-bound statement), and stepping every camera
+  of a synchronized session onto its own frame (only the reference camera is frame-exact).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.

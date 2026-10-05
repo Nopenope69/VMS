@@ -8,6 +8,7 @@ import { SegmentRepository } from './segmentRepository';
 import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
+import { SegmentIntegrityVerifier } from './segmentIntegrity';
 import { computeFileSha256 } from '../../../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
 import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
@@ -63,10 +64,24 @@ export class FrameStepUnavailableError extends Error {
 }
 
 export interface StepFrameResult {
+  /** The segment the new frame is in: the next or previous one when the step crosses a segment boundary. */
   segmentId: string;
   newPts: bigint;
   frameDeltaPts: bigint;
+  /** Wall-clock time of the new frame, rounded UP to the millisecond so a seek to it lands on that frame. */
+  utc: Date;
+  /** EXACT: the next real frame in the file. APPROXIMATE: estimated from the frame rate (the file could not be read). */
+  precision: 'EXACT' | 'APPROXIMATE';
+  /** True when there is no further frame in that direction (start or end of the recording): the position did not move. */
+  clamped: boolean;
 }
+
+/** Frame times are read this far (seconds) either side of the position; widened for a very low frame rate. */
+const FRAME_WINDOW_SECONDS = [2, 8, 30];
+/** A step crosses into a neighbouring segment only when the recording is continuous (no gap longer than this). */
+const SEGMENT_JOIN_GAP_MS = 2000;
+const utcOfFrame = (segment: RecordingSegment, pts: bigint): Date =>
+  new Date(segment.startTime.getTime() + Math.ceil(Number(pts - segment.startPts) / 90));
 
 export class RecordingCatalog {
   private prisma: PrismaClient;
@@ -78,6 +93,7 @@ export class RecordingCatalog {
 
   private reconcilerTimer: NodeJS.Timeout | null = null;
   private retentionTimer: NodeJS.Timeout | null = null;
+  private integrityTimer: NodeJS.Timeout | null = null;
   private isReconciling = false;
 
   constructor(
@@ -270,7 +286,11 @@ export class RecordingCatalog {
   }
 
   /**
-   * Steps to the adjacent frame forward or backward without assuming constant frame rate
+   * Steps to the neighbouring frame, forward or backward, from the real frame times in the file: exact on constant
+   * and variable frame rate. "Current frame" is the last frame at or before `currentPts` (what is on screen).
+   * At the end of a segment the step continues into the next one when the recording is continuous; at the start or
+   * end of the recording it stays put with `clamped: true`. If the file cannot be read it estimates from the frame
+   * rate and says APPROXIMATE; with no frame rate it refuses (FRAME_RATE_UNKNOWN).
    */
   async stepToAdjacentFrame(
     cameraId: string,
@@ -283,28 +303,87 @@ export class RecordingCatalog {
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const keyframes = segment.keyframeIndexJson as any[] | undefined;
-    const fpsKnown = segment.fps != null && segment.fps > 0;
-    if (!fpsKnown && !(keyframes && keyframes.length > 1)) {
-      throw new FrameStepUnavailableError(`segment ${segment.id} has no recorded frame rate and no keyframe index`);
-    }
-    const fallbackDelta = fpsKnown
-      ? SegmentIndexer.calculateFallbackFrameDelta(segment.fps as number, segment.timebaseNumerator, segment.timebaseDenominator)
-      : 0n;
+    const exact = await this.exactStep(segment, currentPts, direction);
+    if (exact) return exact;
 
-    const step = SegmentIndexer.calculateAdjacentFramePts(
-      keyframes,
-      currentPts,
-      direction,
-      segment.startPts,
-      segment.endPts,
-      fallbackDelta
-    );
+    const fpsKnown = segment.fps != null && segment.fps > 0;
+    if (!fpsKnown) {
+      throw new FrameStepUnavailableError(`segment ${segment.id} cannot be read and has no recorded frame rate`);
+    }
+    const delta = SegmentIndexer.calculateFallbackFrameDelta(segment.fps as number, segment.timebaseNumerator, segment.timebaseDenominator);
+    const raw = direction === 'FORWARD' ? currentPts + delta : currentPts - delta;
+    const newPts = raw < segment.startPts ? segment.startPts : raw > segment.endPts ? segment.endPts : raw;
+    return {
+      segmentId: segment.id,
+      newPts,
+      frameDeltaPts: newPts > currentPts ? newPts - currentPts : currentPts - newPts,
+      utc: utcOfFrame(segment, newPts),
+      precision: 'APPROXIMATE',
+      clamped: newPts === currentPts,
+    };
+  }
+
+  /** The real frames of a segment around a position, widening the window until a frame on the needed side is found. */
+  private async framesAround(segment: RecordingSegment, centerPts: bigint, direction: 'FORWARD' | 'BACKWARD'): Promise<bigint[] | null> {
+    if (!this.mediaProbeAdapter.probeFrameTimes) return null;
+    if (!(await this.storageAdapter.stat(segment.filePath)).exists) return null;
+    let frames: bigint[] | null = null;
+    for (const span of FRAME_WINDOW_SECONDS) {
+      frames = await this.mediaProbeAdapter.probeFrameTimes(segment.filePath, centerPts, span);
+      if (!frames) return null;
+      const idx = frames.reduce((n, f, i) => (f <= centerPts ? i : n), -1);
+      if (direction === 'FORWARD' ? idx >= 0 && idx + 1 < frames.length : idx >= 1) return frames;
+    }
+    return frames;
+  }
+
+  private async exactStep(segment: RecordingSegment, currentPts: bigint, direction: 'FORWARD' | 'BACKWARD'): Promise<StepFrameResult | null> {
+    const frames = await this.framesAround(segment, currentPts, direction);
+    if (!frames || frames.length === 0) return null;
+    const idx = frames.reduce((n, f, i) => (f <= currentPts ? i : n), -1);
+    const currentFrame = idx >= 0 ? frames[idx] : currentPts;
+    const target = direction === 'FORWARD' ? frames[idx + 1] : idx >= 1 ? frames[idx - 1] : undefined;
+
+    if (target !== undefined && target !== currentFrame) {
+      return {
+        segmentId: segment.id,
+        newPts: target,
+        frameDeltaPts: target > currentFrame ? target - currentFrame : currentFrame - target,
+        utc: utcOfFrame(segment, target),
+        precision: 'EXACT',
+        clamped: false,
+      };
+    }
+
+    // No further frame in this segment: continue into the neighbouring one when the recording is continuous.
+    const next = await this.segmentRepo.findAdjacentSegment(segment, direction, SEGMENT_JOIN_GAP_MS);
+    if (next) {
+      let newPts: bigint | undefined;
+      if (direction === 'FORWARD') {
+        newPts = next.startPts;
+      } else {
+        const endFrames = await this.framesAround(next, next.endPts, 'BACKWARD');
+        newPts = endFrames && endFrames.length > 0 ? endFrames[endFrames.length - 1] : undefined;
+      }
+      if (newPts !== undefined) {
+        return {
+          segmentId: next.id,
+          newPts,
+          frameDeltaPts: 0n,
+          utc: utcOfFrame(next, newPts),
+          precision: 'EXACT',
+          clamped: false,
+        };
+      }
+    }
 
     return {
       segmentId: segment.id,
-      newPts: step.newPts,
-      frameDeltaPts: step.frameDeltaPts,
+      newPts: currentFrame,
+      frameDeltaPts: 0n,
+      utc: utcOfFrame(segment, currentFrame),
+      precision: 'EXACT',
+      clamped: true,
     };
   }
 
@@ -379,6 +458,20 @@ export class RecordingCatalog {
   }
 
   /**
+   * Starts the periodic integrity check of recorded segments (presence and size every run, content hash within a
+   * byte budget). `intervalMs` 0 turns it off. Settings: INTEGRITY_PRESENCE_BATCH, INTEGRITY_HASH_MB_PER_RUN.
+   */
+  startIntegrityChecks(intervalMs = setting('INTEGRITY_CHECK_INTERVAL_SECONDS') * 1000): void {
+    if (this.integrityTimer || intervalMs <= 0) return;
+    const verifier = new SegmentIntegrityVerifier(this.prisma, this.storageAdapter);
+    this.integrityTimer = setInterval(() => {
+      verifier
+        .runCycle({ presenceBatch: setting('INTEGRITY_PRESENCE_BATCH'), hashBudgetBytes: setting('INTEGRITY_HASH_MB_PER_RUN') * 1_000_000 })
+        .catch((err) => console.error('[RecordingCatalog] Integrity check error:', err.message));
+    }, intervalMs);
+  }
+
+  /**
    * Starts low-frequency filesystem reconciliation crawler
    */
   startReconciler(intervalMs = 300000): void {
@@ -421,6 +514,10 @@ export class RecordingCatalog {
     if (this.retentionTimer) {
       clearInterval(this.retentionTimer);
       this.retentionTimer = null;
+    }
+    if (this.integrityTimer) {
+      clearInterval(this.integrityTimer);
+      this.integrityTimer = null;
     }
   }
 

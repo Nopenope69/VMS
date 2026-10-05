@@ -24,6 +24,11 @@ export interface MediaProbeAdapter {
    * be read. Optional: an adapter without it yields no index, never a guessed one.
    */
   probeKeyframes?(filePath: string): Promise<KeyframeIndexEntry[] | null>;
+  /**
+   * The real frame times (90 kHz, from the first presented frame) in a window of `spanSeconds` either side of a time,
+   * or null when they cannot be read. Optional: without it a frame step can only be estimated.
+   */
+  probeFrameTimes?(filePath: string, centerPts90k: bigint, spanSeconds: number): Promise<bigint[] | null>;
 }
 
 export class FfprobeMediaAdapter implements MediaProbeAdapter {
@@ -52,5 +57,9 @@ export class FfprobeMediaAdapter implements MediaProbeAdapter {
   async probeKeyframes(filePath: string): Promise<KeyframeIndexEntry[] | null> {
     const real = await FFmpegService.probeKeyframes(filePath);
     return real ? real.keyframePts90k.map((pts) => ({ pts })) : null;
+  }
+
+  async probeFrameTimes(filePath: string, centerPts90k: bigint, spanSeconds: number): Promise<bigint[] | null> {
+    return FFmpegService.probeFrameTimes(filePath, centerPts90k, spanSeconds);
   }
 }

@@ -126,7 +126,7 @@ export class RecordingIndexService {
       segmentId: res.segmentId,
       newPts: res.newPts,
       direction,
-      clamped: false,
+      clamped: res.clamped,
       frameDeltaPts: res.frameDeltaPts,
     };
   }

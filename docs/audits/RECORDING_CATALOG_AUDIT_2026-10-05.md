@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10) and Fix 2 (F1, F2, F11, and the assumed frame rate and codec) are done**; the rest are separate pieces of work, in the order at the end. Status of each finding is in the table below.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec) and Fix 3 (F5, F7, F12) are done**; F6 and F8 are open, in the order at the end. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -19,15 +19,15 @@ what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a 
 | F2 crawl re-reads every file | **Fixed (Fix 2)** |
 | F3 file still being written indexed as FINALIZED | **Fixed (Fix 1)** |
 | F4 unreadable file indexed as FINALIZED with invented details | **Fixed (Fix 1)** |
-| F5 completion notice | Corrected below; the worker now registers through the catalog (Fix 2); the notice itself is still one curl |
+| F5 completion notice | **Fixed (Fix 3)**: the hook retries for about two minutes; the worker registers through the catalog (Fix 2) |
 | F6 time assumptions | Open |
-| F7 integrity only at boot | Open |
+| F7 integrity only at boot | **Fixed (Fix 3)**: periodic presence/size and budgeted hash checks |
 | F8 orphan after crash during retention | Known, no change |
 | F9 coverage, seek and listing ignored segment status | **Found and fixed with Fix 1** |
 | F10 the crawler pulled quarantined files out of `.quarantine` | **Found and fixed with Fix 1** |
 | F11 the production worker stored no keyframe index and `endPts = 0` | **Found and fixed with Fix 2** |
 | Seek and frame step reported 25 fps and h264 for an unknown value | **Fixed (Fix 2)** |
-| Frame step is constant-frame-rate arithmetic, and with an index it jumps a whole GOP | Open (see F12) |
+| F12 frame step is constant-frame-rate arithmetic, and with an index it jumps a whole GOP | **Fixed (Fix 3)**: steps to the next real frame, read from the file |
 
 ## What is already right
 
@@ -136,12 +136,10 @@ the worker indexed could not move. The worker also fell back to 1920x1080, 25 fp
 registers through `RecordingCatalog.registerSegment`, keeping its own rule that an unreadable file fails the job so the queue
 retries. Proven by a real-database test, and by running that test against the old worker (`endPts` was 0).
 
-### F12. Frame stepping is not frame-exact (open, not changed)
-`stepSessionFrame` steps by `round(1000 / fps)` ms, a constant-frame-rate assumption, although the route's comment says "exact
-PTS delta". A camera with a variable frame rate steps onto the wrong frame. And `stepToAdjacentFrame`, when a keyframe
-index exists, moves to the next KEYFRAME, which is a jump of a whole GOP, not a frame. Exact stepping needs a per-frame
-timestamp index (Moonfire stores one, about 2 bytes a frame), which the catalog does not hold. Until then the forensic claim
-should read "constant-frame-rate stepping", and the step is refused when the frame rate is unknown (done in Fix 2).
+### F12. Frame stepping was not frame-exact (fixed, Fix 3)
+`stepSessionFrame` stepped by `round(1000 / fps)` ms, a constant-frame-rate assumption, although the route said "exact PTS
+delta". A variable-frame-rate camera stepped onto the wrong frame, and with a keyframe index `stepToAdjacentFrame` jumped to
+the next KEYFRAME (a whole GOP), not a frame. See Fix 3.
 
 ## Fix 2 (done): real keyframes, a cheap crawl, no assumed frame rate or codec
 
@@ -158,18 +156,39 @@ should read "constant-frame-rate stepping", and the step is refused when the fra
   Seek reports null codec and frame rate. A frame step with no frame rate and no keyframes is refused with HTTP 409 and code
   `FRAME_RATE_UNKNOWN`. The playback console shows "codec unknown" and "frame rate unknown" instead of H.264 and 25 FPS.
 
+## Fix 3 (done): exact steps, a retried notice, and checks while running
+
+* **F12, exact stepping.** A step reads the real frame times around the position straight from the file
+  (`ffprobe -read_intervals`, no decoding, about 50 ms) and lands on the next or previous real frame. "Current frame" is the
+  last frame at or before the position, which is what is on screen. This is exact on variable frame rate (tested against
+  ffprobe's own frame list on a clip with irregular gaps) and needs no stored index, so there is no per-frame data in the
+  database (that would be about 30 KB per 10-minute segment, roughly 4 GB for 32 cameras over 30 days). It crosses into the
+  next or previous segment when the recording is continuous (a gap of at most 2 s), and stays put with `clamped: true` at the
+  start or end of the recording. The step is rounded up to the millisecond so a seek to it lands on that frame.
+  A synchronized session steps to the reference camera's (first camera with footage) real frame and brings the others to
+  that moment. If the file cannot be read, the step is estimated from the frame rate and the answer says `APPROXIMATE`; with no
+  frame rate it is refused (409 `FRAME_RATE_UNKNOWN`). The console shows the end of the recording, an approximate step, or a
+  refused step. Still not frame-exact: the other cameras land on their frame at or before that moment, not on a frame of their
+  own, so multi-camera stepping is exact for the reference camera only.
+* **F5, the completion notice.** The MediaMTX hook is `curl -fsS --max-time 5 --retry 12 --retry-delay 5
+  --retry-connrefused`: about two minutes of retries, including while the backend refuses connections, no retry for client
+  errors such as an unknown camera. MediaMTX runs the command on its own goroutine, so this never delays recording. A test
+  reads `mediamtx.yml` so the retry cannot be dropped by accident.
+* **F7, checks while running.** `docs/operations/RECORDING_INTEGRITY.md`. A presence and size check goes round all segments in
+  batches; a content-hash check re-reads footage within a byte budget per run, evidence under a hold first while due (not
+  verified in 24 h). A failure marks the segment, writes an audit-chain entry and an event, and for held evidence raises a
+  CRITICAL alarm. It never deletes, moves or repairs a file. A first version let the pinned evidence use the whole budget every
+  run and starve everything else; a test caught it and held evidence now goes first only when due.
+
 ## Recommended fixes, in order
 
-Each is its own small change with its own tests, starting by turning the matching `it.failing` into `it`.
+Each is its own small change with its own tests.
 
-1. ~~**F4 then F3**~~ done (Fix 1 above).
-2. ~~**F2**~~ done (Fix 2). Hashing as a separate low-priority verification job (Moonfire's three tiers) is still open (F7).
-3. ~~**F1**~~ done (Fix 2).
+1. ~~F4, F3~~ done (Fix 1). 2. ~~F2~~ and 3. ~~F1~~ done (Fix 2). 5. ~~F5, F7~~ and 6. ~~F12~~ done (Fix 3).
 4. **F6:** set `TZ=UTC` on the MediaMTX container and add the start-time versus file-time warning; write the clock-bound
    statement into `docs/operations/EVIDENCE_VERIFICATION.md`.
-5. **F5, F7:** retry the completion notice; run the cheap integrity tier (file still present, size unchanged) on a schedule.
-6. **F12:** a per-frame timestamp index, if exact frame stepping is to be claimed.
+7. **Per-camera frame exactness for multi-camera stepping** if the product needs every camera on its own frame at once.
 
 ## Not covered
-Retention quotas and pruning order beyond the delete ordering above; object-storage archive; the playback API; behaviour under a
-real disk-full or a real MediaMTX crash. Those need the clean-VM and bench runs in the field track.
+Retention quotas and pruning order beyond the delete ordering above; object-storage archive; behaviour under a real disk-full or
+a real MediaMTX crash; the cost of the hash check on real disks. Those need the clean-VM and bench runs in the field track.

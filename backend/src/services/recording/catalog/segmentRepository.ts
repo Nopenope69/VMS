@@ -149,6 +149,33 @@ export class SegmentRepository {
     });
   }
 
+  /**
+   * The FINALIZED segment that follows (or precedes) this one on the same camera, if it starts (ends) within
+   * `maxGapMs` of this one's end (start): a frame step crosses a segment boundary, never a recording gap.
+   */
+  async findAdjacentSegment(segment: RecordingSegment, direction: 'FORWARD' | 'BACKWARD', maxGapMs: number): Promise<RecordingSegment | null> {
+    if (direction === 'FORWARD') {
+      return this.prisma.recordingSegment.findFirst({
+        where: {
+          cameraId: segment.cameraId,
+          status: SERVABLE,
+          id: { not: segment.id },
+          startTime: { gte: new Date(segment.endTime.getTime() - maxGapMs), lte: new Date(segment.endTime.getTime() + maxGapMs) },
+        },
+        orderBy: { startTime: 'asc' },
+      });
+    }
+    return this.prisma.recordingSegment.findFirst({
+      where: {
+        cameraId: segment.cameraId,
+        status: SERVABLE,
+        id: { not: segment.id },
+        endTime: { gte: new Date(segment.startTime.getTime() - maxGapMs), lte: new Date(segment.startTime.getTime() + maxGapMs) },
+      },
+      orderBy: { endTime: 'desc' },
+    });
+  }
+
   async findById(segmentId: string): Promise<RecordingSegment | null> {
     return this.prisma.recordingSegment.findUnique({
       where: { id: segmentId },

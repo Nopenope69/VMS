@@ -160,6 +160,81 @@ export class FFmpegService {
     });
   }
 
+  /** Start time and clock of a file's video stream, cached (a file does not change once finalized). */
+  private static streamTimingCache = new Map<string, { startPts: number; num: number; den: number }>();
+
+  private static async streamTiming(filePath: string): Promise<{ startPts: number; num: number; den: number } | null> {
+    let key = filePath;
+    try {
+      const st = fs.statSync(filePath);
+      key = `${filePath}|${st.size}|${st.mtimeMs}`;
+    } catch {
+      return null;
+    }
+    const hit = this.streamTimingCache.get(key);
+    if (hit) return hit;
+    const out = await this.runProbeJson(['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=start_pts,time_base', '-of', 'json', filePath], 20_000);
+    const stream = out?.streams?.[0];
+    const [num, den] = String(stream?.time_base ?? '').split('/').map(Number);
+    const startPts = Number(stream?.start_pts);
+    if (!num || !den || !Number.isFinite(startPts)) return null;
+    if (this.streamTimingCache.size > 512) this.streamTimingCache.clear();
+    const timing = { startPts, num, den };
+    this.streamTimingCache.set(key, timing);
+    return timing;
+  }
+
+  private static runProbeJson(args: string[], timeoutMs: number): Promise<any | null> {
+    return new Promise((resolve) => {
+      const proc = spawn('ffprobe', args);
+      const chunks: Buffer[] = [];
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        resolve(null);
+      }, timeoutMs);
+      proc.stdout.on('data', (d) => chunks.push(d));
+      proc.on('error', () => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code !== 0) return resolve(null);
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  /**
+   * The real frame times in a window around `centerPts90k` (90 kHz, from the first presented frame), read from the
+   * container without decoding or reading the whole file. Sorted and de-duplicated; null when the file or its
+   * timestamps cannot be read. Used for frame-exact stepping, on constant and variable frame rate alike.
+   */
+  static async probeFrameTimes(filePath: string, centerPts90k: bigint, spanSeconds: number): Promise<bigint[] | null> {
+    const timing = await this.streamTiming(filePath);
+    if (!timing) return null;
+    const centerSec = Number(centerPts90k) / 90000;
+    const startSec = Math.max(0, centerSec - spanSeconds);
+    // Read intervals are in container time, which starts at the stream's first presented frame.
+    const startAbs = (timing.startPts * timing.num) / timing.den + startSec;
+    const out = await this.runProbeJson(
+      ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts', '-read_intervals', `${startAbs.toFixed(6)}%+${(centerSec - startSec + spanSeconds).toFixed(6)}`, '-of', 'json', filePath],
+      20_000
+    );
+    if (!out) return null;
+    const times = new Set<string>();
+    for (const p of out.packets || []) {
+      const pts = Number(p.pts);
+      if (p.pts === undefined || p.pts === 'N/A' || !Number.isFinite(pts)) continue;
+      times.add(BigInt(Math.round(((pts - timing.startPts) * 90000 * timing.num) / timing.den)).toString());
+    }
+    return [...times].map((t) => BigInt(t)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  }
+
   /**
    * Lossless, fast, keyframe-aligned stream copy trimming (-c copy).
    */

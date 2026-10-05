@@ -22,6 +22,16 @@ export interface SynchronizedSeekResult {
   cameras: CameraPlaybackState[];
 }
 
+/** A frame step: the seek result plus how the step was found. */
+export interface FrameStepResult extends SynchronizedSeekResult {
+  /** EXACT: the next real frame of the reference camera. APPROXIMATE: estimated from its frame rate. */
+  precision: 'EXACT' | 'APPROXIMATE';
+  /** The camera whose frame set the step; the others are brought to the same moment. */
+  referenceCameraId: string;
+  /** True when the reference camera has no further frame in that direction. */
+  clamped: boolean;
+}
+
 export interface ReverseShuttleStep {
   cameraId: string;
   pts: bigint;
@@ -192,7 +202,7 @@ export class PlaybackSyncService {
   public async stepSessionFrame(
     sessionId: string,
     direction: 'FORWARD' | 'BACKWARD'
-  ): Promise<SynchronizedSeekResult> {
+  ): Promise<FrameStepResult> {
     const session = await this.prisma.playbackSession.findUnique({
       where: { id: sessionId },
     });
@@ -201,23 +211,29 @@ export class PlaybackSyncService {
     }
 
     const cameraIds = session.cameraIdsJson as string[];
-    // The step length comes from a camera's recorded frame rate. When no camera at this moment has one, the step is
-    // refused: assuming 25 fps would put a forensic step on the wrong frame.
-    let frameStepDeltaMs: number | null = null;
+    // The first camera with footage at this moment is the reference: the step lands on ITS next real frame, and the
+    // other cameras are brought to that moment. When no camera can step (no readable file and no frame rate), the
+    // step is refused: guessing a 25 fps step would put a forensic step on the wrong frame.
+    let step: Awaited<ReturnType<RecordingCatalog['stepToAdjacentFrame']>> | null = null;
+    let referenceCameraId: string | null = null;
+    let lastError: unknown = null;
 
     for (const cameraId of cameraIds) {
       const seekTarget = await this.catalog.findSeekTarget(cameraId, session.masterTimeUtc);
-      if (seekTarget.status === 'READY' && seekTarget.fps && seekTarget.fps > 0) {
-        frameStepDeltaMs = Math.max(1, Math.round(1000 / seekTarget.fps));
+      if (seekTarget.status !== 'READY' || !seekTarget.segmentId || seekTarget.currentPts === undefined) continue;
+      try {
+        step = await this.catalog.stepToAdjacentFrame(cameraId, seekTarget.segmentId, seekTarget.currentPts, direction);
+        referenceCameraId = cameraId;
         break;
+      } catch (err) {
+        lastError = err;
       }
     }
-    if (frameStepDeltaMs === null) {
-      throw new FrameStepUnavailableError('no camera at this moment has a recorded frame rate');
+    if (!step || !referenceCameraId) {
+      throw lastError instanceof FrameStepUnavailableError
+        ? lastError
+        : new FrameStepUnavailableError('no camera has footage at this moment that can be stepped');
     }
-
-    const signedDelta = direction === 'FORWARD' ? frameStepDeltaMs : -frameStepDeltaMs;
-    const targetUtc = new Date(session.masterTimeUtc.getTime() + signedDelta);
 
     // Freeze session in PAUSED state on single-frame step
     await this.prisma.playbackSession.update({
@@ -228,7 +244,8 @@ export class PlaybackSyncService {
       },
     });
 
-    return this.seekPlaybackSession(sessionId, targetUtc);
+    const seek = await this.seekPlaybackSession(sessionId, step.utc);
+    return { ...seek, precision: step.precision, referenceCameraId, clamped: step.clamped };
   }
 
   /**
