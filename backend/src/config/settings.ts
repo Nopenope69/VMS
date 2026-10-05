@@ -13,6 +13,8 @@
  * SELF_CHECKED_SETTINGS so the guard test knows where those reads live.
  */
 
+import { parseTemplates } from '../services/search/templateList';
+
 export class SettingError extends Error {
   constructor(public readonly variable: string, message: string) {
     super(`${variable}: ${message}`);
@@ -122,6 +124,20 @@ export const SETTINGS = {
   VIGILONE_AIR_GAPPED: flag('No internet: outbound notifications that need it are refused.'),
   ARCHIVE_ALLOW_INSECURE_ENDPOINT: flag('Allow an http (not https) object-storage endpoint, for a LAN MinIO.'),
   VIGILONE_HOST_NTP_SYNC: optionalText('Host clock sync state passed in by vigilonectl golive (yes / no).'),
+
+  // Search
+  QUERY_TEMPLATE_ENSEMBLE: flag('Embed each text query in several phrasings and average them (off by default; recall gain not measured on this appliance).'),
+  QUERY_TEMPLATES: {
+    parse: (raw: string, name: string) => {
+      try {
+        return parseTemplates(raw);
+      } catch (e: any) {
+        throw new SettingError(name, e.message);
+      }
+    },
+    default: parseTemplates(''),
+    doc: "Phrasings for QUERY_TEMPLATE_ENSEMBLE, separated by '|', each containing {q} once (default: '{q}', 'a photo of {q}', 'a CCTV image of {q}', 'a security camera photo of {q}').",
+  } as Spec<string[]>,
 
   // Test only
   WHATSAPP_API_BASE_URL: optionalText('Test only: WhatsApp Cloud API base URL (honoured only when NODE_ENV=test).'),
