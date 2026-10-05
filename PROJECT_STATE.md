@@ -429,9 +429,38 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 - **Plain-language search** (first of the five, Session 29, feature `NL_SEARCH`): rules with an English, Hinglish
   and Devanagari word list fill the Find form; Qwen3-4B (candidate, needs the owner's approval to run in the
   product) only rewrites requests the word list cannot read, and what the rules read in the original wins.
-  Measured in `docs/ai/nl-search-evaluation.md`.
-- **Next:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm triage,
-  footage integrity), one PR each, from `master`.
+  Measured in `docs/ai/nl-search-evaluation.md` (merged, #44).
+- **Model research (Session 30, 2026-10-05):** `docs/strategy/model-research-2026-10-05/` (README summary plus four
+  reports: pose/fall/climb, fire/smoke/weapons, events over time, other models). Main finding: training-data
+  licences, not code licences, decide what can ship. On the branch, not yet in a PR (it can ride with the pose PR).
+- **Owner decisions (2026-10-05):**
+  - **Training-data policy:** models with a permissive licence that were trained on non-commercial research data
+    MAY be shipped (the owner accepts the risk; the research recommended against it and suggested Indian legal
+    advice).
+  - **Pose model:** start person down and fence climbing on the **ready-made RTMPose files** (body7 weights), not
+    the COCO-only RTMO export or a retrain.
+- **Next (owner, in a new session): build person down and fence climbing on RTMPose-s.** Plan:
+  1. Add RTMPose-s as a candidate in `scripts/models/models.lock.json`: HF mirror `Tau-J/RTMPose` (Apache-2.0 card)
+     at commit `cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd`, file
+     `rtmposev1/onnx_sdk/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.zip` (ONNX inside; pin the
+     zip and member SHA-256). Record the training data honestly (body7 = COCO, AI Challenger, CrowdPose, MPII,
+     sub-JHMDB, Halpe, PoseTrack18; PoseTrack forbids commercial surveillance), governance
+     `PENDING_HUMAN_REVIEW`. The coding agent must not add the approval to `model-license-exceptions.json` unless
+     the owner explicitly says so.
+  2. Worker: run RTMPose-s top-down on YOLOX person boxes (affine crop 256x192, SimCC argmax decode; opset 11, no
+     custom ops; measured 6.2 ms per crop on 4 vCPU), attach 17 COCO keypoints to person detections, golden test
+     with the real model. RTMO-s (77 ms per 640x640 frame) is the later option for crowded cameras.
+  3. Backend rules beside unattended bag and wrong way (`services/spatial/engine/threatRules.ts`): **person down**
+     (a fall seen happening: torso angle and drop speed relative to height, then lying still for N seconds; a
+     separate lower-severity "lying still"; zones and schedules where lying is normal, e.g. railway platforms) and
+     **fence climbing** (operator draws the fence base and fence-top lines; wrists above the top line, feet off
+     the ground, hip crossing, then the person on the protected side; box-only fallback when pose is weak).
+     New event kinds, events.v1 additions, explanations, rule screen, real-DB tests, browser test, docs, one PR.
+  4. Data: commercially usable fall sets for evaluation are CAUCAFall, UP-Fall, Simuletic synthetic (CC BY 4.0)
+     and GMDCSA-24 (MIT); fence climbing needs staged recordings.
+- **After that:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm
+  triage, footage integrity), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
+  one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).
 
 **Open follow-ups, all known and documented:**
 
