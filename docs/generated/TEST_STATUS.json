@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-05T11:25:28.479Z",
-  "commit": "97398c922a9f7d68ddc5233f4cfb23ecfb05ee5c",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37302044959",
+  "generatedAt": "2026-10-05T15:16:34.427Z",
+  "commit": "1af558684287985d504f0335088b619774e93406",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37330487009",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 159,
-        "passed": 159,
+        "total": 160,
+        "passed": 160,
         "failed": 0
       },
       "tests": {
-        "total": 1223,
-        "passed": 1187,
+        "total": 1226,
+        "passed": 1190,
         "failed": 0,
         "skipped": 36
       },
@@ -197,7 +197,7 @@
         {
           "file": "backend/src/__tests__/contracts/mediaProvider.v1.test.ts",
           "status": "passed",
-          "passed": 7,
+          "passed": 8,
           "failed": 0,
           "skipped": 0
         },
@@ -681,6 +681,13 @@
           "file": "backend/src/__tests__/mediaAuth.test.ts",
           "status": "passed",
           "passed": 10,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/mediamtxProvider.test.ts",
+          "status": "passed",
+          "passed": 2,
           "failed": 0,
           "skipped": 0
         },
@@ -1384,9 +1391,9 @@
     }
   ],
   "totals": {
-    "suites": 192,
-    "tests": 1548,
-    "passed": 1499,
+    "suites": 193,
+    "tests": 1551,
+    "passed": 1502,
     "failed": 8,
     "skipped": 41
   },
