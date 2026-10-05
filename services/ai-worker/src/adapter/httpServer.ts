@@ -30,6 +30,7 @@ function send(res: http.ServerResponse, status: number, body: unknown, correlati
  *   GET  /v1/health      -> AdapterHealthV1 (HTTP 200 when READY/DEGRADED, 503 otherwise)
  *   POST /v1/infer       -> InferenceResultV1 (HTTP status mirrors the error code; 429 carries Retry-After)
  *   POST /v1/embed-text  -> InferenceResultV1 (v1.1, only adapters with a text tower; otherwise 404)
+ *   POST /v1/rewrite-text -> InferenceResultV1 (v1.2, only query_rewrite adapters; otherwise 404)
  *   GET  /metrics        -> Prometheus text
  * Every response echoes X-Correlation-Id (generated when the caller sends none).
  */
@@ -41,6 +42,8 @@ export interface AdapterCoreLike {
   handleInferRequest(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
   /** v1.1, optional: only an adapter with a text tower serves POST /v1/embed-text. */
   handleTextEmbedRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
+  /** v1.2, optional: only a query_rewrite adapter serves POST /v1/rewrite-text. */
+  handleTextRewriteRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
 }
 
 export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOptions = {}): http.Server {
@@ -51,7 +54,7 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
     const correlationId =
       typeof incoming === 'string' && /^[\w.:-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
     const url = (req.url || '/').split('?')[0];
-    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url === '/v1/descriptor' || url === '/v1/health' || url === '/v1/infer' || url === '/v1/embed-text' || url === '/metrics' ? url : 'other', method: req.method || '' });
+    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url === '/v1/descriptor' || url === '/v1/health' || url === '/v1/infer' || url === '/v1/embed-text' || url === '/v1/rewrite-text' || url === '/metrics' ? url : 'other', method: req.method || '' });
 
     if (req.method === 'GET' && url === '/v1/descriptor') return send(res, 200, core.describe(), correlationId);
     if (req.method === 'GET' && url === '/v1/health') {
@@ -61,7 +64,12 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
     if (req.method === 'GET' && url === '/metrics') {
       return send(res, 200, core.metrics.render() + (opts.extraMetrics ? opts.extraMetrics() : ''), correlationId);
     }
-    const textEmbed = req.method === 'POST' && url === '/v1/embed-text' && core.handleTextEmbedRequest ? core.handleTextEmbedRequest.bind(core) : null;
+    const textEmbed =
+      req.method === 'POST' && url === '/v1/embed-text' && core.handleTextEmbedRequest
+        ? core.handleTextEmbedRequest.bind(core)
+        : req.method === 'POST' && url === '/v1/rewrite-text' && core.handleTextRewriteRequest
+          ? core.handleTextRewriteRequest.bind(core)
+          : null;
     if (req.method === 'POST' && (url === '/v1/infer' || textEmbed)) {
       const handle = textEmbed ?? core.handleInferRequest.bind(core);
       const chunks: Buffer[] = [];

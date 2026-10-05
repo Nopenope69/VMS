@@ -188,4 +188,28 @@ describe('SDK adapter core', () => {
     expect(await c.embedText({ ...body, text: 'red car' })).toMatchObject({ status: 'ok', embedding: { dim: 2, normalized: true } });
     expect(calls).toBe(1);
   });
+
+  it('text rewrite (v1.2): served only by a model that rewrites, validated, vocabulary passed through', async () => {
+    let seen: { text: string; vocabulary: string[] } | null = null;
+    const rewriter: AdapterModel = {
+      card: card({ modelId: 'qwen', task: 'query_rewrite', classes: ['text'], runtime: 'llama.cpp' }),
+      infer: async () => ({}),
+      rewriteText: async (text, vocabulary) => ((seen = { text, vocabulary }), { text: 'white car at Main Gate', promptSha256: 'c'.repeat(64) }),
+    };
+    const c = core([rewriter, { card: card(), infer: async () => ({}) }]);
+    expect(c.servesTextRewrite).toBe(true);
+    const body = { contract: 'ai-adapter.v1', requestId: 'q1', tenantId: 't', modelId: 'qwen', text: 'मुख्य गेट पर सफेद कार', vocabulary: ['Main Gate'], deadlineMs: 5000 };
+    expect(await c.rewriteText(body)).toMatchObject({ status: 'ok', requestId: 'q1', detections: [], rewrite: { text: 'white car at Main Gate', promptSha256: 'c'.repeat(64) }, provenance: { modelId: 'qwen' } });
+    expect(seen).toEqual({ text: 'मुख्य गेट पर सफेद कार', vocabulary: ['Main Gate'] });
+    // The detector does not rewrite; blank text and an over-long vocabulary entry are refused.
+    expect(await c.rewriteText({ ...body, modelId: 'test-double' })).toMatchObject({ status: 'error', errorCode: 'UNSUPPORTED_TASK' });
+    expect(await c.rewriteText({ ...body, text: '  ' })).toMatchObject({ status: 'error', errorCode: 'INVALID_FRAME' });
+    expect(await c.rewriteText({ ...body, vocabulary: ['x'.repeat(61)] })).toMatchObject({ status: 'error', errorCode: 'INVALID_FRAME' });
+    // An empty or malformed answer is never a success.
+    const bad = core([{ ...rewriter, rewriteText: async () => ({ text: ' ', promptSha256: 'c'.repeat(64) }) }]);
+    expect(await bad.rewriteText(body)).toMatchObject({ status: 'error', errorCode: 'RUNTIME_ERROR' });
+    const badHash = core([{ ...rewriter, rewriteText: async () => ({ text: 'ok', promptSha256: 'nope' }) }]);
+    expect(await badHash.rewriteText(body)).toMatchObject({ status: 'error', errorCode: 'RUNTIME_ERROR' });
+    expect(core([{ card: card(), infer: async () => ({}) }]).servesTextRewrite).toBe(false);
+  });
 });

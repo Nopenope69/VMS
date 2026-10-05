@@ -6,6 +6,7 @@
  *                         down, also 200); LOADING before and FAILED with the error (503)
  *   POST /v1/infer        InferenceRequestV1 -> InferenceResultV1
  *   POST /v1/embed-text   TextEmbeddingRequestV1 (only when a model has embedText)
+ *   POST /v1/rewrite-text TextRewriteRequestV1 (v1.2, only when a model has rewriteText)
  *
  * The contract rules themselves (validation, deadlines, bounded concurrency, provenance, result checks) are in
  * core.ts, which an adapter with its own HTTP layer can use directly. This file adds the transport: body size
@@ -65,7 +66,16 @@ export function createAdapter(o: AdapterOptions): Adapter {
       const h = core.health();
       return send(res, h.status === 'READY' || h.status === 'DEGRADED' ? 200 : 503, h, corr);
     }
-    const route = req.method === 'POST' && url === '/v1/infer' ? core.infer : req.method === 'POST' && url === '/v1/embed-text' && core.servesTextEmbedding ? core.embedText : null;
+    const route =
+      req.method !== 'POST'
+        ? null
+        : url === '/v1/infer'
+          ? core.infer
+          : url === '/v1/embed-text' && core.servesTextEmbedding
+            ? core.embedText
+            : url === '/v1/rewrite-text' && core.servesTextRewrite
+              ? core.rewriteText
+              : null;
     if (!route) return send(res, 404, { error: 'not found' }, corr);
 
     const chunks: Buffer[] = [];

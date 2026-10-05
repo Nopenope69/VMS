@@ -12,7 +12,8 @@ depends on a model directly.
 ## Messages
 
 - **`AdapterDescriptorV1`**: `adapterId`, `adapterVersion`, `tasks[]`
-  (`object_detection`, `plate_recognition`, `face_detection_for_redaction`, `embedding`),
+  (`object_detection`, `plate_recognition`, `face_detection_for_redaction`, `embedding`,
+  `vlm_verification`, `query_rewrite`),
   `models[]` (model cards), `requiresNetworkEgress` (air-gapped deployments must reject `true`).
 - **`ModelCardV1`**: `modelId`, `name`, `version`, `sha256`, `task`, `classes[]`,
   `codeLicense`, `weightsLicense`, `weightsSource`, `runtime` (`onnxruntime` \| `openvino`),
@@ -42,6 +43,15 @@ depends on a model directly.
     `verification: { targetClass, answer: yes | no | unclear, reason, promptSha256 }` and empty
     `detections`. The answer is advisory: a consumer must never change an alarm because of it. A model card
     may name `llama.cpp` as its runtime.
+  - Text rewrite (v1.2, additive and optional; task `query_rewrite`): `POST /v1/rewrite-text` with
+    `TextRewriteRequestV1` = `{ contract, requestId, tenantId, modelId, text (1 to 512 characters),
+    vocabulary? (at most 64 place names, each at most 60 characters), deadlineMs }`. The `ok` result carries
+    `rewrite: { text, promptSha256 }` (the request in plain English, keeping the place names as given in
+    `vocabulary`) and empty `detections`; provenance names the rewrite model. The rewrite is only text for the
+    consumer's own rules to read: it never sets a search filter by itself, and VigilOne keeps what its rules
+    read in the original request when the two disagree. An adapter without a rewrite model answers 404;
+    `/v1/infer` on `query_rewrite` answers `UNSUPPORTED_TASK`. Errors use the same codes and HTTP statuses as
+    `/v1/infer`.
   - `error`: `errorCode` (`MODEL_NOT_LOADED`, `MODEL_INTEGRITY_FAILED`, `LICENSE_REJECTED`,
     `UNSUPPORTED_TASK`, `INVALID_FRAME`, `DEADLINE_EXCEEDED`, `RUNTIME_ERROR`, `OVERLOADED`),
     `message`, `retryable`. An error never carries detections.

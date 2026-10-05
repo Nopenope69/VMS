@@ -13,10 +13,9 @@
  */
 import crypto from 'crypto';
 import fs from 'fs';
-import net from 'net';
 import path from 'path';
-import { ChildProcess, spawn } from 'child_process';
 import { AnprLoadError } from '../anpr/anprService';
+import { sha256File, startLlamaServer } from '../llama/llamaServer';
 import {
   artifactPathFor,
   assertCandidateApproved,
@@ -120,27 +119,6 @@ export function parseAnswer(content: unknown, reasonMaxChars: number): { answer:
   return { answer: j.answer, reason: j.reason.trim() };
 }
 
-function sha256File(file: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const h = crypto.createHash('sha256');
-    fs.createReadStream(file)
-      .on('data', (c) => h.update(c))
-      .on('error', reject)
-      .on('end', () => resolve(h.digest('hex')));
-  });
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const s = net.createServer();
-    s.once('error', reject);
-    s.listen(0, '127.0.0.1', () => {
-      const port = (s.address() as net.AddressInfo).port;
-      s.close(() => resolve(port));
-    });
-  });
-}
-
 function loadDefinition(defPath: string): { def: VlmPipelineDefinition; sha: string } {
   if (!fs.existsSync(defPath)) throw new AnprLoadError('ARTIFACT_MISSING', `pipeline definition ${defPath} not found`);
   const raw = fs.readFileSync(defPath);
@@ -202,83 +180,31 @@ export async function loadVlmPipeline(opts: VlmLoadOptions = {}): Promise<Loaded
   const components = await verifyVlmComponents(def, opts);
   const bin = opts.serverBin ?? process.env.VLM_LLAMA_SERVER_BIN;
   if (!bin) throw new AnprLoadError('ARTIFACT_MISSING', 'VLM_LLAMA_SERVER_BIN is not set (path of the llama-server binary built from the pinned llama.cpp commit)');
-  if (!fs.existsSync(bin)) throw new AnprLoadError('ARTIFACT_MISSING', `llama-server binary ${bin} not found`);
-  const binarySha256 = await sha256File(bin);
   const model = components.find((c) => c.role === 'vlm_language_model')!.file;
   const mmproj = components.find((c) => c.role === 'vlm_projector')!.file;
-  const port = await freePort();
-  const apiKey = crypto.randomBytes(24).toString('hex');
-  const threads = opts.threads ?? (Number(process.env.VLM_THREADS) || Math.max(1, require('os').cpus().length));
-  const args = [
-    '-m', model, '--mmproj', mmproj,
-    '--host', '127.0.0.1', '--port', String(port),
-    '--api-key', apiKey,
-    '-t', String(threads), '-c', String(def.generation.contextSize),
-    '--parallel', '1', '--no-webui',
-  ];
-  const child: ChildProcess = spawn(bin, args, { stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env } });
-  let exited: string | null = null;
-  let stderrTail = '';
-  child.stderr!.on('data', (c: Buffer) => {
-    stderrTail = (stderrTail + c.toString('utf8')).slice(-2000);
+  const server = await startLlamaServer({
+    bin,
+    model,
+    extraArgs: ['--mmproj', mmproj],
+    contextSize: def.generation.contextSize,
+    threads: opts.threads ?? (Number(process.env.VLM_THREADS) || undefined),
+    commit: def.llamaCpp.commit,
+    tag: def.llamaCpp.tag,
+    requireVision: true,
+    startupTimeoutMs: opts.startupTimeoutMs,
   });
-  child.on('exit', (code, signal) => {
-    exited = `llama-server exited (code ${code}, signal ${signal})`;
-  });
-  child.on('error', (e) => {
-    exited = `llama-server could not start: ${e.message}`;
-  });
-  const base = `http://127.0.0.1:${port}`;
-  const auth = { authorization: `Bearer ${apiKey}` };
-  const kill = async () => {
-    if (exited) return;
-    child.kill('SIGTERM');
-    await new Promise<void>((r) => {
-      const t = setTimeout(() => {
-        child.kill('SIGKILL');
-        r();
-      }, 5000);
-      child.once('exit', () => {
-        clearTimeout(t);
-        r();
-      });
-    });
-  };
-
+  const { base, headers: auth } = server;
   try {
-    const deadline = Date.now() + (opts.startupTimeoutMs ?? 300_000);
-    for (;;) {
-      if (exited) throw new AnprLoadError('INVALID_PIPELINE', `${exited}: ${stderrTail.slice(-500)}`);
-      if (Date.now() > deadline) throw new AnprLoadError('INVALID_PIPELINE', 'llama-server did not become ready in time');
-      try {
-        const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(2000) });
-        if (r.ok) break;
-      } catch {
-        /* not listening yet */
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    const props: any = await (await fetch(`${base}/props`, { headers: auth, signal: AbortSignal.timeout(5000) })).json();
-    const buildInfo = String(props?.build_info ?? '');
-    if (!buildInfo.endsWith(def.llamaCpp.commit.slice(0, 7))) {
-      throw new AnprLoadError('INVALID_PIPELINE', `llama-server reports build '${buildInfo}', the pipeline pins llama.cpp ${def.llamaCpp.tag} (${def.llamaCpp.commit.slice(0, 7)})`);
-    }
-    if (path.resolve(String(props?.model_path ?? '')) !== path.resolve(model)) {
-      throw new AnprLoadError('INVALID_PIPELINE', `llama-server serves ${props?.model_path}, not the verified ${model}`);
-    }
-    if (!Array.isArray(props?.modalities) ? props?.modalities?.vision !== true : !props.modalities.includes('vision')) {
-      throw new AnprLoadError('INVALID_PIPELINE', 'llama-server has no vision input (the projector did not load)');
-    }
-
     return {
       definition: def,
       definitionSha256: sha,
       components,
-      runtime: { buildInfo, binarySha256 },
-      alive: () => !exited,
-      close: kill,
+      runtime: { buildInfo: server.buildInfo, binarySha256: server.binarySha256 },
+      alive: () => !server.exited(),
+      close: server.close,
       async ask(jpeg, targetClass, deadlineMs) {
-        if (exited) throw new VlmRuntimeError(exited);
+        const gone = server.exited();
+        if (gone) throw new VlmRuntimeError(gone);
         const question = buildQuestion(def, targetClass);
         const body = {
           messages: [
@@ -311,7 +237,7 @@ export async function loadVlmPipeline(opts: VlmLoadOptions = {}): Promise<Loaded
       },
     };
   } catch (e) {
-    await kill();
+    await server.close();
     throw e;
   }
 }

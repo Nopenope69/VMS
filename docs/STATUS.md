@@ -6,6 +6,28 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 29 (2026-10-05): plain-language search (rules first, a local model for what they cannot read)
+
+Branch `claude/amazing-hypatia-hkgolw`, from `master` after #43. Feature `NL_SEARCH` (default OFF), endpoint
+`POST /api/v1/tracks/parse-query`, Find panel box "Ask in plain words". ai-adapter.v1.2 adds task `query_rewrite`
+and `POST /v1/rewrite-text` (additive); SDK 0.3.0 adds `rewriteText`. Worker mode `query-rewrite` runs Qwen3-4B
+(candidate, `PENDING_HUMAN_REVIEW`) on the pinned llama-server. No migration.
+
+Local runs: backend `tsc` passes; backend full suite in band 159 suites, 1185 passed, 36 skipped, 2 failed (the
+pinned feature-flag list and the one-reader-per-setting guard, which then got `NL_SEARCH` and the rewrite client
+and pass, 49/49 on rerun); all six gates exit 0 (after the rewrite adapter's version string was tagged like the
+others). Worker 32/33 suites, 323 passed, 2 skipped (RF-DETR, model not fetched), with the real Qwen3-4B; SDK 31/31,
+`check-contract` and worker `check-sdk` pass; frontend `tsc` and build pass; browser test
+`plain-language-search.spec.ts` 2/2.
+
+| Item | Label | Evidence and limits |
+| --- | --- | --- |
+| Rules and word list | DONE_VERIFIED on labelled sets | `queryParser.test.ts` (11 tests, floors per set). English and Hinglish held-out set 28/30 on its first run (29/30 after the "last hour" fix); `dev` 39/40. Sets written by the coding agent; see `docs/ai/nl-search-evaluation.md`. |
+| Rewrite model | DONE_VERIFIED on labelled sets | Devanagari set 0/20 with rules alone, 19/20 with the Qwen3-4B rewrite; median 2.4 s on CPU. `goldenQueryRewrite.test.ts` runs the real model (3 requests and a determinism check). The model needs the owner's licence approval to run in the product. |
+| Endpoint | DONE_VERIFIED | `nlSearchRealDb.test.ts`: 501 with the flag off, 400 on a bad request, site time zone, another tenant's cameras never matched, only unreadable requests sent to the model with this tenant's names, original reading wins, fallback with the reason when the model fails or is not set up. |
+| Find panel | DONE_VERIFIED in a browser | `plain-language-search.spec.ts`: the request fills the form and lists what was understood, removing a part changes the search, the unread notice without a model. |
+| Real operators' requests | NOT_STARTED / BLOCKED_HUMAN | Needs the pilot: operators' own requests, scored the same way. |
+
 ## Session 28 (2026-10-04): threat detections without a new model (unattended bag, wrong way)
 
 Branch `claude/amazing-hypatia-hkgolw`, from `master` after #42. Migration `20261013000000_threat_rules`

@@ -16,6 +16,9 @@ import { EmbeddingError, loadEmbedding } from '../services/search/cropEmbeddingS
 import { jpegSize } from '../services/search/embeddingAdapterClient';
 import { queryEmbedder } from '../services/search/queryEmbedder';
 import { DEFAULT_CANDIDATES, MAX_CANDIDATES, MAX_EXTRA_TERMS, MAX_TRACK_RESULTS, searchTracks } from '../services/search/trackSearch';
+import { mergeWithRewrite, parseSearchRequest } from '../services/search/queryParser';
+import { queryRewriter } from '../services/search/queryRewriteClient';
+import { MetricsService } from '../services/observability/metrics.service';
 
 /**
  * Track index API (feature TRACK_INDEX, licence feature ADVANCED_SEARCH): one record per tracked object.
@@ -288,6 +291,58 @@ router.post('/search', authorize(Permission.SEARCH_VIEW), async (req: Request, r
     });
   } catch (err) {
     return searchFail(res, err);
+  }
+});
+
+// ------------------------------------------------------------------ plain-language search (feature NL_SEARCH)
+
+const ParseBody = z.object({ text: z.string() }).strict();
+const PARSE_METRIC = 'vigilone_nl_search_parses_total';
+const PARSE_HELP = 'Plain-language search requests turned into filters, by outcome';
+
+/**
+ * POST /tracks/parse-query { text }: the filters a plain-language request means, for the operator to check and change
+ * before searching. Rules read the request with this tenant's camera and zone names and the site's time zone; a
+ * request the word list cannot read is rewritten into English by the local query-rewrite model, and the rules read
+ * that too (what they read in the original stands). Nothing is searched, stored or logged here; the search that
+ * follows is audited as usual.
+ */
+router.post('/parse-query', authorize(Permission.SEARCH_VIEW), async (req: Request, res: Response) => {
+  if (!isFeatureEnabled(FeatureFlag.NL_SEARCH)) {
+    return res.status(501).json({ error: 'plain-language search is not enabled (VIGILONE_FEATURE_NL_SEARCH)', code: 'FEATURE_DISABLED', feature: FeatureFlag.NL_SEARCH });
+  }
+  const p = ParseBody.safeParse(req.body);
+  const text = p.success ? p.data.text.trim() : '';
+  if (!text || text.length > MAX_QUERY_TEXT) return res.status(400).json({ error: `text must be 1 to ${MAX_QUERY_TEXT} characters and not blank`, code: 'INVALID_QUERY' });
+  const tenantId = req.user!.tenantId;
+  try {
+    const [cameras, zones, site] = await Promise.all([
+      prisma.camera.findMany({ where: { tenantId }, select: { id: true, name: true } }),
+      prisma.detectionZone.findMany({ where: { tenantId, enabled: true, type: 'INCLUSION' }, select: { id: true, name: true, cameraId: true } }),
+      prisma.site.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' }, select: { timezone: true } }),
+    ]);
+    const ctx = { cameras, zones, now: new Date(), timeZone: site?.timezone || 'Asia/Kolkata' };
+    let parsed = parseSearchRequest(text, ctx);
+    let rewrite: Record<string, unknown> = { used: false };
+    if (parsed.needsRewrite) {
+      const rewriter = queryRewriter();
+      if (!rewriter) {
+        rewrite = { used: false, reason: 'REWRITE_NOT_CONFIGURED' };
+      } else {
+        try {
+          const r = await rewriter.rewrite(tenantId, text, [...cameras.map((c) => c.name), ...zones.map((z) => z.name)]);
+          parsed = mergeWithRewrite(parsed, parseSearchRequest(r.english, ctx));
+          rewrite = { used: true, english: r.english, model: r.model, promptSha256: r.promptSha256, inferenceId: r.inferenceId, latencyMs: r.latencyMs };
+        } catch (e: any) {
+          rewrite = { used: false, reason: e?.code || 'QUERY_REWRITE_UNAVAILABLE', message: e?.message };
+        }
+      }
+    }
+    MetricsService.incCounter(PARSE_METRIC, PARSE_HELP, { outcome: rewrite.used ? 'rewritten' : parsed.needsRewrite ? 'unread' : 'rules' });
+    const { needsRewrite, ...out } = parsed;
+    return res.json({ ...out, unread: needsRewrite, rewrite });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

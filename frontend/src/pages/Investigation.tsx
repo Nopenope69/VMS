@@ -618,6 +618,7 @@ export const Investigation: React.FC = () => {
         <FindPanel
           cameras={cameras}
           semanticSearch={featureFlags.SEMANTIC_SEARCH}
+          plainLanguage={featureFlags.NL_SEARCH}
           canSealEvidence={['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role)}
           canOpenIncident={['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role)}
           onSearch={() => stopwatch.step('SEARCH')}

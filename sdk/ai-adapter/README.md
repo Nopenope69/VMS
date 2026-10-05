@@ -3,13 +3,14 @@
 This package lets you build an AI adapter that VigilOne can use: your detector, plate reader or embedding
 model behind the `ai-adapter.v1` HTTP contract (`docs/contracts/ai-adapter.v1.md`).
 
-**Status:** version 0.2.0 (0.2.0 added the hooks below that the VigilOne ai-worker runs on). It is **private and unpublished**: the repository has no licence yet, and the
+**Status:** version 0.3.0 (0.2.0 added the hooks below that the VigilOne ai-worker runs on; 0.3.0 added `rewriteText`). It is **private and unpublished**: the repository has no licence yet, and the
 owner has to choose one before the SDK can be published.
 
 ## What you write, what the SDK guarantees
 
 You write the model call. The SDK serves `/v1/descriptor`, `/v1/health`, `/v1/infer` and, when you provide
-`embedText`, `/v1/embed-text`. It also guarantees the following, whatever your code does:
+`embedText`, `/v1/embed-text` and, when you provide `rewriteText`, `/v1/rewrite-text` (v1.2: a request in
+any language rewritten into plain English for search rules to read). It also guarantees the following, whatever your code does:
 
 * **Checked answers.** Every answer is validated against the contract before it is sent. If your model
   returns something invalid, the SDK sends `RUNTIME_ERROR` instead of a bad success. Examples: a class that is
@@ -38,9 +39,9 @@ Other hooks: `tasks` on a model serves more tasks than its card's own (the reque
 all; `onOutcome` reports every outcome once, for your metrics.
 
 **Without HTTP.** `createAdapterCore()` gives the same rules without a server (`infer(body)`,
-`embedText(body)`, `health()`, `descriptor`), for an adapter that has its own HTTP layer. Its `run()`
+`embedText(body)`, `rewriteText(body)`, `health()`, `descriptor`), for an adapter that has its own HTTP layer. Its `run()`
 executes work that does not come in as a request (e.g. a camera stream) under the same slots and deadline.
-The VigilOne ai-worker runs its ANPR, redaction, embedding and VLM pipelines this way.
+The VigilOne ai-worker runs its ANPR, redaction, embedding, VLM and query-rewrite pipelines this way.
 
 ```ts
 import { createAdapter, verifyFileSha256, AdapterError } from '@vigilone/ai-adapter-sdk';

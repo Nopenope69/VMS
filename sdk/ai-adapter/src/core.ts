@@ -17,7 +17,8 @@
  *     RUNTIME_ERROR, never a bad success;
  *   - provenance (model hash, adapter, every component model, a fresh inference id, the frame's own
  *     timestamp) is filled in from the model card, so a success always carries it;
- *   - every outcome is reported once to `onOutcome` (for metrics), including work run outside a request.
+ *   - every outcome is reported once to `onOutcome` (for metrics), including work run outside a request;
+ *   - a query_rewrite model (v1.2) answers POST /v1/rewrite-text with plain English and its prompt hash.
  */
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -32,6 +33,7 @@ import {
   InferenceResultV1,
   ModelCardV1,
   TextEmbeddingRequestV1,
+  TextRewriteRequestV1,
   VerificationV1,
 } from './contract/aiAdapter.v1';
 import { AiProvenanceV1 } from './contract/events.v1';
@@ -127,6 +129,11 @@ export interface AdapterModel {
   infer(frame: Frame, ctx: InferContext): Promise<ModelOutput>;
   embedText?(text: string, ctx: InferContext): Promise<Float32Array>;
   /**
+   * For a query_rewrite model: the request in plain English, and the SHA-256 of the exact prompt. `vocabulary` is
+   * the caller's place names, for the model to use where they fit.
+   */
+  rewriteText?(text: string, vocabulary: string[], ctx: InferContext): Promise<{ text: string; promptSha256: string }>;
+  /**
    * Liveness: why the model cannot serve now (e.g. its runtime process died), or null. Checked on every health
    * probe and request; while it returns a reason, health is FAILED and requests get MODEL_NOT_LOADED.
    */
@@ -175,6 +182,10 @@ export interface AdapterCore {
   servesTextEmbedding: boolean;
   /** POST /v1/embed-text. Never throws. */
   embedText(body: unknown): Promise<InferenceResult>;
+  /** True when a model rewrites text (POST /v1/rewrite-text is served). */
+  servesTextRewrite: boolean;
+  /** POST /v1/rewrite-text. Never throws. */
+  rewriteText(body: unknown): Promise<InferenceResult>;
   /**
    * Runs model work that does not come in as a request (e.g. a camera stream) under the same slots, deadline
    * and outcome reporting. Throws an AdapterError on failure.
@@ -485,6 +496,31 @@ export function createAdapterCore(o: AdapterCoreOptions): AdapterCore {
     });
   }
 
+  async function rewriteText(body: unknown): Promise<InferenceResult> {
+    const named = typeof (body as any)?.modelId === 'string' ? (body as any).modelId : undefined;
+    return answer(body, named, async () => {
+      const p = TextRewriteRequestV1.safeParse(body);
+      if (!p.success) throw new AdapterError('INVALID_FRAME', `invalid TextRewriteRequestV1: ${issues(p.error)}`);
+      const r = p.data;
+      if (r.text.trim().length === 0) throw new AdapterError('INVALID_FRAME', 'invalid TextRewriteRequestV1: text is blank');
+      const m = modelFor(null, r.modelId);
+      if (!m.rewriteText) throw new AdapterError('UNSUPPORTED_TASK', `model ${r.modelId} does not rewrite text`);
+      const { value: out, latencyMs } = await guarded(r.deadlineMs, (signal) =>
+        m.rewriteText!(r.text, r.vocabulary ?? [], { requestId: r.requestId, tenantId: r.tenantId, task: m.card.task, deadlineMs: r.deadlineMs, signal })
+      );
+      if (typeof out?.text !== 'string' || !out.text.trim()) throw new AdapterError('RUNTIME_ERROR', 'the model returned no rewrite');
+      return checked({
+        contract: AI_ADAPTER_CONTRACT,
+        status: 'ok',
+        requestId: r.requestId,
+        detections: [],
+        rewrite: { text: out.text.trim(), promptSha256: out.promptSha256 },
+        provenance: provenanceFor(m, new Date().toISOString()),
+        latencyMs,
+      });
+    });
+  }
+
   async function run<T>(modelId: string, deadlineMs: number, fn: (signal: AbortSignal) => Promise<T>) {
     try {
       modelFor(null, modelId);
@@ -510,6 +546,8 @@ export function createAdapterCore(o: AdapterCoreOptions): AdapterCore {
     infer,
     servesTextEmbedding: o.models.some((m) => m.embedText),
     embedText,
+    servesTextRewrite: o.models.some((m) => m.rewriteText),
+    rewriteText,
     run,
     provenance,
     inFlight: () => inFlight,
