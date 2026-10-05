@@ -1,12 +1,11 @@
 import fs from 'fs';
-import { JobStatus } from '@prisma/client';
+import { JobStatus, SegmentStatus } from '@prisma/client';
 import prisma from '../../config/database';
 import { FFmpegService } from '../ffmpeg/ffmpeg.service';
 import { computeFileSha256 } from '../../utils/crypto';
 import StorageVolumeService from './storageVolume.service';
 import StorageEpochService from './storageEpoch.service';
 import { calculateSegmentBounds } from '../../utils/segmentPath';
-import { RecordingCatalog } from '../recording/catalog/recordingCatalog.service';
 
 export class SegmentJobWorkerService {
   private static prisma = prisma;
@@ -132,23 +131,39 @@ export class SegmentJobWorkerService {
         console.warn(`[SegmentJobWorker] Non-blocking epoch resolution note:`, err.message);
       }
 
-      // 5. Register through the catalog, the one place that decides what a segment row holds: real keyframes,
-      //    PTS bounds from the duration, no invented picture details. The probe above already refused an unreadable file.
-      await new RecordingCatalog(this.prisma).registerSegment({
-        tenantId: job.tenantId,
-        cameraId: job.cameraId,
-        filePath,
-        startTime,
-        endTime,
-        durationMs,
-        sizeBytes: BigInt(stats.size),
-        sha256Hash: sha256,
-        codec: probe.videoCodec,
-        width: probe.width,
-        height: probe.height,
-        fps: probe.fps,
-        storageVolumeId: activeVolumeId,
-        storageEpochId: activeEpochId,
+      // 5. Atomically insert or update RecordingSegment
+      await this.prisma.recordingSegment.upsert({
+        where: { filePath },
+        update: {
+          endTime,
+          durationMs,
+          sizeBytes: BigInt(stats.size),
+          sha256Hash: sha256,
+          codec: probe.videoCodec || 'h264',
+          width: probe.width || 1920,
+          height: probe.height || 1080,
+          fps: probe.fps || 25,
+          status: SegmentStatus.FINALIZED,
+          storageVolumeId: activeVolumeId,
+          storageEpochId: activeEpochId,
+        },
+        create: {
+          tenantId: job.tenantId,
+          cameraId: job.cameraId,
+          filePath,
+          startTime,
+          endTime,
+          durationMs,
+          sizeBytes: BigInt(stats.size),
+          sha256Hash: sha256,
+          codec: probe.videoCodec || 'h264',
+          width: probe.width || 1920,
+          height: probe.height || 1080,
+          fps: probe.fps || 25,
+          status: SegmentStatus.FINALIZED,
+          storageVolumeId: activeVolumeId,
+          storageEpochId: activeEpochId,
+        },
       });
 
       // 5. Mark job COMPLETED
