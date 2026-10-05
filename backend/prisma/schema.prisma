@@ -871,6 +871,12 @@ model Alarm {
   ackSlaBreachedAt     DateTime?
   resolveSlaBreachedAt DateTime?
 
+  // Incident window: later triggers of the same rule on the same camera join this alarm instead of raising
+  // a new one (ADR 0014). Only set when the rule's TRIGGER_ALARM action asks for a window.
+  lastActivityAt       DateTime?
+  occurrenceCount      Int       @default(1)
+  lastCanonicalEventId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -884,6 +890,7 @@ model Alarm {
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
+  @@index([tenantId, automationRuleId, cameraId, state])
 }
 
 model DetectionEvent {
