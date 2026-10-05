@@ -436,7 +436,9 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   one incident, one alarm, per rule via `incidentWindowSeconds`) and alarm triage (ADR 0015, flag `ALARM_TRIAGE`:
   ordered queue with reasons and proposed rule changes, nothing applied; a Triage tab on the Alarms page, tested in a
   real browser against the real backend). Left of the
-  four features: cited incident summary, describe-what-to-watch rules, footage integrity.
+  four features: cited incident summary, describe-what-to-watch rules, footage integrity. The RecordingCatalog audit
+  (`docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`) found four defects pinned by `it.failing` tests (invented keyframe
+  index, crawler re-probes every file, partial files and unreadable files indexed as FINALIZED); no fix made yet.
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.
