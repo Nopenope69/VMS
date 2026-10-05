@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-05T15:16:34.427Z",
-  "commit": "1af558684287985d504f0335088b619774e93406",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37330487009",
+  "generatedAt": "2026-10-05T15:58:19.531Z",
+  "commit": "18a2cbd2520adff2fbe99e5282577fd3461ba4a8",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37335992651",
   "projects": [
     {
       "name": "backend",
@@ -1150,8 +1150,8 @@
       },
       "tests": {
         "total": 325,
-        "passed": 312,
-        "failed": 8,
+        "passed": 315,
+        "failed": 5,
         "skipped": 5
       },
       "success": false,
@@ -1264,8 +1264,8 @@
         {
           "file": "services/ai-worker/src/__tests__/goldenVlm.test.ts",
           "status": "failed",
-          "passed": 4,
-          "failed": 8,
+          "passed": 7,
+          "failed": 5,
           "skipped": 0
         },
         {
@@ -1393,8 +1393,8 @@
   "totals": {
     "suites": 193,
     "tests": 1551,
-    "passed": 1502,
-    "failed": 8,
+    "passed": 1505,
+    "failed": 5,
     "skipped": 41
   },
   "allPassed": false
