@@ -430,34 +430,52 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   and Devanagari word list fill the Find form; Qwen3-4B (candidate, needs the owner's approval to run in the
   product) only rewrites requests the word list cannot read, and what the rules read in the original wins.
   Measured in `docs/ai/nl-search-evaluation.md`.
-- **Next:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm triage,
-  footage integrity), one PR each, from `master`.
-- **Built from the reference study (2026-10-05, branch `claude/elegant-albattani-4krihk`):** incident window (ADR 0014:
-  one incident, one alarm, per rule via `incidentWindowSeconds`) and alarm triage (ADR 0015, flag `ALARM_TRIAGE`:
-  ordered queue with reasons and proposed rule changes, nothing applied; a Triage tab on the Alarms page, tested in a
-  real browser against the real backend). Left of the
-  four features: cited incident summary, describe-what-to-watch rules, footage integrity. The RecordingCatalog audit
-  (`docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`) found defects pinned by tests. Fix 1 is done: the crawler skips files
-  still being written, records unreadable files as CORRUPTED with nothing invented, and coverage, seek and listing now count
-  only FINALIZED segments. Fix 2 is done: the stored keyframe index is read from the file (not guessed), the crawl no longer
-  re-reads known files, the production segment-complete worker registers through the catalog (it had stored no index and
-  `endPts = 0`), and an unknown frame rate or codec stays unknown (a frame step is refused with 409 `FRAME_RATE_UNKNOWN`).
-  Fix 3 is done: frame steps land on the next real frame read from the file (exact on variable frame rate, crossing
-  segment boundaries, `precision` and `clamped` in the answer); the segment-complete hook retries for about two minutes;
-  and a scheduled integrity check re-verifies footage while running (`docs/operations/RECORDING_INTEGRITY.md`, settings
-  `INTEGRITY_*`; migration 20261015000000). Fix 4 is done (F6): the recording container is pinned to `TZ=UTC`, a segment whose file name and file clock
-  disagree by more than five minutes raises a warning (the time is never altered), and `EVIDENCE_VERIFICATION.md` states what
-  the recorded times mean and their limits. Still open: stepping every camera of a synchronized session onto its own frame
-  (only the reference camera is frame-exact), and a measured stream delay from RTCP sender reports.
-- **Incident summary (2026-10-06, ADR 0016, flag `INCIDENT_SUMMARY`):** the written story of an alarm from a numbered timeline
-  of recorded facts, by a fixed template (no model); every sentence cites the facts it rests on; no plate text, typed notes
-  or person descriptions are repeated. Immutable snapshots, hashed into the audit chain, included in evidence packages
-  (`incident_summaries.json`), and re-checked by `vigilone-verify` (own copy of the template, parity-tested on 500 generated
-  records; `--require-incident-summaries`). Console: a panel in the resolve dialog. Left of the four features:
-  describe-what-to-watch rules and footage integrity (then the per-camera health endpoint and `ai-adapter.v1` result fields).
-- **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
-  from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
-  endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.
+- **Branch `claude/elegant-albattani-4krihk` (Session 31, 2026-10-05/06): nine commits ahead of `master` at `cd9b7b0`, all pushed,
+  no PR yet** (PR #45 merged only the first, docs-only commit; open a new PR from the UI). Built from the open-source
+  reference study (`docs/strategy/vigilone-oss-reference-study-2026-10-05.md`, design ideas only, no code copied):
+  1. **Incident window** (ADR 0014): a `TRIGGER_ALARM` action may carry `incidentWindowSeconds`; repeat firings of the same
+     rule on the same camera join the open alarm (count, last activity, audit `ALARM_CONTINUE`), never a resolved one, never past
+     one hour; severity only rises. Migration `20261014000000`. Rule-builder UI has no field for it yet (API only).
+  2. **Alarm triage** (ADR 0015, flag `ALARM_TRIAGE`): `/api/v1/alarm-triage/queue` orders open alarms (severity first, then
+     repeats, overdue acknowledge, advisory second opinion, rule-and-camera history), `/report` gives false alarms per camera and
+     proposed rule changes (never applied). A "Triage" tab on the Alarms page. Thresholds (10/20 reviewed, 80/90 %) are guesses.
+  3. **RecordingCatalog audit and four fixes** (`docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`): the crawler follows
+     boot recovery's rules (grace period, unreadable files become CORRUPTED with nothing invented, only FINALIZED segments count
+     as footage, no walking into `.quarantine`); the keyframe index is read from the file; the crawl no longer re-reads known
+     files; the production segment-complete worker registers through the catalog (it had stored no index and `endPts = 0`);
+     unknown frame rate or codec stays null; frame steps land on the next real frame read from the file (exact on variable frame
+     rate, across segment boundaries, `precision`/`clamped` in the answer, 409 `FRAME_RATE_UNKNOWN`); the MediaMTX
+     completion hook retries ~2 minutes; a scheduled integrity check (presence/size, budgeted content hash, held evidence first
+     while due; never deletes or repairs; `docs/operations/RECORDING_INTEGRITY.md`, settings `INTEGRITY_*`, migration
+     `20261015000000`); the recording container is pinned to `TZ=UTC`, a segment whose name and file clock disagree raises a
+     warning (time never altered), and `EVIDENCE_VERIFICATION.md` states what recorded times mean and their limits.
+  4. **Incident summary** (ADR 0016, flag `INCIDENT_SUMMARY`, migration `20261016000000`): a numbered timeline of recorded facts
+     rendered by a fixed template (no model), every sentence cites its facts, no plate text / typed notes / person descriptions;
+     immutable snapshots, audit-chain entry, `incident_summaries.json` in evidence packages, offline re-check in
+     `vigilone-verify` (`--require-incident-summaries`, parity test on 500 generated records). Panel in the resolve dialog.
+  - **Verified in this session (cloud sandbox, not CI):** backend 173 suites / 1329 passed / 42 skipped; `tsc` clean (backend and
+    frontend); repo gates pass (fake-success, hygiene, docs, dependency licences, feature-flag docs); `node --test
+    tools/vigilone-verify/*.test.mjs` 25 passed; browser suite 27 passed (`scripts/e2e/frontend-browser.sh`). **CI has not run on
+    this branch. Nothing has run on a real camera, MediaMTX or disk.**
+- **Next, in the agreed order:** (a) **describe-what-to-watch rules** (a local model drafts a normal rule, the dry run shows last
+  week's matches, the operator saves it; needs the owner's approval of the local text model, Qwen3-4B, in the licence process);
+  (b) **footage integrity** (per-device signing of segment hashes at ingest, C2PA-style manifests on exports after a licence check,
+  classical camera-sabotage detection); (c) **per-camera health endpoint** (idea from Kerberos Agent's `/health`: connectivity,
+  stream stats, last recorded segment, reconnect count; read-only); (d) **`ai-adapter.v1` result fields** (`clipped`, `cost`, a
+  get-the-source-media call; as a minor version, proposal first). Then the leftovers: stepping every camera of a synchronized view
+  onto its own frame (only the reference camera is frame-exact today), a measured stream delay from RTCP sender reports,
+  audit finding F8 (orphan file after a crash during retention, known, no change), a rule-builder field for
+  `incidentWindowSeconds`, a queue page polish for triage, and Bucket 6 (privacy tools, parked).
+- **Owner decisions still needed:** merge the branch (new PR); approve or reject the local text model and C2PA library for (a)
+  and (b); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
+  quarantine cap (old open question); all of the field track (bench, clean-VM drill, real footage, pilot site, DPDP choices).
+- **Sandbox set-up for the next session (the cloud container is fresh each time):** `cd backend && npm ci` and the same in
+  `frontend`; PostgreSQL stops when the container restarts (`service postgresql start`); pgvector is not preinstalled
+  (`apt-get install -y postgresql-16-pgvector`), then create the role and database from the test URL below
+  (`CREATE USER vigilone SUPERUSER PASSWORD ...; CREATE DATABASE vigilone_db OWNER vigilone;`) and run
+  `node_modules/.bin/prisma migrate deploy`; quote the database URL (it contains `!`). Browser tests:
+  `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers TEST_DB_URL=postgresql://vigilone:...@localhost:5432/vigilone_e2e
+  scripts/e2e/frontend-browser.sh` (set `E2E_ONLY=<spec>` for one spec). ffmpeg and Chromium are installed.
 
 **Open follow-ups, all known and documented:**
 
