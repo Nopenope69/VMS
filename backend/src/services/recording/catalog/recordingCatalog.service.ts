@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { PrismaClient, RecordingSegment, EvidencePin } from '@prisma/client';
+import { PrismaClient, RecordingSegment, EvidencePin, SegmentStatus } from '@prisma/client';
 import { StorageAdapter, LocalStorageAdapter } from './storageAdapter';
 import { MediaProbeAdapter, FfprobeMediaAdapter } from './mediaProbeAdapter';
 import { SegmentIndexer } from './segmentIndexer';
@@ -101,7 +101,8 @@ export class RecordingCatalog {
     let keyframeIndex = input.keyframeIndexJson;
 
     // Probe file if critical metadata is missing
-    if (!durationMs || !codec || !fps) {
+    let probeFailed = false;
+    if (fileStat.exists && fileStat.size > 0 && (!durationMs || !codec || !fps)) {
       const probe = await this.mediaProbeAdapter.probeMedia(input.filePath);
       if (probe) {
         durationMs = durationMs ?? probe.durationMs;
@@ -112,10 +113,21 @@ export class RecordingCatalog {
         timebaseNum = probe.timebaseNumerator;
         timebaseDen = probe.timebaseDenominator;
         keyframeIndex = keyframeIndex ?? probe.keyframeIndex;
+      } else {
+        probeFailed = true;
       }
     }
 
-    const safeDurationMs = durationMs ?? 1000;
+    // The same classes boot recovery uses: a file that is missing, empty or unreadable is not a recorded segment.
+    // It is kept as a row so it can be found and recovered, but it never counts as footage and nothing about it is
+    // invented (no duration, size of picture, frame rate or codec). A caller-supplied duration (the recorder's own
+    // figure) is the one thing that makes an unprobed file usable.
+    let unusable: { status: SegmentStatus; reason: string } | null = null;
+    if (!fileStat.exists) unusable = { status: SegmentStatus.FILE_MISSING, reason: 'FILE_NOT_FOUND_AT_REGISTRATION' };
+    else if (fileStat.size === 0) unusable = { status: SegmentStatus.CORRUPTED, reason: 'ZERO_BYTE' };
+    else if (probeFailed && !input.durationMs) unusable = { status: SegmentStatus.CORRUPTED, reason: 'UNREADABLE_MEDIA' };
+
+    const safeDurationMs = unusable ? 0 : durationMs ?? 0;
     let startTime = input.startTime;
     if (!startTime) {
       try {
@@ -124,12 +136,12 @@ export class RecordingCatalog {
         startTime = new Date(fileStat.mtime.getTime() - safeDurationMs);
       }
     }
-    const endTime = input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
+    const endTime = unusable ? startTime : input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
 
     // Compute presentation timestamps
     const startPts = input.startPts ?? 0n;
     const ptsDelta = SegmentIndexer.calculatePtsDelta(safeDurationMs, timebaseNum, timebaseDen);
-    const endPts = input.endPts ?? (startPts + ptsDelta);
+    const endPts = unusable ? startPts : input.endPts ?? (startPts + ptsDelta);
 
     let sha256 = input.sha256Hash;
     if (!sha256 && fileStat.exists && fileStat.size > 0) {
@@ -149,15 +161,17 @@ export class RecordingCatalog {
       durationMs: safeDurationMs,
       sizeBytes,
       sha256Hash: sha256,
-      codec: codec || 'h264',
-      width: width || 1920,
-      height: height || 1080,
-      fps: fps || 25.0,
+      codec: codec ?? null,
+      width: width ?? null,
+      height: height ?? null,
+      fps: fps ?? null,
+      status: unusable ? unusable.status : SegmentStatus.FINALIZED,
+      quarantineReason: unusable ? unusable.reason : null,
       startPts,
       endPts,
       timebaseNumerator: timebaseNum,
       timebaseDenominator: timebaseDen,
-      keyframeIndexJson: keyframeIndex || null,
+      keyframeIndexJson: unusable ? null : keyframeIndex || null,
       storageLocation: input.storageLocation || 'LOCAL',
     });
   }
@@ -424,6 +438,14 @@ export class RecordingCatalog {
           try {
             fs.renameSync(filePath, path.join(qDir, fileName));
           } catch {}
+          continue;
+        }
+
+        // A file modified inside the active-write grace may still be open in the recorder (the same rule boot
+        // recovery uses). It is indexed on a later pass, or by the segment-complete job, once it is finished.
+        try {
+          if (isWithinActiveWriteGrace((await this.storageAdapter.stat(filePath)).mtime.getTime())) continue;
+        } catch {
           continue;
         }
 

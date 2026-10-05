@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This is an audit with failing tests. **No behaviour was changed.** Fixes are separate pieces of work, in the order at the end.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, and two related findings F9, F10) is now done**; the other fixes are separate pieces of work, in the order at the end. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -10,6 +10,21 @@ defect exists and breaks the moment someone fixes it, which is the signal to tur
 
 What was read, not run on real hardware: nothing here has met a real camera or a real MediaMTX segment. Findings about
 what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a live recorder.
+
+## Status
+
+| Finding | State |
+| --- | --- |
+| F1 invented keyframe index | Open (test `it.failing`) |
+| F2 crawl re-reads every file | Open (test `it.failing`) |
+| F3 file still being written indexed as FINALIZED | **Fixed (Fix 1)** |
+| F4 unreadable file indexed as FINALIZED with invented details | **Fixed (Fix 1)** |
+| F5 completion notice | Corrected below; open as a small item |
+| F6 time assumptions | Open |
+| F7 integrity only at boot | Open |
+| F8 orphan after crash during retention | Known, no change |
+| F9 coverage, seek and listing ignored segment status | **Found and fixed with Fix 1** |
+| F10 the crawler pulled quarantined files out of `.quarantine` | **Found and fixed with Fix 1** |
 
 ## What is already right
 
@@ -39,7 +54,7 @@ At 32 cameras with 10-minute segments, 30 days of retention is about 138,000 fil
 on the same disks that are recording. Recording must stay independent of indexing load (AGENTS.md). Moonfire's fsck
 separates three levels: file present (seconds), size (minutes), content hash (hours), and does the cheap one routinely.
 
-### F3. A file MediaMTX is still writing is indexed as FINALIZED (test)
+### F3. A file MediaMTX is still writing is indexed as FINALIZED (fixed)
 The crawler skips the active-write grace for files it indexes (it uses it only before quarantining an unmapped file), and
 the repository sets `status: FINALIZED` by default. Test: a file modified just now is indexed FINALIZED. The size, duration
 and SHA-256 recorded are those of a half-written file. The next crawl refreshes some fields (the upsert update branch
@@ -47,16 +62,19 @@ changes `endTime`, `sizeBytes`, `sha256Hash`) but `startPts` and the status are 
 "`registerSegment` may index a segment that is still being written". Boot recovery already has the right rule; the
 crawler does not use it, so there are two sets of rules for the same question, against ADR 0001's one-authority aim.
 
-### F4. A file that cannot be read gets invented metadata and counts as footage (test)
+### F4. A file that cannot be read gets invented metadata and counts as footage (fixed)
 When `ffprobe` returns nothing, `registerSegment` falls back to 1000 ms duration, 1920x1080, 25 fps, h264, and stores the
 row FINALIZED with the hash of whatever bytes are there. Test: 4 KB of random bytes become a valid one-second segment.
 Coverage and gap detection then treat the interval as recorded. This is the "never replace a missing result with a made-up
 one" rule (AGENTS.md). The status enum already has CORRUPTED, RECOVERY_FAILED and QUARANTINED for this.
 
-### F5. One-shot completion notice, and the safety net is the expensive crawl (no test)
-`mediamtx.yml` tells the backend a segment is complete with a single `curl --max-time 3` and no retry. If the backend is
-restarting or busy, the notice is lost and the file is found only by the next crawl (up to 5 minutes later). That crawl is
-F2 and F3. Fixing F2 and F3 is what makes this design safe; adding a retry or a durable queue is a smaller second step.
+### F5. The completion notice is one curl, but a durable job sits behind it (corrected; no test)
+`mediamtx.yml` sends the notice with a single `curl --max-time 3` and no retry. This audit first said a lost notice meant
+the file was found only by the crawl. That was incomplete: when the notice arrives, `handleSegmentComplete` stores a durable
+`SegmentJob` and `segmentJobWorker` indexes it, and that worker already refuses a file it cannot probe (it throws, so the
+job fails instead of indexing). A lost notice (backend restarting) is still caught only by the crawl, which is why Fix 1
+mattered. Left over: the worker is a third indexing implementation with its own rules, and it still falls back to 1920x1080,
+25 fps and h264 when the probe omits them. Folding it into `registerSegment` is the clean follow-up.
 
 ### F6. Time rests on two assumptions that are not stated anywhere a test can hold (no test)
 1. The file name's time is MediaMTX's own wall clock, parsed as UTC. The compose file does not set a time zone for the
@@ -81,13 +99,38 @@ A crash after the row is deleted and before the file is unlinked leaves a file w
 (F3's rules apply), and retention prunes it on a later pass. Harmless but wasteful, and the footage reappears in coverage for
 a while. Worth knowing; no change proposed.
 
+### F9. Coverage, seek and listing ignored a segment's status (found while fixing F4; fixed)
+`findSegments`, `findContainingSegment` and `findNearestSegment` did not filter on status, so every consumer (coverage and
+gap detection, seek, playback listing, export) counted corrupt, quarantined, missing and pruned files as footage. Boot recovery
+produces exactly those statuses, so this already happened after a recovery run. Fixed: only FINALIZED counts.
+
+### F10. The crawler pulled files out of quarantine (found while fixing F4; fixed)
+`LocalStorageAdapter.scanDirectory` descended into `.quarantine`. Files there did not map to a camera, so the crawler's
+"unmappable file" branch moved them again, into `.quarantine/.quarantine`, on every pass. Confirmed by running the test against
+the old walk: the quarantined file was gone from its place. Boot recovery already skipped that folder. Fixed in the walk.
+
+## Fix 1 (done): the crawler follows boot recovery's rules
+
+* The crawler skips a file modified inside the active-write grace (default 120 s, the value boot recovery uses) and indexes
+  it on a later pass.
+* A file that is missing, empty or unreadable becomes a row with status FILE_MISSING or CORRUPTED and a reason
+  (`FILE_NOT_FOUND_AT_REGISTRATION`, `ZERO_BYTE`, `UNREADABLE_MEDIA`). It keeps its real size and hash, has duration 0, and
+  no codec, picture size or frame rate (null, not defaults). It is not moved, repaired or deleted: those stay with boot
+  recovery, because the crawler runs while recording.
+* The same row goes back to FINALIZED with the real details when the file becomes readable on a later pass.
+* A duration supplied by the caller (the recorder's own figure) keeps a file with a failed probe usable; the picture
+  details stay null.
+* Segment width, height, frame rate and codec are now stored as unknown (null) instead of 1920, 1080, 25 and h264 when
+  nothing measured them. Seek and frame stepping still report 25 fps and h264 for a null (their own read-time fallback,
+  unchanged); that is a remaining gap, small once F1 is fixed.
+* Evidence of the change: the audit tests F3 and F4 are plain tests now, with seven more in the same file; the full backend
+  suite passes.
+
 ## Recommended fixes, in order
 
 Each is its own small change with its own tests, starting by turning the matching `it.failing` into `it`.
 
-1. **F4 then F3 (one change):** the crawler uses the same classification and active-write grace as boot recovery. Unreadable
-   files become CORRUPTED or RECOVERY_FAILED, never FINALIZED with defaults; files inside the grace are skipped and indexed
-   on the next pass or the completion notice. Smallest change with the biggest effect on what coverage claims.
+1. ~~**F4 then F3**~~ done (Fix 1 above).
 2. **F2:** skip a file whose row exists with the same size and modification time; run hashing as a separate low-priority
    verification job (Moonfire's three tiers), not in the crawl.
 3. **F1:** read the real keyframes (`ffprobe -skip_frame nokey`, or the fMP4 `moof` boxes) and record where the index came
@@ -95,7 +138,8 @@ Each is its own small change with its own tests, starting by turning the matchin
    presents an assumption as a measurement. Measure the cost on a 10-minute 1080p segment first.
 4. **F6:** set `TZ=UTC` on the MediaMTX container and add the start-time versus file-time warning; write the clock-bound
    statement into `docs/operations/EVIDENCE_VERIFICATION.md`.
-5. **F5, F7:** a retry or durable queue for the completion notice, and the cheap integrity tier on a schedule.
+5. **F5, F7:** fold the segment job worker into `registerSegment`; retry the completion notice; run the cheap integrity tier
+   (file still present, size unchanged) on a schedule.
 
 ## Not covered
 Retention quotas and pruning order beyond the delete ordering above; object-storage archive; the playback API; behaviour under a
