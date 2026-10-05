@@ -11,10 +11,12 @@ stops the server at start-up with a message naming the variable.
 
 ## Status
 
-- **Off by default.** The benefit is **not measured** on this appliance's embedding model or real site queries, and no
-  retrieval evaluation tool exists in this repository to measure it. Compare recall@k with and without it on labelled
-  queries before turning it on anywhere, and before changing the default.
+- **Off by default.** The benefit is **not measured** on this appliance's embedding model or real site queries. To measure
+  it, run the labelled query set twice through `tools/eval/retrieval-collect.mjs`, once with the setting off and once on
+  (restart the backend between runs), score both with `tools/eval/retrieval-eval.mjs` and compare recall@k
+  (procedure: `docs/operations/RETRIEVAL_LABELLING.md`). That needs at least 100 labelled queries from a real site, which
+  do not exist yet. Do not turn it on, or change the default, before that comparison.
 - Cost: one text-encoder call per template per text term (four by default). Photo and stored-crop queries are unchanged.
 - Safety: all calls must be served by the same model and adapter, otherwise the query fails rather than mixing
   vectors. Nothing is stored; stored crop embeddings are untouched.
-- Tests: 17 unit tests with a fake embedder. The real adapter was not involved.
+- Tests: 13 unit tests with a fake embedder. The real adapter was not involved.

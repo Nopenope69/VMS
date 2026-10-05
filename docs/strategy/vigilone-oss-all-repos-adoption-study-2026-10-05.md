@@ -31,12 +31,12 @@ AGENTS.md.
 | 4 | **Semantic triggers with calibrated thresholds** (z-score normalised distances, kept per site). | Frigate `semantic_trigger.py`, `embeddings/util.py` | Gives describe-what-to-watch rules a threshold that means the same thing across sites. Stays advisory. | M | `NL_SEARCH` family |
 | 5 | **Near-match candidates for the known-plate list.** Bounded weighted edit distance with look-alike costs. **Correction:** a live known-plate list already exists (`services/anpr/watchlistMatcher.ts`: exact, wildcard and regex, with alerts); only near matches were missing. | Frigate LPR (`match_distance`, `replace_rules`) | Built as an advisory, audited, on-demand endpoint (see `docs/operations/PLATE_NEAR_MATCH.md`). | M | Done |
 | 6 | **Per-camera lifecycle state and health.** States (pending, loading, loaded, failed, retrying), last error, retry count, a task supervisor that records panics with stack, and a shutdown report. | Viseron `domain_registry.py`; Kerberos Agent `lifecycle/supervisor.go`; Kerberos `/health` | Folds into the per-camera health endpoint already planned (A3). A failed camera stays visible and isolated. Read-only. | M | None |
-| 7 | **Metrics for our own eval sets.** Precision, recall, F1, mAP and a detection-matching routine so detector and tracker changes are compared on the same footage. | Supervision `metrics/` | We have a plate evaluation harness and tracker validation. A general detector metric set would make model swaps (YOLOX versus alternatives) measurable. | M | None |
+| 7 | ~~Metrics for our own eval sets~~ **Already ours.** `tools/eval/coco-eval.mjs` computes AP, mAP50 and per-class AP checked against pycocotools, with precision, recall and false positives per hour; `retrieval-eval.mjs` and `plateEval.ts` cover search and plates. | Supervision `metrics/` | Nothing to build. The gap is real labelled site data (HUMAN-REQUIRED, P2.10). | n/a | Done already |
 | 8 | **Resumable archive upload with persisted resume state.** | Kerberos Agent `cloud/tus_client.go` (resume state in a sidecar file, survives restarts) | Our archive job retries but I found no multipart or resumable upload. Matters for large segments over poor Indian site links. | M | With archive flag |
 | 9 | **Re-ranking and query expansion for cross-camera candidates.** | FastReID `evaluation/rerank.py`, `query_expansion.py` (algorithms, Apache-2.0) | Improves the ranked list shown to the operator in follow-a-person. Operator confirmation stays mandatory (ADR 0013). Needs our own labelled journeys to prove it helps. | M | Measure first |
-| 10 | **Model capability descriptor in the adapter.** Input size, input format, trigger classes, prebuffer need. | Scrypted `ObjectDetectionModel` | `ai-adapter.v1` minor-version proposal, already queued as A4. | S | Contract change, docs first |
-| 11 | **Per-track enrichment cadence.** Run attribute, action and classifier models on a tracked crop only, every N frames, hold the verdict for a set number of frames, with a warm-up. | PaddleDetection `infer_cfg_pphuman.yml` (`skip_frame_num`, `display_frames`, `warmup_frame`, batch size per task) | Matches the track-centric model. Compare against what our scheduler already does before changing anything. | S (compare) | None |
-| 12 | **Preclusive-zone idea: one signal suppresses others.** A whole-frame change (lighting, camera shake) cancels motion alarms from the other zones. | ZoneMinder `ZoneType` (`PRECLUSIVE`, `INCLUSIVE`, `EXCLUSIVE`, `PRIVACY`), per-event `tot_score`, `max_score`, `max_score_frame_id` | We already have `sceneChangeDetector` and exclusion zones. Check whether scene change suppresses zone alarms; the best-frame-per-event score is also a cheap way to pick evidence thumbnails. Idea only (GPL). | S (compare) | None |
+| 10 | **Model capability descriptor.** **Largely already ours:** `ModelCardV1.input` carries width, height, colour space and letterbox. What Scrypted adds (`triggerClasses`, `prebuffer`, per-detection `clipped` and `cost`) is small: `cost` belongs to the tracker, which sits outside the adapter, and a box touching the frame edge can be derived without a contract change. | Scrypted `ObjectDetectionModel` | No contract change proposed. Revisit only if a second detector needs trigger classes. | n/a | Dropped |
+| 11 | **Per-track enrichment cadence.** Checked: `InferenceScheduler` bounds concurrency, enforces a deadline and prefers the newest frame per camera; `frameQueue` limits a camera to 1 to 5 fps. I found no per-task frame skipping or verdict-hold for enrichments (attributes, classifiers). | PaddleDetection `infer_cfg_pphuman.yml` | Worth doing only when a second per-track model exists; measure compute on reference hardware first. | S | Compared, not built |
+| 12 | **Preclusive-zone idea.** Checked: `SceneChangeDetectorService` runs an episode state machine with detection-zone include and exclude masks and a rate limiter. I found no rule where a whole-frame change (lighting, camera shake) suppresses zone alarms; ONVIF tamper events are mapped separately. | ZoneMinder `ZoneType`, per-event `max_score_frame_id` | Needs real footage to set a threshold; not built. | S-M | Compared, not built |
 | 13 | **Far-field tiled detection.** Run the detector on overlapping tiles of a motion region and merge with NMS, to catch small distant people on wide or 4K views. | Supervision `InferenceSlicer`, "detect small objects" guide | I found no tiling in `ai-worker`. It multiplies compute, so it must be motion-gated, off by default, and measured on the reference hardware; AGENTS.md prefers substreams for AI. | M | Flag, hardware numbers |
 | 14 | **Timestamped frames for VLM verification.** Send frames interleaved with their timestamps, and ask for time and box answers that we then check against tracker boxes. | Qwen3-VL video cookbook (interleaved timestamp-image pairs, spatio-temporal grounding) | Keeps VLM output tied to PTS and checkable against the track. Advisory only, and the local model licence decision is still open. | M | Flag, licence decision |
 | 15 | **Camera-protocol coverage, lazy pull and preload.** Sources for cheap DVR and camera families, streams pulled only when a consumer exists, optional preload. | go2rtc (`dvrip`, `isapi`, `tapo`, `onvif`, `streams/preload.go`) | Camera interoperability for the Indian market (Xiongmai/XMeye and Dahua OEMs). Compare with our supported list; MediaMTX stays the media plane. | Research | None |
@@ -74,3 +74,27 @@ AGENTS.md.
 5. **#7 metrics**, then **#9, #13, #14** only after reference-hardware numbers and the local-model licence decision.
 
 None of these changes a flag default or a shipping claim.
+
+## 6. Status after the first build round (5 Oct 2026)
+
+| # | Item | Result |
+| --- | --- | --- |
+| 1 | Archive-aware retention | **Built**, `docs/operations/ARCHIVE_AWARE_RETENTION.md` |
+| 2 | Provider fallback and CPU settings | **Built**, `docs/operations/AI_EXECUTION_PROVIDER.md`. No acceleration shipped: the ONNX Runtime package is CPU only |
+| 3 | Prompt-template ensembling | **Built, off by default, unmeasured**, `docs/operations/QUERY_TEMPLATE_ENSEMBLE.md` |
+| 4 | Calibrated semantic triggers | **Not built.** Depends on the describe-what-to-watch rules, which need the local-model licence decision |
+| 5 | Plate near matches | **Built** (advisory, audited), `docs/operations/PLATE_NEAR_MATCH.md`. The known-plate list itself already existed |
+| 6 | Per-camera health | **Built**, `docs/operations/CAMERA_HEALTH.md`. No retry counters: none are recorded today |
+| 7 | Detector metrics | **Already existed** (`tools/eval`) |
+| 8 | Resumable archive upload | **Not built.** Needs a live MinIO or S3 to test multipart and resume; unverifiable with test doubles alone |
+| 9 | Re-ranking for cross-camera candidates | **Not built.** Needs labelled journeys to prove it helps |
+| 10 | Adapter capability descriptor | **Dropped**, mostly present already |
+| 11, 12 | Enrichment cadence, preclusive zones | **Compared**, findings above |
+| 13 | Tiled detection | **Not built.** Needs reference-hardware numbers |
+| 14 | Timestamped frames for VLM checks | **Not built.** Local-model licence decision open |
+| 15 | Camera-protocol coverage | **Not done.** Needs a list of camera models seen at pilot sites |
+| 16 | Signals on the scrub bar | **Not built.** Frontend work that cannot be verified here |
+
+Two claims in earlier versions of this study and the deep dive were wrong and are corrected in place: the plate list
+existed, and a continuous-versus-event retention split existed. The detector metrics and retrieval evaluation tools
+also already existed.
