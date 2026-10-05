@@ -449,6 +449,12 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   disagree by more than five minutes raises a warning (the time is never altered), and `EVIDENCE_VERIFICATION.md` states what
   the recorded times mean and their limits. Still open: stepping every camera of a synchronized session onto its own frame
   (only the reference camera is frame-exact), and a measured stream delay from RTCP sender reports.
+- **Incident summary (2026-10-06, ADR 0016, flag `INCIDENT_SUMMARY`):** the written story of an alarm from a numbered timeline
+  of recorded facts, by a fixed template (no model); every sentence cites the facts it rests on; no plate text, typed notes
+  or person descriptions are repeated. Immutable snapshots, hashed into the audit chain, included in evidence packages
+  (`incident_summaries.json`), and re-checked by `vigilone-verify` (own copy of the template, parity-tested on 500 generated
+  records; `--require-incident-summaries`). Console: a panel in the resolve dialog. Left of the four features:
+  describe-what-to-watch rules and footage integrity (then the per-camera health endpoint and `ai-adapter.v1` result fields).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features.

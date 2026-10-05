@@ -3,7 +3,8 @@
  * operations test stay as they are. Three open alarms: a CRITICAL one the second-opinion model doubts, a WARNING one
  * from a rule operators have marked false 12 times on this camera, and a WARNING one from a rule they confirmed 12
  * times and that repeated 5 times. A second rule on the same camera has 25 alarms all marked false, with no
- * incident window, which is what produces a suggested rule change.
+ * incident window, which is what produces a suggested rule change. A fourth, acknowledged alarm ('Summary alarm') is for
+ * frontend/e2e/incident-summary.spec.ts (ADR 0016); it is not open, so it is not in the triage queue.
  */
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -83,5 +84,9 @@ export async function seedTriage(prisma: PrismaClient, opts: { password: string;
   const noisyOpen = await open('Triage dock motion', { severity: 'WARNING', automationRuleId: noisy.id, triggeredAt: new Date(now.getTime() - 300_000) });
   const steadyOpen = await open('Triage door forced', { severity: 'WARNING', automationRuleId: steady.id, occurrenceCount: 5, triggeredAt: new Date(now.getTime() - 120_000) });
 
-  return { tenantId: tenant.id, email, alarms: { critical: critical.id, noisy: noisyOpen.id, steady: steadyOpen.id }, noisyRuleName: noisy.name, loudRuleName: loud.name };
+  // For the incident summary spec: already acknowledged, so it is not in the triage queue (open alarms only) and the two
+  // specs cannot change each other's counts.
+  const summary = await open('Summary alarm', { severity: 'WARNING', state: 'ACKNOWLEDGED', acknowledgedAt: new Date(now.getTime() - 30_000), acknowledgedById: admin.id, triggeredAt: new Date(now.getTime() - 90_000) });
+
+  return { tenantId: tenant.id, email, alarms: { critical: critical.id, noisy: noisyOpen.id, steady: steadyOpen.id, summary: summary.id }, noisyRuleName: noisy.name, loudRuleName: loud.name };
 }

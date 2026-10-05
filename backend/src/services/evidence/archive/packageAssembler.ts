@@ -9,7 +9,7 @@ export interface EvidenceArtifactRecord {
   mediaType: string;
   byteLength: number;
   sha256: string;
-  role: 'PRIMARY_MEDIA' | 'CUSTODY_LEDGER' | 'STATUTORY_CERTIFICATE' | 'TRUST_ANCHOR_PUBLIC_KEY' | 'METADATA' | 'AI_PROVENANCE' | 'DERIVATION_RECORD' | 'EXPLANATIONS';
+  role: 'PRIMARY_MEDIA' | 'CUSTODY_LEDGER' | 'STATUTORY_CERTIFICATE' | 'TRUST_ANCHOR_PUBLIC_KEY' | 'METADATA' | 'AI_PROVENANCE' | 'DERIVATION_RECORD' | 'EXPLANATIONS' | 'INCIDENT_SUMMARIES';
 }
 
 export interface AssemblePackageOptions {

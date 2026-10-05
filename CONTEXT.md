@@ -74,6 +74,10 @@ _Avoid_: EventType map, trigger switch
 The time a `TRIGGER_ALARM` action keeps one alarm open for the same rule and camera: later firings join that alarm (count, last activity, audit) instead of raising new ones, until a quiet gap, a resolve, or the one-hour cap ends the incident (ADR 0014).
 _Avoid_: alarm dedup, alarm debounce
 
+**IncidentSummary**:
+The written story of an alarm, generated from a numbered timeline of recorded facts by a fixed template; every sentence cites the facts it rests on, nothing personal is repeated, and each snapshot is hashed, chained into the audit log and verifiable offline (ADR 0016).
+_Avoid_: AI summary, narrative, report
+
 **RuleEngine**:
 The one evaluator of automation rules, owned by the IncidentOrchestrator. The rule preview and the automation dry run use it too; the legacy `EventActionMatrixService` was retired (ADR 0004 follow-up).
 _Avoid_: EventActionMatrix, AutomationMatrix

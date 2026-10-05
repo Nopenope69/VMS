@@ -20,7 +20,8 @@ export type FeatureFlagName =
   | 'TRACK_INDEX'
   | 'SEMANTIC_SEARCH'
   | 'NL_SEARCH'
-  | 'ALARM_TRIAGE';
+  | 'ALARM_TRIAGE'
+  | 'INCIDENT_SUMMARY';
 
 export type FeatureFlagStates = Record<FeatureFlagName, boolean>;
 
@@ -39,6 +40,7 @@ export const ALL_FEATURES_OFF: FeatureFlagStates = Object.freeze({
   SEMANTIC_SEARCH: false,
   NL_SEARCH: false,
   ALARM_TRIAGE: false,
+  INCIDENT_SUMMARY: false,
 });
 
 export async function fetchFeatureFlags(): Promise<FeatureFlagStates> {

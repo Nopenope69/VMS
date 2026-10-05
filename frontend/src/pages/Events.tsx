@@ -24,6 +24,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluationBanner';
 import { AlarmSecondOpinion } from '../components/AlarmSecondOpinion';
 import { AlarmTriagePanel } from '../components/AlarmTriagePanel';
+import { AlarmIncidentSummary } from '../components/AlarmIncidentSummary';
 import { useFeatureFlags } from '../services/features';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
@@ -995,6 +996,7 @@ export const Events: React.FC = () => {
             </div>
 
             {!__DEMO_MODE__ && <AlarmSecondOpinion alarmId={resolvingAlarm.id} />}
+            {!__DEMO_MODE__ && featureFlags.INCIDENT_SUMMARY && <AlarmIncidentSummary alarmId={resolvingAlarm.id} />}
 
             <div>
               <label className="block text-xs font-medium text-vms-text mb-1.5 flex items-center gap-1.5">
