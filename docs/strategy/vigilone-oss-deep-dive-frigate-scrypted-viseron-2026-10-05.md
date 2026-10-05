@@ -53,7 +53,7 @@ it", not "it does not exist".
 | # | What Viseron does | VigilOne today | Proposal | Priority |
 | --- | --- | --- | --- | --- |
 | V1 | **Domain lifecycle.** Each configured camera or detector has a state (`PENDING`, `LOADING`, `LOADED`, `FAILED`, `RETRYING`), a cancel event, and a retained error. A failed camera still appears with its error rather than vanishing. | `streamSupervisor.ts`, watchdogs, and the planned per-camera health endpoint (A3). | Give A3 an explicit per-camera state machine with a retained last error and retry count. One camera's failure stays visible and isolated. | **Medium, folds into A3** |
-| V2 | **Tiered retention by category.** Storage tiers have `min_age` and `max_age` per category (recorder, snapshots, timelapse); recorder tiers can differ for continuous and event footage. Config validation rejects missing paths, reserved paths, duplicates and non-increasing ages at save time. | Retention settings exist. A continuous-versus-event split was not found. | Keep event footage longer than continuous footage, behind `StorageAdapter`, with save-time validation. Any evidence hold or custody record must override retention, and a failed validation must keep existing recordings. | **Medium-high (storage cost)** |
+| V2 | **Tiered retention by category.** Storage tiers have `min_age` and `max_age` per category (recorder, snapshots, timelapse); recorder tiers can differ for continuous and event footage. Config validation rejects missing paths, reserved paths, duplicates and non-increasing ages at save time. | **Correction:** the split already exists. `CameraQuotaConfig` in `recording/catalog/retentionPolicy.ts` has `continuousDays` and `motionDays`, and pinned evidence is never deleted. | Only the save-time validation idea is left (reject a policy that would delete evidence-relevant footage sooner than intended). See the all-repos study for the archive-before-delete gap. | Low |
 | V3 | **Three watchdog kinds** (thread, process, subprocess) with restartable workers. | Stream and worker supervisors. | Compare restart and backoff policy only. | Low |
 | V4 | **Remote AI backends** (CompreFace, DeepStack, CodeProject.AI) and accelerator components (Hailo, EdgeTPU). | OpenVINO and ONNX paths. | Add Hailo to the hardware watch list. Remote AI services are not a fit for an offline appliance. | Low |
 | V5 | **Orphaned-camera handling** in storage. | `crashRecovery` and reconciler cover orphaned segments. | Check that footage of a deleted camera stays reachable for evidence export. | Low |
@@ -73,6 +73,6 @@ Still shallow after this pass: Shinobi, ZoneMinder, OpenIPC (low value for us), 
 
 1. F1 into B1 (describe-what-to-watch), because it supplies the threshold calibration that feature lacks.
 2. F2, the India-specific plate watchlist match, as its own small PR behind a flag.
-3. V1 into A3 (per-camera health), then V2 (retention by footage kind) after an ADR.
+3. V1 into A3 (per-camera health).
 4. S1 into the A4 adapter-fields proposal.
 5. F3, F4, F5, F6, F7 as measured follow-ups; none changes a flag default or a shipping claim.
