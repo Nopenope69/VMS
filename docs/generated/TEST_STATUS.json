@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-06T05:39:43.552Z",
-  "commit": "7cef25ab5e0e168decc291348f135ad05ff84236",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37418762882",
+  "generatedAt": "2026-10-06T05:55:37.142Z",
+  "commit": "ca29da6c998a53c6fe833eb52c2c6520cd2b042d",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37420339915",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 165,
-        "passed": 165,
+        "total": 178,
+        "passed": 178,
         "failed": 0
       },
       "tests": {
-        "total": 1290,
-        "passed": 1254,
+        "total": 1435,
+        "passed": 1399,
         "failed": 0,
         "skipped": 36
       },
@@ -30,6 +30,20 @@
           "file": "backend/src/__tests__/aiWorker.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/alarmTriage.test.ts",
+          "status": "passed",
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/alarmTriageRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -566,6 +580,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/frameStepExact.test.ts",
+          "status": "passed",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/frontendDemoHazards.test.ts",
           "status": "passed",
           "passed": 4,
@@ -625,6 +646,48 @@
           "file": "backend/src/__tests__/incidentOrchestrator.test.ts",
           "status": "passed",
           "passed": 16,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentSummary.test.ts",
+          "status": "passed",
+          "passed": 24,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentSummaryExportRealDb.test.ts",
+          "status": "passed",
+          "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentSummaryRealDb.test.ts",
+          "status": "passed",
+          "passed": 10,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentSummaryTemplateParity.test.ts",
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentWindow.test.ts",
+          "status": "passed",
+          "passed": 16,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/incidentWindowRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -709,6 +772,13 @@
           "file": "backend/src/__tests__/mediamtxProvider.test.ts",
           "status": "passed",
           "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/mediamtxTimeZone.test.ts",
+          "status": "passed",
+          "passed": 3,
           "failed": 0,
           "skipped": 0
         },
@@ -916,6 +986,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/recordingCatalogAudit.test.ts",
+          "status": "passed",
+          "passed": 25,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/recordingIndex.test.ts",
           "status": "passed",
           "passed": 6,
@@ -989,6 +1066,20 @@
           "file": "backend/src/__tests__/secretsAudit.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/segmentCompleteHook.test.ts",
+          "status": "passed",
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/segmentIntegrityRealDb.test.ts",
+          "status": "passed",
+          "passed": 15,
           "failed": 0,
           "skipped": 0
         },
@@ -1433,9 +1524,9 @@
     }
   ],
   "totals": {
-    "suites": 199,
-    "tests": 1629,
-    "passed": 1588,
+    "suites": 212,
+    "tests": 1774,
+    "passed": 1733,
     "failed": 0,
     "skipped": 41
   },
