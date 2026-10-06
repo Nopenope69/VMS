@@ -306,7 +306,6 @@ model Tenant {
   retentionPolicies       RetentionPolicy[]
   dataProtection          DataProtectionSettings?
   explanations            Explanation[]
-  incidentSummaries       IncidentSummary[]
   ioDevices               IoDevice[]
   doors                   Door[]
   vlmVerifications        VlmVerification[]
@@ -526,10 +525,6 @@ model RecordingSegment {
   storageVolume       StorageVolume? @relation(fields: [storageVolumeId], references: [id], onDelete: SetNull)
   storageEpochId      String?
   storageEpoch        StorageEpoch?  @relation(fields: [storageEpochId], references: [id], onDelete: SetNull)
-  /// Last time the periodic presence and size check looked at this file (ADR: F7 in the RecordingCatalog audit).
-  integrityCheckedAt  DateTime?
-  /// Last time the periodic content-hash check matched this file to its recorded hash.
-  hashVerifiedAt      DateTime?
   originalSha256      String? // Pre-repair original checksum if repaired
   repairedSha256      String? // Post-repair derivative checksum if repaired
   repairedAt          DateTime? // Timestamp of repair operation
@@ -541,8 +536,6 @@ model RecordingSegment {
 
   @@index([cameraId, startTime, endTime])
   @@index([status])
-  @@index([status, integrityCheckedAt])
-  @@index([status, hashVerifiedAt])
   @@index([tenantId, cameraId, startTime])
 }
 
@@ -878,27 +871,19 @@ model Alarm {
   ackSlaBreachedAt     DateTime?
   resolveSlaBreachedAt DateTime?
 
-  // Incident window: later triggers of the same rule on the same camera join this alarm instead of raising
-  // a new one (ADR 0014). Only set when the rule's TRIGGER_ALARM action asks for a window.
-  lastActivityAt       DateTime?
-  occurrenceCount      Int       @default(1)
-  lastCanonicalEventId String?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  notificationJobs  NotificationJob[]
-  notificationLogs  NotificationLog[]
-  escalations       AlarmEscalation[]
-  feedback          AlarmFeedback?
-  evidenceHolds     IncidentEvidenceHold[]
-  explanations      Explanation[]
-  incidentSummaries IncidentSummary[]
-  vlmVerifications  VlmVerification[]
+  notificationJobs NotificationJob[]
+  notificationLogs NotificationLog[]
+  escalations      AlarmEscalation[]
+  feedback         AlarmFeedback?
+  evidenceHolds    IncidentEvidenceHold[]
+  explanations     Explanation[]
+  vlmVerifications VlmVerification[]
 
   @@index([tenantId, state, severity])
   @@index([cameraId, triggeredAt])
-  @@index([tenantId, automationRuleId, cameraId, state])
 }
 
 model DetectionEvent {
@@ -1833,30 +1818,6 @@ model Explanation {
 
   @@unique([alarmId, templateVersion])
   @@index([tenantId, cameraId, alarmTriggeredAt])
-}
-
-/// Incident summary snapshots (ADR 0016): a written story of an alarm where every sentence cites recorded facts. Immutable;
-/// an incident that has changed gets a new row (the id follows the alarm, template and facts hash).
-model IncidentSummary {
-  id               String   @id @default(uuid())
-  tenantId         String
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  alarmId          String
-  alarm            Alarm    @relation(fields: [alarmId], references: [id], onDelete: Cascade)
-  /// Copied from the facts so exports can select by camera and window without parsing recordJson.
-  cameraId         String?
-  alarmTriggeredAt DateTime
-  summaryId        String   @unique
-  templateVersion  String
-  factsSha256      String
-  recordSha256     String
-  recordJson       Json
-  generatedById    String?
-  generatedAt      DateTime
-  createdAt        DateTime @default(now())
-
-  @@index([tenantId, cameraId, alarmTriggeredAt])
-  @@index([alarmId, generatedAt])
 }
 
 /// Phase 5 (P5.1): metadata for an object crop stored on disk by the CropStore. The bytes live under

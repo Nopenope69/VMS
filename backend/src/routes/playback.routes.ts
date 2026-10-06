@@ -234,9 +234,7 @@ router.post('/sync/sessions/:sessionId/rate', async (req: Request, res: Response
 });
 
 /**
- * Step one frame forward or backward: the next real frame of the first camera with footage (read from the file's own
- * frame times, so exact on variable frame rate too); the other cameras are brought to that moment. The answer says
- * `precision` (EXACT or APPROXIMATE) and `clamped` (no further frame). 409 FRAME_RATE_UNKNOWN when it cannot be done.
+ * Step frame forward or backward (exact PTS delta, no 33ms assumption)
  */
 router.post('/sync/sessions/:sessionId/step', async (req: Request, res: Response) => {
   const { direction } = req.body;
@@ -260,7 +258,6 @@ router.post('/sync/sessions/:sessionId/step', async (req: Request, res: Response
 
     return res.json({ ...stepResult, cameras: serializedCameras });
   } catch (err: any) {
-    if (err?.code === 'FRAME_RATE_UNKNOWN') return res.status(409).json({ error: err.message, code: err.code });
     return res.status(500).json({ error: err.message });
   }
 });

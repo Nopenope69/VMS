@@ -256,8 +256,8 @@ describe('Candidate 01: RecordingCatalog (Authoritative Recording Spine)', () =>
     });
   });
 
-  describe('Frame stepping when the file cannot be read (exact stepping is in frameStepExact.test.ts)', () => {
-    it('never jumps to the next keyframe: with a keyframe index it still steps one frame', async () => {
+  describe('Non-FPS-Dependent Frame Stepping', () => {
+    it('steps through discrete keyframes when available', async () => {
       const seg = await catalog.registerSegment({
         tenantId: sampleTenantId,
         cameraId: sampleCameraId,
@@ -273,13 +273,14 @@ describe('Candidate 01: RecordingCatalog (Authoritative Recording Spine)', () =>
         ],
       });
 
-      // A keyframe is not the next frame: stepping to one (90000) would skip a whole GOP. One frame at 25 fps is 3600.
-      const step = await catalog.stepToAdjacentFrame(sampleCameraId, seg.id, 0n, 'FORWARD');
-      expect(step.newPts).toBe(3600n);
-      expect(step.precision).toBe('APPROXIMATE');
+      const forward = await catalog.stepToAdjacentFrame(sampleCameraId, seg.id, 0n, 'FORWARD');
+      expect(forward.newPts).toBe(90000n);
+
+      const backward = await catalog.stepToAdjacentFrame(sampleCameraId, seg.id, 90000n, 'BACKWARD');
+      expect(backward.newPts).toBe(0n);
     });
 
-    it('estimates from the frame rate and says APPROXIMATE when the file cannot be read', async () => {
+    it('falls back to exact timebase-derived delta when keyframe list is missing', async () => {
       const seg = await catalog.registerSegment({
         tenantId: sampleTenantId,
         cameraId: sampleCameraId,
@@ -298,7 +299,6 @@ describe('Candidate 01: RecordingCatalog (Authoritative Recording Spine)', () =>
       const step = await catalog.stepToAdjacentFrame(sampleCameraId, seg.id, 10000n, 'FORWARD');
       expect(step.newPts).toBe(13600n);
       expect(step.frameDeltaPts).toBe(3600n);
-      expect(step.precision).toBe('APPROXIMATE');
     });
   });
 

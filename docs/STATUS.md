@@ -6,44 +6,6 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
-## Session 32 (2026-10-05/06): open-source reference study, alarm triage, RecordingCatalog audit and fixes, incident summary
-
-Branch `claude/elegant-albattani-4krihk` (PR #47, ten commits from `master` `cd9b7b0`, merged with `master` `84d3c49`;
-#45 merged only the docs commit). State `DONE_UNVERIFIED` for everything below: built and tested in the cloud sandbox on synthetic data, real
-database, real ffmpeg and a real browser; **not run in CI, not on a real camera, MediaMTX or disk.**
-
-| Piece | State | Where |
-| --- | --- | --- |
-| Reference study of 16 public repositories (design ideas only) | DONE_VERIFIED (read, not run) | `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` |
-| Incident window, one incident one alarm | DONE_UNVERIFIED | ADR 0014, migration 20261014000000; no rule-builder field yet |
-| Alarm triage queue and proposals, Triage tab | DONE_UNVERIFIED | ADR 0015, flag `ALARM_TRIAGE`; thresholds are guesses |
-| RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
-| Time assumptions pinned (`TZ=UTC`), mismatch warning, clock limits written down | DONE_UNVERIFIED | `docs/operations/EVIDENCE_VERIFICATION.md` |
-| Cited incident summary, evidence package section, offline checks | DONE_UNVERIFIED | ADR 0016, flag `INCIDENT_SUMMARY`, migration 20261016000000 |
-| Describe-what-to-watch rules, footage integrity, per-camera health endpoint, adapter result fields | NOT_STARTED | See `PROJECT_STATE.md` section 9; the first two need owner licence decisions |
-
-Local runs (sandbox): backend full suite in band 173 suites, 1329 passed, 42 skipped, 0 failed; backend and frontend `tsc`
-clean; gates `check-no-fake-success`, `check-repo-hygiene`, `docs-hygiene`, `check-dependency-licenses`,
-`generate-feature-flag-docs --check` pass; `node --test tools/vigilone-verify/*.test.mjs` 25 passed;
-`scripts/e2e/frontend-browser.sh` 27 passed.
-
-Found by running things, not by reading: the segment-complete worker (the main production indexing path) stored no keyframe
-index and `endPts = 0`; the crawler moved quarantined files and indexed half-written and unreadable files as finished; coverage
-and seek counted corrupt, quarantined and missing files as footage; "pinned evidence first" in the hash check starved every
-other segment until it was limited to evidence that is due; a key-order-sensitive comparison failed on canonical JSON in the
-summary verifier until the real export test ran.
-
-### Not verified (and why)
-- CI on this branch (new migrations, flags, jobs not yet seen by GitHub Actions).
-- The cost of the content-hash check, the keyframe read on a cold disk, and false failures on healthy disks: need real disks.
-- Anything about MediaMTX behaviour beyond reading its source (hook runs on its own goroutine; segment names use the process
-  time zone).
-- Whether the triage order or the incident summary helps investigators: needs the pilot (the time-to-answer stopwatch measures it).
-
-### What I need from the human
-1. Open a PR for the branch (the session cannot choose to merge) and watch the first CI run.
-2. Licence decisions: the local text model (Qwen3-4B) for describe-what-to-watch rules; a C2PA library for footage integrity.
-3. Pilot data for incident windows and triage thresholds.
 ## Session 31 (2026-10-05): open-model research (pose, falls, climbing, fire, weapons, the rest)
 
 Branch `claude/amazing-hypatia-hkgolw`, from `master` after #44 and #45. Documents only: `docs/strategy/model-research-2026-10-05/`

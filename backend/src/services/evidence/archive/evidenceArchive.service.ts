@@ -1,8 +1,6 @@
 import { collectAiProvenance } from './aiProvenance';
 import { buildExplanationsDocument } from '../../explanation/explanation';
 import { loadExplanationRecords } from '../../explanation/explanationService';
-import { loadIncidentSummaryRecords } from '../../incidentSummary/service';
-import { buildIncidentSummariesDocument } from '../../incidentSummary/summary';
 import { FeatureFlag, isFeatureEnabled } from '../../../config/featureFlags';
 import fs from 'fs';
 import path from 'path';
@@ -457,7 +455,7 @@ export class EvidenceArchive {
       // be left out of a package because the flag was switched off later). An invalid stored record
       // fails the export loudly; it is never dropped or repaired.
       const explanationRecords = await loadExplanationRecords(this.prisma, params.tenantId, params.cameraId, params.startTime, params.endTime);
-      const extraArtifacts: Array<{ sourcePath: string; path: string; mediaType: string; role: 'AI_PROVENANCE' | 'EXPLANATIONS' | 'INCIDENT_SUMMARIES' }> = [
+      const extraArtifacts: Array<{ sourcePath: string; path: string; mediaType: string; role: 'AI_PROVENANCE' | 'EXPLANATIONS' }> = [
         { sourcePath: aiPath, path: 'ai_provenance.json', mediaType: 'application/json', role: 'AI_PROVENANCE' },
       ];
       if (isFeatureEnabled(FeatureFlag.EXPLANATIONS) || explanationRecords.length > 0) {
@@ -475,27 +473,6 @@ export class EvidenceArchive {
           digestSha256: explDoc.digestSha256,
         };
         extraArtifacts.push({ sourcePath: explPath, path: 'explanations.json', mediaType: 'application/json', role: 'EXPLANATIONS' });
-      }
-
-      // Incident summaries (ADR 0016): the newest stored snapshot for each alarm raised on this camera inside the window.
-      // Same rules as the explanations: written when the feature is on or records exist, and a stored record that does not
-      // match its own row fails the export loudly.
-      const summaryRecords = await loadIncidentSummaryRecords(this.prisma, params.tenantId, params.cameraId, params.startTime, params.endTime);
-      if (isFeatureEnabled(FeatureFlag.INCIDENT_SUMMARY) || summaryRecords.length > 0) {
-        const sumDoc = buildIncidentSummariesDocument({
-          cameraId: params.cameraId,
-          window: { startUtc: params.startTime.toISOString(), endUtc: params.endTime.toISOString() },
-          records: summaryRecords,
-        });
-        const sumPath = path.join(workDir, 'incident_summaries.json');
-        fs.writeFileSync(sumPath, canonicalizeJson(sumDoc), 'utf8');
-        manifestData.incidentSummaries = {
-          schema: sumDoc.schema,
-          artifact: 'incident_summaries.json',
-          recordCount: sumDoc.summaries.length,
-          digestSha256: sumDoc.digestSha256,
-        };
-        extraArtifacts.push({ sourcePath: sumPath, path: 'incident_summaries.json', mediaType: 'application/json', role: 'INCIDENT_SUMMARIES' });
       }
 
       // Generate Section 63 BSA Part A & Part B PDF certificate

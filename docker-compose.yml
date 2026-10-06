@@ -66,9 +66,6 @@ services:
       # MediaMTX port 8554 (RTSP) is NOT mapped to host - strictly internal Docker network!
       # Port 9997 (Control API) is NOT mapped to host - strictly internal Docker network!
     environment:
-      # Segment file names carry the recorder's LOCAL time (MediaMTX formats them in the zone of its own process) and the
-      # catalog reads them as UTC. Never change this: every segment would be shifted by the zone offset, without an error.
-      - TZ=UTC
       - MTX_WEBRTCADDITIONALHOSTS=${LAN_IP:-127.0.0.1}
       - RECORD_SEGMENT_DURATION=${RECORD_SEGMENT_DURATION:-10m}
       - RECORD_PART_DURATION=${RECORD_PART_DURATION:-1s}

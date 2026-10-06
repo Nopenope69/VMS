@@ -25,35 +25,7 @@ or read error.
 | `custody.export_event` / `custody.derivation_event` | EVIDENCE_EXPORTED links the Merkle root to this video. For a derivative, EVIDENCE_REDACTED links the parent master hash to this derivative |
 | `ai.artifact_bound`, `ai.records_attributed`, `ai.summary_matches` | Every AI record in ai_provenance.json names a model (name, version, SHA-256) listed in the file, plus confidence, frame timestamp and camera. The counts and models match the signed summary |
 | `ai.unattributed`, `ai.models_unevaluated` (WARN) | Some AI events have no model provenance (written before Phase 2), or a model has no evaluation on site data |
-| `summary.artifact_bound`, `summary.summary_matches`, `summary.records_intact`, `summary.unique`, `summary.scope` | Incident summaries (ADR 0016, `incident_summaries.json`, role `INCIDENT_SUMMARIES`): the artifact is in the signed manifest and agrees with its digest; every record recomputes its facts, text and record hashes, its sentences and citations equal what the named template renders from its facts, every citation points at a fact in the record, every fact is cited, and the closing statement is the fixed one; one summary per alarm; every summary is for this camera and its alarm was raised inside the export window. `--require-incident-summaries` makes a missing section a failure (otherwise `summary.present` is a warning) |
 | `derivation.*` | For a redacted derivative: derivation.json names this video; the parent master hash equals the recomputed Merkle root; the source segments are leaves of the parent; the detector model is listed in the AI provenance |
-
-## What the times in a recording mean, and how accurate they are
-
-Read this before describing the time of an event in a statement, a certificate or in court. Nothing here has been measured on a
-real appliance with real cameras; it states what the design guarantees and what it does not.
-
-1. **The time of a recording is the appliance's clock, not the camera's.** A segment's start time is the appliance's wall clock
-   (UTC) at the moment the recorder opened the file. It is in the file name, to the microsecond, and the catalog reads it as UTC.
-   The MediaMTX container is pinned to UTC (`TZ=UTC`) because it writes that name in its own local time. If a segment's name and
-   the file's last write differ by more than five minutes (a wrong time zone or a wrong clock), the appliance raises a warning
-   event, `Segment time does not match the file clock`, and does **not** change the recorded time.
-2. **Inside one segment, timing is the camera's.** The time of a frame is the segment start plus the frame's timestamp minus the
-   first frame's timestamp, from the camera's own stream clock. So the spacing between frames of one camera is as exact as that
-   camera's clock; the placement of the whole segment on the wall clock is as exact as the appliance's clock at the start,
-   plus the delay between the camera capturing the first frame and the recorder opening the file (network and buffering delay,
-   not measured, plausibly tens to hundreds of milliseconds).
-3. **Between cameras, alignment is only as good as that.** Two cameras recording the same event are placed on one wall clock by
-   the appliance's clock for each, plus each stream's own delay. Do not claim sub-frame alignment between cameras. A claim of
-   "within one second" is supportable when the appliance clock is NTP-synchronised; anything finer needs a measurement on the site.
-4. **The appliance clock must be synchronised.** The go-live runbook requires NTP and `vigilonectl` reports whether the host is
-   NTP-synchronised. The ClockGuard floor (`clock_guard.state`) only stops the clock from moving backwards past what was already
-   seen (it protects licensing and updates); it does not measure accuracy and is not evidence that the clock was right.
-5. **The camera's clock is not used for video.** The ONVIF clock check (`CAMERA_EVENTS.md`) reads the camera's time in whole
-   seconds and is used for event subscriptions, and it cannot confirm better than about a second. Camera-supplied event times
-   are stored as the camera's, not corrected to the appliance's.
-6. **Frame stepping** lands on real frames of the reference camera (see the RecordingCatalog audit); the other cameras of a
-   synchronized view are brought to the same moment, not to a frame boundary of their own.
 
 ## Package contents (P4.5)
 
