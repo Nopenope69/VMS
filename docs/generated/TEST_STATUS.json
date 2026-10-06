@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-06T10:22:43.487Z",
-  "commit": "a5d96bb37f87a2d7862f9c973496b8243c7a1193",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37448572237",
+  "generatedAt": "2026-10-06T13:40:44.073Z",
+  "commit": "6da910d98dc6d57c7af67e61595fbb61d362b0d8",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37471964509",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 178,
-        "passed": 178,
+        "total": 180,
+        "passed": 180,
         "failed": 0
       },
       "tests": {
-        "total": 1435,
-        "passed": 1399,
+        "total": 1477,
+        "passed": 1441,
         "failed": 0,
         "skipped": 36
       },
@@ -937,6 +937,20 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/poseRules.test.ts",
+          "status": "passed",
+          "passed": 33,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/poseRulesRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/prismaSingleton.test.ts",
           "status": "passed",
           "passed": 2,
@@ -1270,17 +1284,17 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 34,
-        "passed": 33,
-        "failed": 0
+        "total": 37,
+        "passed": 35,
+        "failed": 1
       },
       "tests": {
-        "total": 339,
-        "passed": 334,
-        "failed": 0,
-        "skipped": 5
+        "total": 364,
+        "passed": 354,
+        "failed": 1,
+        "skipped": 9
       },
-      "success": true,
+      "success": false,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1374,6 +1388,13 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/goldenPose.test.ts",
+          "status": "failed",
+          "passed": 0,
+          "failed": 1,
+          "skipped": 4
+        },
+        {
           "file": "services/ai-worker/src/__tests__/goldenQueryRewrite.test.ts",
           "status": "passed",
           "passed": 5,
@@ -1442,6 +1463,13 @@
           "passed": 13,
           "failed": 0,
           "skipped": 3
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/poseEstimator.test.ts",
+          "status": "passed",
+          "passed": 13,
+          "failed": 0,
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/queryRewrite.test.ts",
@@ -1519,16 +1547,23 @@
           "passed": 3,
           "failed": 0,
           "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/workerPose.test.ts",
+          "status": "passed",
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
         }
       ]
     }
   ],
   "totals": {
-    "suites": 212,
-    "tests": 1774,
-    "passed": 1733,
-    "failed": 0,
-    "skipped": 41
+    "suites": 217,
+    "tests": 1841,
+    "passed": 1795,
+    "failed": 1,
+    "skipped": 45
   },
-  "allPassed": true
+  "allPassed": false
 }
