@@ -8,9 +8,13 @@ Nothing here says "passing" without the run that showed it. CI-generated test co
 
 ## Session 32 (2026-10-05/06): open-source reference study, alarm triage, RecordingCatalog audit and fixes, incident summary
 
-Branch `claude/elegant-albattani-4krihk` (PR #47, ten commits from `master` `cd9b7b0`, merged with `master` `84d3c49`;
-#45 merged only the docs commit). State `DONE_UNVERIFIED` for everything below: built and tested in the cloud sandbox on synthetic data, real
-database, real ffmpeg and a real browser; **not run in CI, not on a real camera, MediaMTX or disk.**
+Merged to `master` as PR #47 (`fe188e1`, ten commits from `cd9b7b0`, merged with `84d3c49`; #45 merged only the docs commit). #47 was merged before
+its CI finished (GitHub runners never started four jobs). It was reverted (#48) and re-landed unchanged as #50 (`ca29da6`, on top of #49); it is in
+`master` once. **CI result:** the full CI run on `ca29da6` passed all 10 jobs, including Backend Typecheck, Migrations & Tests (applies migrations
+`20261014000000` to `20261016000000` on a fresh Postgres, full backend suite, real-DB tests), AI Worker, Frontend Browser Tests and the AI
+end-to-end scenario (run 37420339858, attempt 2). A local full backend run on the same code also passed (173 suites, 1329 tests, 42 skipped).
+State stays `DONE_UNVERIFIED` below because it is **not proven on a real camera, MediaMTX or disk**; both new flags (`ALARM_TRIAGE`,
+`INCIDENT_SUMMARY`) stay off by default.
 
 | Piece | State | Where |
 | --- | --- | --- |
