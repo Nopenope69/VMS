@@ -46,6 +46,8 @@ export class RetentionService {
         pinnedSkippedCount: 0,
         evaluatedSegmentsCount: 0,
         exhaustionCondition: false,
+        unarchivedPurgedCount: 0,
+        unarchivedPurgedBytes: 0n,
       };
     }
     this.isPruning = true;
@@ -75,6 +77,8 @@ export class RetentionService {
       let totalSkipped = 0;
       let totalEvaluated = 0;
       let hasExhaustion = false;
+      let totalUnarchived = 0;
+      let totalUnarchivedBytes = 0n;
 
       for (const tenant of tenants) {
         const report = await this.engine.pruneCameraQuotasAndRetention(tenant.id, now);
@@ -83,6 +87,8 @@ export class RetentionService {
         totalSkipped += report.pinnedSkippedCount;
         totalEvaluated += report.evaluatedSegmentsCount;
         if (report.exhaustionCondition) hasExhaustion = true;
+        totalUnarchived += report.unarchivedPurgedCount;
+        totalUnarchivedBytes += report.unarchivedPurgedBytes;
       }
 
       return {
@@ -91,6 +97,8 @@ export class RetentionService {
         pinnedSkippedCount: totalSkipped,
         evaluatedSegmentsCount: totalEvaluated,
         exhaustionCondition: hasExhaustion,
+        unarchivedPurgedCount: totalUnarchived,
+        unarchivedPurgedBytes: totalUnarchivedBytes,
       };
     } finally {
       this.isPruning = false;

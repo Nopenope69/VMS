@@ -6,6 +6,8 @@
 import prisma from '../../config/database';
 import { EmbeddingAdapterClient, EmbeddingResult } from './embeddingAdapterClient';
 import { embeddingAdapterUrl } from './embeddingWorkers';
+import { ensembleTextEmbedding } from './queryTemplates';
+import { setting } from '../../config/settings';
 
 export interface QueryEmbedder {
   text(text: string): Promise<EmbeddingResult>;
@@ -26,7 +28,12 @@ export function defaultQueryEmbedder(): QueryEmbedder | null {
     return client;
   };
   return {
-    text: async (text) => (await connected()).embedText(text),
+    text: async (text) => {
+      const client = await connected();
+      // Opt-in: several phrasings averaged (QUERY_TEMPLATE_ENSEMBLE). Plain single-phrase embedding otherwise.
+      if (setting('QUERY_TEMPLATE_ENSEMBLE')) return ensembleTextEmbedding((t) => client.embedText(t), text, setting('QUERY_TEMPLATES'));
+      return client.embedText(text);
+    },
     image: async (jpeg) => (await connected()).embed(jpeg, new Date().toISOString()),
   };
 }

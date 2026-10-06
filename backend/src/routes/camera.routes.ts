@@ -15,6 +15,7 @@ import streamWatchdogService from '../services/watchdog/streamWatchdog.service';
 import { ZoneType } from '@prisma/client';
 import { cameraRegistry as cameras } from '../composition';
 import { Actor } from '../services/camera/cameraRegistry';
+import { loadCameraHealth, summariseHealth } from '../services/camera/cameraHealth.service';
 
 /**
  * Camera HTTP routes. Every camera, preset, tour and zone is found through the CameraRegistry, which enforces
@@ -108,6 +109,32 @@ router.post('/', authorize(Permission.CAMERA_CREATE), enforceCameraQuota, async 
 router.get('/', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
   try {
     return res.json({ cameras: await cameras.list(req.user!.tenantId) });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+/**
+ * Per-camera health: read-only, derived from what the watchdogs and the recorder already record. States are
+ * HEALTHY, DEGRADED, DOWN, UNKNOWN (never reported) and NOT_MONITORED, each with the reasons behind it.
+ */
+router.get('/health', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const rows = await loadCameraHealth(prisma, req.user!.tenantId, { segmentDuration: config.RECORD_SEGMENT_DURATION });
+    return res.json({ generatedAt: new Date().toISOString(), summary: summariseHealth(rows), cameras: rows });
+  } catch (err: any) {
+    return fail(res, err);
+  }
+});
+
+router.get('/:id/health', authorize(Permission.CAMERA_VIEW), async (req: Request, res: Response) => {
+  try {
+    const camera = await cameras.require(req.user!.tenantId, req.params.id);
+    const [row] = await loadCameraHealth(prisma, req.user!.tenantId, {
+      cameraId: camera.id,
+      segmentDuration: config.RECORD_SEGMENT_DURATION,
+    });
+    return res.json({ generatedAt: new Date().toISOString(), ...row });
   } catch (err: any) {
     return fail(res, err);
   }

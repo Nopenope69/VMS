@@ -12,6 +12,7 @@ import { TensorBufferPool } from './tensorPool';
 import { SignatureDecoder } from './signatureDecoder';
 import { decodeModelOutputs } from './decoders';
 import { fillPlanarTensor } from './preprocess';
+import { planSession, createSessionWithFallback, FallbackNote } from './executionProvider';
 
 export interface InferenceOptions {
   imageWidth?: number;
@@ -36,7 +37,10 @@ export interface IInferenceEngine {
 export interface RuntimeInfo {
   runtime: 'onnxruntime' | 'openvino';
   runtimeVersion: string | null;
+  /** The provider that actually created the session (never the one that was merely requested). */
   executionProvider: string | null;
+  /** Set when the requested provider could not start and the CPU ran instead. */
+  executionProviderFallback?: FallbackNote;
 }
 
 /**
@@ -66,6 +70,7 @@ export class OnnxInferenceEngine implements IInferenceEngine {
   private inputHeight = 640;
   private runtimeVersion: string | null = null;
   private executionProvider: string | null = null;
+  private executionProviderFallback: FallbackNote | undefined;
 
   constructor(poolCapacity: number = 4) {
     const isProduction =
@@ -98,6 +103,7 @@ export class OnnxInferenceEngine implements IInferenceEngine {
       runtime: this.runtimeName.toLowerCase() === 'openvino' ? 'openvino' : 'onnxruntime',
       runtimeVersion: this.runtimeVersion,
       executionProvider: this.executionProvider,
+      ...(this.executionProviderFallback ? { executionProviderFallback: this.executionProviderFallback } : {}),
     };
   }
 
@@ -111,6 +117,7 @@ export class OnnxInferenceEngine implements IInferenceEngine {
     }
 
     this.loaded = false;
+    this.executionProviderFallback = undefined;
     this.config = config;
     this.manifest = manifest;
     this.runtimeName = config.runtime || 'onnxruntime';
@@ -144,17 +151,19 @@ export class OnnxInferenceEngine implements IInferenceEngine {
       }
       this.ort = ort;
 
-      // Execution provider: CPU unless the manifest names another one (OpenVINO, CUDA).
-      const ep = normalizeExecutionProvider(config.executionProvider);
-      const sessionOptions: any = { executionProviders: [ep] };
-
-      try {
-        this.session = await ort.InferenceSession.create(artifactBuffer, sessionOptions);
-      } catch (err: any) {
-        throw new Error(`Failed to create native ONNX session: ${err.message}`);
+      // Execution provider: CPU unless the manifest names another one. If that one cannot start the model
+      // runs on CPU (AI_EP_FALLBACK=none to refuse instead) and the fallback is recorded, never hidden.
+      const plan = planSession(normalizeExecutionProvider(config.executionProvider));
+      const created = await createSessionWithFallback(ort, artifactBuffer, plan);
+      this.session = created.session;
+      this.executionProviderFallback = created.fallback;
+      if (created.fallback) {
+        console.warn(
+          `[AiWorker] execution provider '${created.fallback.from}' could not start (${created.fallback.reason}); running on CPU`
+        );
       }
       this.runtimeVersion = ort.env?.versions?.node ?? ort.env?.versions?.common ?? null;
-      this.executionProvider = ep;
+      this.executionProvider = created.executionProvider;
 
       // Verify ONNX graph signature against manifest contract
       if (manifest?.modelSignatureJson) {

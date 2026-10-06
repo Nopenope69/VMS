@@ -7,6 +7,7 @@ import { authorize, assertTenantBoundary, Permission } from '../services/rbac/pe
 import { AuditChainService } from '../services/audit/auditChain.service';
 import { incidentOrchestrator, plateAggregator as aggregator, edgeAiRuntime as aiRuntime } from '../composition';
 import { compilePattern, MatchType, WatchlistPatternError } from '../services/anpr/watchlistMatcher';
+import { findNearMatches, DEFAULT_MAX_COST, HARD_MAX_COST } from '../services/anpr/plateNearMatch';
 import { normalizeIndianPlate, cleanPlateText } from '../contracts/indianPlate.v1';
 import { z } from 'zod';
 import { requirePurpose, recordSensitiveQuery } from '../services/privacy/dataProtection.service';
@@ -88,6 +89,41 @@ router.get('/observations', authorize(Permission.ANPR_VIEW), authorize(Permissio
         total,
         totalPages: Math.ceil(total / limit),
       },
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+/**
+ * Near matches of one observation against the known-plate list. Advisory and read-only: it raises no alarm and
+ * links nothing; it shows which characters differ so a person can look at the picture and decide. Audited with the
+ * declared purpose like every plate query.
+ */
+router.get('/observations/:id/near-matches', authorize(Permission.ANPR_VIEW), authorize(Permission.PLATE_DATA_QUERY), requirePurpose(prisma, 'PLATE'), async (req: Request, res: Response) => {
+  const tenantId = req.user!.tenantId;
+  const maxCost = req.query.maxCost === undefined ? DEFAULT_MAX_COST : Number(req.query.maxCost);
+  if (!(maxCost > 0) || maxCost > HARD_MAX_COST) {
+    return res.status(400).json({ error: `maxCost must be above 0 and at most ${HARD_MAX_COST}` });
+  }
+  try {
+    const obs = await prisma.vehicleObservation.findFirst({
+      where: { id: req.params.id, tenantId },
+      select: { id: true, normalizedPlate: true, plateFormat: true, bestConfidence: true, matchedWatchlistId: true },
+    });
+    if (!obs) return res.status(404).json({ error: 'Observation not found' });
+    const entries = await prisma.vehicleWatchlist.findMany({
+      where: { tenantId, active: true, matchType: 'EXACT' },
+      select: { id: true, normalizedPlate: true, matchType: true, category: true },
+    });
+    const nearMatches = findNearMatches(obs.normalizedPlate, entries, { maxCost });
+    await recordSensitiveQuery(prisma, req, 'ANPR_NEAR_MATCH_QUERY', { observationId: obs.id, maxCost, resultCount: nearMatches.length });
+    return res.json({
+      advisory: true,
+      note: 'Candidates for human review only. A near match is not a confirmed identification.',
+      observation: obs,
+      maxCost,
+      nearMatches,
     });
   } catch (err: any) {
     return res.status(err.statusCode || 500).json({ error: err.message });
