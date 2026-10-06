@@ -439,7 +439,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
     advice).
   - **Pose model:** start person down and fence climbing on the **ready-made RTMPose files** (body7 weights), not
     the COCO-only RTMO export or a retrain.
-- **Next (owner, in a new session): build person down and fence climbing on RTMPose-s.** Plan:
+- **Done in Session 34 (2026-10-06): person down and fence climbing on RTMPose-s** (ADR 0017, `docs/operations/POSE_RULES.md`; pose off by default, `AI_POSE_ESTIMATION`; owner approval for the model recorded; feet-off-ground and box-only fence fallback deliberately not built; nothing tuned on real footage). The plan below is kept for reference:
   1. Add RTMPose-s as a candidate in `scripts/models/models.lock.json`: HF mirror `Tau-J/RTMPose` (Apache-2.0 card)
      at commit `cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd`, file
      `rtmposev1/onnx_sdk/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.zip` (ONNX inside; pin the
@@ -458,8 +458,8 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
      New event kinds, events.v1 additions, explanations, rule screen, real-DB tests, browser test, docs, one PR.
   4. Data: commercially usable fall sets for evaluation are CAUCAFall, UP-Fall, Simuletic synthetic (CC BY 4.0)
      and GMDCSA-24 (MIT); fence climbing needs staged recordings.
-- **After that:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm
-  triage, footage integrity), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
+- **After that:** the two software features still open (describe-what-to-watch rules, footage integrity; the cited incident
+  summary and alarm triage are in `master` since #50), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
   one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
@@ -494,16 +494,23 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
     frontend); repo gates pass (fake-success, hygiene, docs, dependency licences, feature-flag docs); `node --test
     tools/vigilone-verify/*.test.mjs` 25 passed; browser suite 27 passed (`scripts/e2e/frontend-browser.sh`). **CI has not run on
     this branch. Nothing has run on a real camera, MediaMTX or disk.**
+- **Session 33 (2026-10-06), PRs #49 and #50, both merged:** a deeper read of the open-source list
+  (`docs/strategy/vigilone-oss-all-repos-adoption-study-2026-10-05.md` and the Frigate/Scrypted/Viseron deep dive) and six
+  small changes: execution-provider CPU fallback with honest reporting (the ONNX Runtime package is CPU only, **no acceleration
+  shipped**), archive-aware retention (alarm `STORAGE_UNARCHIVED_FOOTAGE_DROPPED`), a read-only per-camera health endpoint (no
+  retry counters, none recorded), advisory plate near-match candidates, opt-in query template ensembling (off, unmeasured), and
+  the **re-land of #47** (merged early, reverted by #48, re-landed by #50 after a full green CI run). Operations notes are in
+  `docs/operations/` (`AI_EXECUTION_PROVIDER`, `ARCHIVE_AWARE_RETENTION`, `CAMERA_HEALTH`, `PLATE_NEAR_MATCH`,
+  `QUERY_TEMPLATE_ENSEMBLE`). Unbuilt items and why are in section 6 of the adoption study. Lesson: before proposing a gap,
+  search `tools/eval`, `services/anpr` and the retention code; three early "gaps" already existed.
 - **Next for this branch's line of work (after person down and fence climbing, which the owner put first, above):** (a) **describe-what-to-watch rules** (a local model drafts a normal rule, the dry run shows last
   week's matches, the operator saves it; needs the owner's approval of the local text model, Qwen3-4B, in the licence process);
   (b) **footage integrity** (per-device signing of segment hashes at ingest, C2PA-style manifests on exports after a licence check,
-  classical camera-sabotage detection); (c) **per-camera health endpoint** (idea from Kerberos Agent's `/health`: connectivity,
-  stream stats, last recorded segment, reconnect count; read-only); (d) **`ai-adapter.v1` result fields** (`clipped`, `cost`, a
-  get-the-source-media call; as a minor version, proposal first). Then the leftovers: stepping every camera of a synchronized view
+  classical camera-sabotage detection); (c) ~~per-camera health endpoint~~ **done in Session 33** (no reconnect count: nothing records one); (d) ~~`ai-adapter.v1` result fields~~ **dropped in Session 33**: `ModelCardV1.input` already carries size and colour space, `cost` belongs to the tracker, edge clipping can be derived. Then the leftovers: stepping every camera of a synchronized view
   onto its own frame (only the reference camera is frame-exact today), a measured stream delay from RTCP sender reports,
   audit finding F8 (orphan file after a crash during retention, known, no change), a rule-builder field for
   `incidentWindowSeconds`, a queue page polish for triage, and Bucket 6 (privacy tools, parked).
-- **Owner decisions still needed:** merge the branch (new PR); approve or reject the local text model and C2PA library for (a)
+- **Owner decisions still needed:** (the #47 branch is merged, via #50); approve or reject the local text model and C2PA library for (a)
   and (b); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
   quarantine cap (old open question); all of the field track (bench, clean-VM drill, real footage, pilot site, DPDP choices).
 - **Sandbox set-up for the next session (the cloud container is fresh each time):** `cd backend && npm ci` and the same in

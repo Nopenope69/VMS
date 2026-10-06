@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Compass, Square, Trash2, Save, ArrowRight, Info, AlertCircle, CheckCircle2, Briefcase, Navigation } from 'lucide-react';
+import { Compass, Square, Trash2, Save, ArrowRight, Info, AlertCircle, CheckCircle2, Briefcase, Navigation, UserX, ShieldAlert } from 'lucide-react';
 import api from '../services/api';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
@@ -10,7 +10,7 @@ interface Point2D {
   y: number;
 }
 
-type RuleType = 'TRIPWIRE' | 'LOITERING' | 'UNATTENDED_OBJECT' | 'WRONG_WAY';
+type RuleType = 'TRIPWIRE' | 'LOITERING' | 'UNATTENDED_OBJECT' | 'WRONG_WAY' | 'PERSON_DOWN' | 'FENCE_CLIMB';
 
 /** A rule as the backend stores it (coordinates normalised to the camera image, 0..1). */
 interface SpatialRule {
@@ -22,7 +22,7 @@ interface SpatialRule {
   lineCoordinatesJson?: [Point2D, Point2D] | null;
   polygonCoordinatesJson?: Point2D[] | null;
   dwellThresholdSeconds?: number | null;
-  paramsJson?: { objectClasses?: string[] } | null;
+  paramsJson?: { objectClasses?: string[]; lyingStillSeconds?: number; protectedSide?: 'LEFT' | 'RIGHT'; topLine?: Point2D[]; climbSeconds?: number } | null;
   cooldownSeconds: number;
 }
 
@@ -53,6 +53,18 @@ const TYPES: Array<{ type: RuleType; label: string; icon: React.ElementType; hel
     icon: Navigation,
     help: 'Click 3 or more points for the zone, then switch to "Arrow" and click 2 points for the allowed direction. Alerts when something inside moves against the arrow.',
   },
+  {
+    type: 'PERSON_DOWN',
+    label: 'Person down',
+    icon: UserX,
+    help: 'Click 3 or more points for the area. Needs body pose (AI_POSE_ESTIMATION on the AI worker). Alerts when someone is seen going down and stays down for the set time. Advisory: look at the picture. Leave out places where lying is normal.',
+  },
+  {
+    type: 'FENCE_CLIMB',
+    label: 'Fence climbing',
+    icon: ShieldAlert,
+    help: 'Click 3 or more points for the area around the fence, then "Fence base" (2 points along the bottom) and "Fence top" (2 points along the top edge). Pick the protected side. Needs body pose. Alerts when a hand stays above the fence top, then when the person is across. Advisory.',
+  },
 ];
 
 const toNorm = (p: Point2D): Point2D => ({ x: +(p.x / CANVAS_W).toFixed(4), y: +(p.y / CANVAS_H).toFixed(4) });
@@ -66,6 +78,10 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
   const [unattendedSeconds, setUnattendedSeconds] = useState(60);
   const [cooldownSeconds, setCooldownSeconds] = useState(10);
   const [wrongWayClasses, setWrongWayClasses] = useState<string[]>(VEHICLE_CLASSES);
+  const [downSeconds, setDownSeconds] = useState(10);
+  const [lyingStillSeconds, setLyingStillSeconds] = useState(0);
+  const [climbSeconds, setClimbSeconds] = useState(1.5);
+  const [protectedSide, setProtectedSide] = useState<'LEFT' | 'RIGHT'>('LEFT');
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
@@ -73,11 +89,14 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
   // Drawing state, in canvas pixels; converted to 0..1 when saved.
   const [linePoints, setLinePoints] = useState<Point2D[]>([]);
   const [polygonPoints, setPolygonPoints] = useState<Point2D[]>([]);
-  /** WRONG_WAY draws a zone and an arrow; this says which one the clicks go to. */
-  const [drawing, setDrawing] = useState<'zone' | 'arrow'>('zone');
+  /** FENCE_CLIMB: the fence top line (the base line is `linePoints`). */
+  const [topPoints, setTopPoints] = useState<Point2D[]>([]);
+  /** WRONG_WAY draws a zone and an arrow, FENCE_CLIMB a zone, the fence base and the fence top; this says where the clicks go. */
+  const [drawing, setDrawing] = useState<'zone' | 'arrow' | 'base' | 'top'>('zone');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const needsLine = ruleType === 'TRIPWIRE' || (ruleType === 'WRONG_WAY' && drawing === 'arrow');
+  const needsLine = ruleType === 'TRIPWIRE' || (ruleType === 'WRONG_WAY' && drawing === 'arrow') || (ruleType === 'FENCE_CLIMB' && drawing === 'base');
+  const needsTop = ruleType === 'FENCE_CLIMB' && drawing === 'top';
 
   const fetchRules = async () => {
     try {
@@ -93,6 +112,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
       fetchRules();
       setLinePoints([]);
       setPolygonPoints([]);
+      setTopPoints([]);
       setErrorNotice(null);
       setSuccessNotice(null);
     }
@@ -138,8 +158,8 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
       });
     }
 
-    if ((ruleType === 'TRIPWIRE' || ruleType === 'WRONG_WAY') && linePoints.length > 0) {
-      ctx.strokeStyle = ruleType === 'WRONG_WAY' ? '#10B981' : '#C05800';
+    if ((ruleType === 'TRIPWIRE' || ruleType === 'WRONG_WAY' || ruleType === 'FENCE_CLIMB') && linePoints.length > 0) {
+      ctx.strokeStyle = ruleType === 'WRONG_WAY' ? '#10B981' : ruleType === 'FENCE_CLIMB' ? '#F59E0B' : '#C05800';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(linePoints[0].x, linePoints[0].y);
@@ -162,14 +182,31 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
         ctx.beginPath();
         ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
         ctx.fill();
-        if (ruleType === 'TRIPWIRE') {
+        if (ruleType === 'TRIPWIRE' || ruleType === 'FENCE_CLIMB') {
           ctx.fillStyle = '#FDFBD4';
           ctx.font = '11px monospace';
           ctx.fillText(idx === 0 ? 'Point A' : 'Point B', p.x + 8, p.y - 8);
         }
       });
     }
-  }, [linePoints, polygonPoints, ruleType]);
+
+    if (ruleType === 'FENCE_CLIMB' && topPoints.length > 0) {
+      ctx.strokeStyle = '#EF4444';
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(topPoints[0].x, topPoints[0].y);
+      for (let i = 1; i < topPoints.length; i++) ctx.lineTo(topPoints[i].x, topPoints[i].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      topPoints.forEach((p) => {
+        ctx.fillStyle = '#EF4444';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+    }
+  }, [linePoints, polygonPoints, topPoints, ruleType]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -178,6 +215,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
     const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
     const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
     if (needsLine) setLinePoints(linePoints.length >= 2 ? [{ x, y }] : [...linePoints, { x, y }]);
+    else if (needsTop) setTopPoints(topPoints.length >= 2 ? [{ x, y }] : [...topPoints, { x, y }]);
     else setPolygonPoints([...polygonPoints, { x, y }]);
   };
 
@@ -185,8 +223,9 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
     setRuleType(t);
     setLinePoints([]);
     setPolygonPoints([]);
+    setTopPoints([]);
     setDrawing('zone');
-    setCooldownSeconds(t === 'UNATTENDED_OBJECT' ? 300 : t === 'LOITERING' ? 30 : 10);
+    setCooldownSeconds(t === 'UNATTENDED_OBJECT' ? 300 : t === 'PERSON_DOWN' ? 120 : t === 'FENCE_CLIMB' ? 60 : t === 'LOITERING' ? 30 : 10);
   };
 
   const handleSaveRule = async () => {
@@ -197,6 +236,9 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
     if (ruleType !== 'TRIPWIRE' && polygonPoints.length < 3) return setErrorNotice('Click at least 3 points to draw the zone');
     if (ruleType === 'WRONG_WAY' && linePoints.length < 2) return setErrorNotice('Switch to "Arrow" and click two points for the allowed direction');
     if (ruleType === 'WRONG_WAY' && wrongWayClasses.length === 0) return setErrorNotice('Pick at least one kind of object to watch');
+    if (ruleType === 'FENCE_CLIMB' && linePoints.length < 2) return setErrorNotice('Switch to "Fence base" and click two points along the bottom of the fence');
+    if (ruleType === 'FENCE_CLIMB' && topPoints.length < 2) return setErrorNotice('Switch to "Fence top" and click two points along the top edge of the fence');
+    if (ruleType === 'PERSON_DOWN' && (downSeconds < 3 || downSeconds > 3600)) return setErrorNotice('Time down must be between 3 and 3600 seconds');
 
     const base = { name: ruleName.trim(), type: ruleType, cameraId, cooldownSeconds };
     const zone = polygonPoints.map(toNorm);
@@ -208,12 +250,17 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
           ? { ...base, polygonCoordinates: zone, dwellThresholdSeconds: dwellSeconds }
           : ruleType === 'UNATTENDED_OBJECT'
             ? { ...base, polygonCoordinates: zone, dwellThresholdSeconds: unattendedSeconds }
-            : { ...base, polygonCoordinates: zone, lineCoordinates: line, params: { objectClasses: wrongWayClasses } };
+            : ruleType === 'WRONG_WAY'
+              ? { ...base, polygonCoordinates: zone, lineCoordinates: line, params: { objectClasses: wrongWayClasses } }
+              : ruleType === 'PERSON_DOWN'
+                ? { ...base, polygonCoordinates: zone, dwellThresholdSeconds: downSeconds, ...(lyingStillSeconds > 0 ? { params: { lyingStillSeconds } } : {}) }
+                : { ...base, polygonCoordinates: zone, lineCoordinates: line, params: { topLine: topPoints.map(toNorm), protectedSide, climbSeconds } };
     try {
       await api.post('/spatial-rules', body);
       setRuleName('');
       setLinePoints([]);
       setPolygonPoints([]);
+      setTopPoints([]);
       setDrawing('zone');
       setSuccessNotice('Rule saved.');
       fetchRules();
@@ -239,6 +286,8 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
     if (r.type === 'TRIPWIRE') return r.direction || 'BIDIRECTIONAL';
     if (r.type === 'LOITERING') return `${r.dwellThresholdSeconds}s in zone`;
     if (r.type === 'UNATTENDED_OBJECT') return `bag left ${r.dwellThresholdSeconds}s`;
+    if (r.type === 'PERSON_DOWN') return `down ${r.dwellThresholdSeconds}s${r.paramsJson?.lyingStillSeconds ? `, found lying ${r.paramsJson.lyingStillSeconds}s` : ''}`;
+    if (r.type === 'FENCE_CLIMB') return `protected side ${(r.paramsJson?.protectedSide || 'LEFT').toLowerCase()}`;
     return `against arrow: ${(r.paramsJson?.objectClasses || ['any']).join(', ')}`;
   };
 
@@ -249,7 +298,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Spatial rules: tripwire, loitering, unattended bag, wrong way"
+      title="Spatial rules: tripwire, loitering, unattended bag, wrong way, person down, fence climbing"
       subtitle={`Camera: ${cameraName}`}
       icon={<Compass className="w-4 h-4 text-vms-accent" />}
       size="4xl"
@@ -307,6 +356,7 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
                 onClick={() => {
                   setLinePoints([]);
                   setPolygonPoints([]);
+                  setTopPoints([]);
                   setDrawing('zone');
                 }}
                 className="text-[11px] font-mono text-vms-muted hover:text-rose-400 transition-colors"
@@ -327,6 +377,29 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
                     className={`px-2 py-1 rounded ${drawing === m ? 'bg-sky-500/20 text-sky-300 border border-sky-400' : 'bg-vms-panel text-vms-muted'}`}
                   >
                     {m === 'zone' ? `Zone (${polygonPoints.length} points)` : `Arrow (${linePoints.length}/2)`}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {ruleType === 'FENCE_CLIMB' && (
+              <div className="flex items-center gap-2 text-[11px] font-mono">
+                <span className="text-vms-muted">Drawing:</span>
+                {(
+                  [
+                    ['zone', `Area (${polygonPoints.length} points)`],
+                    ['base', `Fence base (${linePoints.length}/2)`],
+                    ['top', `Fence top (${topPoints.length}/2)`],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={drawing === m}
+                    onClick={() => setDrawing(m)}
+                    className={`px-2 py-1 rounded ${drawing === m ? 'bg-sky-500/20 text-sky-300 border border-sky-400' : 'bg-vms-panel text-vms-muted'}`}
+                  >
+                    {label}
                   </button>
                 ))}
               </div>
@@ -401,6 +474,48 @@ export const TripwireModal: React.FC<TripwireModalProps> = ({ isOpen, onClose, c
                     className="w-full"
                   />
                 </div>
+              )}
+
+              {ruleType === 'PERSON_DOWN' && (
+                <>
+                  <div>
+                    <label htmlFor="rule-down" className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                      Down for (seconds)
+                    </label>
+                    <Input id="rule-down" type="number" min="3" max="3600" value={downSeconds} onChange={(e) => setDownSeconds(Number(e.target.value))} className="w-full" />
+                  </div>
+                  <div>
+                    <label htmlFor="rule-lying" className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                      Also warn when found lying still (seconds, 0 = off)
+                    </label>
+                    <Input id="rule-lying" type="number" min="0" max="3600" value={lyingStillSeconds} onChange={(e) => setLyingStillSeconds(Number(e.target.value))} className="w-full" />
+                  </div>
+                </>
+              )}
+
+              {ruleType === 'FENCE_CLIMB' && (
+                <>
+                  <div>
+                    <label htmlFor="rule-side" className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                      Protected side (looking from point A to point B)
+                    </label>
+                    <select
+                      id="rule-side"
+                      value={protectedSide}
+                      onChange={(e) => setProtectedSide(e.target.value as 'LEFT' | 'RIGHT')}
+                      className="w-full bg-vms-surface border border-vms-border rounded p-2 text-xs text-vms-text font-mono focus:outline-none focus:border-vms-accent"
+                    >
+                      <option value="LEFT">Left of the base line</option>
+                      <option value="RIGHT">Right of the base line</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="rule-climb" className="block text-[11px] text-vms-muted mb-1 font-mono uppercase tracking-wider">
+                      Hand above the top for (seconds)
+                    </label>
+                    <Input id="rule-climb" type="number" min="0.5" max="30" step="0.5" value={climbSeconds} onChange={(e) => setClimbSeconds(Number(e.target.value))} className="w-full" />
+                  </div>
+                </>
               )}
 
               {ruleType === 'WRONG_WAY' && (

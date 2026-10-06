@@ -115,6 +115,26 @@ export const EVENT_KINDS: { [K in VigilOneEventType]: EventKind<K> } = {
     },
   },
 
+  PERSON_DOWN: {
+    triggers: { PERSON_DOWN: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict() },
+    matches: genericConfidence,
+    spatialRuleRef: (p) => p.zoneId,
+    v1: {
+      type: 'ai.person_down',
+      payload: (p) => ({ zoneId: p.zoneId, trackId: p.trackId, kind: p.downKind, lyingSeconds: p.lyingSeconds, thresholdSeconds: p.thresholdSeconds, basis: p.basis }),
+    },
+  },
+
+  FENCE_CLIMB: {
+    triggers: { FENCE_CLIMB: z.object({ ...base, spatialRuleId: z.string().uuid().optional(), minConfidence: confidence }).strict() },
+    matches: genericConfidence,
+    spatialRuleRef: (p) => p.zoneId,
+    v1: {
+      type: 'ai.fence_climb',
+      payload: (p) => ({ zoneId: p.zoneId, trackId: p.trackId, stage: p.stage, climbSeconds: p.climbSeconds }),
+    },
+  },
+
   ANPR_MATCH: {
     triggers: { ANPR_WATCHLIST: z.object({ ...base, watchlistCategories: z.array(z.string().min(1)).max(20).optional(), minConfidence: confidence }).strict() },
     matches: (config, p) => {

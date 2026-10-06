@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { TripwireDirection } from '@prisma/client';
 import { z } from 'zod';
-import { UnattendedObjectParams, WrongWayParams } from '../services/spatial/threatRuleParams';
+import { UnattendedObjectParams, WrongWayParams, PersonDownParams, FenceClimbParams } from '../services/spatial/threatRuleParams';
 import prisma from '../config/database';
 import { requireAuth } from '../middleware/auth';
 import { authorize, Permission } from '../services/rbac/permissions';
@@ -63,11 +63,33 @@ export const SpatialRuleBody = z.discriminatedUnion('type', [
       params: WrongWayParams.optional(),
     })
     .strict(),
+  z
+    .object({
+      ...common,
+      type: z.literal('PERSON_DOWN'),
+      /** Where a person going down matters. Leave out places where lying is normal. */
+      polygonCoordinates: Polygon,
+      /** How long a person who fell must stay down before the alarm. */
+      dwellThresholdSeconds: z.coerce.number().int().min(3).max(3600).optional(),
+      params: PersonDownParams.optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...common,
+      type: z.literal('FENCE_CLIMB'),
+      /** The area around the fence the rule applies to. */
+      polygonCoordinates: Polygon,
+      /** The fence base on the ground. The fence top and the protected side are in `params`. */
+      lineCoordinates: Line,
+      params: FenceClimbParams,
+    })
+    .strict(),
 ]);
 
 /**
  * POST /api/v1/spatial-rules
- * Create a spatial analytics rule: TRIPWIRE, LOITERING, UNATTENDED_OBJECT or WRONG_WAY.
+ * Create a spatial analytics rule: TRIPWIRE, LOITERING, UNATTENDED_OBJECT, WRONG_WAY, PERSON_DOWN or FENCE_CLIMB.
  */
 router.post(
   '/',
@@ -87,7 +109,7 @@ router.post(
         res.status(404).json({ error: 'CAMERA_NOT_FOUND' });
         return;
       }
-      const defaults = { TRIPWIRE: { cooldown: 10, dwell: 30 }, LOITERING: { cooldown: 30, dwell: 30 }, UNATTENDED_OBJECT: { cooldown: 300, dwell: 60 }, WRONG_WAY: { cooldown: 10, dwell: 30 } }[b.type];
+      const defaults = { TRIPWIRE: { cooldown: 10, dwell: 30 }, LOITERING: { cooldown: 30, dwell: 30 }, UNATTENDED_OBJECT: { cooldown: 300, dwell: 60 }, WRONG_WAY: { cooldown: 10, dwell: 30 }, PERSON_DOWN: { cooldown: 120, dwell: 10 }, FENCE_CLIMB: { cooldown: 60, dwell: 30 } }[b.type];
 
       const rule = await prisma.spatialAnalyticsRule.create({
         data: {

@@ -14,6 +14,13 @@
       "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 01CBjncYM8Qx21Ja96if5yCv",
       "approvedAt": "2026-09-30",
       "reason": "Owner decision to run SigLIP 2 base for crop and text search. Weights are Apache-2.0 upstream (google/siglip2-base-patch16-224); the pinned ONNX export matches the official checkpoint (tools/reference/siglip2_reference.py). Training data (WebLI) is unpublished and was not reviewed by counsel; this is a business decision, not a legal clearance. Person search remains governed by the DPDP decision record."
+    },
+    {
+      "key": "rtmpose-s-body7-256x192",
+      "sha256": "9aeb635b83f86aea45cf45d85798f7eba1a162de8e0d721c44e54fe5eebaf47d",
+      "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 01LeRvHiXZZBz37VxpWr2oGZ (\"You have my go ahead for all licenses. Now build\")",
+      "approvedAt": "2026-10-06",
+      "reason": "Owner decision to run RTMPose-s (body7) for person-down and fence-climbing detection. Code and weights are Apache-2.0 (OpenMMLab MMPose, ONNX export by the project). The training mix includes datasets with non-commercial or research terms (AI Challenger, CrowdPose, MPII, sub-JHMDB, Halpe, PoseTrack18); under the owner's training-data policy of 2026-10-05 this is accepted by the owner, who bears the risk. The research recommended Indian legal advice, which has not been taken. The result is advisory: pose never changes an alarm by itself."
     }
   ]
 }

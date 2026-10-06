@@ -9,6 +9,8 @@ import {
   LoiteringEventPayload,
   UnattendedObjectPayload,
   WrongWayPayload,
+  PersonDownPayload,
+  FenceClimbPayload,
   AnprEventPayload,
   CameraOfflinePayload,
   StreamDegradedPayload,
@@ -214,6 +216,47 @@ export function fromWrongWay(
       objectClass: params.objectClass,
       angleDegrees: params.angleDegrees,
       travel: params.travel,
+    },
+  });
+}
+
+export function fromPersonDown(
+  params: BaseEventParams & { zoneId: string; trackId: string; downKind: 'FALL' | 'LYING_STILL'; lyingSeconds: number; thresholdSeconds: number; basis: 'pose' | 'box' }
+): VigilOneEvent<PersonDownPayload> {
+  return createVigilOneEvent<PersonDownPayload>({
+    ...params,
+    source: params.source || 'SPATIAL_ANALYTICS',
+    type: 'PERSON_DOWN',
+    // A seen fall is the stronger signal; someone found lying is weaker.
+    severity: params.severity || (params.downKind === 'FALL' ? EventSeverity.CRITICAL : EventSeverity.WARNING),
+    title: params.title || (params.downKind === 'FALL' ? `Person down in zone ${params.zoneId}` : `Person lying still in zone ${params.zoneId}`),
+    payload: {
+      kind: 'PERSON_DOWN',
+      zoneId: params.zoneId,
+      trackId: params.trackId,
+      downKind: params.downKind,
+      lyingSeconds: params.lyingSeconds,
+      thresholdSeconds: params.thresholdSeconds,
+      basis: params.basis,
+    },
+  });
+}
+
+export function fromFenceClimb(
+  params: BaseEventParams & { zoneId: string; trackId: string; stage: 'CLIMBING' | 'CROSSED'; climbSeconds: number }
+): VigilOneEvent<FenceClimbPayload> {
+  return createVigilOneEvent<FenceClimbPayload>({
+    ...params,
+    source: params.source || 'SPATIAL_ANALYTICS',
+    type: 'FENCE_CLIMB',
+    severity: params.severity || (params.stage === 'CROSSED' ? EventSeverity.CRITICAL : EventSeverity.WARNING),
+    title: params.title || (params.stage === 'CROSSED' ? `Fence crossed in zone ${params.zoneId}` : `Fence climbing in zone ${params.zoneId}`),
+    payload: {
+      kind: 'FENCE_CLIMB',
+      zoneId: params.zoneId,
+      trackId: params.trackId,
+      stage: params.stage,
+      climbSeconds: params.climbSeconds,
     },
   });
 }

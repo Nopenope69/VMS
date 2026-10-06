@@ -97,6 +97,29 @@ const WrongWayPayload = z
   })
   .strict();
 
+/** v1.2 (additive): a person seen going down and staying down (FALL), or found lying still (LYING_STILL). Advisory. */
+const PersonDownPayload = z
+  .object({
+    zoneId: NonEmptyId,
+    trackId: NonEmptyId,
+    kind: z.enum(['FALL', 'LYING_STILL']),
+    lyingSeconds: z.number().nonnegative(),
+    thresholdSeconds: z.number().positive(),
+    /** What the posture was read from: body keypoints, or only the shape of the person's box. */
+    basis: z.enum(['pose', 'box']),
+  })
+  .strict();
+
+/** v1.2 (additive): a person climbing a fence (hand above the fence top at the fence) or having crossed it. Advisory. */
+const FenceClimbPayload = z
+  .object({
+    zoneId: NonEmptyId,
+    trackId: NonEmptyId,
+    stage: z.enum(['CLIMBING', 'CROSSED']),
+    climbSeconds: z.number().nonnegative(),
+  })
+  .strict();
+
 const PlatePayload = z
   .object({
     plateText: z.string().min(1).max(20),
@@ -167,6 +190,8 @@ export const EVENT_PAYLOADS_V1 = {
   'ai.loitering': LoiteringPayload,
   'ai.unattended_object': UnattendedObjectPayload,
   'ai.wrong_way': WrongWayPayload,
+  'ai.person_down': PersonDownPayload,
+  'ai.fence_climb': FenceClimbPayload,
   'ai.plate_detected': PlatePayload,
   'access.door_opened': DoorPayload,
   'access.door_closed': DoorStatePayload,

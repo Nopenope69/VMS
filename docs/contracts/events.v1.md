@@ -39,6 +39,8 @@ producer without real provenance must not emit an `ai.*` event.
 | `ai.loitering` | `zoneId`, `trackId`, `dwellSeconds`, `thresholdSeconds` |
 | `ai.unattended_object` (v1.1) | `zoneId` (the rule), `trackId`, `objectClass` (backpack, handbag, suitcase), `unattendedSeconds`, `thresholdSeconds` |
 | `ai.wrong_way` (v1.1) | `zoneId` (the rule), `trackId`, `objectClass?`, `angleDegrees` (0..180 from the allowed direction), `travel` (normalised) |
+| `ai.person_down` (v1.2) | `zoneId` (the rule), `trackId`, `kind` (`FALL` \| `LYING_STILL`), `lyingSeconds`, `thresholdSeconds`, `basis` (`pose` \| `box`). Advisory |
+| `ai.fence_climb` (v1.2) | `zoneId` (the rule), `trackId`, `stage` (`CLIMBING` \| `CROSSED`), `climbSeconds`. Advisory |
 | `ai.plate_detected` | `plateText`, `confidence`, `watchlistMatchId?`, `watchlistCategory?`, `vehicleColor?` |
 | `access.door_opened` | `doorId`, `credentialId?`, `forced?` |
 | `alarm.fire` | `panelId`, `zone`, `state` (`ALARM` \| `TROUBLE` \| `RESTORED`) |
@@ -56,6 +58,8 @@ Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`; the 
 | `LOITERING_DWELL` | `ai.loitering` | `dwellTimeSeconds` becomes `dwellSeconds`. **Requires provenance.** |
 | `UNATTENDED_OBJECT` | `ai.unattended_object` | **Requires provenance.** |
 | `WRONG_WAY` | `ai.wrong_way` | **Requires provenance.** |
+| `PERSON_DOWN` | `ai.person_down` | `downKind` becomes `kind`. **Requires provenance.** |
+| `FENCE_CLIMB` | `ai.fence_climb` | **Requires provenance.** |
 | `ANPR_MATCH` | `ai.plate_detected` | **Requires provenance.** |
 | `CAMERA_OFFLINE` | `camera.offline` | |
 | `STREAM_DEGRADED` | `camera.degraded` | `reason: STREAM_DEGRADED`. |

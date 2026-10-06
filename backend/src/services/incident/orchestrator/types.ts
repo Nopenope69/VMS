@@ -6,6 +6,8 @@ export type VigilOneEventType =
   | 'LOITERING_DWELL'
   | 'UNATTENDED_OBJECT'
   | 'WRONG_WAY'
+  | 'PERSON_DOWN'
+  | 'FENCE_CLIMB'
   | 'ANPR_MATCH'
   | 'CAMERA_OFFLINE'
   | 'STREAM_DEGRADED'
@@ -72,6 +74,26 @@ export interface WrongWayPayload {
   objectClass?: string;
   angleDegrees: number;
   travel: number;
+}
+
+/** A person seen going down and staying down (FALL), or found lying still (LYING_STILL). Advisory. */
+export interface PersonDownPayload {
+  kind: 'PERSON_DOWN';
+  zoneId: string;
+  trackId: string;
+  downKind: 'FALL' | 'LYING_STILL';
+  lyingSeconds: number;
+  thresholdSeconds: number;
+  basis: 'pose' | 'box';
+}
+
+/** A person climbing a fence (a hand above the fence top at the fence) or having crossed it. Advisory. */
+export interface FenceClimbPayload {
+  kind: 'FENCE_CLIMB';
+  zoneId: string;
+  trackId: string;
+  stage: 'CLIMBING' | 'CROSSED';
+  climbSeconds: number;
 }
 
 export interface AnprEventPayload {
@@ -189,6 +211,8 @@ export type VigilOneEventPayload =
   | LoiteringEventPayload
   | UnattendedObjectPayload
   | WrongWayPayload
+  | PersonDownPayload
+  | FenceClimbPayload
   | AnprEventPayload
   | CameraOfflinePayload
   | StreamDegradedPayload
@@ -260,7 +284,7 @@ export interface RuleTriggerConfig {
   objectClasses?: string[];
   /** AI_OBJECT_DETECTED: fire only once the object has been tracked this long (P3.7). */
   minDwellSeconds?: number;
-  /** TRIPWIRE_CROSS / LOITERING_DWELL / UNATTENDED_OBJECT / WRONG_WAY: only this spatial rule. */
+  /** TRIPWIRE_CROSS / LOITERING_DWELL / UNATTENDED_OBJECT / WRONG_WAY / PERSON_DOWN / FENCE_CLIMB: only this spatial rule. */
   spatialRuleId?: string;
   /** DOOR_EVENT: only these doors / actions (empty or absent = any). */
   doorIds?: string[];

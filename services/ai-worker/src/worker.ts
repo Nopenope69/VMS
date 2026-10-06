@@ -16,6 +16,7 @@ import { eventTypeForClass } from './classMap';
 import { MetricsRegistry } from './metrics';
 import { cropToJpeg } from './cropExtractor';
 import { describeColours, isMonochromeFrame } from './colourAttributes';
+import { PoseEstimator, POSE_METHOD } from './poseEstimator';
 import {
   ModelManifestRecord,
   NormalizedDetectionEvent,
@@ -42,6 +43,18 @@ export interface AiWorkerConfig {
   colourAttributes?: boolean;
 }
 
+/** Pose runs on CONFIRMED person detections only, at most once per track per interval and N persons per frame. */
+export interface PoseOptions {
+  estimator: PoseEstimator;
+  /** The pinned model that produced the keypoints (provenance, written into every pose). */
+  model: { name: string; version: string; sha256: string };
+  intervalMs?: number;
+  maxPerFrame?: number;
+}
+export const DEFAULT_POSE_INTERVAL_MS = 500;
+export const DEFAULT_POSE_MAX_PER_FRAME = 4;
+const POSE_STATE_MAX = 5000;
+
 export const AI_WORKER_ADAPTER_VERSION = '2.0.0-phase2';
 
 export class AiWorker {
@@ -52,6 +65,8 @@ export class AiWorker {
   private scheduler: InferenceScheduler;
   private loadedModel?: LoadedModelArtifact;
   private trackers: Map<string, MultiObjectTracker> = new Map();
+  private pose?: PoseOptions;
+  private lastPoseAt = new Map<string, number>();
   public readonly core: AiAdapterCore;
 
   constructor(config: AiWorkerConfig, engine?: IInferenceEngine, metrics: MetricsRegistry = new MetricsRegistry()) {
@@ -125,6 +140,62 @@ export class AiWorker {
         this.lastCropLog = Date.now();
         console.error(`[AiWorker] crop attach failed for ${event.objectClass ?? 'object'} on ${event.cameraId}; the detection is sent without it: ${err?.message || err}`);
       }
+    }
+  }
+
+  /** Turns on body pose for CONFIRMED person detections (off until called). */
+  public setPoseEstimator(opts: PoseOptions | undefined): void {
+    this.pose = opts;
+    this.lastPoseAt.clear();
+  }
+
+  /**
+   * Adds `attributesJson.pose`: 17 keypoints [x, y, score] normalised to the source image, with the model that made
+   * them. Never throws: a failure is counted and the detection is still sent without a pose.
+   */
+  private async attachPose(event: NormalizedDetectionEvent, frame: Buffer, geometry: FrameGeometry, budget: { left: number }, nowMs: number): Promise<void> {
+    const pose = this.pose;
+    if (!pose || event.objectClass !== 'person' || !event.trackId || !event.boundingBox) return;
+    const counter = 'vigilone_ai_pose_total';
+    const help = 'Body poses estimated for confirmed person detections, by outcome';
+    const key = `${event.cameraId}|${event.trackId}`;
+    const last = this.lastPoseAt.get(key);
+    if (last !== undefined && nowMs - last < (pose.intervalMs ?? DEFAULT_POSE_INTERVAL_MS)) {
+      this.core.metrics.inc(counter, help, { outcome: 'skipped_interval' });
+      return;
+    }
+    if (budget.left <= 0) {
+      this.core.metrics.inc(counter, help, { outcome: 'skipped_busy' });
+      return;
+    }
+    budget.left--;
+    try {
+      const r = await pose.estimator.estimate(frame, geometry, event.boundingBox);
+      if (!r) {
+        this.core.metrics.inc(counter, help, { outcome: 'too_small' });
+        return;
+      }
+      this.lastPoseAt.set(key, nowMs);
+      if (this.lastPoseAt.size > POSE_STATE_MAX) {
+        for (const k of this.lastPoseAt.keys()) {
+          this.lastPoseAt.delete(k);
+          if (this.lastPoseAt.size <= POSE_STATE_MAX / 2) break;
+        }
+      }
+      const r4 = (n: number) => Math.round(n * 10000) / 10000;
+      event.attributesJson = {
+        ...(event.attributesJson || {}),
+        pose: {
+          method: POSE_METHOD,
+          model: pose.model,
+          meanScore: r4(r.meanScore),
+          keypoints: r.keypoints.map((k) => [r4(k.x), r4(k.y), r4(k.score)]),
+        },
+      };
+      this.core.metrics.inc(counter, help, { outcome: 'estimated' });
+    } catch (err: any) {
+      this.core.metrics.inc(counter, help, { outcome: 'failed' });
+      console.warn(`[AiWorker] pose failed for ${event.cameraId}: ${err?.message || err}`);
     }
   }
 
@@ -259,6 +330,7 @@ export class AiWorker {
 
         // Transmit ONLY CONFIRMED tracks to backend internal API
         let monochrome: boolean | undefined; // computed once per frame, only if a detection needs it
+        const poseBudget = { left: this.pose?.maxPerFrame ?? DEFAULT_POSE_MAX_PER_FRAME };
         for (const event of normalizedEvents) {
           if (event.trackId && firstSeen.has(event.trackId)) {
             event.trackFirstSeenAt = firstSeen.get(event.trackId)!.toISOString();
@@ -269,6 +341,7 @@ export class AiWorker {
               if (monochrome === undefined) monochrome = this.monochrome(frameData as Buffer, geometry!);
               this.attachColours(event, frameData as Buffer, geometry!, monochrome);
             }
+            await this.attachPose(event, frameData as Buffer, geometry!, poseBudget, frameTimestamp.getTime());
             await this.apiClient.submitDetection(event);
             delete event.cropJpegBase64; // the returned events stay small
             this.core.metrics.inc('vigilone_ai_detections_submitted_total', 'Confirmed-track detections sent to the backend', { objectClass: event.objectClass || 'unknown' });

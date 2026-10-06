@@ -203,6 +203,8 @@ enum RuleTriggerType {
   LOITERING_DWELL
   UNATTENDED_OBJECT
   WRONG_WAY
+  PERSON_DOWN
+  FENCE_CLIMB
   CAMERA_OFFLINE
   SCENE_CHANGE
   DIGITAL_INPUT_STATE
@@ -1366,13 +1368,13 @@ model SpatialAnalyticsRule {
   cameraId               String
   camera                 Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   name                   String
-  type                   String // TRIPWIRE, LOITERING, UNATTENDED_OBJECT, WRONG_WAY
+  type                   String // TRIPWIRE, LOITERING, UNATTENDED_OBJECT, WRONG_WAY, PERSON_DOWN, FENCE_CLIMB
   enabled                Boolean           @default(true)
   direction              TripwireDirection @default(BIDIRECTIONAL)
   lineCoordinatesJson    Json? // [{x, y}, {x, y}] for Tripwire
   polygonCoordinatesJson Json? // [{x, y}, ...] for Loitering
   dwellThresholdSeconds  Int?              @default(30) // Continuous dwell threshold
-  /// Type-specific settings: UNATTENDED_OBJECT { ownerRadius, moveTolerance }, WRONG_WAY { minTravel, objectClasses }.
+  /// Type-specific settings: UNATTENDED_OBJECT { ownerRadius, moveTolerance }, WRONG_WAY { minTravel, objectClasses }, PERSON_DOWN { fallWindowSeconds, lyingStillSeconds, stillTolerance, minKeypointScore, aspectRatio }, FENCE_CLIMB { topLine, protectedSide, climbSeconds, nearDistance, maxClimbSeconds, minKeypointScore }.
   paramsJson             Json?
   cooldownSeconds        Int               @default(10)
   createdAt              DateTime          @default(now())

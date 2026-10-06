@@ -26,7 +26,7 @@ describe('contract events.v1', () => {
         'camera.online', 'camera.offline', 'camera.degraded', 'recording.started', 'recording.stopped',
         'storage.warning', 'storage.critical', 'storage.rollover', 'storage.full', 'motion.detected',
         'ai.person_detected', 'ai.vehicle_detected', 'ai.line_crossing', 'ai.loitering', 'ai.plate_detected',
-        'ai.unattended_object', 'ai.wrong_way', 'access.door_opened', 'alarm.fire', 'pos.transaction',
+        'ai.unattended_object', 'ai.wrong_way', 'ai.person_down', 'ai.fence_climb', 'access.door_opened', 'alarm.fire', 'pos.transaction',
       ])
     );
   });
@@ -45,7 +45,7 @@ describe('contract events.v1', () => {
 
     it('has a mapping for every internal event type', () => {
       expect(Object.keys(VIGILONE_EVENT_TO_V1).sort()).toEqual(
-        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'DOOR_EVENT', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS', 'UNATTENDED_OBJECT', 'WRONG_WAY'].sort()
+        ['AI_OBJECT_DETECTED', 'ANPR_MATCH', 'CAMERA_ANALYTIC', 'CAMERA_OFFLINE', 'DI_TRIGGER', 'DOOR_EVENT', 'LOITERING_DWELL', 'MOTION', 'SCENE_CHANGE', 'STREAM_DEGRADED', 'SYSTEM_ALERT', 'TRIPWIRE_CROSS', 'UNATTENDED_OBJECT', 'WRONG_WAY', 'PERSON_DOWN', 'FENCE_CLIMB'].sort()
       );
     });
 
