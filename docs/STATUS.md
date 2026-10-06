@@ -6,6 +6,40 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 34 (2026-10-06): person down and fence climbing (body pose)
+
+Branch `claude/jolly-wozniak-j9gqjy`. The owner's first priority (`PROJECT_STATE.md` section 9), built on RTMPose-s. ADR 0017,
+operations note `docs/operations/POSE_RULES.md`. Owner approval for the model recorded 2026-10-06 ("You have my go ahead for
+all licenses. Now build"); only RTMPose-s was added to `model-license-exceptions.json`. Other pending candidates (for example
+Qwen3-4B) were **not** approved by this session.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| RTMPose-s (body7) pinned as a candidate, zip and member SHA-256, honest training-data record, owner approval | DONE_VERIFIED: `fetch-model.sh` verified the real file; `check:model-licenses` passes with the approval | `scripts/models/models.lock.json`, `model-license-exceptions.json` |
+| Worker pose estimator (192x256 crop, SimCC decode), attached to confirmed person detections, **off by default** (`AI_POSE_ESTIMATION`) | DONE_UNVERIFIED: unit tests, and the real model on one photograph (anatomical order, left/right, scores) | `services/ai-worker/src/poseEstimator.ts`, `worker.ts`, `main.ts` |
+| `PERSON_DOWN` rule: fall seen then lying still; optional found-lying alert; box-shape fallback labelled as such | DONE_UNVERIFIED: 33 unit tests; real database end to end (rule API, ingestion, incident, canonical event, alarm, events.v1) | `spatial/engine/poseRules.ts`, ADR 0017 |
+| `FENCE_CLIMB` rule: hand above the fence top at the fence (CLIMBING), hips across to the protected side (CROSSED) | DONE_UNVERIFIED: same tests. **Feet-off-ground and a box-only fallback were deliberately not built** | same |
+| events.v1.2 `ai.person_down`, `ai.fence_climb`; migration `20261017000000` (enum values only) | DONE_VERIFIED on a fresh PostgreSQL 16 (`migrate deploy`) | `contracts/events.v1.ts`, `docs/contracts/events.v1.md` |
+| Rule screen: Person down and Fence climbing (area, base, top, protected side), automation trigger options | DONE_VERIFIED in a real browser: `e2e/pose-rules.spec.ts` saves in 0..1 coordinates; whole browser suite 28 passed | `TripwireModal.tsx` |
+| Nothing on a real camera, nothing tuned on real footage | NOT_DONE: thresholds (35/60 degrees, 3 s fall window, 1.5 s climb) are first guesses | |
+
+Local runs (sandbox, PostgreSQL 16 and Chromium available this time): backend full suite in band **180 suites, 1477 tests,
+1435 passed, 42 skipped, 0 failed**; ai-worker 284 passed, 79 skipped (real-model suites without their files); backend,
+frontend and ai-worker `tsc` clean; gates `check:hygiene`, `check:no-fake-success`, `check:feature-flag-docs`,
+`check:dependency-licenses`, `check:model-licenses`, `check:status-docs`, ai-worker `check-sdk` and SDK `check-contract` pass;
+browser suite 28 passed.
+
+### Not done, on purpose
+- Specific wording in the incident summary and explanation records for the new events (they use the existing generic sentence;
+  the offline verifier must be changed together with the template).
+- Pose-based person-down for crowded scenes (RTMO), fall datasets evaluation (CAUCAFall, UP-Fall, GMDCSA-24), staged fence-climb
+  recordings: need real data. The recommended next measurement is a labelled clip set per camera.
+- The CI job now fetches the pose model (`.github/workflows/ci.yml`); CI has not run on this branch yet.
+
+### What I need from the human
+1. Staged fall and fence-climb clips from a real camera (and a "normal activity" set) to tune the thresholds.
+2. Indian legal advice on the body7 training-data terms (recommended by the research, not taken).
+
 ## Session 33 (2026-10-06): deeper open-source read, six small changes, and the re-land of #47
 
 Branch `claude/jolly-wozniak-j9gqjy`. PR #49 (merged), PR #50 (merged; re-land of #47). Design ideas only from the public

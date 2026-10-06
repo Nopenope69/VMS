@@ -439,7 +439,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
     advice).
   - **Pose model:** start person down and fence climbing on the **ready-made RTMPose files** (body7 weights), not
     the COCO-only RTMO export or a retrain.
-- **Next (owner, in a new session): build person down and fence climbing on RTMPose-s.** Plan:
+- **Done in Session 34 (2026-10-06): person down and fence climbing on RTMPose-s** (ADR 0017, `docs/operations/POSE_RULES.md`; pose off by default, `AI_POSE_ESTIMATION`; owner approval for the model recorded; feet-off-ground and box-only fence fallback deliberately not built; nothing tuned on real footage). The plan below is kept for reference:
   1. Add RTMPose-s as a candidate in `scripts/models/models.lock.json`: HF mirror `Tau-J/RTMPose` (Apache-2.0 card)
      at commit `cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd`, file
      `rtmposev1/onnx_sdk/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.zip` (ONNX inside; pin the
@@ -458,8 +458,8 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
      New event kinds, events.v1 additions, explanations, rule screen, real-DB tests, browser test, docs, one PR.
   4. Data: commercially usable fall sets for evaluation are CAUCAFall, UP-Fall, Simuletic synthetic (CC BY 4.0)
      and GMDCSA-24 (MIT); fence climbing needs staged recordings.
-- **After that:** the other four software features (describe-what-to-watch rules, cited incident summary, alarm
-  triage, footage integrity), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
+- **After that:** the two software features still open (describe-what-to-watch rules, footage integrity; the cited incident
+  summary and alarm triage are in `master` since #50), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
   one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health

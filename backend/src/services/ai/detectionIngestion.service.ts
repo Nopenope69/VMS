@@ -10,6 +10,8 @@ import {
   fromTripwireCrossing,
   fromUnattendedObject,
   fromWrongWay,
+  fromPersonDown,
+  fromFenceClimb,
 } from '../incident/orchestrator/events';
 import { AiProvenance, VigilOneEvent } from '../incident/orchestrator/types';
 import { FeatureFlag, isFeatureEnabled } from '../../config/featureFlags';
@@ -23,8 +25,16 @@ import {
   UnattendedObjectResult,
   WrongWayRuleInput,
   WrongWayResult,
+  PersonDownRuleInput,
+  PersonDownResult,
+  FenceClimbRuleInput,
+  FenceClimbResult,
+  Keypoint,
+  PostureReading,
+  classifyPosture,
+  parsePose,
 } from '../spatial/engine';
-import { parseThreatParams } from '../spatial/threatRuleParams';
+import { parseThreatParams, parsePersonDownParams, parseFenceClimbParams } from '../spatial/threatRuleParams';
 import type { TrackIndexService } from '../tracks/trackIndex.service';
 
 /**
@@ -84,6 +94,8 @@ export interface SpatialEngineLike {
   notePerson?(cameraId: string, trackId: string, box: SpatialBox, nowMs: number): void;
   evaluateUnattendedObject?(rule: UnattendedObjectRuleInput, cameraId: string, trackId: string, centre: Point2D, nowMs: number): UnattendedObjectResult | null;
   evaluateWrongWay?(rule: WrongWayRuleInput, trackId: string, at: Point2D, nowMs: number): WrongWayResult | null;
+  evaluatePersonDown?(rule: PersonDownRuleInput, trackId: string, reading: PostureReading, centroid: Point2D, nowMs: number): PersonDownResult | null;
+  evaluateFenceClimb?(rule: FenceClimbRuleInput, trackId: string, keypoints: Keypoint[] | null, centroid: Point2D, nowMs: number): FenceClimbResult | null;
 }
 
 /** Carried objects the unattended-object rule watches (the worker reports them as OBJECT_DETECTED). */
@@ -414,6 +426,102 @@ export class DetectionIngestionService {
           travel: result.travel,
           provenance: prov,
           title: `Wrong way: ${rule.name}`,
+        });
+      } else if (rule.type === 'PERSON_DOWN' && rule.polygonCoordinatesJson && engine.evaluatePersonDown) {
+        if (d.objectClass !== 'person' || !d.boundingBox) continue;
+        const params = parsePersonDownParams(rule.paramsJson);
+        const threshold = rule.dwellThresholdSeconds ?? 10;
+        // The worker attaches a pose only some of the time; a detection without one has nothing to add to a fall.
+        const kps = parsePose(d.attributesJson);
+        if (!kps) continue;
+        const reading = classifyPosture(kps, d.boundingBox, { minScore: params.minKeypointScore, aspect: params.aspectRatio });
+        const result = engine.evaluatePersonDown(
+          {
+            id: rule.id,
+            polygon: rule.polygonCoordinatesJson as unknown as Point2D[],
+            lyingSeconds: threshold,
+            fallWindowSeconds: params.fallWindowSeconds,
+            lyingStillSeconds: params.lyingStillSeconds,
+            stillTolerance: params.stillTolerance,
+            minKeypointScore: params.minKeypointScore,
+            aspectRatio: params.aspectRatio,
+          },
+          d.trackId!,
+          reading,
+          centroid,
+          nowMs
+        );
+        if (!result) continue;
+        const cooldownSec = rule.cooldownSeconds || 60;
+        const label = result.kind === 'FALL' ? 'Person down' : 'Person lying still';
+        const limit = result.kind === 'FALL' ? threshold : params.lyingStillSeconds ?? threshold;
+        incidentData = {
+          ruleType: 'PERSON_DOWN',
+          cooldownBucket: BigInt(Math.floor(nowMs / (cooldownSec * 1000))) * 2n + (result.kind === 'LYING_STILL' ? 1n : 0n),
+          title: `${label}: ${rule.name}`,
+          description:
+            result.kind === 'FALL'
+              ? `Track ${d.trackId} was seen going down in ${rule.name} and has stayed down for ${result.lyingSeconds}s (advisory; read from ${result.basis === 'pose' ? 'body pose' : 'box shape only'})`
+              : `Track ${d.trackId} was found lying in ${rule.name} and has not moved for ${result.lyingSeconds}s (advisory; read from ${result.basis === 'pose' ? 'body pose' : 'box shape only'})`,
+          metadataJson: { downKind: result.kind, lyingSeconds: result.lyingSeconds, basis: result.basis, torsoAngle: result.torsoAngle, ruleName: rule.name, centroid, inferenceId: d.inferenceId, objectClass: 'person', provenance: prov },
+        };
+        ev = fromPersonDown({
+          tenantId: d.tenantId,
+          cameraId,
+          zoneId: rule.id,
+          trackId: d.trackId!,
+          downKind: result.kind,
+          lyingSeconds: result.lyingSeconds,
+          thresholdSeconds: limit,
+          basis: result.basis,
+          provenance: prov,
+          title: `${label}: ${rule.name}`,
+        });
+      } else if (rule.type === 'FENCE_CLIMB' && rule.polygonCoordinatesJson && rule.lineCoordinatesJson && engine.evaluateFenceClimb) {
+        if (d.objectClass !== 'person') continue;
+        const params = parseFenceClimbParams(rule.paramsJson);
+        if (!params) continue; // no valid fence top or protected side: the rule cannot run, and says nothing
+        const kps = parsePose(d.attributesJson);
+        const result = engine.evaluateFenceClimb(
+          {
+            id: rule.id,
+            polygon: rule.polygonCoordinatesJson as unknown as Point2D[],
+            base: rule.lineCoordinatesJson as unknown as [Point2D, Point2D],
+            top: params.topLine as unknown as [Point2D, Point2D],
+            protectedSide: params.protectedSide,
+            climbSeconds: params.climbSeconds,
+            nearDistance: params.nearDistance,
+            maxClimbSeconds: params.maxClimbSeconds,
+            minKeypointScore: params.minKeypointScore,
+          },
+          d.trackId!,
+          kps,
+          centroid,
+          nowMs
+        );
+        if (!result) continue;
+        const cooldownSec = rule.cooldownSeconds || 30;
+        const label = result.stage === 'CROSSED' ? 'Fence crossed' : 'Fence climbing';
+        incidentData = {
+          ruleType: 'FENCE_CLIMB',
+          // Climbing and crossing are two alerts of one climb: separate buckets, so the second is not dropped as a repeat.
+          cooldownBucket: BigInt(Math.floor(nowMs / (cooldownSec * 1000))) * 2n + (result.stage === 'CROSSED' ? 1n : 0n),
+          title: `${label}: ${rule.name}`,
+          description:
+            result.stage === 'CROSSED'
+              ? `Track ${d.trackId} appears to have crossed the fence at ${rule.name} after climbing (advisory; read from body pose)`
+              : `Track ${d.trackId} has had a hand above the fence top at ${rule.name} for ${result.climbSeconds}s (advisory; read from body pose)`,
+          metadataJson: { stage: result.stage, climbSeconds: result.climbSeconds, ruleName: rule.name, centroid, inferenceId: d.inferenceId, objectClass: 'person', provenance: prov },
+        };
+        ev = fromFenceClimb({
+          tenantId: d.tenantId,
+          cameraId,
+          zoneId: rule.id,
+          trackId: d.trackId!,
+          stage: result.stage,
+          climbSeconds: result.climbSeconds,
+          provenance: prov,
+          title: `${label}: ${rule.name}`,
         });
       }
       if (!ev || !incidentData) continue;

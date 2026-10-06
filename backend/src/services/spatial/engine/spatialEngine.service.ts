@@ -36,6 +36,15 @@ import {
   WrongWayRuleInput,
 } from './threatRules';
 import {
+  FenceClimbResult,
+  FenceClimbRuleInput,
+  Keypoint,
+  PersonDownResult,
+  PersonDownRuleInput,
+  PoseRuleLedger,
+  PostureReading,
+} from './poseRules';
+import {
   ZoneConfigSnapshot,
   ZoneEvaluationResult,
   ZoneEvaluator,
@@ -127,6 +136,7 @@ export class SpatialEngine {
   private prisma: PrismaClient;
   private trackLedger: TrackStateLedger;
   private threatLedger = new ThreatRuleLedger();
+  private poseLedger = new PoseRuleLedger();
 
   constructor(
     prisma?: PrismaClient,
@@ -218,6 +228,14 @@ export class SpatialEngine {
     return this.threatLedger.evaluateWrongWay(rule, trackId, at, currentTimeMs);
   }
 
+  public evaluatePersonDown(rule: PersonDownRuleInput, trackId: string, reading: PostureReading, centroid: Point2D, currentTimeMs: number = Date.now()): PersonDownResult | null {
+    return this.poseLedger.evaluatePersonDown(rule, trackId, reading, centroid, currentTimeMs);
+  }
+
+  public evaluateFenceClimb(rule: FenceClimbRuleInput, trackId: string, keypoints: Keypoint[] | null, centroid: Point2D, currentTimeMs: number = Date.now()): FenceClimbResult | null {
+    return this.poseLedger.evaluateFenceClimb(rule, trackId, keypoints, centroid, currentTimeMs);
+  }
+
   public handleObservationLoss(
     ruleId: string,
     trackId: string,
@@ -234,6 +252,7 @@ export class SpatialEngine {
   public clearTrackState(): void {
     this.trackLedger.clear();
     this.threatLedger.clear();
+    this.poseLedger.clear();
   }
 
   // ==========================================

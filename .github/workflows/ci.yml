@@ -245,6 +245,8 @@ jobs:
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
           # SigLIP 2 candidate models (tests only, same rule)
           scripts/models/fetch-model.sh siglip2-base-p16-224-vision && scripts/models/fetch-model.sh siglip2-base-p16-224-text
+          # RTMPose-s body pose (a candidate with the owner's recorded approval; used by the golden pose test)
+          scripts/models/fetch-model.sh rtmpose-s-body7-256x192
 
       # llama-server for the VLM second opinion, built from the commit pinned in the pipeline file. The cache
       # key is that file, so a new pin rebuilds; the build step checks the tag still points at the commit.
