@@ -106,6 +106,9 @@ export const SETTINGS = {
   DPDP_PURGE_INTERVAL_MS: integer('How often expired personal data is purged.', 3_600_000, 60_000, 86_400_000),
   DOOR_POLL_INTERVAL_MS: integer('How often door contacts are polled.', 500, 50, 60_000),
   CRASH_RECOVERY_ACTIVE_WRITE_GRACE_SECONDS: integer('Files modified this recently are treated as still being recorded; 0 turns the check off.', 120, 0, 86_400),
+  INTEGRITY_CHECK_INTERVAL_SECONDS: integer('How often the periodic integrity check of recorded segments runs; 0 turns it off.', 300, 0, 86_400),
+  INTEGRITY_PRESENCE_BATCH: integer('Segments the presence and size check looks at per run, least recently checked first.', 2000, 1, 100_000),
+  INTEGRITY_HASH_MB_PER_RUN: integer('Megabytes of footage the content-hash check re-reads per run (evidence-pinned segments first); 0 turns the hash check off.', 512, 0, 102_400),
   REDACTION_MAX_CLIP_SECONDS: integer('Longest clip a redaction job accepts.', 1800, 1, 86_400),
 
   // High availability

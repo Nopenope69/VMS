@@ -128,5 +128,12 @@ export function validateRuleInput(body: unknown) {
   const conditions = validateConditions(r.data.conditions);
   const ids = r.data.actions.map((a) => a.id);
   if (new Set(ids).size !== ids.length) throw new RuleValidationError('actions: action ids must be unique');
+  r.data.actions.forEach((a, i) => {
+    const w = a.config?.incidentWindowSeconds;
+    if (a.type !== RuleActionType.TRIGGER_ALARM || w === undefined) return;
+    if (!Number.isInteger(w) || w < 0 || w > 86400) {
+      throw new RuleValidationError(`actions.${i}.config.incidentWindowSeconds: must be a whole number of seconds from 0 to 86400`);
+    }
+  });
   return { ...r.data, triggerConfig, conditions };
 }

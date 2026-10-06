@@ -55,6 +55,8 @@ export class LocalStorageAdapter implements StorageAdapter {
       for (const entry of entries) {
         const fullPath = path.join(currentDir, entry.name);
         if (entry.isDirectory()) {
+          // Quarantined files are not footage; boot recovery owns them (it skips this folder too).
+          if (entry.name === '.quarantine') continue;
           await walk(fullPath);
         } else if (entry.isFile() && (entry.name.endsWith('.mp4') || entry.name.endsWith('.fmp4'))) {
           files.push(fullPath);

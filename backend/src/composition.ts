@@ -79,6 +79,7 @@ let vlmWorkers: { stop(): void } | null = null;
 export function startBackgroundServices(): void {
   SegmentJobWorkerService.start(2000);
   recordingCatalog.startReconciler(300000); // 5-minute safety reconciliation fallback
+  recordingCatalog.startIntegrityChecks(); // presence/size every run, content hash within a byte budget (INTEGRITY_* settings)
   storageSentinel.start(60000);
   recordingScheduleService.start(60000);
   streamWatchdogService.start(30000);

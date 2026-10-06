@@ -47,6 +47,8 @@ export const Investigation: React.FC = () => {
   const [selectedCameraIds, setSelectedCameraIds] = useState<string[]>([]);
   const [focusedCameraId, setFocusedCameraId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'matrix' | 'single'>('matrix');
+  /** What the last frame step was: exact, an estimate, at the end of the footage, or refused. Cleared by the next seek. */
+  const [stepNotice, setStepNotice] = useState<string | null>(null);
   const [gridLayout, setGridLayout] = useState<'1x1' | '2x2' | '1+5' | '3x3'>('2x2');
 
   // Master UTC Investigation Timeline
@@ -219,8 +221,14 @@ export const Investigation: React.FC = () => {
       .then((res) => {
         setMasterUtc(new Date(res.data.masterTimeUtc));
         updateCameraStatesFromSeek(res.data.cameras || []);
+        if (res.data.clamped) setStepNotice('No further frame in this direction: this is the end of the recording.');
+        else if (res.data.precision === 'APPROXIMATE') setStepNotice('Approximate step: the recording could not be read, so the step is estimated from the frame rate.');
+        else setStepNotice(null);
       })
-      .catch((err) => console.error('Step error:', err));
+      .catch((err) => {
+        console.error('Step error:', err);
+        setStepNotice(err?.response?.data?.code === 'FRAME_RATE_UNKNOWN' ? 'Cannot step: the frame rate of this recording is unknown.' : 'The step failed.');
+      });
   };
 
   const togglePlay = () => {
@@ -546,7 +554,7 @@ export const Investigation: React.FC = () => {
                   {/* Telemetry Footer */}
                   <div className="p-1.5 bg-slate-950/85 border-t border-vms-border font-mono text-[10px] text-vms-muted flex items-center justify-between z-10 pointer-events-none">
                     <span className="text-vms-dim">
-                      {state?.codec?.toUpperCase() || 'H.264'} • {state?.fps || 25} FPS
+                      {state?.codec ? state.codec.toUpperCase() : 'codec unknown'} • {state?.fps ? `${state.fps} FPS` : 'frame rate unknown'}
                     </span>
                     <span className="text-sky-400 font-mono font-semibold">
                       {masterUtc.toISOString().slice(11, 23)} UTC
@@ -710,6 +718,12 @@ export const Investigation: React.FC = () => {
               aria-label="Step Frame Forward"
             />
           </div>
+
+          {stepNotice && (
+            <span role="status" className="text-[11px] font-mono text-amber-400" data-testid="step-notice">
+              {stepNotice}
+            </span>
+          )}
 
           {/* Quick Jump Buttons */}
           <div className="flex items-center space-x-1 text-xs font-mono">

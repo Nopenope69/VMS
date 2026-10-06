@@ -41,8 +41,10 @@ pathDefaults:
   recordSegmentDuration: 10m
   recordPartDuration: 1s
   recordDeleteAfter: 0s
+  # Retried for about two minutes (backend restarting). MediaMTX runs this command on its own goroutine, so the retries never delay
+  # recording. A notice that still fails is caught by the 5-minute filesystem crawl.
   runOnRecordSegmentComplete: >-
-    curl --max-time 3 -s -X POST http://backend:4000/api/v1/internal/segment-complete -H "Authorization: Bearer $INTERNAL_API_SECRET" -H "Content-Type: application/json" -d '{"path":"$MTX_PATH","file":"$MTX_SEGMENT_PATH","duration":"$MTX_SEGMENT_DURATION"}'
+    curl -fsS --max-time 5 --retry 12 --retry-delay 5 --retry-connrefused -X POST http://backend:4000/api/v1/internal/segment-complete -H "Authorization: Bearer $INTERNAL_API_SECRET" -H "Content-Type: application/json" -d '{"path":"$MTX_PATH","file":"$MTX_SEGMENT_PATH","duration":"$MTX_SEGMENT_DURATION"}'
 
 
 # Path Configuration
