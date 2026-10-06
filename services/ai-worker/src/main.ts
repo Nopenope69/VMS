@@ -204,10 +204,10 @@ export async function boot(): Promise<BootResult> {
  * the switch is on and any of that fails, the worker stops with the reason instead of running without pose.
  */
 async function enablePose(worker: AiWorker): Promise<void> {
-  const key = env('AI_POSE_MODEL_KEY', 'rtmpose-s-body7-256x192');
+  const key = env('AI_POSE_MODEL_KEY', 'rtmpose-s-body7-256x192') as string;
   const entry = findCandidateEntry(key);
   const { buffers } = verifyPipelineComponents([{ role: 'pose_estimator', key, sha256: entry.sha256 }]);
-  const estimator = new PoseEstimator(await OrtSession.create(buffers.pose_estimator, Number(env('AI_POSE_THREADS', '1'))));
+  const estimator = new PoseEstimator(await OrtSession.create(buffers.pose_estimator, Number(env('AI_POSE_THREADS', '1') as string)));
   worker.setPoseEstimator({
     estimator,
     model: { name: entry.name, version: entry.version, sha256: entry.sha256 },
