@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { PrismaClient, RecordingSegment, EvidencePin } from '@prisma/client';
+import { PrismaClient, RecordingSegment, EvidencePin, SegmentStatus } from '@prisma/client';
 import { StorageAdapter, LocalStorageAdapter } from './storageAdapter';
 import { MediaProbeAdapter, FfprobeMediaAdapter } from './mediaProbeAdapter';
 import { SegmentIndexer } from './segmentIndexer';
@@ -8,6 +8,7 @@ import { SegmentRepository } from './segmentRepository';
 import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
+import { SegmentIntegrityVerifier } from './segmentIntegrity';
 import { computeFileSha256 } from '../../../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
 import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
@@ -22,16 +23,18 @@ export interface RegisterSegmentInput {
   durationMs?: number;
   sizeBytes?: bigint;
   sha256Hash?: string;
-  codec?: string;
-  width?: number;
-  height?: number;
-  fps?: number;
+  codec?: string | null;
+  width?: number | null;
+  height?: number | null;
+  fps?: number | null;
   startPts?: bigint;
   endPts?: bigint;
   timebaseNumerator?: number;
   timebaseDenominator?: number;
   keyframeIndexJson?: any;
   storageLocation?: string;
+  storageVolumeId?: string;
+  storageEpochId?: string;
 }
 
 export interface SeekTargetResult {
@@ -42,16 +45,49 @@ export interface SeekTargetResult {
   currentPts?: bigint;
   nearestKeyframePts?: bigint;
   offsetMs?: number;
-  codec?: string;
-  fps?: number;
+  /** null = the segment has no recorded value; nothing is assumed (no h264, no 25 fps). */
+  codec?: string | null;
+  fps?: number | null;
   gapDurationMs?: number | null;
 }
 
+/** A segment is only compared with its file clock while the file is this fresh (a restore from backup resets mtimes). */
+const CLOCK_CHECK_FRESH_MS = 3600_000;
+/** Segment end per its file name versus the file's last write: more than this apart means a clock or time zone problem. */
+const CLOCK_TOLERANCE_MS = 5 * 60_000;
+const CLOCK_WARNING_TITLE = 'Segment time does not match the file clock';
+
+/**
+ * A frame step needs the segment's frame rate (or a real keyframe to step to). When neither is known the step is
+ * refused with this error instead of assuming 25 fps. HTTP 409, code FRAME_RATE_UNKNOWN.
+ */
+export class FrameStepUnavailableError extends Error {
+  readonly code = 'FRAME_RATE_UNKNOWN';
+  readonly statusCode = 409;
+  constructor(detail: string) {
+    super(`FRAME_RATE_UNKNOWN: ${detail}`);
+  }
+}
+
 export interface StepFrameResult {
+  /** The segment the new frame is in: the next or previous one when the step crosses a segment boundary. */
   segmentId: string;
   newPts: bigint;
   frameDeltaPts: bigint;
+  /** Wall-clock time of the new frame, rounded UP to the millisecond so a seek to it lands on that frame. */
+  utc: Date;
+  /** EXACT: the next real frame in the file. APPROXIMATE: estimated from the frame rate (the file could not be read). */
+  precision: 'EXACT' | 'APPROXIMATE';
+  /** True when there is no further frame in that direction (start or end of the recording): the position did not move. */
+  clamped: boolean;
 }
+
+/** Frame times are read this far (seconds) either side of the position; widened for a very low frame rate. */
+const FRAME_WINDOW_SECONDS = [2, 8, 30];
+/** A step crosses into a neighbouring segment only when the recording is continuous (no gap longer than this). */
+const SEGMENT_JOIN_GAP_MS = 2000;
+const utcOfFrame = (segment: RecordingSegment, pts: bigint): Date =>
+  new Date(segment.startTime.getTime() + Math.ceil(Number(pts - segment.startPts) / 90));
 
 export class RecordingCatalog {
   private prisma: PrismaClient;
@@ -63,6 +99,7 @@ export class RecordingCatalog {
 
   private reconcilerTimer: NodeJS.Timeout | null = null;
   private retentionTimer: NodeJS.Timeout | null = null;
+  private integrityTimer: NodeJS.Timeout | null = null;
   private isReconciling = false;
 
   constructor(
@@ -92,16 +129,17 @@ export class RecordingCatalog {
     const sizeBytes = input.sizeBytes ?? BigInt(fileStat.size);
 
     let durationMs = input.durationMs;
-    let codec = input.codec;
-    let width = input.width;
-    let height = input.height;
-    let fps = input.fps;
+    let codec: string | null | undefined = input.codec;
+    let width: number | null | undefined = input.width;
+    let height: number | null | undefined = input.height;
+    let fps: number | null | undefined = input.fps;
     let timebaseNum = input.timebaseNumerator ?? 1;
     let timebaseDen = input.timebaseDenominator ?? 90000;
     let keyframeIndex = input.keyframeIndexJson;
 
     // Probe file if critical metadata is missing
-    if (!durationMs || !codec || !fps) {
+    let probeFailed = false;
+    if (fileStat.exists && fileStat.size > 0 && (!durationMs || !codec || !fps)) {
       const probe = await this.mediaProbeAdapter.probeMedia(input.filePath);
       if (probe) {
         durationMs = durationMs ?? probe.durationMs;
@@ -112,10 +150,27 @@ export class RecordingCatalog {
         timebaseNum = probe.timebaseNumerator;
         timebaseDen = probe.timebaseDenominator;
         keyframeIndex = keyframeIndex ?? probe.keyframeIndex;
+      } else {
+        probeFailed = true;
       }
     }
 
-    const safeDurationMs = durationMs ?? 1000;
+    // The same classes boot recovery uses: a file that is missing, empty or unreadable is not a recorded segment.
+    // It is kept as a row so it can be found and recovered, but it never counts as footage and nothing about it is
+    // invented (no duration, size of picture, frame rate or codec). A caller-supplied duration (the recorder's own
+    // figure) is the one thing that makes an unprobed file usable.
+    let unusable: { status: SegmentStatus; reason: string } | null = null;
+    if (!fileStat.exists) unusable = { status: SegmentStatus.FILE_MISSING, reason: 'FILE_NOT_FOUND_AT_REGISTRATION' };
+    else if (fileStat.size === 0) unusable = { status: SegmentStatus.CORRUPTED, reason: 'ZERO_BYTE' };
+    else if (probeFailed && !input.durationMs) unusable = { status: SegmentStatus.CORRUPTED, reason: 'UNREADABLE_MEDIA' };
+
+    // The real keyframes, read once per file. No index (null) when they cannot be read; seek then uses the
+    // segment start and says nothing finer.
+    if (!unusable && !keyframeIndex && this.mediaProbeAdapter.probeKeyframes) {
+      keyframeIndex = (await this.mediaProbeAdapter.probeKeyframes(input.filePath)) ?? undefined;
+    }
+
+    const safeDurationMs = unusable ? 0 : durationMs ?? 0;
     let startTime = input.startTime;
     if (!startTime) {
       try {
@@ -124,12 +179,21 @@ export class RecordingCatalog {
         startTime = new Date(fileStat.mtime.getTime() - safeDurationMs);
       }
     }
-    const endTime = input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
+    const endTime = unusable ? startTime : input.endTime ?? new Date(startTime.getTime() + safeDurationMs);
+
+    // A segment that has just finished should end about when its file was last written. A big difference means the
+    // recorder's clock or time zone is wrong. It is reported, never corrected: nothing may rewrite the evidence clock.
+    if (!unusable && fileStat.exists && Date.now() - fileStat.mtime.getTime() < CLOCK_CHECK_FRESH_MS) {
+      const driftMs = fileStat.mtime.getTime() - endTime.getTime();
+      if (Math.abs(driftMs) > CLOCK_TOLERANCE_MS) {
+        await this.noteClockMismatch(input.cameraId, input.filePath, endTime, fileStat.mtime, driftMs);
+      }
+    }
 
     // Compute presentation timestamps
     const startPts = input.startPts ?? 0n;
     const ptsDelta = SegmentIndexer.calculatePtsDelta(safeDurationMs, timebaseNum, timebaseDen);
-    const endPts = input.endPts ?? (startPts + ptsDelta);
+    const endPts = unusable ? startPts : input.endPts ?? (startPts + ptsDelta);
 
     let sha256 = input.sha256Hash;
     if (!sha256 && fileStat.exists && fileStat.size > 0) {
@@ -149,17 +213,50 @@ export class RecordingCatalog {
       durationMs: safeDurationMs,
       sizeBytes,
       sha256Hash: sha256,
-      codec: codec || 'h264',
-      width: width || 1920,
-      height: height || 1080,
-      fps: fps || 25.0,
+      codec: codec ?? null,
+      width: width ?? null,
+      height: height ?? null,
+      fps: fps ?? null,
+      status: unusable ? unusable.status : SegmentStatus.FINALIZED,
+      quarantineReason: unusable ? unusable.reason : null,
       startPts,
       endPts,
       timebaseNumerator: timebaseNum,
       timebaseDenominator: timebaseDen,
-      keyframeIndexJson: keyframeIndex || null,
+      keyframeIndexJson: unusable ? null : keyframeIndex || null,
       storageLocation: input.storageLocation || 'LOCAL',
+      storageVolumeId: input.storageVolumeId,
+      storageEpochId: input.storageEpochId,
     });
+  }
+
+  /** One warning per camera per hour, however many segments are off. Never throws: indexing must not fail on a report. */
+  private async noteClockMismatch(cameraId: string, filePath: string, endTime: Date, mtime: Date, driftMs: number): Promise<void> {
+    const minutes = Math.round(Math.abs(driftMs) / 60000);
+    console.warn(`[RecordingCatalog] ${filePath}: name says the segment ended ${endTime.toISOString()}, file last written ${mtime.toISOString()} (${minutes} min apart)`);
+    try {
+      if (typeof (this.prisma as any).event?.findFirst !== 'function') return;
+      const recent = await this.prisma.event.findFirst({
+        where: { cameraId, type: 'RECORDING_FAILURE', title: CLOCK_WARNING_TITLE, firstDetectedAt: { gte: new Date(Date.now() - 3600_000) } },
+        select: { id: true },
+      });
+      if (recent) return;
+      await this.prisma.event.create({
+        data: {
+          cameraId,
+          type: 'RECORDING_FAILURE',
+          severity: 'WARNING',
+          title: CLOCK_WARNING_TITLE,
+          description:
+            `The file name says this segment ended at ${endTime.toISOString()} (read as UTC) but the file was last written at ${mtime.toISOString()}, ` +
+            `${minutes} minutes ${driftMs > 0 ? 'later' : 'earlier'}. The recorder's time zone or clock may be wrong: check that the MediaMTX container runs ` +
+            `with TZ=UTC and that the appliance clock is correct. Recorded times have not been changed. ${filePath}`,
+          metadata: { filePath, nameEndUtc: endTime.toISOString(), fileWrittenUtc: mtime.toISOString(), driftMs } as any,
+        },
+      });
+    } catch (err: any) {
+      console.error('[RecordingCatalog] could not raise the clock warning:', err.message);
+    }
   }
 
   /**
@@ -199,8 +296,8 @@ export class RecordingCatalog {
         currentPts: targetPts,
         nearestKeyframePts,
         offsetMs: elapsedMs,
-        codec: containing.codec || 'h264',
-        fps: containing.fps || 25.0,
+        codec: containing.codec ?? null,
+        fps: containing.fps ?? null,
         gapDurationMs: null,
       };
     }
@@ -220,8 +317,8 @@ export class RecordingCatalog {
         currentPts: nearest.startPts,
         nearestKeyframePts: nearest.startPts,
         offsetMs: 0,
-        codec: nearest.codec || 'h264',
-        fps: nearest.fps || 25.0,
+        codec: nearest.codec ?? null,
+        fps: nearest.fps ?? null,
         gapDurationMs,
       };
     }
@@ -233,7 +330,11 @@ export class RecordingCatalog {
   }
 
   /**
-   * Steps to the adjacent frame forward or backward without assuming constant frame rate
+   * Steps to the neighbouring frame, forward or backward, from the real frame times in the file: exact on constant
+   * and variable frame rate. "Current frame" is the last frame at or before `currentPts` (what is on screen).
+   * At the end of a segment the step continues into the next one when the recording is continuous; at the start or
+   * end of the recording it stays put with `clamped: true`. If the file cannot be read it estimates from the frame
+   * rate and says APPROXIMATE; with no frame rate it refuses (FRAME_RATE_UNKNOWN).
    */
   async stepToAdjacentFrame(
     cameraId: string,
@@ -246,26 +347,87 @@ export class RecordingCatalog {
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const keyframes = segment.keyframeIndexJson as any[] | undefined;
-    const fallbackDelta = SegmentIndexer.calculateFallbackFrameDelta(
-      segment.fps || 25.0,
-      segment.timebaseNumerator,
-      segment.timebaseDenominator
-    );
+    const exact = await this.exactStep(segment, currentPts, direction);
+    if (exact) return exact;
 
-    const step = SegmentIndexer.calculateAdjacentFramePts(
-      keyframes,
-      currentPts,
-      direction,
-      segment.startPts,
-      segment.endPts,
-      fallbackDelta
-    );
+    const fpsKnown = segment.fps != null && segment.fps > 0;
+    if (!fpsKnown) {
+      throw new FrameStepUnavailableError(`segment ${segment.id} cannot be read and has no recorded frame rate`);
+    }
+    const delta = SegmentIndexer.calculateFallbackFrameDelta(segment.fps as number, segment.timebaseNumerator, segment.timebaseDenominator);
+    const raw = direction === 'FORWARD' ? currentPts + delta : currentPts - delta;
+    const newPts = raw < segment.startPts ? segment.startPts : raw > segment.endPts ? segment.endPts : raw;
+    return {
+      segmentId: segment.id,
+      newPts,
+      frameDeltaPts: newPts > currentPts ? newPts - currentPts : currentPts - newPts,
+      utc: utcOfFrame(segment, newPts),
+      precision: 'APPROXIMATE',
+      clamped: newPts === currentPts,
+    };
+  }
+
+  /** The real frames of a segment around a position, widening the window until a frame on the needed side is found. */
+  private async framesAround(segment: RecordingSegment, centerPts: bigint, direction: 'FORWARD' | 'BACKWARD'): Promise<bigint[] | null> {
+    if (!this.mediaProbeAdapter.probeFrameTimes) return null;
+    if (!(await this.storageAdapter.stat(segment.filePath)).exists) return null;
+    let frames: bigint[] | null = null;
+    for (const span of FRAME_WINDOW_SECONDS) {
+      frames = await this.mediaProbeAdapter.probeFrameTimes(segment.filePath, centerPts, span);
+      if (!frames) return null;
+      const idx = frames.reduce((n, f, i) => (f <= centerPts ? i : n), -1);
+      if (direction === 'FORWARD' ? idx >= 0 && idx + 1 < frames.length : idx >= 1) return frames;
+    }
+    return frames;
+  }
+
+  private async exactStep(segment: RecordingSegment, currentPts: bigint, direction: 'FORWARD' | 'BACKWARD'): Promise<StepFrameResult | null> {
+    const frames = await this.framesAround(segment, currentPts, direction);
+    if (!frames || frames.length === 0) return null;
+    const idx = frames.reduce((n, f, i) => (f <= currentPts ? i : n), -1);
+    const currentFrame = idx >= 0 ? frames[idx] : currentPts;
+    const target = direction === 'FORWARD' ? frames[idx + 1] : idx >= 1 ? frames[idx - 1] : undefined;
+
+    if (target !== undefined && target !== currentFrame) {
+      return {
+        segmentId: segment.id,
+        newPts: target,
+        frameDeltaPts: target > currentFrame ? target - currentFrame : currentFrame - target,
+        utc: utcOfFrame(segment, target),
+        precision: 'EXACT',
+        clamped: false,
+      };
+    }
+
+    // No further frame in this segment: continue into the neighbouring one when the recording is continuous.
+    const next = await this.segmentRepo.findAdjacentSegment(segment, direction, SEGMENT_JOIN_GAP_MS);
+    if (next) {
+      let newPts: bigint | undefined;
+      if (direction === 'FORWARD') {
+        newPts = next.startPts;
+      } else {
+        const endFrames = await this.framesAround(next, next.endPts, 'BACKWARD');
+        newPts = endFrames && endFrames.length > 0 ? endFrames[endFrames.length - 1] : undefined;
+      }
+      if (newPts !== undefined) {
+        return {
+          segmentId: next.id,
+          newPts,
+          frameDeltaPts: 0n,
+          utc: utcOfFrame(next, newPts),
+          precision: 'EXACT',
+          clamped: false,
+        };
+      }
+    }
 
     return {
       segmentId: segment.id,
-      newPts: step.newPts,
-      frameDeltaPts: step.frameDeltaPts,
+      newPts: currentFrame,
+      frameDeltaPts: 0n,
+      utc: utcOfFrame(segment, currentFrame),
+      precision: 'EXACT',
+      clamped: true,
     };
   }
 
@@ -340,6 +502,20 @@ export class RecordingCatalog {
   }
 
   /**
+   * Starts the periodic integrity check of recorded segments (presence and size every run, content hash within a
+   * byte budget). `intervalMs` 0 turns it off. Settings: INTEGRITY_PRESENCE_BATCH, INTEGRITY_HASH_MB_PER_RUN.
+   */
+  startIntegrityChecks(intervalMs = setting('INTEGRITY_CHECK_INTERVAL_SECONDS') * 1000): void {
+    if (this.integrityTimer || intervalMs <= 0) return;
+    const verifier = new SegmentIntegrityVerifier(this.prisma, this.storageAdapter);
+    this.integrityTimer = setInterval(() => {
+      verifier
+        .runCycle({ presenceBatch: setting('INTEGRITY_PRESENCE_BATCH'), hashBudgetBytes: setting('INTEGRITY_HASH_MB_PER_RUN') * 1_000_000 })
+        .catch((err) => console.error('[RecordingCatalog] Integrity check error:', err.message));
+    }, intervalMs);
+  }
+
+  /**
    * Starts low-frequency filesystem reconciliation crawler
    */
   startReconciler(intervalMs = 300000): void {
@@ -383,10 +559,36 @@ export class RecordingCatalog {
       clearInterval(this.retentionTimer);
       this.retentionTimer = null;
     }
+    if (this.integrityTimer) {
+      clearInterval(this.integrityTimer);
+      this.integrityTimer = null;
+    }
   }
 
   /**
-   * Low-frequency self-healing crawler: reconciles disk files into catalog
+   * Rows already in the catalog for these files, loaded in batches (one query per few thousand files, not per file).
+   */
+  private async knownSegments(files: string[]): Promise<Map<string, { status: SegmentStatus; sizeBytes: bigint }>> {
+    const known = new Map<string, { status: SegmentStatus; sizeBytes: bigint }>();
+    if (typeof (this.prisma as any).recordingSegment?.findMany !== 'function') return known;
+    const CHUNK = 2000;
+    for (let i = 0; i < files.length; i += CHUNK) {
+      const rows = await this.prisma.recordingSegment.findMany({
+        where: { filePath: { in: files.slice(i, i + CHUNK) } },
+        select: { filePath: true, status: true, sizeBytes: true },
+      });
+      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes });
+    }
+    return known;
+  }
+
+  /**
+   * Low-frequency self-healing crawler: reconciles disk files into catalog.
+   *
+   * It is cheap on a healthy disk (audit finding F2): a file whose row is already FINALIZED with the same size is
+   * not probed or hashed again. Only new files, files that changed size, and files not yet usable (corrupt,
+   * missing) are read, so the crawl does not compete with recording for disk time. Re-checking the content hash of
+   * old files is a separate, slower job and is not done here.
    */
   async reconcileFilesystem(): Promise<number> {
     if (this.isReconciling) return 0;
@@ -396,6 +598,8 @@ export class RecordingCatalog {
     try {
       const recordingsDir = setting('RECORDINGS_DIR');
       const files = await this.storageAdapter.scanDirectory(recordingsDir);
+      const known = await this.knownSegments(files);
+      const cameraByDir = new Map<string, { id: string; tenantId: string } | null>();
 
       for (const filePath of files) {
         // e.g. .../{cameraId}/2026-09-04_01-30-00-123456.mp4
@@ -403,10 +607,20 @@ export class RecordingCatalog {
         const fileName = parts[parts.length - 1];
         const candidateCamId = parts[parts.length - 2];
 
-        const camera = await this.prisma.camera.findFirst({
-          where: { OR: [{ id: candidateCamId }, { streamPath: candidateCamId }] },
-          select: { id: true, tenantId: true },
-        });
+        const existing = known.get(filePath);
+        if (existing?.status === SegmentStatus.FINALIZED) {
+          const st = await this.storageAdapter.stat(filePath);
+          if (st.exists && BigInt(st.size) === existing.sizeBytes) continue;
+        }
+
+        let camera = cameraByDir.get(candidateCamId);
+        if (camera === undefined) {
+          camera = await this.prisma.camera.findFirst({
+            where: { OR: [{ id: candidateCamId }, { streamPath: candidateCamId }] },
+            select: { id: true, tenantId: true },
+          });
+          cameraByDir.set(candidateCamId, camera);
+        }
 
         if (!camera) {
           // Admission Control (C-018): unmappable files must be isolated to .quarantine and never indexed.
@@ -424,6 +638,14 @@ export class RecordingCatalog {
           try {
             fs.renameSync(filePath, path.join(qDir, fileName));
           } catch {}
+          continue;
+        }
+
+        // A file modified inside the active-write grace may still be open in the recorder (the same rule boot
+        // recovery uses). It is indexed on a later pass, or by the segment-complete job, once it is finished.
+        try {
+          if (isWithinActiveWriteGrace((await this.storageAdapter.stat(filePath)).mtime.getTime())) continue;
+        } catch {
           continue;
         }
 

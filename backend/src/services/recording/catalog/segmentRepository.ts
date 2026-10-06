@@ -1,5 +1,11 @@
 import { PrismaClient, RecordingSegment, SegmentStatus } from '@prisma/client';
 
+/**
+ * Only a FINALIZED segment is footage that can be played, counted as coverage or seeked to. A corrupt, quarantined,
+ * missing or pruned file is not (audit finding F9, docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md).
+ */
+const SERVABLE = SegmentStatus.FINALIZED;
+
 export interface UpsertSegmentInput {
   tenantId?: string;
   cameraId: string;
@@ -9,17 +15,21 @@ export interface UpsertSegmentInput {
   durationMs: number;
   sizeBytes: bigint;
   sha256Hash?: string | null;
-  codec?: string;
-  width?: number;
-  height?: number;
-  fps?: number;
+  /** null = unknown. Nothing is invented for a file that could not be read. */
+  codec?: string | null;
+  width?: number | null;
+  height?: number | null;
+  fps?: number | null;
   status?: SegmentStatus;
+  quarantineReason?: string | null;
   startPts?: bigint;
   endPts?: bigint;
   timebaseNumerator?: number;
   timebaseDenominator?: number;
   keyframeIndexJson?: any;
   storageLocation?: string;
+  storageVolumeId?: string;
+  storageEpochId?: string;
 }
 
 export class SegmentRepository {
@@ -47,17 +57,20 @@ export class SegmentRepository {
         durationMs: input.durationMs,
         sizeBytes: input.sizeBytes,
         sha256Hash: input.sha256Hash,
-        codec: input.codec || 'h264',
-        width: input.width || 1920,
-        height: input.height || 1080,
-        fps: input.fps || 25.0,
+        codec: input.codec ?? null,
+        width: input.width ?? null,
+        height: input.height ?? null,
+        fps: input.fps ?? null,
         status: input.status || SegmentStatus.FINALIZED,
+        quarantineReason: input.quarantineReason ?? null,
         startPts: input.startPts ?? 0n,
         endPts: input.endPts ?? 0n,
         timebaseNumerator: input.timebaseNumerator ?? 1,
         timebaseDenominator: input.timebaseDenominator ?? 90000,
         keyframeIndexJson: input.keyframeIndexJson,
         storageLocation: input.storageLocation || 'LOCAL',
+        storageVolumeId: input.storageVolumeId,
+        storageEpochId: input.storageEpochId,
       },
       update: {
         endTime: input.endTime,
@@ -67,6 +80,14 @@ export class SegmentRepository {
         endPts: input.endPts ?? undefined,
         keyframeIndexJson: input.keyframeIndexJson ?? undefined,
         status: input.status ?? undefined,
+        storageVolumeId: input.storageVolumeId,
+        storageEpochId: input.storageEpochId,
+        // A file that could not be read earlier and can now (or the reverse) takes the new picture details and reason.
+        codec: input.codec ?? null,
+        width: input.width ?? null,
+        height: input.height ?? null,
+        fps: input.fps ?? null,
+        quarantineReason: input.quarantineReason ?? null,
       },
     });
   }
@@ -78,6 +99,7 @@ export class SegmentRepository {
     return this.prisma.recordingSegment.findMany({
       where: {
         cameraId,
+        status: SERVABLE,
         startTime: { lte: endUtc },
         endTime: { gte: startUtc },
       },
@@ -92,6 +114,7 @@ export class SegmentRepository {
     return this.prisma.recordingSegment.findFirst({
       where: {
         cameraId,
+        status: SERVABLE,
         startTime: { lte: targetUtc },
         endTime: { gte: targetUtc },
       },
@@ -107,6 +130,7 @@ export class SegmentRepository {
     const preceding = await this.prisma.recordingSegment.findFirst({
       where: {
         cameraId,
+        status: SERVABLE,
         endTime: { lte: targetUtc },
       },
       orderBy: { endTime: 'desc' },
@@ -118,9 +142,37 @@ export class SegmentRepository {
     return this.prisma.recordingSegment.findFirst({
       where: {
         cameraId,
+        status: SERVABLE,
         startTime: { gte: targetUtc },
       },
       orderBy: { startTime: 'asc' },
+    });
+  }
+
+  /**
+   * The FINALIZED segment that follows (or precedes) this one on the same camera, if it starts (ends) within
+   * `maxGapMs` of this one's end (start): a frame step crosses a segment boundary, never a recording gap.
+   */
+  async findAdjacentSegment(segment: RecordingSegment, direction: 'FORWARD' | 'BACKWARD', maxGapMs: number): Promise<RecordingSegment | null> {
+    if (direction === 'FORWARD') {
+      return this.prisma.recordingSegment.findFirst({
+        where: {
+          cameraId: segment.cameraId,
+          status: SERVABLE,
+          id: { not: segment.id },
+          startTime: { gte: new Date(segment.endTime.getTime() - maxGapMs), lte: new Date(segment.endTime.getTime() + maxGapMs) },
+        },
+        orderBy: { startTime: 'asc' },
+      });
+    }
+    return this.prisma.recordingSegment.findFirst({
+      where: {
+        cameraId: segment.cameraId,
+        status: SERVABLE,
+        id: { not: segment.id },
+        endTime: { gte: new Date(segment.startTime.getTime() - maxGapMs), lte: new Date(segment.startTime.getTime() + maxGapMs) },
+      },
+      orderBy: { endTime: 'desc' },
     });
   }
 

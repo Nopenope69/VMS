@@ -1,4 +1,4 @@
-import { FFmpegService, VideoProbeResult } from '../../ffmpeg/ffmpeg.service';
+import { FFmpegService } from '../../ffmpeg/ffmpeg.service';
 
 export interface KeyframeIndexEntry {
   pts: bigint;
@@ -8,10 +8,10 @@ export interface KeyframeIndexEntry {
 
 export interface MediaProbeResult {
   durationMs: number;
-  width?: number;
-  height?: number;
-  codec?: string;
-  fps?: number;
+  width?: number | null;
+  height?: number | null;
+  codec?: string | null;
+  fps?: number | null;
   timebaseNumerator: number;
   timebaseDenominator: number;
   keyframeIndex?: KeyframeIndexEntry[];
@@ -19,6 +19,16 @@ export interface MediaProbeResult {
 
 export interface MediaProbeAdapter {
   probeMedia(filePath: string): Promise<MediaProbeResult | null>;
+  /**
+   * The keyframes that are really in the file (90 kHz, from the first presented frame), or null when they cannot
+   * be read. Optional: an adapter without it yields no index, never a guessed one.
+   */
+  probeKeyframes?(filePath: string): Promise<KeyframeIndexEntry[] | null>;
+  /**
+   * The real frame times (90 kHz, from the first presented frame) in a window of `spanSeconds` either side of a time,
+   * or null when they cannot be read. Optional: without it a frame step can only be estimated.
+   */
+  probeFrameTimes?(filePath: string, centerPts90k: bigint, spanSeconds: number): Promise<bigint[] | null>;
 }
 
 export class FfprobeMediaAdapter implements MediaProbeAdapter {
@@ -29,30 +39,27 @@ export class FfprobeMediaAdapter implements MediaProbeAdapter {
     }
 
     const durationMs = Math.round(rawProbe.durationSeconds * 1000);
-    const fps = rawProbe.fps > 0 ? rawProbe.fps : 25.0;
     const timebaseNumerator = 1;
     const timebaseDenominator = 90000;
-
-    // Build synthetic keyframe entries for standard GOP (typically 1 keyframe every 2 seconds = 50 frames @ 25fps)
-    const keyframeIndex: KeyframeIndexEntry[] = [];
-    const gopDurationMs = 2000;
-    const ptsPerMs = BigInt(timebaseDenominator) / BigInt(1000 * timebaseNumerator);
-
-    for (let offsetMs = 0; offsetMs < durationMs; offsetMs += gopDurationMs) {
-      keyframeIndex.push({
-        pts: BigInt(offsetMs) * ptsPerMs,
-      });
-    }
 
     return {
       durationMs,
       width: rawProbe.width,
       height: rawProbe.height,
       codec: rawProbe.videoCodec,
-      fps,
+      fps: rawProbe.fps,
       timebaseNumerator,
       timebaseDenominator,
-      keyframeIndex,
     };
+  }
+
+  /** The real keyframes, or null: never a guessed one-keyframe-every-2-seconds list (audit finding F1). */
+  async probeKeyframes(filePath: string): Promise<KeyframeIndexEntry[] | null> {
+    const real = await FFmpegService.probeKeyframes(filePath);
+    return real ? real.keyframePts90k.map((pts) => ({ pts })) : null;
+  }
+
+  async probeFrameTimes(filePath: string, centerPts90k: bigint, spanSeconds: number): Promise<bigint[] | null> {
+    return FFmpegService.probeFrameTimes(filePath, centerPts90k, spanSeconds);
   }
 }
