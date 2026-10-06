@@ -465,8 +465,10 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   from open-source projects (alert-cutoff semantics, RecordingCatalog crash-safety and time audit, per-camera health
   endpoint, adapter result fields) and sets the order: alert-cutoff first, then the four pending features. The owner then put person down and
   fence climbing first (above); the reference study's order applies after it.
-- **Branch `claude/elegant-albattani-4krihk` (Session 32, 2026-10-05/06): PR #47, ten commits, based on `master` at `cd9b7b0`
-  and merged with `master` `84d3c49`** (PR #45 merged only the first, docs-only commit). Built from the open-source
+- **Session 32 (2026-10-05/06), in `master` once: PR #47 (`fe188e1`, ten commits from `cd9b7b0`), reverted by #48 and re-landed unchanged as
+  #50 (`ca29da6`, on top of #49).** #47 was merged before its CI ran (GitHub runners never started four jobs). The full CI run on `ca29da6` then
+  passed all 10 jobs, including the backend suite with the three new migrations and the AI end-to-end scenario. Still not proven on a real
+  camera, MediaMTX or disk; `ALARM_TRIAGE` and `INCIDENT_SUMMARY` stay off by default (PR #45 merged only the first, docs-only commit). Built from the open-source
   reference study (`docs/strategy/vigilone-oss-reference-study-2026-10-05.md`, design ideas only, no code copied):
   1. **Incident window** (ADR 0014): a `TRIGGER_ALARM` action may carry `incidentWindowSeconds`; repeat firings of the same
      rule on the same camera join the open alarm (count, last activity, audit `ALARM_CONTINUE`), never a resolved one, never past
