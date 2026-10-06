@@ -909,6 +909,85 @@
     "status": "PENDING_HUMAN_REVIEW",
     "question": "Qwen3-4B weights are Apache-2.0, but its training data is undisclosed. Used only to rewrite a search request into English on site; VigilOne's own rules set every filter and the operator sees them before searching."
    }
+  },
+  {
+   "key": "rtmpose-s-body7-256x192",
+   "name": "rtmpose-s-body7-256x192",
+   "role": "pose_estimator",
+   "version": "mmpose-rtmposev1-20230504@cd4d7095f5cf",
+   "url": "https://huggingface.co/Tau-J/RTMPose/resolve/cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd/rtmposev1/onnx_sdk/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.zip",
+   "archive": {
+    "format": "zip",
+    "sha256": "7673922e531014906ca4f0f239b7e233b740146a10b632deaa2a28d45470d802",
+    "member": "20230831/rtmpose_onnx/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504/end2end.onnx",
+    "fileName": "rtmpose-s-body7-256x192.onnx"
+   },
+   "sha256": "9aeb635b83f86aea45cf45d85798f7eba1a162de8e0d721c44e54fe5eebaf47d",
+   "sizeBytes": 21890172,
+   "task": "pose_estimation",
+   "codeLicense": "Apache-2.0",
+   "weightLicense": "Apache-2.0",
+   "weightsSource": "OpenMMLab MMPose RTMPose-s (body7), ONNX export published by the project at Hugging Face Tau-J/RTMPose commit cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd (code and checkpoint: Apache-2.0, github.com/open-mmlab/mmpose). Input 1x3x256x192, outputs simcc_x (1x17x384) and simcc_y (1x17x512), opset 11, no custom operators.",
+   "trainingData": {
+    "source": "Body7: COCO, AI Challenger, CrowdPose, MPII, sub-JHMDB, Halpe, PoseTrack18",
+    "license": "Mixed. COCO annotations CC-BY-4.0; AI Challenger, CrowdPose, MPII, sub-JHMDB, Halpe and PoseTrack18 carry research or non-commercial terms (PoseTrack forbids commercial surveillance use)",
+    "provenance": "public-datasets with some non-commercial terms. Repository owner policy of 2026-10-05: weights under a permissive licence trained on non-commercial research data may ship; the owner accepts the risk. Indian legal advice was recommended and has not been taken.",
+    "commercialUse": false
+   },
+   "governance": {
+    "status": "PENDING_HUMAN_REVIEW",
+    "question": "Training data includes non-commercial research datasets (see trainingData). Weights are Apache-2.0. The owner approved running it in the product on 2026-10-06 (model-license-exceptions.json); legal review remains advisable."
+   },
+   "runtimeConfig": {
+    "runtime": "onnxruntime",
+    "runtimeVersion": "1.30.0",
+    "executionProvider": "cpu",
+    "modelFormat": "ONNX",
+    "inputWidth": 192,
+    "inputHeight": 256,
+    "colorSpace": "RGB",
+    "normalization": {
+     "type": "meanstd",
+     "mean": [
+      123.675,
+      116.28,
+      103.53
+     ],
+     "std": [
+      58.395,
+      57.12,
+      57.375
+     ],
+     "scale": 1
+    },
+    "resize": {
+     "interpolation": "bilinear",
+     "keepAspectRatio": true,
+     "padding": 1.25
+    }
+   },
+   "modelSignature": {
+    "input": {
+     "name": "input",
+     "shape": [
+      -1,
+      3,
+      256,
+      192
+     ],
+     "dtype": "float32"
+    },
+    "output": {
+     "name": "simcc_x",
+     "shape": [
+      -1,
+      17,
+      384
+     ],
+     "dtype": "float32"
+    },
+    "decoder": "simcc_argmax_v1"
+   }
   }
  ]
 }

@@ -34,6 +34,10 @@
  *                             store (default false; the backend also needs VIGILONE_FEATURE_OBJECT_CROPS)
  *  AI_COLOUR_ATTRIBUTES       'false' stops naming the colours of CONFIRMED detections (default true;
  *                             colourAttributes.ts; the backend track index reads them)
+ *  AI_POSE_ESTIMATION         'true' adds body pose (17 keypoints) to CONFIRMED person detections for the person-down
+ *                             and fence-climbing rules (default false). Needs the RTMPose-s file and a person's approval
+ *                             for its SHA-256; otherwise the worker stops with the reason. AI_POSE_INTERVAL_MS (500),
+ *                             AI_POSE_MAX_PER_FRAME (4), AI_POSE_THREADS (1), AI_POSE_MODEL_KEY tune it.
  *  AI_MAX_STREAMS             cameras processed concurrently (default 16)
  *  AI_INFERENCE_TIMEOUT_MS    per-frame deadline (default 1000)
  *  AI_GATE_MODE               motion gating: 'motion' (default) or 'off' (P2.5)
@@ -52,7 +56,10 @@ import { StreamSupervisor } from './streamSupervisor';
 import { ResourceGovernor } from './frameQueue';
 import { MetricsRegistry } from './metrics';
 import { ModelManifestRecord } from './types';
-import { loadAnprPipeline, LoadedAnprPipeline } from './anpr/anprService';
+import { loadAnprPipeline, LoadedAnprPipeline, verifyPipelineComponents } from './anpr/anprService';
+import { OrtSession } from './anpr/ortSession';
+import { PoseEstimator } from './poseEstimator';
+import { findCandidateEntry } from './modelCatalog';
 import { AnprAdapterCore } from './anpr/anprAdapterCore';
 import { LprRunner } from './anpr/lprRunner';
 import { loadRedactionPipeline, LoadedRedactionPipeline } from './redaction/redactionPipeline';
@@ -156,6 +163,7 @@ export async function boot(): Promise<BootResult> {
     weightsSource: deployed.weightsSource,
   };
   await loadOrRefuse(worker, manifest, entry ?? null, deployed.evaluationJson ?? null);
+  if (env('AI_POSE_ESTIMATION', 'false') === 'true') await enablePose(worker);
 
   // 4. Frames: MediaMTX loopback only (single-RTSP-stream invariant), letterboxed per the model.
   const rc = manifest.runtimeConfigJson;
@@ -188,6 +196,25 @@ export async function boot(): Promise<BootResult> {
   supervisor.on('inferenceError', (e) => log('warn', 'inference error', e));
   await supervisor.start();
   return { worker, close, port: boundPort };
+}
+
+/**
+ * Body pose (person down, fence climbing). Off unless AI_POSE_ESTIMATION=true. The model is a candidate: it runs only
+ * with a person's approval for its exact SHA-256 (model-license-exceptions.json) and a file that matches its pin. If
+ * the switch is on and any of that fails, the worker stops with the reason instead of running without pose.
+ */
+async function enablePose(worker: AiWorker): Promise<void> {
+  const key = env('AI_POSE_MODEL_KEY', 'rtmpose-s-body7-256x192');
+  const entry = findCandidateEntry(key);
+  const { buffers } = verifyPipelineComponents([{ role: 'pose_estimator', key, sha256: entry.sha256 }]);
+  const estimator = new PoseEstimator(await OrtSession.create(buffers.pose_estimator, Number(env('AI_POSE_THREADS', '1'))));
+  worker.setPoseEstimator({
+    estimator,
+    model: { name: entry.name, version: entry.version, sha256: entry.sha256 },
+    intervalMs: Number(env('AI_POSE_INTERVAL_MS', '500')),
+    maxPerFrame: Number(env('AI_POSE_MAX_PER_FRAME', '4')),
+  });
+  log('info', 'body pose enabled', { model: `${entry.name}:${entry.version}`, sha256: entry.sha256 });
 }
 
 /**
