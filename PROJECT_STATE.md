@@ -439,7 +439,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
     advice).
   - **Pose model:** start person down and fence climbing on the **ready-made RTMPose files** (body7 weights), not
     the COCO-only RTMO export or a retrain.
-- **Done in Session 34 (2026-10-06): person down and fence climbing on RTMPose-s** (ADR 0017, `docs/operations/POSE_RULES.md`; pose off by default, `AI_POSE_ESTIMATION`; owner approval for the model recorded; feet-off-ground and box-only fence fallback deliberately not built; nothing tuned on real footage). The plan below is kept for reference:
+- **Done in Session 34 (2026-10-06), merged as #52 with all 10 CI jobs green: person down and fence climbing on RTMPose-s** (ADR 0017, `docs/operations/POSE_RULES.md`; pose off by default, `AI_POSE_ESTIMATION`; owner approval for the model recorded; feet-off-ground and box-only fence fallback deliberately not built; nothing tuned on real footage). The plan below is kept for reference:
   1. Add RTMPose-s as a candidate in `scripts/models/models.lock.json`: HF mirror `Tau-J/RTMPose` (Apache-2.0 card)
      at commit `cd4d7095f5cfc9cfc4f46289bee91ea4a1e1d9fd`, file
      `rtmposev1/onnx_sdk/rtmpose-s_simcc-body7_pt-body7_420e-256x192-acd4a1ef_20230504.zip` (ONNX inside; pin the
@@ -510,7 +510,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   onto its own frame (only the reference camera is frame-exact today), a measured stream delay from RTCP sender reports,
   audit finding F8 (orphan file after a crash during retention, known, no change), a rule-builder field for
   `incidentWindowSeconds`, a queue page polish for triage, and Bucket 6 (privacy tools, parked).
-- **Owner decisions still needed:** (the #47 branch is merged, via #50); approve or reject the local text model and C2PA library for (a)
+- **Owner decisions still needed (Session 34 update):** staged fall and fence-climb clips from a real camera to tune the pose rules; Indian legal advice on the RTMPose body7 training-data terms; (the #47 branch is merged, via #50); approve or reject the local text model and C2PA library for (a)
   and (b); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
   quarantine cap (old open question); all of the field track (bench, clean-VM drill, real footage, pilot site, DPDP choices).
 - **Sandbox set-up for the next session (the cloud container is fresh each time):** `cd backend && npm ci` and the same in

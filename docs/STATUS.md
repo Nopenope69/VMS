@@ -8,7 +8,7 @@ Nothing here says "passing" without the run that showed it. CI-generated test co
 
 ## Session 34 (2026-10-06): person down and fence climbing (body pose)
 
-Branch `claude/jolly-wozniak-j9gqjy`. The owner's first priority (`PROJECT_STATE.md` section 9), built on RTMPose-s. ADR 0017,
+Merged to `master` as PR #52 (`6da910d`; it also carried the Session 33 notes). **CI on its head `ae43102`: all 10 jobs green on the first complete run**, including Backend Typecheck, Migrations & Tests (migration `20261017000000` on a fresh Postgres, real-database tests), AI Worker (with the pose model fetched, so the real-model golden test ran), Frontend Browser Tests and the AI end-to-end scenario. The owner's first priority (`PROJECT_STATE.md` section 9), built on RTMPose-s. ADR 0017,
 operations note `docs/operations/POSE_RULES.md`. Owner approval for the model recorded 2026-10-06 ("You have my go ahead for
 all licenses. Now build"); only RTMPose-s was added to `model-license-exceptions.json`. Other pending candidates (for example
 Qwen3-4B) were **not** approved by this session.
@@ -34,11 +34,22 @@ browser suite 28 passed.
   the offline verifier must be changed together with the template).
 - Pose-based person-down for crowded scenes (RTMO), fall datasets evaluation (CAUCAFall, UP-Fall, GMDCSA-24), staged fence-climb
   recordings: need real data. The recommended next measurement is a labelled clip set per camera.
-- The CI job now fetches the pose model (`.github/workflows/ci.yml`); CI has not run on this branch yet.
+- The CI job fetches the pose model (`.github/workflows/ci.yml`); it passed on #52.
 
 ### What I need from the human
 1. Staged fall and fence-climb clips from a real camera (and a "normal activity" set) to tune the thresholds.
 2. Indian legal advice on the body7 training-data terms (recommended by the research, not taken).
+3. Decisions for the two software features still open: approve or reject the local text model (Qwen3-4B) for describe-what-to-watch
+   rules, and a C2PA library licence check for footage integrity (the pose approval did **not** cover these).
+4. For the Session 33 items: 100+ labelled real-site search queries (template ensembling), real plate reads (look-alike table),
+   and the pilot sites' camera models (protocol coverage).
+
+### How to pick up (next chat)
+`master` has everything above. Start from `origin/master`. The sandbox this session had PostgreSQL 16 (`service postgresql start`,
+`apt-get install -y postgresql-16-pgvector`, role and database from `PROJECT_STATE.md`, `prisma migrate deploy`) and Chromium
+(`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; `E2E_ONLY=<file>.spec.ts scripts/e2e/frontend-browser.sh`), so the real-database and
+browser suites can run locally. Real-model tests need `scripts/models/fetch-model.sh <key>` (the pose model is 20 MB). A force-push
+is refused by the sandbox: rebuild a branch with a merge instead.
 
 ## Session 33 (2026-10-06): deeper open-source read, six small changes, and the re-land of #47
 
