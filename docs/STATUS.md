@@ -6,10 +6,48 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 33 (2026-10-06): deeper open-source read, six small changes, and the re-land of #47
+
+Branch `claude/jolly-wozniak-j9gqjy`. PR #49 (merged), PR #50 (merged; re-land of #47). Design ideas only from the public
+repositories; no code copied. States below are about what was built here; everything is `DONE_UNVERIFIED` where it matters
+(no real camera, MediaMTX, archive store, embedding adapter or disk), unless a row says otherwise.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| All-repos adoption study and deep dive (Frigate, Scrypted, Viseron read in detail; the rest of the list read for architecture) | DONE_VERIFIED (read, not run). Three claims in it were wrong and are corrected in place (plate list, retention split, existing metrics tools) | `docs/strategy/vigilone-oss-all-repos-adoption-study-2026-10-05.md`, `docs/strategy/vigilone-oss-deep-dive-frigate-scrypted-viseron-2026-10-05.md` |
+| Execution provider: CPU fallback, honest reporting, thread and graph settings | DONE_UNVERIFIED. The shipped ONNX Runtime package is **CPU only**; fallback checked against the real binary; **no acceleration is shipped or claimed** | `services/ai-worker/src/executionProvider.ts`, `docs/operations/AI_EXECUTION_PROVIDER.md` |
+| Archive-aware retention (archived segments freed first; unarchived drops counted, alarmed `STORAGE_UNARCHIVED_FOOTAGE_DROPPED`) | DONE_UNVERIFIED (database doubles, no live archive store) | `docs/operations/ARCHIVE_AWARE_RETENTION.md` |
+| Per-camera health endpoint `GET /api/v1/cameras/health` and `/:id/health` | DONE_UNVERIFIED. Read-only, derived from recorded facts; **no reconnect or retry counters** (nothing records them) | `docs/operations/CAMERA_HEALTH.md` |
+| Plate near-match candidates `GET /api/v1/anpr/observations/:id/near-matches` | DONE_UNVERIFIED. Advisory and audited; look-alike table not measured on Indian plate reads | `docs/operations/PLATE_NEAR_MATCH.md` |
+| Query template ensembling (`QUERY_TEMPLATE_ENSEMBLE`) | DONE_UNVERIFIED, **off by default, benefit unmeasured**; measure with `tools/eval/retrieval-*.mjs` on 100+ labelled real queries | `docs/operations/QUERY_TEMPLATE_ENSEMBLE.md` |
+| Re-land of #47 (incident window, triage, RecordingCatalog fixes, incident summary) via #50 | CI: all 10 checks green on the first complete run (Backend Typecheck, Migrations & Tests, Frontend Browser Tests and the AI end-to-end scenario included). Nothing on real hardware | see Session 32 |
+
+Local runs (sandbox): ai-worker suite 260 passed, 79 skipped, 0 failed; backend suite without `*RealDb` tests 1013 of 1111
+passed, the 63 failures all need a live PostgreSQL (none fail for another reason); backend and frontend `tsc` clean.
+
+### Not built, and why (adoption study section 6)
+Semantic triggers (need describe-what-to-watch and the local-model licence decision); resumable archive upload (needs a live
+MinIO or S3 to test); cross-camera re-ranking (needs labelled journeys); tiled detection (needs reference-hardware numbers);
+VLM timestamped frames (licence decision); enrichment cadence and scene-change suppression (compared with the code, found as
+gaps, need real footage); scrub-bar signals (frontend, not verifiable here); camera-protocol coverage (needs the pilot
+sites' camera list).
+
+### Process notes
+- #47 was first merged before CI finished (runner problem), reverted in #48, and re-landed in #50 after a full green run.
+  A force-push to rebuild the branch was refused by the sandbox and not worked around; the branch was rebuilt with a merge
+  of `master` and a revert of the revert instead (a normal fast-forward push).
+- The retrieval evaluation, COCO metrics and plate evaluation tools already existed; two of my early "gaps" were wrong
+  because I searched too narrowly. Check `tools/eval` and `services/anpr` before proposing evaluation or watchlist work.
+
+### What I need from the human
+1. Labelled real-site queries (100+) to measure template ensembling; real plate reads to tune the look-alike table.
+2. The local text model and C2PA library licence decisions (unchanged from Session 32).
+3. Pilot-site camera models, to scope protocol coverage.
+
 ## Session 32 (2026-10-05/06): open-source reference study, alarm triage, RecordingCatalog audit and fixes, incident summary
 
 Branch `claude/elegant-albattani-4krihk` (PR #47, ten commits from `master` `cd9b7b0`, merged with `master` `84d3c49`;
-#45 merged only the docs commit). State `DONE_UNVERIFIED` for everything below: built and tested in the cloud sandbox on synthetic data, real
+#45 merged only the docs commit). **#47 was merged before CI finished, reverted by #48, and re-landed by #50 (all 10 CI checks green on `740adc5`); see Session 33.** State `DONE_UNVERIFIED` for everything below: built and tested in the cloud sandbox on synthetic data, real
 database, real ffmpeg and a real browser; **not run in CI, not on a real camera, MediaMTX or disk.**
 
 | Piece | State | Where |
@@ -20,7 +58,7 @@ database, real ffmpeg and a real browser; **not run in CI, not on a real camera,
 | RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
 | Time assumptions pinned (`TZ=UTC`), mismatch warning, clock limits written down | DONE_UNVERIFIED | `docs/operations/EVIDENCE_VERIFICATION.md` |
 | Cited incident summary, evidence package section, offline checks | DONE_UNVERIFIED | ADR 0016, flag `INCIDENT_SUMMARY`, migration 20261016000000 |
-| Describe-what-to-watch rules, footage integrity, per-camera health endpoint, adapter result fields | NOT_STARTED | See `PROJECT_STATE.md` section 9; the first two need owner licence decisions |
+| Describe-what-to-watch rules, footage integrity, adapter result fields | NOT_STARTED (per-camera health is done, Session 33; adapter result fields were dropped as mostly present already) | See `PROJECT_STATE.md` section 9; the first two need owner licence decisions |
 
 Local runs (sandbox): backend full suite in band 173 suites, 1329 passed, 42 skipped, 0 failed; backend and frontend `tsc`
 clean; gates `check-no-fake-success`, `check-repo-hygiene`, `docs-hygiene`, `check-dependency-licenses`,
@@ -34,7 +72,7 @@ other segment until it was limited to evidence that is due; a key-order-sensitiv
 summary verifier until the real export test ran.
 
 ### Not verified (and why)
-- CI on this branch (new migrations, flags, jobs not yet seen by GitHub Actions).
+- ~~CI on this branch~~ Seen in #50: all 10 checks green (Session 33).
 - The cost of the content-hash check, the keyframe read on a cold disk, and false failures on healthy disks: need real disks.
 - Anything about MediaMTX behaviour beyond reading its source (hook runs on its own goroutine; segment names use the process
   time zone).
