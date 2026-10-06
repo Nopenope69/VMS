@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-05T18:59:58.702Z",
-  "commit": "5dadf96bdbac581b32609c91f824367cf789e854",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37359267265",
+  "generatedAt": "2026-10-06T05:39:43.552Z",
+  "commit": "7cef25ab5e0e168decc291348f135ad05ff84236",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37418762882",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 160,
-        "passed": 160,
+        "total": 165,
+        "passed": 165,
         "failed": 0
       },
       "tests": {
-        "total": 1226,
-        "passed": 1190,
+        "total": 1290,
+        "passed": 1254,
         "failed": 0,
         "skipped": 36
       },
@@ -51,6 +51,13 @@
           "file": "backend/src/__tests__/applianceBootstrap.test.ts",
           "status": "passed",
           "passed": 6,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/archiveAwareRetention.test.ts",
+          "status": "passed",
+          "passed": 7,
           "failed": 0,
           "skipped": 0
         },
@@ -100,6 +107,20 @@
           "file": "backend/src/__tests__/cameraEventsIntegration.test.ts",
           "status": "passed",
           "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraHealth.test.ts",
+          "status": "passed",
+          "passed": 24,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraHealthService.test.ts",
+          "status": "passed",
+          "passed": 5,
           "failed": 0,
           "skipped": 0
         },
@@ -818,6 +839,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/plateNearMatch.test.ts",
+          "status": "passed",
+          "passed": 15,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/plateTrackAggregator.test.ts",
           "status": "passed",
           "passed": 5,
@@ -856,6 +884,13 @@
           "file": "backend/src/__tests__/queryParser.test.ts",
           "status": "passed",
           "passed": 11,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/queryTemplates.test.ts",
+          "status": "passed",
+          "passed": 13,
           "failed": 0,
           "skipped": 0
         },
@@ -1144,13 +1179,13 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 33,
-        "passed": 32,
+        "total": 34,
+        "passed": 33,
         "failed": 0
       },
       "tests": {
-        "total": 325,
-        "passed": 320,
+        "total": 339,
+        "passed": 334,
         "failed": 0,
         "skipped": 5
       },
@@ -1216,6 +1251,13 @@
           "file": "services/ai-worker/src/__tests__/embeddingPreprocess.test.ts",
           "status": "passed",
           "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "services/ai-worker/src/__tests__/executionProvider.test.ts",
+          "status": "passed",
+          "passed": 14,
           "failed": 0,
           "skipped": 0
         },
@@ -1391,9 +1433,9 @@
     }
   ],
   "totals": {
-    "suites": 193,
-    "tests": 1551,
-    "passed": 1510,
+    "suites": 199,
+    "tests": 1629,
+    "passed": 1588,
     "failed": 0,
     "skipped": 41
   },
