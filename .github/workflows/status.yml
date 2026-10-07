@@ -71,7 +71,7 @@ jobs:
 
       # Same model set as the ai-worker job in ci.yml. With VIGILONE_REQUIRE_MODEL_TESTS=1 a golden-model suite
       # fails, never skips, when its model is missing: the SigLIP 2 and SmolVLM2 suites failed here from Phase 5
-      # until this step fetched them.
+      # until this step fetched them, and the RTMPose suite did the same after #52 added it to ci.yml only.
       - name: Cache model files
         uses: actions/cache@v4
         with:
@@ -83,6 +83,7 @@ jobs:
           scripts/models/fetch-model.sh yolox-nano && scripts/models/fetch-model.sh yolox-tiny
           scripts/models/fetch-model.sh ppocrv4-det && scripts/models/fetch-model.sh fast-plate-ocr-cct-s-v2 && scripts/models/fetch-model.sh yunet-2023mar
           scripts/models/fetch-model.sh siglip2-base-p16-224-vision && scripts/models/fetch-model.sh siglip2-base-p16-224-text
+          scripts/models/fetch-model.sh rtmpose-s-body7-256x192
 
       - name: Cache llama.cpp build and VLM model files
         uses: actions/cache@v4
