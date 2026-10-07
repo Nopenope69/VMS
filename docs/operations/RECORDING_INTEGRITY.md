@@ -30,6 +30,12 @@ Segments in object storage (not local) and segments already marked bad are skipp
 
 A failed segment stops counting as footage: it is left out of coverage, playback, seek and export, and the timeline shows a gap.
 
+A `SIZE_CHANGED` or `HASH_MISMATCH` finding stays: indexing the file again (the five-minute crawl, the segment-complete job,
+the register API) does not set it back to FINALIZED and does not replace the recorded hash or size with the changed file's,
+and start-up recovery does not refresh its size. Start-up recovery may still repair a file it cannot read as video; the
+original hash is kept and the repaired file's hash is recorded beside it. There is no operator action yet to accept a changed
+file back into service (audit F13 in `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`).
+
 Every failure writes an entry in the audit chain (`SEGMENT_INTEGRITY_FAILURE`) and a `RECORDING_FAILURE` event. A failure on
 footage under an **evidence hold** is `CRITICAL` and also raises a CRITICAL alarm: do not export that footage; restore from
 backup and review the chain of custody.

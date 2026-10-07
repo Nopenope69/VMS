@@ -65,14 +65,19 @@ describe('Durable Segment Job Queue & Bounded Worker Pool', () => {
       return j;
     });
 
-    jest.spyOn(mockPrisma.recordingSegment, 'upsert').mockImplementation(async (query: any) => {
-      let seg = segmentsStore.find((s) => s.filePath === query.where.filePath);
-      if (!seg) {
-        seg = { id: `seg_${Date.now()}`, ...query.create };
-        segmentsStore.push(seg);
-      } else {
-        Object.assign(seg, query.update);
-      }
+    // SegmentRepository.upsertSegment: a conditional update by file path, then a create when there is no row.
+    jest.spyOn(mockPrisma.recordingSegment, 'updateMany').mockImplementation(async (query: any) => {
+      const seg = segmentsStore.find((s) => s.filePath === query.where.filePath);
+      if (!seg) return { count: 0 };
+      Object.assign(seg, query.data);
+      return { count: 1 };
+    });
+    const segByPath = async (query: any) => segmentsStore.find((s) => s.filePath === query.where.filePath) || null;
+    jest.spyOn(mockPrisma.recordingSegment, 'findUnique').mockImplementation(segByPath);
+    jest.spyOn(mockPrisma.recordingSegment, 'findUniqueOrThrow').mockImplementation(segByPath);
+    jest.spyOn(mockPrisma.recordingSegment, 'create').mockImplementation(async (query: any) => {
+      const seg = { id: `seg_${Date.now()}`, ...query.data };
+      segmentsStore.push(seg);
       return seg;
     });
   });

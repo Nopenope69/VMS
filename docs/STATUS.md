@@ -6,6 +6,23 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 35 (2026-10-07): an integrity finding is no longer undone by re-registration (audit F13)
+
+Branch `claude/exciting-heisenberg-2ylmpx`. The five-minute crawler re-registered a segment the integrity check had marked
+CORRUPTED (`HASH_MISMATCH`, `SIZE_CHANGED`), stored the changed file's hash and size and set it back to FINALIZED, silently;
+boot recovery also refreshed such a row's size at restart. ADR 0018 / `FOOTAGE_SEALING` (named as the fix for sealed
+segments) is not in this repository, so the fix covers every segment. Details: F13 in
+`docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`. Local full backend run on this change (Postgres 16 with pgvector,
+`npx jest --runInBand`): 181 suites, 1444 tests passed, 42 skipped; `tsc --noEmit` clean. CI has not run it yet. Two
+mock-Prisma unit tests (`recordingCatalog.test.ts`, `durableQueue.test.ts`) were updated to mock the calls the repository now
+makes (`updateMany`, `findUnique`, `create`) instead of `upsert`.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| Held finding: registration (crawler, segment-complete job, register API) keeps status, reason, original hash and size; crawler skips held files; boot recovery does not refresh their size | DONE_UNVERIFIED: real-database test written first and run against the old code (5 cases failed), passing after the fix; legitimate recovery (unreadable or zero-byte at registration, boot-recovery repair) still works. Not run on a real disk or recorder | `segmentRepository.ts`, `recordingCatalog.service.ts`, `crashRecovery.service.ts`, `src/__tests__/integrityFindingStickyRealDb.test.ts` |
+| Operator action to release a held segment (audited, keeps the original hash) | NOT_STARTED | F13 open item 1 |
+| Crawler can accept a size change (or a reappearing missing file) before the integrity check sees it | NOT_STARTED (known gap) | F13 open item 2 |
+
 ## Session 34 (2026-10-06): person down and fence climbing (body pose)
 
 Branch `claude/jolly-wozniak-j9gqjy`. The owner's first priority (`PROJECT_STATE.md` section 9), built on RTMPose-s. ADR 0017,
@@ -93,7 +110,7 @@ State stays `DONE_UNVERIFIED` below because it is **not proven on a real camera,
 | Reference study of 16 public repositories (design ideas only) | DONE_VERIFIED (read, not run) | `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` |
 | Incident window, one incident one alarm | DONE_UNVERIFIED | ADR 0014, migration 20261014000000; no rule-builder field yet |
 | Alarm triage queue and proposals, Triage tab | DONE_UNVERIFIED | ADR 0015, flag `ALARM_TRIAGE`; thresholds are guesses |
-| RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
+| RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known (F13 fixed in Session 35, with two open items) | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
 | Time assumptions pinned (`TZ=UTC`), mismatch warning, clock limits written down | DONE_UNVERIFIED | `docs/operations/EVIDENCE_VERIFICATION.md` |
 | Cited incident summary, evidence package section, offline checks | DONE_UNVERIFIED | ADR 0016, flag `INCIDENT_SUMMARY`, migration 20261016000000 |
 | Describe-what-to-watch rules, footage integrity, adapter result fields | NOT_STARTED (per-camera health is done, Session 33; adapter result fields were dropped as mostly present already) | See `PROJECT_STATE.md` section 9; the first two need owner licence decisions |
