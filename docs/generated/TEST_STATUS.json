@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-06T13:40:44.073Z",
-  "commit": "6da910d98dc6d57c7af67e61595fbb61d362b0d8",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37471964509",
+  "generatedAt": "2026-10-07T08:55:20.879Z",
+  "commit": "d67ea39d566822c355483d9be5cab44b31e84314",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37596137891",
   "projects": [
     {
       "name": "backend",
@@ -1285,16 +1285,16 @@
       "name": "ai-worker",
       "suites": {
         "total": 37,
-        "passed": 35,
-        "failed": 1
+        "passed": 36,
+        "failed": 0
       },
       "tests": {
-        "total": 364,
-        "passed": 354,
-        "failed": 1,
-        "skipped": 9
+        "total": 363,
+        "passed": 358,
+        "failed": 0,
+        "skipped": 5
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1389,10 +1389,10 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenPose.test.ts",
-          "status": "failed",
-          "passed": 0,
-          "failed": 1,
-          "skipped": 4
+          "status": "passed",
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenQueryRewrite.test.ts",
@@ -1560,10 +1560,10 @@
   ],
   "totals": {
     "suites": 217,
-    "tests": 1841,
-    "passed": 1795,
-    "failed": 1,
-    "skipped": 45
+    "tests": 1840,
+    "passed": 1799,
+    "failed": 0,
+    "skipped": 41
   },
-  "allPassed": false
+  "allPassed": true
 }
