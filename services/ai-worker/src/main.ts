@@ -38,6 +38,10 @@
  *                             and fence-climbing rules (default false). Needs the RTMPose-s file and a person's approval
  *                             for its SHA-256; otherwise the worker stops with the reason. AI_POSE_INTERVAL_MS (500),
  *                             AI_POSE_MAX_PER_FRAME (4), AI_POSE_THREADS (1), AI_POSE_MODEL_KEY tune it.
+ *  AI_SABOTAGE_DETECTION      'true' checks every sampled frame for a covered, defocused, moved or blinded camera
+ *                             (classical image measurements, no model; ADR 0019; default false). The backend records the
+ *                             findings only with VIGILONE_FEATURE_CAMERA_SABOTAGE. AI_SABOTAGE_HOLD_SECONDS (10) is how
+ *                             long a condition must last before it is reported.
  *  AI_MAX_STREAMS             cameras processed concurrently (default 16)
  *  AI_INFERENCE_TIMEOUT_MS    per-frame deadline (default 1000)
  *  AI_GATE_MODE               motion gating: 'motion' (default) or 'off' (P2.5)
@@ -53,6 +57,7 @@ import { QueryRewriteAdapterCore } from './textllm/queryRewriteAdapterCore';
 import { findLockEntry, artifactPathFor, manifestFromLockEntry, readModelLock, ModelLockEntry } from './modelCatalog';
 import { ModelRefusalError } from './modelLoader';
 import { StreamSupervisor } from './streamSupervisor';
+import { SabotageDetector } from './sabotageDetector';
 import { ResourceGovernor } from './frameQueue';
 import { MetricsRegistry } from './metrics';
 import { ModelManifestRecord } from './types';
@@ -173,6 +178,7 @@ export async function boot(): Promise<BootResult> {
     governor: new ResourceGovernor({ maxConcurrentStreams: Number(env('AI_MAX_STREAMS', '16')) }),
     metrics,
     gateMode: env('AI_GATE_MODE', 'motion') === 'off' ? 'off' : 'motion',
+    sabotage: sabotageDetectorFromEnv(),
     defaultStreamConfig: {
       fps: Number(env('AI_DETECT_FPS', '1')),
       width: rc.inputWidth,
@@ -193,9 +199,20 @@ export async function boot(): Promise<BootResult> {
     }
   });
   supervisor.on('streamError', (e) => log('warn', 'stream error', e));
+  supervisor.on('sabotage', (f) => log('warn', 'camera sabotage suspected', { cameraId: f.cameraId, type: f.type, score: f.score, startedAt: f.startedAt }));
   supervisor.on('inferenceError', (e) => log('warn', 'inference error', e));
   await supervisor.start();
   return { worker, close, port: boundPort };
+}
+
+/** Camera-sabotage detection (ADR 0019), off unless AI_SABOTAGE_DETECTION=true. A bad hold time stops the worker. */
+export function sabotageDetectorFromEnv(): SabotageDetector | undefined {
+  if (env('AI_SABOTAGE_DETECTION', 'false') !== 'true') return undefined;
+  const hold = Number(env('AI_SABOTAGE_HOLD_SECONDS', '10'));
+  if (!Number.isFinite(hold) || hold < 2 || hold > 3600) {
+    throw new Error(`AI_SABOTAGE_HOLD_SECONDS must be between 2 and 3600 seconds (got '${env('AI_SABOTAGE_HOLD_SECONDS')}')`);
+  }
+  return new SabotageDetector({ holdMs: hold * 1000 });
 }
 
 /**

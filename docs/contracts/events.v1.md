@@ -63,7 +63,7 @@ Implemented by `toEventV1()` in `backend/src/contracts/eventMapping.v1.ts`; the 
 | `ANPR_MATCH` | `ai.plate_detected` | **Requires provenance.** |
 | `CAMERA_OFFLINE` | `camera.offline` | |
 | `STREAM_DEGRADED` | `camera.degraded` | `reason: STREAM_DEGRADED`. |
-| `SCENE_CHANGE` | `camera.degraded` | `reason: TAMPER_<OCCLUSION\|DEFOCUS\|DISPLACEMENT>`. |
+| `SCENE_CHANGE` | `camera.degraded` | `reason: TAMPER_<OCCLUSION\|DEFOCUS\|DISPLACEMENT\|BLINDED>` (`BLINDED` added with camera-sabotage detection, ADR 0019; `reason` is a free string, so this is additive). |
 | `DI_TRIGGER` | `system.digital_input` | Not `access.door_opened`: a digital input is only a door once it is configured as a door contact, which the current model does not record. |
 | `SYSTEM_ALERT` | `system.alert` | `alertCode` becomes `code`. |
 | `AI_OBJECT_DETECTED` | `ai.person_detected` / `ai.vehicle_detected` | Chosen by object class; other classes are unmappable. **Requires provenance** (the AI worker attaches it). |

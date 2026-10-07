@@ -173,6 +173,11 @@ export class AuthenticatedInternalApiClient {
     return this.request('POST', '/ai/model-events', report);
   }
 
+  /** Reports a confirmed camera-sabotage condition (covered, defocused, moved, blinded); ADR 0019. */
+  public reportCameraSabotage(body: Record<string, unknown>): Promise<{ eventId: string; duplicate?: boolean }> {
+    return this.request('POST', '/camera-sabotage', body);
+  }
+
   /** Per-camera gating inputs: armed by AI rules, time of last classical motion (P2.5). */
   public async fetchAiActivity(): Promise<Record<string, CameraActivity>> {
     const res = await this.request<{ cameras: Array<{ cameraId: string; armed: boolean; lastMotionAt: string | null }> }>('GET', '/ai/activity');

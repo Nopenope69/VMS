@@ -128,11 +128,17 @@ export interface DigitalIoPayload {
   voltage?: number;
 }
 
+export type SceneChangeType = 'OCCLUSION' | 'DEFOCUS' | 'DISPLACEMENT' | 'BLINDED';
+
 export interface SceneChangePayload {
   kind: 'SCENE_CHANGE';
   score: number;
   threshold: number;
-  changeType: 'OCCLUSION' | 'DEFOCUS' | 'DISPLACEMENT';
+  changeType: SceneChangeType;
+  /** Camera-sabotage detection (ADR 0019): the method, when the condition began, and what was measured. */
+  method?: string;
+  startedAtUtc?: string;
+  measurements?: Record<string, number>;
 }
 
 export interface SystemAlertPayload {

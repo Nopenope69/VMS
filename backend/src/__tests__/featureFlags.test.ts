@@ -24,6 +24,7 @@ describe('Feature flags: typed registry', () => {
       [
         'ANPR',
         'CAMERA_EVENTS',
+        'CAMERA_SABOTAGE',
         'DIO_RELAY',
         'EXPLANATIONS',
         'FEDERATION',
