@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-07T09:11:54.333Z",
-  "commit": "c291687a360a301b0d73cf1c7702f7c127d89e06",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37598013164",
+  "generatedAt": "2026-10-07T12:48:40.076Z",
+  "commit": "03935b722ea85dd6a2f5b68e1397c6ac3a5e1670",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37622671911",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 181,
-        "passed": 181,
+        "total": 183,
+        "passed": 183,
         "failed": 0
       },
       "tests": {
-        "total": 1486,
-        "passed": 1450,
+        "total": 1501,
+        "passed": 1465,
         "failed": 0,
         "skipped": 36
       },
@@ -1105,6 +1105,20 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/segmentSeal.test.ts",
+          "status": "passed",
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/segmentSealRealDb.test.ts",
+          "status": "passed",
+          "passed": 13,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/semanticSearchRealModels.test.ts",
           "status": "passed",
           "passed": 7,
@@ -1566,9 +1580,9 @@
     }
   ],
   "totals": {
-    "suites": 218,
-    "tests": 1849,
-    "passed": 1808,
+    "suites": 220,
+    "tests": 1864,
+    "passed": 1823,
     "failed": 0,
     "skipped": 41
   },
