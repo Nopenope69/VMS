@@ -14,7 +14,8 @@
  * file as licensePublicKey: the runner hands it to the backend as VIGILONE_LICENSE_TEST_PUBLIC_KEY, which the
  * backend trusts only under NODE_ENV=test (utils/license.ts). The investigation workspace data lives in a second
  * tenant (seed-workspace.ts), returned as `workspace`; the alarm triage data in a third (seed-triage.ts), `triage`; the footage integrity data in a fourth
- * (seed-integrity.ts), `integrity`.
+ * (seed-integrity.ts), `integrity`; two cameras with real recordings for frame stepping in a fifth (seed-step.ts),
+ * `frameStep`.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -25,6 +26,7 @@ import { LicenseClaims, signLicensePayload } from '../../src/utils/license';
 import { seedWorkspace } from './seed-workspace';
 import { seedTriage } from './seed-triage';
 import { seedIntegrity } from './seed-integrity';
+import { seedStep } from './seed-step';
 
 const DAY = 86_400_000;
 
@@ -170,12 +172,14 @@ async function main() {
 
   const triage = await seedTriage(prisma, { password, licencePrivateKey: licenceKey.privateKey });
   const integrity = await seedIntegrity(prisma, { password, licencePrivateKey: licenceKey.privateKey });
+  const frameStep = await seedStep(prisma, { password, licencePrivateKey: licenceKey.privateKey, recordingsDir: process.env.RECORDINGS_DIR || path.join(exportsDir, '..', 'recordings') });
 
   process.stdout.write(
     JSON.stringify({
       workspace,
       triage,
       integrity,
+      frameStep,
       tenantId: tenant.id,
       email,
       viewerEmail,

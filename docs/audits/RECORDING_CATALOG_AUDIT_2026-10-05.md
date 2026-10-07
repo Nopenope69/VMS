@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec), Fix 3 (F5, F7, F12), Fix 4 (F6) and Fix 5 (F13) are done**; F8 (known, no change), multi-camera frame exactness and the two gaps listed under F13 remain. Status of each finding is in the table below.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec), Fix 3 (F5, F7, F12), Fix 4 (F6) and Fix 5 (F13) are done**; F8 (known, no change) and the two gaps listed under F13 remain; multi-camera frame exactness was added in Session 37. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -169,8 +169,11 @@ the next KEYFRAME (a whole GOP), not a frame. See Fix 3.
   A synchronized session steps to the reference camera's (first camera with footage) real frame and brings the others to
   that moment. If the file cannot be read, the step is estimated from the frame rate and the answer says `APPROXIMATE`; with no
   frame rate it is refused (409 `FRAME_RATE_UNKNOWN`). The console shows the end of the recording, an approximate step, or a
-  refused step. Still not frame-exact: the other cameras land on their frame at or before that moment, not on a frame of their
-  own, so multi-camera stepping is exact for the reference camera only.
+  refused step. **Since 2026-10-07 (Session 37) every camera is on a frame of its own:** after the step, each other camera is
+  put on the real frame it shows at that moment (its last frame at or before it, read from its file; `frameShownAt`), and
+  every camera says `framePrecision` EXACT, or APPROXIMATE when its file could not be read. The console marks each tile.
+  Tested with two real recordings at different frame rates, 137 ms apart (`frameStepExact.test.ts`,
+  `e2e/frame-step.spec.ts`).
 * **F5, the completion notice.** The MediaMTX hook is `curl -fsS --max-time 5 --retry 12 --retry-delay 5
   --retry-connrefused`: about two minutes of retries, including while the backend refuses connections, no retry for client
   errors such as an unknown camera. MediaMTX runs the command on its own goroutine, so this never delays recording. A test
@@ -249,7 +252,7 @@ None of this has met a real disk or recorder; it is proven on test files in a re
 Each is its own small change with its own tests.
 
 1. ~~F4, F3~~ done (Fix 1). 2. ~~F2~~ and 3. ~~F1~~ done (Fix 2). 5. ~~F5, F7~~ and 6. ~~F12~~ done (Fix 3). 4. ~~F6~~ done (Fix 4).
-7. **Per-camera frame exactness for multi-camera stepping** if the product needs every camera on its own frame at once.
+7. ~~**Per-camera frame exactness for multi-camera stepping**~~ done in Session 37.
 8. **F13 follow-ups**: an audited operator action to release a held segment, and closing the crawler-first size-change and
    reappearing-file paths (see F13).
 

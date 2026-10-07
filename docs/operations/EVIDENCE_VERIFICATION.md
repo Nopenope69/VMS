@@ -54,8 +54,10 @@ real appliance with real cameras; it states what the design guarantees and what 
 5. **The camera's clock is not used for video.** The ONVIF clock check (`CAMERA_EVENTS.md`) reads the camera's time in whole
    seconds and is used for event subscriptions, and it cannot confirm better than about a second. Camera-supplied event times
    are stored as the camera's, not corrected to the appliance's.
-6. **Frame stepping** lands on real frames of the reference camera (see the RecordingCatalog audit); the other cameras of a
-   synchronized view are brought to the same moment, not to a frame boundary of their own.
+6. **Frame stepping** lands on a real frame of the reference camera, and every other camera of a synchronized view is put on
+   the real frame it shows at that moment, read from its own file (see the RecordingCatalog audit). A camera whose file
+   cannot be read is marked APPROXIMATE. Cameras film at their own rates, so their frames are not taken at the same instant:
+   each shows its latest frame at or before the master time.
 
 ## Package contents (P4.5)
 

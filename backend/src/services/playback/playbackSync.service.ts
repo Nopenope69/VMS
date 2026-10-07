@@ -12,6 +12,11 @@ export interface CameraPlaybackState {
   codec?: string | null;
   fps?: number | null;
   gapDurationMs?: number | null;
+  /**
+   * After a frame step: EXACT when `currentPts` is a real frame read from the file (the frame on screen at the master
+   * time), APPROXIMATE when the file could not be read and the position is computed from the time.
+   */
+  framePrecision?: 'EXACT' | 'APPROXIMATE';
 }
 
 export interface SynchronizedSeekResult {
@@ -26,7 +31,7 @@ export interface SynchronizedSeekResult {
 export interface FrameStepResult extends SynchronizedSeekResult {
   /** EXACT: the next real frame of the reference camera. APPROXIMATE: estimated from its frame rate. */
   precision: 'EXACT' | 'APPROXIMATE';
-  /** The camera whose frame set the step; the others are brought to the same moment. */
+  /** The camera whose frame set the step; every other camera is put on its own frame shown at that moment. */
   referenceCameraId: string;
   /** True when the reference camera has no further frame in that direction. */
   clamped: boolean;
@@ -245,6 +250,30 @@ export class PlaybackSyncService {
     });
 
     const seek = await this.seekPlaybackSession(sessionId, step.utc);
+    // Every camera on a real frame of its own: the reference on the frame it stepped to, each other camera on the frame
+    // it shows at that moment (its last frame at or before it). Cameras film at their own rates, so their frames do not
+    // line up; without this they sat between two of their frames.
+    for (const cam of seek.cameras) {
+      if (cam.status !== 'READY' || !cam.segmentId || cam.currentPts === undefined) continue;
+      if (cam.cameraId === referenceCameraId && cam.segmentId === step.segmentId) {
+        cam.currentPts = step.newPts;
+        cam.framePrecision = step.precision;
+        continue;
+      }
+      let frame: Awaited<ReturnType<RecordingCatalog['frameShownAt']>> = null;
+      try {
+        frame = await this.catalog.frameShownAt(cam.segmentId, cam.currentPts);
+      } catch {
+        frame = null; // unreadable file: keep the computed position and say so
+      }
+      if (frame) {
+        cam.currentPts = frame.pts;
+        cam.offsetMs = frame.offsetMs;
+        cam.framePrecision = 'EXACT';
+      } else {
+        cam.framePrecision = 'APPROXIMATE';
+      }
+    }
     return { ...seek, precision: step.precision, referenceCameraId, clamped: step.clamped };
   }
 
