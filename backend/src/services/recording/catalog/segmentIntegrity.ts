@@ -3,6 +3,7 @@ import { AuditChainService } from '../../audit/auditChain.service';
 import { computeFileSha256 } from '../../../utils/crypto';
 import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
 import { LocalStorageAdapter, StorageAdapter } from './storageAdapter';
+import { INTEGRITY_FAILURE } from './segmentRepository';
 
 /**
  * Periodic integrity check of recorded segments while the appliance runs (audit finding F7). Boot recovery looks at
@@ -13,7 +14,8 @@ import { LocalStorageAdapter, StorageAdapter } from './storageAdapter';
  *
  * It only reads. A failure marks the row (FILE_MISSING or CORRUPTED with a reason), writes an audit-chain entry and a
  * RECORDING_FAILURE event, and for evidence under a hold also raises a CRITICAL alarm. It never deletes, moves or
- * repairs a file: those decisions belong to boot recovery and to people.
+ * repairs a file: those decisions belong to boot recovery and to people. A SIZE_CHANGED or HASH_MISMATCH finding
+ * (`INTEGRITY_FAILURE`) stays: re-registration keeps the row CORRUPTED with its original hash and size.
  */
 
 /** Evidence under a hold is hashed again when its last check is older than this. */
@@ -101,7 +103,7 @@ export class SegmentIntegrityVerifier {
       } else if (!seg.repairedAt && BigInt(st.size) !== seg.sizeBytes) {
         // A repaired file legitimately differs in size from the original row; only an untouched one must match.
         report.sizeChanged++;
-        await this.fail(seg, SegmentStatus.CORRUPTED, 'SIZE_CHANGED', { expectedBytes: seg.sizeBytes.toString(), foundBytes: st.size });
+        await this.fail(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.SIZE_CHANGED, { expectedBytes: seg.sizeBytes.toString(), foundBytes: st.size });
       } else {
         healthy.push(seg.id);
       }
@@ -159,7 +161,7 @@ export class SegmentIntegrityVerifier {
           await this.prisma.recordingSegment.update({ where: { id: seg.id }, data: { hashVerifiedAt: new Date() } });
         } else {
           report.hashMismatch++;
-          await this.fail(seg, SegmentStatus.CORRUPTED, 'HASH_MISMATCH', { expectedSha256: expected, foundSha256: actual }, pinned);
+          await this.fail(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.HASH_MISMATCH, { expectedSha256: expected, foundSha256: actual }, pinned);
         }
       }
     }

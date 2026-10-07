@@ -21,21 +21,22 @@ describe('Candidate 01: RecordingCatalog (Authoritative Recording Spine)', () =>
 
     prisma = {
       recordingSegment: {
-        upsert: jest.fn().mockImplementation(({ where, create, update }) => {
-          const key = where.filePath;
-          if (segmentTable.has(key)) {
-            const existing = segmentTable.get(key);
-            const updated = { ...existing, ...update, updatedAt: new Date() };
-            segmentTable.set(key, updated);
-            return Promise.resolve(updated);
-          }
+        // SegmentRepository.upsertSegment: a conditional update by file path, then a create when there is no row.
+        updateMany: jest.fn().mockImplementation(({ where, data }) => {
+          const existing = segmentTable.get(where.filePath);
+          if (!existing) return Promise.resolve({ count: 0 });
+          segmentTable.set(where.filePath, { ...existing, ...data, updatedAt: new Date() });
+          return Promise.resolve({ count: 1 });
+        }),
+        findUniqueOrThrow: jest.fn().mockImplementation(({ where }) => Promise.resolve(segmentTable.get(where.filePath))),
+        create: jest.fn().mockImplementation(({ data }) => {
           const created = {
             id: `seg-${segmentTable.size + 1}`,
-            ...create,
+            ...data,
             createdAt: new Date(),
             updatedAt: new Date(),
           };
-          segmentTable.set(key, created);
+          segmentTable.set(data.filePath, created);
           return Promise.resolve(created);
         }),
         findUnique: jest.fn().mockImplementation(({ where }) => {
@@ -202,7 +203,8 @@ describe('Candidate 01: RecordingCatalog (Authoritative Recording Spine)', () =>
 
       expect(updated.id).toBe('seg-1');
       expect(updated.sha256Hash).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
-      expect(prisma.recordingSegment.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.recordingSegment.create).toHaveBeenCalledTimes(1);
+      expect(prisma.recordingSegment.updateMany).toHaveBeenCalledTimes(2);
     });
   });
 

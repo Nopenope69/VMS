@@ -2,7 +2,7 @@
 
 Scope: how `RecordingCatalog` (ADR 0001) indexes and prunes footage, compared with the crash-safety and time ideas read in
 Moonfire NVR (GPL, design only) and MediaMTX (MIT) in `docs/strategy/vigilone-oss-reference-study-2026-10-05.md`.
-This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec), Fix 3 (F5, F7, F12) and Fix 4 (F6) are done**; only F8 (known, no change) and multi-camera frame exactness remain. Status of each finding is in the table below.
+This started as an audit with failing tests and no behaviour change. **Fix 1 (F3, F4, F9, F10), Fix 2 (F1, F2, F11, and the assumed frame rate and codec), Fix 3 (F5, F7, F12), Fix 4 (F6) and Fix 5 (F13) are done**; F8 (known, no change), multi-camera frame exactness and the two gaps listed under F13 remain. Status of each finding is in the table below.
 
 Evidence: `backend/src/__tests__/recordingCatalogAudit.test.ts` (real database, real files, real ffmpeg). Each finding
 marked "test" is an `it.failing`: it states the correct behaviour and currently fails, so the suite stays green while the
@@ -28,6 +28,7 @@ what MediaMTX does come from `mediamtx.yml` and the MediaMTX source, not from a 
 | F11 the production worker stored no keyframe index and `endPts = 0` | **Found and fixed with Fix 2** |
 | Seek and frame step reported 25 fps and h264 for an unknown value | **Fixed (Fix 2)** |
 | F12 frame step is constant-frame-rate arithmetic, and with an index it jumps a whole GOP | **Fixed (Fix 3)**: steps to the next real frame, read from the file |
+| F13 re-registration undid an integrity finding (changed file back to FINALIZED with its new hash) | **Found and fixed (Fix 5)** for HASH_MISMATCH and SIZE_CHANGED; two related gaps open, see F13 |
 
 ## What is already right
 
@@ -195,12 +196,62 @@ the next KEYFRAME (a whole GOP), not a frame. See Fix 3.
 * Not done: using the camera's RTCP sender-report time to measure the stream delay (the idea in MediaMTX's `ntpestimator`). That
   is what would let a site state a measured bound.
 
+## Fix 5 (done): an integrity finding is not undone by re-registration
+
+### F13. The crawler blessed a file the integrity check had caught as changed (found 2026-10-07; fixed)
+The periodic check (F7) marks a segment CORRUPTED with `HASH_MISMATCH` or `SIZE_CHANGED`, writes an audit-chain entry and an
+event, and for held evidence a CRITICAL alarm. But the crawler re-registers every file whose row is not FINALIZED, every five
+minutes, and `SegmentRepository.upsertSegment` updated the row unconditionally: `registerSegment` hashed the changed file,
+stored that hash and size, and set the status back to FINALIZED with no reason. A few minutes after the finding the changed
+file was footage again, with a hash computed from the changed bytes. Nothing recorded that the finding had been undone (the
+audit entry stays, the row contradicts it), and an export would then have passed its hash check
+(`EXPORT_SEGMENT_INTEGRITY_FAILED` compares against the replaced hash) and put the changed file in an evidence package. Boot
+recovery had a smaller form of the same hole: for a playable file with a row it refreshed `sizeBytes` from the file whatever
+the row's status, so a `SIZE_CHANGED` row lost its recorded size at the next restart. Proven by
+`backend/src/__tests__/integrityFindingStickyRealDb.test.ts`, written first and run against the old code (the four
+re-registration cases and the restart case failed: the row came back FINALIZED, or the size was replaced).
+
+ADR 0018 (segment seals, flag `FOOTAGE_SEALING`, `findSealConflict`) was named as covering this for sealed segments. That ADR
+and code are **not in this repository** (checked on this branch and on `master`, 2026-10-07), so the fix below does not rely on
+it and applies to every segment, sealed or not.
+
+What changed:
+
+* `SegmentRepository.upsertSegment` (every registration path goes through it: crawler, segment-complete job, the
+  register API) updates only rows that are not held, in one conditional statement. A row with status CORRUPTED and reason
+  `HASH_MISMATCH` or `SIZE_CHANGED` (`INTEGRITY_FAILURE_REASONS`) is returned unchanged: status, reason, original hash and
+  original size stay, even when the caller supplies a hash. A finding recorded while a registration is in flight is not
+  overwritten either, because the condition is checked in the same statement as the write. A warning is logged.
+* The crawler does not read or hash a held file at all (no `ffprobe`, no hashing every five minutes).
+* Boot recovery's valid-pair branch leaves a held row alone (no size refresh).
+* Unchanged on purpose: a file that was missing, zero bytes or unreadable at registration (`FILE_NOT_FOUND_AT_REGISTRATION`,
+  `ZERO_BYTE`, `UNREADABLE_MEDIA`) still becomes FINALIZED when it is readable on a later pass; the active-write grace
+  rules are the same; boot recovery's repair of a file it cannot read still sets FINALIZED and records `repairedSha256`,
+  keeping the original `sha256Hash` (tested with the remux step stubbed, as in `crashRecovery.test.ts`).
+
+Still open (not fixed here, stated so nobody assumes otherwise):
+
+1. **No operator action returns a held segment to service.** The design says it is a human decision, but there is no API or
+   screen for it yet; today the only ways back are boot recovery's repair (only for a file it cannot read as video) or a
+   direct database change, which the audit chain would not record. A released finding should be an audited action by a
+   named user that keeps the original hash next to the accepted one (as `repairedSha256` does).
+2. **The crawler can still accept a size change before the integrity check sees it.** A FINALIZED file whose size changed
+   after the active-write grace is re-registered with its new size and hash (test "a changed file is read again" in
+   `recordingCatalogAudit.test.ts` expects that). Both jobs run every five minutes, so whichever runs first wins; if the
+   crawler does, there is no finding at all. The same applies to a `FILE_MISSING` row whose file reappears with different
+   content: it is re-registered as FINALIZED with the new hash. Closing this means deciding when a grown file after the grace
+   is legitimate (the recorder's own late write) and when it is a change, which needs evidence from a real MediaMTX.
+
+None of this has met a real disk or recorder; it is proven on test files in a real database.
+
 ## Recommended fixes, in order
 
 Each is its own small change with its own tests.
 
 1. ~~F4, F3~~ done (Fix 1). 2. ~~F2~~ and 3. ~~F1~~ done (Fix 2). 5. ~~F5, F7~~ and 6. ~~F12~~ done (Fix 3). 4. ~~F6~~ done (Fix 4).
 7. **Per-camera frame exactness for multi-camera stepping** if the product needs every camera on its own frame at once.
+8. **F13 follow-ups**: an audited operator action to release a held segment, and closing the crawler-first size-change and
+   reappearing-file paths (see F13).
 
 ## Not covered
 Retention quotas and pruning order beyond the delete ordering above; object-storage archive; behaviour under a real disk-full or

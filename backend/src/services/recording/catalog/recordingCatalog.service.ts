@@ -4,7 +4,7 @@ import { PrismaClient, RecordingSegment, EvidencePin, SegmentStatus } from '@pri
 import { StorageAdapter, LocalStorageAdapter } from './storageAdapter';
 import { MediaProbeAdapter, FfprobeMediaAdapter } from './mediaProbeAdapter';
 import { SegmentIndexer } from './segmentIndexer';
-import { SegmentRepository } from './segmentRepository';
+import { SegmentRepository, isHeldByIntegrityFinding } from './segmentRepository';
 import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
@@ -50,6 +50,8 @@ export interface SeekTargetResult {
   fps?: number | null;
   gapDurationMs?: number | null;
 }
+
+type KnownSegment = { status: SegmentStatus; sizeBytes: bigint; quarantineReason: string | null };
 
 /** A segment is only compared with its file clock while the file is this fresh (a restore from backup resets mtimes). */
 const CLOCK_CHECK_FRESH_MS = 3600_000;
@@ -568,16 +570,16 @@ export class RecordingCatalog {
   /**
    * Rows already in the catalog for these files, loaded in batches (one query per few thousand files, not per file).
    */
-  private async knownSegments(files: string[]): Promise<Map<string, { status: SegmentStatus; sizeBytes: bigint }>> {
-    const known = new Map<string, { status: SegmentStatus; sizeBytes: bigint }>();
+  private async knownSegments(files: string[]): Promise<Map<string, KnownSegment>> {
+    const known = new Map<string, KnownSegment>();
     if (typeof (this.prisma as any).recordingSegment?.findMany !== 'function') return known;
     const CHUNK = 2000;
     for (let i = 0; i < files.length; i += CHUNK) {
       const rows = await this.prisma.recordingSegment.findMany({
         where: { filePath: { in: files.slice(i, i + CHUNK) } },
-        select: { filePath: true, status: true, sizeBytes: true },
+        select: { filePath: true, status: true, sizeBytes: true, quarantineReason: true },
       });
-      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes });
+      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes, quarantineReason: r.quarantineReason });
     }
     return known;
   }
@@ -588,7 +590,8 @@ export class RecordingCatalog {
    * It is cheap on a healthy disk (audit finding F2): a file whose row is already FINALIZED with the same size is
    * not probed or hashed again. Only new files, files that changed size, and files not yet usable (corrupt,
    * missing) are read, so the crawl does not compete with recording for disk time. Re-checking the content hash of
-   * old files is a separate, slower job and is not done here.
+   * old files is a separate, slower job and is not done here. A file the integrity check found changed (CORRUPTED,
+   * HASH_MISMATCH or SIZE_CHANGED) is not read or re-registered at all: that finding stands until a person acts.
    */
   async reconcileFilesystem(): Promise<number> {
     if (this.isReconciling) return 0;
@@ -608,6 +611,7 @@ export class RecordingCatalog {
         const candidateCamId = parts[parts.length - 2];
 
         const existing = known.get(filePath);
+        if (existing && isHeldByIntegrityFinding(existing)) continue;
         if (existing?.status === SegmentStatus.FINALIZED) {
           const st = await this.storageAdapter.stat(filePath);
           if (st.exists && BigInt(st.size) === existing.sizeBytes) continue;

@@ -9,6 +9,7 @@ import { extractStreamPathAndFilename, calculateSegmentBounds, SegmentBounds } f
 import ControlPlaneManifestService from '../appliance/controlPlaneManifest.service';
 import PinStateMirrorService from '../evidence/pinStateMirror.service';
 import { setting } from '../../config/settings';
+import { isHeldByIntegrityFinding } from '../recording/catalog/segmentRepository';
 
 export interface CrashRecoveryReport {
   timestamp: Date;
@@ -619,6 +620,10 @@ export class CrashRecoveryService {
                 }
                 orphansIndexed++;
               }
+            } else if (isHeldByIntegrityFinding(existingSegment)) {
+              // The periodic integrity check found this file changed (audit F13). Its recorded size and hash are the
+              // evidence of what was recorded: they are not refreshed from the changed file. A person decides.
+              continue;
             } else {
               // State 4: Valid DB/Media Pair - confirm size and hash
               const stat = fs.statSync(filePath);
