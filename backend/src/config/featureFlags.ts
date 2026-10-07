@@ -33,6 +33,7 @@ export enum FeatureFlag {
   NL_SEARCH = 'NL_SEARCH',
   ALARM_TRIAGE = 'ALARM_TRIAGE',
   INCIDENT_SUMMARY = 'INCIDENT_SUMMARY',
+  FOOTAGE_SEALING = 'FOOTAGE_SEALING',
 }
 
 export interface FeatureFlagDefinition {
@@ -204,6 +205,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: [],
     status:
       'An alarm\'s story is written from a numbered timeline of recorded facts (the trigger, earlier events, the linked detection, a journey\'s tracks and operator-confirmed links, repeats, the advisory second opinion, acknowledgement, verdict, resolution, evidence holds) by a fixed template, no model. Every sentence cites the facts it rests on. Number plate text, operators\' typed text and descriptions of people are never repeated. Each summary is hashed, written into the audit chain, stored immutably (a snapshot per set of facts) and goes into evidence packages, where vigilone-verify re-renders it from its facts and checks every citation. Tested on the real database with synthetic alarms; not yet read by investigators on a live site.',
+  },
+  [FeatureFlag.FOOTAGE_SEALING]: {
+    flag: FeatureFlag.FOOTAGE_SEALING,
+    envVar: envVarFor(FeatureFlag.FOOTAGE_SEALING),
+    title: 'Footage sealing',
+    routePrefixes: ['/api/v1/segment-seals'],
+    workers: ['segmentSealAnchor'],
+    status:
+      'Each recorded segment is sealed when it is registered: its SHA-256, times and size are signed with the appliance Ed25519 key and chained to the camera\'s previous seal, and the chain head is written into the audit chain every 15 minutes. A file or stored hash that later differs from its seal is reported as an integrity failure, never resealed. Exports carry the seals, and vigilone-verify checks them offline. Someone with root on the appliance can still read the key; seals stop lesser edits and accidents. Tested on the real database with real files; not run on a live appliance.',
   },
 });
 

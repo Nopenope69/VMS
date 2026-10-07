@@ -4,6 +4,7 @@ import { loadExplanationRecords } from '../../explanation/explanationService';
 import { loadIncidentSummaryRecords } from '../../incidentSummary/service';
 import { buildIncidentSummariesDocument } from '../../incidentSummary/summary';
 import { FeatureFlag, isFeatureEnabled } from '../../../config/featureFlags';
+import { buildSegmentSealsDocument, keyFingerprint, SegmentSealer } from '../../recording/catalog/segmentSeal';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -265,6 +266,11 @@ export class EvidenceArchive {
       // Every listed segment must be on disk with the bytes its recorded SHA-256 describes; a
       // segment finalised without a hash gets its real hash now. The manifest never lists a segment
       // that is not in the video, and never a hash that was not computed from the bytes (P4.5).
+      // A sealed segment must also match its seal (ADR 0018): the stored hash is a database column, the seal is signed.
+      const sealer = new SegmentSealer(this.prisma);
+      const sealedHash = new Map(
+        (await this.prisma.segmentSeal.findMany({ where: { segmentId: { in: segmentIds } }, select: { segmentId: true, mediaSha256: true } })).map((r) => [r.segmentId, r.mediaSha256]),
+      );
       for (const seg of segments) {
         if (!seg.filePath || !fs.existsSync(seg.filePath)) {
           throw new Error(`EXPORT_SEGMENT_MISSING: segment ${seg.id} (${seg.filePath}) is not on disk`);
@@ -272,6 +278,10 @@ export class EvidenceArchive {
         const actual = await computeFileSha256(seg.filePath);
         if (seg.sha256Hash && seg.sha256Hash !== actual) {
           throw new Error(`EXPORT_SEGMENT_INTEGRITY_FAILED: segment ${seg.id} has SHA-256 ${actual}, the catalog recorded ${seg.sha256Hash}`);
+        }
+        const sealed = sealedHash.get(seg.id);
+        if (sealed && sealed !== actual) {
+          throw new Error(`EXPORT_SEGMENT_SEAL_MISMATCH: segment ${seg.id} has SHA-256 ${actual}, its seal recorded ${sealed}`);
         }
         if (!seg.sha256Hash) {
           await this.prisma.recordingSegment.update({ where: { id: seg.id }, data: { sha256Hash: actual } });
@@ -457,7 +467,7 @@ export class EvidenceArchive {
       // be left out of a package because the flag was switched off later). An invalid stored record
       // fails the export loudly; it is never dropped or repaired.
       const explanationRecords = await loadExplanationRecords(this.prisma, params.tenantId, params.cameraId, params.startTime, params.endTime);
-      const extraArtifacts: Array<{ sourcePath: string; path: string; mediaType: string; role: 'AI_PROVENANCE' | 'EXPLANATIONS' | 'INCIDENT_SUMMARIES' }> = [
+      const extraArtifacts: Array<{ sourcePath: string; path: string; mediaType: string; role: 'AI_PROVENANCE' | 'EXPLANATIONS' | 'INCIDENT_SUMMARIES' | 'SEGMENT_SEALS' }> = [
         { sourcePath: aiPath, path: 'ai_provenance.json', mediaType: 'application/json', role: 'AI_PROVENANCE' },
       ];
       if (isFeatureEnabled(FeatureFlag.EXPLANATIONS) || explanationRecords.length > 0) {
@@ -496,6 +506,30 @@ export class EvidenceArchive {
           digestSha256: sumDoc.digestSha256,
         };
         extraArtifacts.push({ sourcePath: sumPath, path: 'incident_summaries.json', mediaType: 'application/json', role: 'INCIDENT_SUMMARIES' });
+      }
+
+      // Segment seals (ADR 0018): the seals of the exported segments and the run of seals between them, so the chain can be
+      // checked offline. Written when the feature is on or seals exist; a package must not drop seals because the flag
+      // was switched off later.
+      const seals = await sealer.sealsForExport(params.cameraId, segmentIds);
+      if (isFeatureEnabled(FeatureFlag.FOOTAGE_SEALING) || seals.length > 0) {
+        const sealDoc = buildSegmentSealsDocument({
+          cameraId: params.cameraId,
+          exportedSegmentIds: segmentIds,
+          seals,
+          publicKeyFingerprint: keyFingerprint(getOrCreateApplianceEd25519Keys().publicKeyPem),
+        });
+        const sealPath = path.join(workDir, 'segment_seals.json');
+        fs.writeFileSync(sealPath, canonicalizeJson(sealDoc), 'utf8');
+        const sealedIds = new Set(seals.map((x) => x.segmentId));
+        manifestData.segmentSeals = {
+          schema: sealDoc.schema,
+          artifact: 'segment_seals.json',
+          sealCount: seals.length,
+          exportedSegmentsSealed: segmentIds.filter((id) => sealedIds.has(id)).length,
+          exportedSegmentCount: segmentIds.length,
+        };
+        extraArtifacts.push({ sourcePath: sealPath, path: 'segment_seals.json', mediaType: 'application/json', role: 'SEGMENT_SEALS' });
       }
 
       // Generate Section 63 BSA Part A & Part B PDF certificate

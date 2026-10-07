@@ -39,7 +39,7 @@ export interface IntegrityReport {
   hashNoBaseline: number;
 }
 
-type SegmentRow = {
+export type SegmentRow = {
   id: string;
   tenantId: string | null;
   cameraId: string;
@@ -99,11 +99,11 @@ export class SegmentIntegrityVerifier {
       report.presenceChecked++;
       if (!st.exists) {
         report.missing++;
-        await this.fail(seg, SegmentStatus.FILE_MISSING, 'FILE_MISSING_DURING_RUN');
+        await this.reportFailure(seg, SegmentStatus.FILE_MISSING, 'FILE_MISSING_DURING_RUN');
       } else if (!seg.repairedAt && BigInt(st.size) !== seg.sizeBytes) {
         // A repaired file legitimately differs in size from the original row; only an untouched one must match.
         report.sizeChanged++;
-        await this.fail(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.SIZE_CHANGED, { expectedBytes: seg.sizeBytes.toString(), foundBytes: st.size });
+        await this.reportFailure(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.SIZE_CHANGED, { expectedBytes: seg.sizeBytes.toString(), foundBytes: st.size });
       } else {
         healthy.push(seg.id);
       }
@@ -136,13 +136,22 @@ export class SegmentIntegrityVerifier {
         rows = (await this.prisma.recordingSegment.findMany({ where: base, orderBy: order, take: 10, select: SELECT })) as SegmentRow[];
       }
       if (rows.length === 0) return;
+      const seals = await this.sealsFor(rows.map((r) => r.id));
 
       for (const seg of rows) {
         if (spent >= budgetBytes) return;
         seen.push(seg.id);
         const st = await this.storage.stat(seg.filePath);
         if (!st.exists || isWithinActiveWriteGrace(st.mtime.getTime())) continue; // the presence tier reports a missing file
-        const expected = seg.repairedSha256 ?? seg.sha256Hash;
+        // A sealed segment is checked against its seal (ADR 0018): the stored hash is a database column anyone with
+        // database access can change. A repaired file is checked against its repaired hash; its seal names the original.
+        const seal = seals.get(seg.id);
+        if (seal && !seg.repairedSha256 && seg.sha256Hash !== seal) {
+          report.hashMismatch++;
+          await this.reportFailure(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.DB_HASH_DIFFERS_FROM_SEAL, { storedSha256: seg.sha256Hash, sealedSha256: seal }, pinned);
+          continue;
+        }
+        const expected = seg.repairedSha256 ?? seal ?? seg.sha256Hash;
         if (!expected) {
           report.hashNoBaseline++;
           await this.prisma.recordingSegment.update({ where: { id: seg.id }, data: { hashVerifiedAt: new Date() } });
@@ -161,14 +170,24 @@ export class SegmentIntegrityVerifier {
           await this.prisma.recordingSegment.update({ where: { id: seg.id }, data: { hashVerifiedAt: new Date() } });
         } else {
           report.hashMismatch++;
-          await this.fail(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.HASH_MISMATCH, { expectedSha256: expected, foundSha256: actual }, pinned);
+          await this.reportFailure(seg, SegmentStatus.CORRUPTED, INTEGRITY_FAILURE.HASH_MISMATCH, { expectedSha256: expected, foundSha256: actual }, pinned);
         }
       }
     }
   }
 
-  /** Marks the segment, audits it, and reports it. Never touches the file. */
-  private async fail(seg: SegmentRow, status: SegmentStatus, reason: string, detail: Record<string, unknown> = {}, knownPinned?: boolean): Promise<void> {
+  /** Sealed media hash per segment id; empty when there are no seals (or no seal table, in unit doubles). */
+  private async sealsFor(ids: string[]): Promise<Map<string, string>> {
+    if (typeof (this.prisma as any).segmentSeal?.findMany !== 'function') return new Map();
+    const rows = await this.prisma.segmentSeal.findMany({ where: { segmentId: { in: ids } }, select: { segmentId: true, mediaSha256: true } });
+    return new Map(rows.map((r) => [r.segmentId, r.mediaSha256]));
+  }
+
+  /**
+   * Marks the segment, audits it, and reports it. Never touches the file. Public so the catalog can report a segment
+   * registered again with a hash that differs from its seal (ADR 0018) through the same path.
+   */
+  async reportFailure(seg: SegmentRow, status: SegmentStatus, reason: string, detail: Record<string, unknown> = {}, knownPinned?: boolean): Promise<void> {
     const tenantId = seg.tenantId ?? seg.camera?.tenantId ?? null;
     await this.prisma.$transaction(async (tx) => {
       await tx.recordingSegment.update({ where: { id: seg.id }, data: { status, quarantineReason: reason, integrityCheckedAt: new Date() } });

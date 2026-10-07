@@ -27,10 +27,12 @@ Segments in object storage (not local) and segments already marked bad are skipp
 | `FILE_MISSING_DURING_RUN` (status FILE_MISSING) | The file was removed or its disk went away while the appliance was running |
 | `SIZE_CHANGED` (status CORRUPTED) | A finalized file has a different size than recorded |
 | `HASH_MISMATCH` (status CORRUPTED) | Same size or not, the content no longer matches the recorded hash |
+| `DIFFERS_FROM_SEAL` (status CORRUPTED) | A sealed segment's file was registered again with other content. It keeps its first hash (ADR 0018, `FOOTAGE_SEALING.md`) and is reported once |
+| `DB_HASH_DIFFERS_FROM_SEAL` (status CORRUPTED) | The stored hash of a sealed segment no longer equals its seal: the database row was changed |
 
 A failed segment stops counting as footage: it is left out of coverage, playback, seek and export, and the timeline shows a gap.
 
-A `SIZE_CHANGED` or `HASH_MISMATCH` finding stays: indexing the file again (the five-minute crawl, the segment-complete job,
+A `SIZE_CHANGED`, `HASH_MISMATCH`, `DIFFERS_FROM_SEAL` or `DB_HASH_DIFFERS_FROM_SEAL` finding stays: indexing the file again (the five-minute crawl, the segment-complete job,
 the register API) does not set it back to FINALIZED and does not replace the recorded hash or size with the changed file's,
 and start-up recovery does not refresh its size. Start-up recovery may still repair a file it cannot read as video; the
 original hash is kept and the repaired file's hash is recorded beside it. There is no operator action yet to accept a changed

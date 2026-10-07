@@ -40,6 +40,7 @@ import cameraConnectionManager from './services/camera/cameraConnectionManager.s
 import { setting } from './config/settings';
 import { CameraRegistry } from './services/camera/cameraRegistry';
 import { TrackIndexService } from './services/tracks/trackIndex.service';
+import { SegmentSealAnchor, SegmentSealer } from './services/recording/catalog/segmentSeal';
 
 // --- Modules shared by routes and background services ---------------------------------------------------
 export const recordingCatalog = new RecordingCatalog(prisma);
@@ -71,6 +72,7 @@ let embeddingWorkers: { stop(): void } | null = null;
 let federationUplink: FederationUplink | null = null;
 let archiveWorker: ArchiveWorker | null = null;
 let vlmWorkers: { stop(): void } | null = null;
+let segmentSealAnchor: SegmentSealAnchor | null = null;
 
 /**
  * Background services. With high availability on (VIGILONE_HA_NODE_ID set), only the node holding the leader
@@ -117,6 +119,10 @@ export function startBackgroundServices(): void {
       process.exit(1);
     });
   vlmWorkers = startVlmWorkers(prisma);
+  if (isFeatureEnabled(FeatureFlag.FOOTAGE_SEALING)) {
+    segmentSealAnchor = new SegmentSealAnchor(new SegmentSealer(prisma));
+    segmentSealAnchor.start();
+  }
 
   // Boot self-healing: reconcile PostgreSQL desired state with MediaMTX reality
   StartupReconcilerService.reconcile().catch((err) => {
@@ -145,5 +151,6 @@ export async function stopBackgroundServices(): Promise<void> {
   federationUplink?.stop();
   archiveWorker?.stop();
   vlmWorkers?.stop();
+  segmentSealAnchor?.stop();
   await cameraEventManager.stop();
 }

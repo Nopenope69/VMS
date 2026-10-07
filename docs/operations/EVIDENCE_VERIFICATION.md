@@ -6,6 +6,7 @@ on their own machine against an export ZIP (or its extracted directory):
 
 ```
 node vigilone-verify.mjs Evidence_<id>.zip --trusted-key appliance_public_key.pem --require-ai-provenance
+node vigilone-verify.mjs Evidence_<id>.zip --trusted-key appliance_public_key.pem --require-segment-seals
 node vigilone-verify.mjs Evidence_<id>.zip --json > verification.json
 ```
 
@@ -26,6 +27,7 @@ or read error.
 | `ai.artifact_bound`, `ai.records_attributed`, `ai.summary_matches` | Every AI record in ai_provenance.json names a model (name, version, SHA-256) listed in the file, plus confidence, frame timestamp and camera. The counts and models match the signed summary |
 | `ai.unattributed`, `ai.models_unevaluated` (WARN) | Some AI events have no model provenance (written before Phase 2), or a model has no evaluation on site data |
 | `summary.artifact_bound`, `summary.summary_matches`, `summary.records_intact`, `summary.unique`, `summary.scope` | Incident summaries (ADR 0016, `incident_summaries.json`, role `INCIDENT_SUMMARIES`): the artifact is in the signed manifest and agrees with its digest; every record recomputes its facts, text and record hashes, its sentences and citations equal what the named template renders from its facts, every citation points at a fact in the record, every fact is cited, and the closing statement is the fixed one; one summary per alarm; every summary is for this camera and its alarm was raised inside the export window. `--require-incident-summaries` makes a missing section a failure (otherwise `summary.present` is a warning) |
+| `seals.artifact_bound`, `seals.summary_matches`, `seals.hashes`, `seals.signatures`, `seals.chain`, `seals.leaves_match`, `seals.coverage` | Segment seals (ADR 0018, `segment_seals.json`, role `SEGMENT_SEALS`): each seal hash recomputes from its body (`vigilone.segment-seal.v1`); each seal is signed by the package's appliance key (a seal signed by another key fails, it cannot be checked here); the seals form an unbroken run (consecutive numbers, each linking to the one before); every exported segment that has a seal has the sealed media hash, start and end in its Merkle leaf. A seal shows the segment's bytes were these when it was **recorded**, not only when it was exported. `--require-segment-seals` makes a missing section or an unsealed exported segment a failure (otherwise warnings). Seals before the package's first one stay on the appliance: check the full chain there with `GET /api/v1/segment-seals/cameras/:cameraId/verify` |
 | `derivation.*` | For a redacted derivative: derivation.json names this video; the parent master hash equals the recomputed Merkle root; the source segments are leaves of the parent; the detector model is listed in the AI provenance |
 
 ## What the times in a recording mean, and how accurate they are

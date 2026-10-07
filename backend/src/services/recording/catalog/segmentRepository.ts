@@ -12,7 +12,14 @@ const SERVABLE = SegmentStatus.FINALIZED;
  * FINALIZED or replaces its hash or size. Returning it to service is a human decision, or boot recovery's repair, which
  * keeps the original hash and records `repairedSha256`.
  */
-export const INTEGRITY_FAILURE = { HASH_MISMATCH: 'HASH_MISMATCH', SIZE_CHANGED: 'SIZE_CHANGED' } as const;
+export const INTEGRITY_FAILURE = {
+  HASH_MISMATCH: 'HASH_MISMATCH',
+  SIZE_CHANGED: 'SIZE_CHANGED',
+  /** A sealed segment's file was registered again with other content (ADR 0018). */
+  DIFFERS_FROM_SEAL: 'DIFFERS_FROM_SEAL',
+  /** A sealed segment's stored hash no longer equals its seal (ADR 0018). */
+  DB_HASH_DIFFERS_FROM_SEAL: 'DB_HASH_DIFFERS_FROM_SEAL',
+} as const;
 export const INTEGRITY_FAILURE_REASONS: string[] = Object.values(INTEGRITY_FAILURE);
 
 /**
