@@ -1,8 +1,8 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-07T18:29:16.979Z",
-  "commit": "aef5d9d54af3e6cd9b59421349587b7dc39178aa",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37665401777",
+  "generatedAt": "2026-10-07T22:04:45.617Z",
+  "commit": "d0e7d7fdc1503d183b5d40ce026a750160cb9c08",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37692798161",
   "projects": [
     {
       "name": "backend",
@@ -12,8 +12,8 @@
         "failed": 0
       },
       "tests": {
-        "total": 1521,
-        "passed": 1485,
+        "total": 1523,
+        "passed": 1487,
         "failed": 0,
         "skipped": 36
       },
@@ -589,7 +589,7 @@
         {
           "file": "backend/src/__tests__/frameStepExact.test.ts",
           "status": "passed",
-          "passed": 8,
+          "passed": 10,
           "failed": 0,
           "skipped": 0
         },
@@ -1595,8 +1595,8 @@
   ],
   "totals": {
     "suites": 222,
-    "tests": 1945,
-    "passed": 1904,
+    "tests": 1947,
+    "passed": 1906,
     "failed": 0,
     "skipped": 41
   },
