@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-07T08:55:20.879Z",
-  "commit": "d67ea39d566822c355483d9be5cab44b31e84314",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37596137891",
+  "generatedAt": "2026-10-07T09:11:54.333Z",
+  "commit": "c291687a360a301b0d73cf1c7702f7c127d89e06",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37598013164",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 180,
-        "passed": 180,
+        "total": 181,
+        "passed": 181,
         "failed": 0
       },
       "tests": {
-        "total": 1477,
-        "passed": 1441,
+        "total": 1486,
+        "passed": 1450,
         "failed": 0,
         "skipped": 36
       },
@@ -695,6 +695,13 @@
           "file": "backend/src/__tests__/indianPlate.test.ts",
           "status": "passed",
           "passed": 25,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/integrityFindingStickyRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
           "failed": 0,
           "skipped": 0
         },
@@ -1559,9 +1566,9 @@
     }
   ],
   "totals": {
-    "suites": 217,
-    "tests": 1840,
-    "passed": 1799,
+    "suites": 218,
+    "tests": 1849,
+    "passed": 1808,
     "failed": 0,
     "skipped": 41
   },
