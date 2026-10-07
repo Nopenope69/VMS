@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-07T12:48:40.076Z",
-  "commit": "03935b722ea85dd6a2f5b68e1397c6ac3a5e1670",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37622671911",
+  "generatedAt": "2026-10-07T18:29:16.979Z",
+  "commit": "aef5d9d54af3e6cd9b59421349587b7dc39178aa",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37665401777",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 183,
-        "passed": 183,
+        "total": 184,
+        "passed": 184,
         "failed": 0
       },
       "tests": {
-        "total": 1501,
-        "passed": 1465,
+        "total": 1521,
+        "passed": 1485,
         "failed": 0,
         "skipped": 36
       },
@@ -156,6 +156,13 @@
           "file": "backend/src/__tests__/cameraRetentionQuota.test.ts",
           "status": "passed",
           "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
+          "file": "backend/src/__tests__/cameraSabotageRealDb.test.ts",
+          "status": "passed",
+          "passed": 20,
           "failed": 0,
           "skipped": 0
         },
@@ -1305,13 +1312,13 @@
     {
       "name": "ai-worker",
       "suites": {
-        "total": 37,
-        "passed": 36,
+        "total": 38,
+        "passed": 37,
         "failed": 0
       },
       "tests": {
-        "total": 363,
-        "passed": 358,
+        "total": 424,
+        "passed": 419,
         "failed": 0,
         "skipped": 5
       },
@@ -1514,6 +1521,13 @@
           "skipped": 0
         },
         {
+          "file": "services/ai-worker/src/__tests__/sabotageDetector.test.ts",
+          "status": "passed",
+          "passed": 55,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "services/ai-worker/src/__tests__/signatureDecoder.test.ts",
           "status": "passed",
           "passed": 3,
@@ -1530,7 +1544,7 @@
         {
           "file": "services/ai-worker/src/__tests__/streamSupervisor.test.ts",
           "status": "passed",
-          "passed": 5,
+          "passed": 11,
           "failed": 0,
           "skipped": 0
         },
@@ -1580,9 +1594,9 @@
     }
   ],
   "totals": {
-    "suites": 220,
-    "tests": 1864,
-    "passed": 1823,
+    "suites": 222,
+    "tests": 1945,
+    "passed": 1904,
     "failed": 0,
     "skipped": 41
   },
