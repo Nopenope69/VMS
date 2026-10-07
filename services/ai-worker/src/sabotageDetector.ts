@@ -6,7 +6,7 @@ import { VideoFrame } from './types';
  *
  * Per camera the detector first learns a reference view (sharpness, brightness, a coarse picture and a coarse edge
  * map) and then follows slow changes such as daylight. A condition must hold for `holdMs` before it is reported, once;
- * it is reported again only after it has been gone for `clearMs`. While a condition is suspected the reference is not
+ * its end is reported once it has been gone for `clearMs`, which also re-arms it. While a condition is suspected the reference is not
  * updated, so a sabotaged view is never learnt as normal. The one exception: a camera that stays moved for `relearnMs`
  * after the report learns its new view, because a moved camera stays moved until someone fixes it.
  *
@@ -29,6 +29,8 @@ export interface SabotageMeasurements {
 }
 
 export interface SabotageFinding {
+  /** CONFIRMED when a condition has lasted the hold time; CLEARED when a reported condition has ended. */
+  state: 'CONFIRMED' | 'CLEARED';
   cameraId: string;
   tenantId: string;
   type: SabotageType;
@@ -38,6 +40,10 @@ export interface SabotageFinding {
   threshold: number;
   startedAt: Date;
   confirmedAt: Date;
+  /** CLEARED only: when the end was confirmed, and why (the picture is normal again, or a moved view was relearnt). */
+  clearedAt?: Date;
+  clearReason?: 'RESTORED' | 'RELEARNED';
+  /** For CONFIRMED, the frame that confirmed it; for CLEARED, the frame that ended it. */
   measurements: SabotageMeasurements;
 }
 
@@ -97,7 +103,7 @@ interface CameraState {
   lastFrameAt?: number;
   suspects: Map<SabotageType, Suspect>;
   /** Conditions already reported, with the last time each was seen. */
-  active: Map<SabotageType, { reportedAt: number; lastSeen: number }>;
+  active: Map<SabotageType, { startedAt: number; reportedAt: number; lastSeen: number; score: number; threshold: number }>;
 }
 
 export interface FrameAnalysis extends Omit<SabotageMeasurements, 'referenceSharpness' | 'similarity'> {
@@ -189,8 +195,9 @@ export class SabotageDetector {
       }
       const sus = cam.suspects.get(type)!;
       if (t - sus.since >= this.o.holdMs) {
-        cam.active.set(type, { reportedAt: t, lastSeen: t });
+        cam.active.set(type, { startedAt: sus.since, reportedAt: t, lastSeen: t, score: round(score), threshold: this.thresholdFor(type) });
         findings.push({
+          state: 'CONFIRMED',
           cameraId: frame.cameraId,
           tenantId: frame.tenantId,
           type,
@@ -203,13 +210,29 @@ export class SabotageDetector {
       }
     }
     for (const [type, s] of cam.suspects) if (t - s.lastSeen > this.o.graceMs) cam.suspects.delete(type);
-    for (const [type, act] of cam.active) if (t - act.lastSeen >= this.o.clearMs) cam.active.delete(type);
+    const ended = (type: SabotageType, act: NonNullable<ReturnType<typeof cam.active.get>>, clearReason: 'RESTORED' | 'RELEARNED') => {
+      cam!.active.delete(type);
+      findings.push({
+        state: 'CLEARED',
+        cameraId: frame.cameraId,
+        tenantId: frame.tenantId,
+        type,
+        score: act.score,
+        threshold: act.threshold,
+        startedAt: new Date(act.startedAt),
+        confirmedAt: new Date(act.reportedAt),
+        clearedAt: new Date(t),
+        clearReason,
+        measurements: m,
+      });
+    };
+    for (const [type, act] of cam.active) if (t - act.lastSeen >= this.o.clearMs) ended(type, act, 'RESTORED');
 
     const moved = cam.active.get('DISPLACEMENT');
     if (moved && seen.has('DISPLACEMENT') && t - moved.reportedAt >= this.o.relearnMs) {
       // The camera stays moved: its new view becomes the reference (the move was reported once).
       cam.suspects.clear();
-      cam.active.delete('DISPLACEMENT');
+      ended('DISPLACEMENT', moved, 'RELEARNED');
       cam.ref = learn(null, a);
     } else if (seen.size === 0 && cam.suspects.size === 0 && cam.active.size === 0) {
       follow(ref, a, this.o.followRate);

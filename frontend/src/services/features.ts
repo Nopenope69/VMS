@@ -21,7 +21,9 @@ export type FeatureFlagName =
   | 'SEMANTIC_SEARCH'
   | 'NL_SEARCH'
   | 'ALARM_TRIAGE'
-  | 'INCIDENT_SUMMARY';
+  | 'INCIDENT_SUMMARY'
+  | 'FOOTAGE_SEALING'
+  | 'CAMERA_SABOTAGE';
 
 export type FeatureFlagStates = Record<FeatureFlagName, boolean>;
 
@@ -41,6 +43,8 @@ export const ALL_FEATURES_OFF: FeatureFlagStates = Object.freeze({
   NL_SEARCH: false,
   ALARM_TRIAGE: false,
   INCIDENT_SUMMARY: false,
+  FOOTAGE_SEALING: false,
+  CAMERA_SABOTAGE: false,
 });
 
 export async function fetchFeatureFlags(): Promise<FeatureFlagStates> {

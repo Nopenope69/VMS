@@ -8,23 +8,28 @@
  * camera's state are untouched, and the event says what was measured.
  *
  * The event id is derived from camera, type and start time, so a report the worker repeats (a retry after a timeout)
- * is the same event and is evaluated once.
+ * is the same event and is evaluated once. Each confirmed condition is also kept as a CameraSabotageCondition row for
+ * the footage-integrity page; when the worker reports it gone, the row is closed and an informational SYSTEM_ALERT
+ * (`CAMERA_TAMPER_CLEARED`, no rule trigger) records that the camera was restored.
  */
 import crypto from 'crypto';
 import { EventSeverity, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { fromSceneChange } from '../incident/orchestrator/events';
+import { fromSceneChange, fromSystemAlert } from '../incident/orchestrator/events';
 import type { IngestResult, SceneChangeType, VigilOneEvent } from '../incident/orchestrator/types';
 
 export const SABOTAGE_METHODS = ['classical-v1'] as const;
 
 const MEASUREMENT_KEYS = ['meanLuma', 'stdLuma', 'darkFraction', 'brightFraction', 'sharpness', 'referenceSharpness', 'similarity'] as const;
 
+const CHANGE_TYPES = ['OCCLUSION', 'DEFOCUS', 'DISPLACEMENT', 'BLINDED'] as const;
+
 export const CameraSabotageReportSchema = z
   .object({
+    state: z.literal('CONFIRMED').default('CONFIRMED'),
     cameraId: z.string().uuid(),
     tenantId: z.string().min(1),
-    changeType: z.enum(['OCCLUSION', 'DEFOCUS', 'DISPLACEMENT', 'BLINDED']),
+    changeType: z.enum(CHANGE_TYPES),
     score: z.number().min(0).max(1),
     threshold: z.number().min(0).max(1),
     startedAtUtc: z.string().datetime(),
@@ -36,6 +41,22 @@ export const CameraSabotageReportSchema = z
 
 export type CameraSabotageReport = z.infer<typeof CameraSabotageReportSchema>;
 
+/** The worker saw the condition end: the picture is normal again, or a moved camera's new view became its reference. */
+export const CameraSabotageClearedSchema = z
+  .object({
+    state: z.literal('CLEARED'),
+    cameraId: z.string().uuid(),
+    tenantId: z.string().min(1),
+    changeType: z.enum(CHANGE_TYPES),
+    startedAtUtc: z.string().datetime(),
+    clearedAtUtc: z.string().datetime(),
+    clearReason: z.enum(['RESTORED', 'RELEARNED']),
+    method: z.enum(SABOTAGE_METHODS),
+  })
+  .strict();
+
+export type CameraSabotageCleared = z.infer<typeof CameraSabotageClearedSchema>;
+
 export class CameraSabotageError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) {
     super(message);
@@ -45,7 +66,7 @@ export class CameraSabotageError extends Error {
 /** A clock skew larger than this between the worker and the backend refuses the report (times would be wrong). */
 const MAX_FUTURE_MS = 60_000;
 
-const TITLES: Record<SceneChangeType, string> = {
+export const SABOTAGE_TITLES: Record<SceneChangeType, string> = {
   OCCLUSION: 'Camera view covered or blocked',
   DEFOCUS: 'Camera out of focus or lens obscured',
   DISPLACEMENT: 'Camera moved: the view differs from its reference',
@@ -66,7 +87,7 @@ export function describeSabotage(r: CameraSabotageReport): string {
     DISPLACEMENT: `the picture is sharp but no longer resembles the camera's reference view (similarity ${m.similarity})`,
     BLINDED: `${Math.round(m.brightFraction * 100)}% of the picture is saturated`,
   };
-  return `${TITLES[r.changeType]} for at least ${held} s: ${seen[r.changeType]}. Measured by ${r.method} on the camera's substream; advisory, check the live view.`;
+  return `${SABOTAGE_TITLES[r.changeType]} for at least ${held} s: ${seen[r.changeType]}. Measured by ${r.method} on the camera's substream; advisory, check the live view.`;
 }
 
 export class CameraSabotageService {
@@ -76,28 +97,42 @@ export class CameraSabotageService {
     private readonly now: () => number = Date.now
   ) {}
 
-  async report(body: unknown): Promise<{ eventId: string; result: IngestResult }> {
+  /** A confirmed condition (raises SCENE_CHANGE) or the end of one (closes it); `state` tells which. */
+  async report(body: unknown): Promise<{ eventId: string; result: IngestResult; duplicate?: boolean }> {
+    if ((body as { state?: unknown } | null)?.state === 'CLEARED') return this.cleared(body);
     const parsed = CameraSabotageReportSchema.safeParse(body);
-    if (!parsed.success) {
-      throw new CameraSabotageError(400, 'INVALID_REPORT', parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; '));
-    }
+    if (!parsed.success) throw invalid(parsed.error);
     const r = parsed.data;
     const started = Date.parse(r.startedAtUtc);
     const confirmed = Date.parse(r.confirmedAtUtc);
     if (confirmed < started) throw new CameraSabotageError(400, 'INVALID_REPORT', 'confirmedAtUtc is before startedAtUtc');
     if (confirmed > this.now() + MAX_FUTURE_MS) throw new CameraSabotageError(400, 'CLOCK_SKEW', 'confirmedAtUtc is in the future');
+    const camera = await this.camera(r.cameraId, r.tenantId);
 
-    const camera = await this.prisma.camera.findUnique({ where: { id: r.cameraId }, select: { tenantId: true, siteId: true } });
-    // A camera of another tenant is reported exactly like a missing one.
-    if (!camera || camera.tenantId !== r.tenantId) throw new CameraSabotageError(404, 'CAMERA_NOT_FOUND', 'Camera not found');
-
+    const eventId = sabotageEventId(r.cameraId, r.changeType, r.startedAtUtc);
+    // The condition row first: a retry after a failed ingest finds it and still raises the event (both are idempotent).
+    await this.prisma.cameraSabotageCondition.upsert({
+      where: { eventId },
+      create: {
+        tenantId: r.tenantId,
+        cameraId: r.cameraId,
+        changeType: r.changeType,
+        startedAt: new Date(started),
+        confirmedAt: new Date(confirmed),
+        score: r.score,
+        method: r.method,
+        measurementsJson: r.measurements,
+        eventId,
+      },
+      update: {},
+    });
     const event = fromSceneChange({
-      id: sabotageEventId(r.cameraId, r.changeType, r.startedAtUtc),
+      id: eventId,
       tenantId: r.tenantId,
       cameraId: r.cameraId,
       source: 'WATCHDOG',
       severity: EventSeverity.WARNING,
-      title: TITLES[r.changeType],
+      title: SABOTAGE_TITLES[r.changeType],
       description: describeSabotage(r),
       score: r.score,
       threshold: r.threshold,
@@ -111,4 +146,60 @@ export class CameraSabotageService {
     const result = await this.ingest(event);
     return { eventId: event.id, result };
   }
+
+  private async cleared(body: unknown): Promise<{ eventId: string; result: IngestResult; duplicate?: boolean }> {
+    const parsed = CameraSabotageClearedSchema.safeParse(body);
+    if (!parsed.success) throw invalid(parsed.error);
+    const r = parsed.data;
+    const cleared = Date.parse(r.clearedAtUtc);
+    if (cleared > this.now() + MAX_FUTURE_MS) throw new CameraSabotageError(400, 'CLOCK_SKEW', 'clearedAtUtc is in the future');
+    const camera = await this.camera(r.cameraId, r.tenantId);
+
+    const conditionEventId = sabotageEventId(r.cameraId, r.changeType, r.startedAtUtc);
+    const row = await this.prisma.cameraSabotageCondition.findUnique({ where: { eventId: conditionEventId } });
+    if (!row || row.cameraId !== r.cameraId) {
+      throw new CameraSabotageError(404, 'CONDITION_NOT_FOUND', 'No reported condition matches this camera, type and start');
+    }
+    if (cleared < row.startedAt.getTime()) throw new CameraSabotageError(400, 'INVALID_REPORT', 'clearedAtUtc is before the condition began');
+    const eventId = `${conditionEventId}_cleared`;
+    // Only the first report closes it: a retry leaves the recorded time as it was.
+    const closed = await this.prisma.cameraSabotageCondition.updateMany({
+      where: { id: row.id, clearedAt: null },
+      data: { clearedAt: new Date(cleared), clearReason: r.clearReason },
+    });
+    const duplicate = closed.count === 0;
+
+    const seconds = Math.max(0, Math.round((cleared - row.startedAt.getTime()) / 1000));
+    const what = SABOTAGE_TITLES[r.changeType].split(':')[0].toLowerCase();
+    const event = fromSystemAlert({
+      id: eventId,
+      tenantId: r.tenantId,
+      cameraId: r.cameraId,
+      source: 'WATCHDOG',
+      severity: EventSeverity.INFO,
+      title: r.clearReason === 'RESTORED' ? 'Camera view restored' : 'Moved camera: new view accepted',
+      subsystem: 'camera-sabotage',
+      alertCode: 'CAMERA_TAMPER_CLEARED',
+      message:
+        r.clearReason === 'RESTORED'
+          ? `The picture is normal again after ${seconds} s (${what}).`
+          : `The camera stayed moved for ${seconds} s; its new view is now the reference it is compared with.`,
+      details: { changeType: r.changeType, clearReason: r.clearReason, conditionEventId, startedAtUtc: row.startedAt.toISOString() },
+    });
+    event.timestampUtc = new Date(cleared);
+    if (camera.siteId) event.siteId = camera.siteId;
+    const result = await this.ingest(event);
+    return { eventId, result, ...(duplicate ? { duplicate: true } : {}) };
+  }
+
+  /** A camera of another tenant is reported exactly like a missing one. */
+  private async camera(cameraId: string, tenantId: string): Promise<{ siteId: string | null }> {
+    const camera = await this.prisma.camera.findUnique({ where: { id: cameraId }, select: { tenantId: true, siteId: true } });
+    if (!camera || camera.tenantId !== tenantId) throw new CameraSabotageError(404, 'CAMERA_NOT_FOUND', 'Camera not found');
+    return { siteId: camera.siteId };
+  }
+}
+
+function invalid(error: z.ZodError): CameraSabotageError {
+  return new CameraSabotageError(400, 'INVALID_REPORT', error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; '));
 }

@@ -207,7 +207,7 @@ export class StreamSupervisor extends EventEmitter {
       return;
     }
     for (const f of findings) {
-      this.metrics.inc('vigilone_ai_sabotage_findings_total', 'Camera-sabotage conditions confirmed, by type', { type: f.type });
+      this.metrics.inc('vigilone_ai_sabotage_findings_total', 'Camera-sabotage conditions confirmed and cleared, by type', { type: f.type, state: f.state });
       this.emit('sabotage', f);
       void this.reportSabotage(f);
     }
@@ -215,17 +215,30 @@ export class StreamSupervisor extends EventEmitter {
 
   /** Sends a finding to the backend, retrying transport failures; a refusal (4xx/501) is not retried. */
   private async reportSabotage(f: SabotageFinding): Promise<void> {
-    const body = {
-      cameraId: f.cameraId,
-      tenantId: f.tenantId,
-      changeType: f.type,
-      score: f.score,
-      threshold: f.threshold,
-      startedAtUtc: f.startedAt.toISOString(),
-      confirmedAtUtc: f.confirmedAt.toISOString(),
-      method: SABOTAGE_METHOD,
-      measurements: f.measurements,
-    };
+    const body =
+      f.state === 'CLEARED'
+        ? {
+            state: 'CLEARED',
+            cameraId: f.cameraId,
+            tenantId: f.tenantId,
+            changeType: f.type,
+            startedAtUtc: f.startedAt.toISOString(),
+            clearedAtUtc: (f.clearedAt ?? f.confirmedAt).toISOString(),
+            clearReason: f.clearReason ?? 'RESTORED',
+            method: SABOTAGE_METHOD,
+          }
+        : {
+            state: 'CONFIRMED',
+            cameraId: f.cameraId,
+            tenantId: f.tenantId,
+            changeType: f.type,
+            score: f.score,
+            threshold: f.threshold,
+            startedAtUtc: f.startedAt.toISOString(),
+            confirmedAtUtc: f.confirmedAt.toISOString(),
+            method: SABOTAGE_METHOD,
+            measurements: f.measurements,
+          };
     const counter = 'vigilone_ai_sabotage_reports_total';
     const help = 'Camera-sabotage reports sent to the backend, by outcome';
     for (let attempt = 0; ; attempt++) {
@@ -245,7 +258,7 @@ export class StreamSupervisor extends EventEmitter {
         }
         if ((status !== undefined && status < 500) || attempt >= this.sabotageRetryDelaysMs.length) {
           this.metrics.inc(counter, help, { outcome: status !== undefined && status < 500 ? 'refused' : 'failed' });
-          this.emit('warn', `camera-sabotage report for ${f.cameraId} (${f.type}) was not recorded: ${err?.message || err}`);
+          this.emit('warn', `camera-sabotage report for ${f.cameraId} (${f.type} ${f.state.toLowerCase()}) was not recorded: ${err?.message || err}`);
           return;
         }
         await new Promise((r) => setTimeout(r, this.sabotageRetryDelaysMs[attempt]));

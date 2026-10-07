@@ -481,11 +481,14 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   /api/v1/internal/camera-sabotage` raises the existing `SCENE_CHANGE` event (it had no producer; `BLINDED` added, events.v1
   `camera.degraded` / `TAMPER_BLINDED`), which `SCENE_CHANGE` rules turn into alarms. Thresholds set on four photographs
   with ffmpeg-simulated noise, blur, covers, moves, glare, dusk and night; **not run on a real camera**. No UI change (the
-  rule builder already had the trigger). No "restored" event.
+  rule builder already had the trigger). Then, in the same PR (#56): the end of a condition is recorded
+  (`CameraSabotageCondition` rows, informational `CAMERA_TAMPER_CLEARED` alert, no alarm) and a **Footage Integrity tab**
+  (operators and administrators, Alt+I; `GET /api/v1/footage-integrity/cameras`) shows per camera the tamper status, recent
+  conditions, sealed recordings with a "Check chain" button (the existing seal-chain check) and held recordings.
 - **Remaining towards the North Star (read in Session 35 from all strategy docs; next chat builds from here):**
   1. **Footage integrity, part 3:** C2PA-style export manifests (library licence check first). ~~Camera-sabotage
-     detection~~ done in Session 37. A seal UI (chain status per camera) and a sabotage view (per-camera condition, a
-     "restored" event, per-camera thresholds) are also open.
+     detection~~ done in Session 37. ~~A seal UI and a sabotage view~~ done in Session 37 (Footage Integrity tab). Still
+     open there: per-camera thresholds, and conditions left open when the worker restarts.
   2. **Describe-what-to-watch rules** and calibrated semantic triggers: blocked on the owner approving Qwen3-4B.
   3. **V1.0 understand-and-act (North Star section 6):** investigation entity (the context graph, PostgreSQL), VLM on short
      clips, AI-proposed actions executed by the rule engine, one or two vertical packs (owner picks).

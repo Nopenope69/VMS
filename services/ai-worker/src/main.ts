@@ -199,7 +199,11 @@ export async function boot(): Promise<BootResult> {
     }
   });
   supervisor.on('streamError', (e) => log('warn', 'stream error', e));
-  supervisor.on('sabotage', (f) => log('warn', 'camera sabotage suspected', { cameraId: f.cameraId, type: f.type, score: f.score, startedAt: f.startedAt }));
+  supervisor.on('sabotage', (f) =>
+    f.state === 'CLEARED'
+      ? log('info', 'camera sabotage cleared', { cameraId: f.cameraId, type: f.type, reason: f.clearReason, clearedAt: f.clearedAt })
+      : log('warn', 'camera sabotage suspected', { cameraId: f.cameraId, type: f.type, score: f.score, startedAt: f.startedAt })
+  );
   supervisor.on('inferenceError', (e) => log('warn', 'inference error', e));
   await supervisor.start();
   return { worker, close, port: boundPort };

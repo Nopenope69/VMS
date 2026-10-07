@@ -28,6 +28,7 @@ import layoutRoutes from './routes/layout.routes';
 import alarmTriageRoutes from './routes/alarmTriage.routes';
 import incidentSummaryRoutes from './routes/incidentSummary.routes';
 import segmentSealRoutes from './routes/segmentSeal.routes';
+import footageIntegrityRoutes from './routes/footageIntegrity.routes';
 import alarmRoutes from './routes/alarm.routes';
 import anprRoutes from './routes/anpr.routes';
 import smartSearchRoutes from './routes/smartSearch.routes';
@@ -150,6 +151,8 @@ app.use('/api/v1/tracks', requireFeatureFlag(FeatureFlag.TRACK_INDEX), trackFoll
 app.use('/api/v1/tracks', requireFeatureFlag(FeatureFlag.TRACK_INDEX), trackRoutes);
 app.use('/api/v1/incident-summaries', requireFeatureFlag(FeatureFlag.INCIDENT_SUMMARY), incidentSummaryRoutes);
 app.use('/api/v1/segment-seals', requireFeatureFlag(FeatureFlag.FOOTAGE_SEALING), segmentSealRoutes);
+// Read-only overview across camera-sabotage detection and sealing; each part reports whether its flag is on.
+app.use('/api/v1/footage-integrity', footageIntegrityRoutes);
 app.use('/api/v1/alarm-triage', requireFeatureFlag(FeatureFlag.ALARM_TRIAGE), alarmTriageRoutes);
 app.use('/api/v1/investigations/timings', requireFeatureFlag(FeatureFlag.INVESTIGATION_TIMING), investigationTimingRoutes);
 app.use('/api/v1/search', requireFeatureFlag(FeatureFlag.SMART_SEARCH), smartSearchRoutes);

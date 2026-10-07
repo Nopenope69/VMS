@@ -307,10 +307,10 @@ router.post('/camera-sabotage', async (req: Request, res: Response) => {
   }
   try {
     cameraSabotage ??= new CameraSabotageService(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
-    const { eventId, result } = await cameraSabotage.report(req.body);
+    const { eventId, result, duplicate } = await cameraSabotage.report(req.body);
     return res.json({
       eventId,
-      ...(result.duplicate ? { duplicate: true } : {}),
+      ...(duplicate || result.duplicate ? { duplicate: true } : {}),
       rulesTriggered: result.rulesTriggered,
       ...(result.alarmId ? { alarmId: result.alarmId } : {}),
     });

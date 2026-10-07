@@ -222,7 +222,7 @@ describe('StreamSupervisor: each sampled frame is inferred at most once', () => 
 
 describe('StreamSupervisor: camera-sabotage reports (ADR 0019)', () => {
   const finding = {
-    cameraId: 'cam-s', tenantId: 't', type: 'OCCLUSION' as const, score: 0.97, threshold: 0.5,
+    state: 'CONFIRMED' as const, cameraId: 'cam-s', tenantId: 't', type: 'OCCLUSION' as const, score: 0.97, threshold: 0.5,
     startedAt: new Date('2026-10-07T10:00:00Z'), confirmedAt: new Date('2026-10-07T10:00:10Z'),
     measurements: { meanLuma: 128, stdLuma: 3, darkFraction: 0, brightFraction: 0, sharpness: 1, referenceSharpness: 0.6, similarity: 0.02 },
   };
@@ -258,11 +258,24 @@ describe('StreamSupervisor: camera-sabotage reports (ADR 0019)', () => {
     expect(sabotage.observe).toHaveBeenCalledTimes(2);
     expect(report).toHaveBeenCalledTimes(1);
     expect(report.mock.calls[0][0]).toEqual({
-      cameraId: 'cam-s', tenantId: 't', changeType: 'OCCLUSION', score: 0.97, threshold: 0.5,
+      state: 'CONFIRMED', cameraId: 'cam-s', tenantId: 't', changeType: 'OCCLUSION', score: 0.97, threshold: 0.5,
       startedAtUtc: '2026-10-07T10:00:00.000Z', confirmedAtUtc: '2026-10-07T10:00:10.000Z', method: 'classical-v1',
       measurements: finding.measurements,
     });
     expect(worker.processFrame).toHaveBeenCalled(); // inference still runs
+    await supervisor.stopAll();
+  });
+
+  it('reports the end of a condition with the cleared body', async () => {
+    const report = jest.fn().mockResolvedValue({ eventId: 'ev_sabotage_x_cleared' });
+    const cleared = { ...finding, state: 'CLEARED' as const, clearedAt: new Date('2026-10-07T10:05:00Z'), clearReason: 'RESTORED' as const };
+    const { supervisor, emit } = setup(report, jest.fn().mockReturnValueOnce([cleared]).mockReturnValue([]));
+    emit(1);
+    await settle();
+    expect(report.mock.calls[0][0]).toEqual({
+      state: 'CLEARED', cameraId: 'cam-s', tenantId: 't', changeType: 'OCCLUSION',
+      startedAtUtc: '2026-10-07T10:00:00.000Z', clearedAtUtc: '2026-10-07T10:05:00.000Z', clearReason: 'RESTORED', method: 'classical-v1',
+    });
     await supervisor.stopAll();
   });
 

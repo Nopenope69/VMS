@@ -39,6 +39,16 @@ share one meaning. The backend already had a `SCENE_CHANGE` event kind with `OCC
   the method (`classical-v1`), the start time and the measurements. The event id is derived from camera, type and start, so a
   retried report is evaluated once. `SCENE_CHANGE` rules (already in the rule builder) turn it into an alarm; without a rule
   it is only recorded. `BLINDED` is new: `TAMPER_BLINDED` in events.v1 (`reason` is a free string; additive).
+* **The end of a condition is recorded too.** Once a reported condition has been gone for 30 s (or a moved camera's new view
+  is relearnt), the worker reports it with `state: CLEARED`. Every confirmed condition is kept as a `CameraSabotageCondition`
+  row (migration `20261019000000`); the clear report closes it once (`clearedAt`, `RESTORED` or `RELEARNED`; a retry keeps
+  the first time) and raises an informational `SYSTEM_ALERT` `CAMERA_TAMPER_CLEARED` ("Camera view restored"), which no rule
+  trigger fires on and which raises no alarm. Clearing a condition that was never reported is refused (404).
+* **A page for operators.** `GET /api/v1/footage-integrity/cameras` (CAMERA_VIEW, the caller's tenant only, reads only)
+  gives per camera the open and recent (7 days) conditions, the number of sealed recordings and the last seal (ADR 0018),
+  and the recordings held by an integrity finding (audit F13). It is not behind a flag; it says which features are off. The
+  "Footage Integrity" tab (operators and administrators, Alt+I) shows it, and its "Check chain" button runs the existing
+  per-camera seal-chain check.
 * **Advisory and separate.** Recording, live view and the camera's state are untouched. The event names its measurements so
   an operator can judge it against the live view.
 
@@ -46,7 +56,9 @@ share one meaning. The backend already had a `SCENE_CHANGE` event kind with `OCC
 * Two switches, both off: `AI_SABOTAGE_DETECTION=true` on the worker, `VIGILONE_FEATURE_CAMERA_SABOTAGE=true` on the
   backend. The worker's pipeline only runs with a deployed detection model, so a site without the AI worker has no
   sabotage detection (cameras' own tamper events still arrive through `CAMERA_EVENTS`).
-* No "restored" event: the end of a condition is only visible as the absence of new reports. An operator closes the alarm.
+* The "restored" notice does not close the alarm the condition raised: an operator still does, after looking.
+* A condition open when the worker restarts stays open on the page until the same condition is reported and cleared
+  again (the worker forgets its state on restart). Thresholds per camera are not configurable yet.
 * The thresholds were set on four photographs with simulated sensor noise, blur, covers, moves, glare, dusk and night
   (`sabotageDetector.test.ts`, decoded by real ffmpeg). Known misses and likely false alarms, to measure on site footage:
   a nudge of about 5% is not a move; a large vehicle parked across the view, a lights-off event without infrared, or rain and

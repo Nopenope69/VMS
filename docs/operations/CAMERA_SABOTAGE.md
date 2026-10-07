@@ -20,12 +20,29 @@ it with what that camera normally shows. It reports, once per occurrence:
 | `DISPLACEMENT` | Camera moved: the view differs from its reference | Sharp, but showing something else |
 | `BLINDED` | Camera blinded by bright light | Most of the picture saturated |
 
-A condition must last 10 seconds before it is reported, and is reported again only after it has been gone for 30 seconds.
+A condition must last 10 seconds before it is reported. When it has been gone for 30 seconds the worker reports that too: the
+system records a **"Camera view restored"** notice (information only, no alarm, events.v1 `system.alert` code
+`CAMERA_TAMPER_CLEARED`), and the condition can be reported again. A moved camera whose new view is accepted after
+15 minutes records "Moved camera: new view accepted" instead.
 The event's description says what was measured, for example "sharpness fell to 0.21 against a reference of 0.62".
 
 To get an **alarm**, add an automation rule with the trigger "SCENE_CHANGE (Camera Tamper / Obscuration)", optionally limited
 to one camera. Without a rule the event is only recorded. In events.v1 it is `camera.degraded` with reason
 `TAMPER_OCCLUSION`, `TAMPER_DEFOCUS`, `TAMPER_DISPLACEMENT` or `TAMPER_BLINDED`.
+
+## The Footage Integrity page
+
+Operators and administrators have a **Footage Integrity** tab (Alt+I). Per camera it shows:
+
+- whether the view looks normal or which condition is open, and since when;
+- conditions that ended in the last 7 days, how long they lasted, and whether the view was restored or a new view accepted;
+- how many recordings are sealed and when the last one was (`FOOTAGE_SEALING.md`), with a **Check chain** button that runs
+  the backend's chain check for that camera now and lists any problem;
+- how many recordings are held by an integrity finding (`RECORDING_INTEGRITY.md`).
+
+The page reads only. It says when camera-sabotage detection or sealing is switched off, so an empty column is never
+mistaken for "all fine". If the worker restarts while a condition is open, the page keeps showing it open until the same
+condition is reported and cleared again; check the live view.
 
 ## Things to know on site
 

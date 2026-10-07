@@ -91,7 +91,7 @@ describe('SabotageDetector on real decoded frames', () => {
       it(`${image}: ${filter} is reported once as ${type} after the hold time`, () => {
         const det = new SabotageDetector({ holdMs: 10_000 });
         const { findings } = run(det, image, filter, 30);
-        expect(findings.map((f) => f.type)).toEqual([type]);
+        expect(findings.map((f) => [f.state, f.type])).toEqual([['CONFIRMED', type]]);
         const f = findings[0];
         expect(f.confirmedAt.getTime() - f.startedAt.getTime()).toBeGreaterThanOrEqual(10_000);
         expect(f.startedAt.getTime()).toBe(T0 + 20_000); // the first altered frame
@@ -193,10 +193,18 @@ describe('SabotageDetector timing', () => {
     for (let i = 0; i < 20; i++) out.push(...det.observe(frame(normal[i % 4], t++))); // shorter than clearMs
     for (let i = 0; i < 20; i++) out.push(...det.observe(frame(covered[i % 4], t++)));
     expect(out).toHaveLength(1);
+    const lastCovered = t - 1;
     for (let i = 0; i < 40; i++) out.push(...det.observe(frame(normal[i % 4], t++)));
     expect(det.activeConditions('cam-1')).toEqual([]);
+    // Its end is reported once, clearMs after the last covered frame, with the original start and confirmation.
+    expect(out.map((f) => [f.state, f.type])).toEqual([['CONFIRMED', 'OCCLUSION'], ['CLEARED', 'OCCLUSION']]);
+    const end = out[1];
+    expect(end.clearReason).toBe('RESTORED');
+    expect(end.clearedAt!.getTime()).toBe(T0 + (lastCovered + 30) * 1000);
+    expect(end.startedAt).toEqual(out[0].startedAt);
+    expect(end.confirmedAt).toEqual(out[0].confirmedAt);
     for (let i = 0; i < 20; i++) out.push(...det.observe(frame(covered[i % 4], t++)));
-    expect(out.map((f) => f.type)).toEqual(['OCCLUSION', 'OCCLUSION']);
+    expect(out.map((f) => [f.state, f.type])).toEqual([['CONFIRMED', 'OCCLUSION'], ['CLEARED', 'OCCLUSION'], ['CONFIRMED', 'OCCLUSION']]);
   });
 
   it('a camera that stays moved learns its new view after relearnMs, and is then quiet', () => {
@@ -207,11 +215,15 @@ describe('SabotageDetector timing', () => {
     const out: SabotageFinding[] = [];
     for (let i = 0; i < 20; i++) out.push(...det.observe(frame(normal[i % 4], t++)));
     for (let i = 0; i < 300; i++) out.push(...det.observe(frame(moved[i % 4], t++)));
-    expect(out.map((f) => f.type)).toEqual(['DISPLACEMENT']);
+    expect(out.map((f) => [f.state, f.type, f.clearReason])).toEqual([
+      ['CONFIRMED', 'DISPLACEMENT', undefined],
+      ['CLEARED', 'DISPLACEMENT', 'RELEARNED'],
+    ]);
+    expect(out[1].clearedAt!.getTime() - out[0].confirmedAt.getTime()).toBe(60_000);
     expect(det.activeConditions('cam-1')).toEqual([]);
     // Moving it back to the original view is a move too.
     for (let i = 0; i < 30; i++) out.push(...det.observe(frame(normal[i % 4], t++)));
-    expect(out.map((f) => f.type)).toEqual(['DISPLACEMENT', 'DISPLACEMENT']);
+    expect(out.filter((f) => f.state === 'CONFIRMED').map((f) => f.type)).toEqual(['DISPLACEMENT', 'DISPLACEMENT']);
   });
 
   it('a gap in the stream drops a suspected condition', () => {
