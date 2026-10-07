@@ -427,7 +427,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   (unattended bag, wrong way) are on `claude/amazing-hypatia-hkgolw` (Session 28); person down and fence climbing
   need a pose model and a licence decision (merged, #43). Bucket 6 (privacy tools) is parked.
 - **Plain-language search** (first of the five, Session 29, feature `NL_SEARCH`): rules with an English, Hinglish
-  and Devanagari word list fill the Find form; Qwen3-4B (candidate, needs the owner's approval to run in the
+  and Devanagari word list fill the Find form; Qwen3-4B (candidate, approved by the owner on 2026-10-07, to run in the
   product) only rewrites requests the word list cannot read, and what the rules read in the original wins.
   Measured in `docs/ai/nl-search-evaluation.md` (merged, #44).
 - **Model research (Session 31, 2026-10-05):** `docs/strategy/model-research-2026-10-05/` (README summary plus four
@@ -485,25 +485,34 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   (`CameraSabotageCondition` rows, informational `CAMERA_TAMPER_CLEARED` alert, no alarm) and a **Footage Integrity tab**
   (operators and administrators, Alt+I; `GET /api/v1/footage-integrity/cameras`) shows per camera the tamper status, recent
   conditions, sealed recordings with a "Check chain" button (the existing seal-chain check) and held recordings.
+- **Session 37, second PR (after #56 merged):** (1) the automation rule builder was **unreachable** (it opened only from the
+  Federation console, which v1.0 never shows); it now opens from the Alarms page ("Automation rules"), and TRIGGER_ALARM
+  actions have the alarm-grouping field (`incidentWindowSeconds`, ADR 0014). (2) Every camera of a synchronised view now
+  steps onto a real frame of its own (`RecordingCatalog.frameShownAt`, per-camera `framePrecision`); the Investigation tile
+  no longer shows an invented PTS. (3) Owner decisions recorded: **Qwen3-4B approved** (`model-license-exceptions.json`),
+  **both vertical packs** (Factory safety; Public safety for Railways and Safe City; North Star P3).
 - **Remaining towards the North Star (read in Session 35 from all strategy docs; next chat builds from here):**
   1. **Footage integrity, part 3:** C2PA-style export manifests (library licence check first). ~~Camera-sabotage
      detection~~ done in Session 37. ~~A seal UI and a sabotage view~~ done in Session 37 (Footage Integrity tab). Still
      open there: per-camera thresholds, and conditions left open when the worker restarts.
-  2. **Describe-what-to-watch rules** and calibrated semantic triggers: blocked on the owner approving Qwen3-4B.
+  2. **Describe-what-to-watch rules** and calibrated semantic triggers: **unblocked**, the owner approved Qwen3-4B on
+     2026-10-07 (Session 37).
   3. **V1.0 understand-and-act (North Star section 6):** investigation entity (the context graph, PostgreSQL), VLM on short
-     clips, AI-proposed actions executed by the rule engine, one or two vertical packs (owner picks).
+     clips, AI-proposed actions executed by the rule engine, and **two vertical packs, both chosen by the owner on
+     2026-10-07: Factory safety and Public safety (Railways and Safe City)** (North Star P3 lists what each reuses and
+     still needs).
   4. **Threat detections still open:** fire/smoke (own fine-tune on D-Fire/Pyro-SDIS), weapons (staged data, operator
      confirms), fight/crowd/accident/tailgating (rules on tracks, then VLM on clips; tailgating needs access control).
   5. **Tier 2:** local MCP interface (read-only, audited), overnight digest (cheap on incident summaries), Hindi/regional
-     talk-down, factory safety pack.
+     talk-down (Public safety pack), factory safety pack.
   6. **Model upgrades:** PP-OCRv6 detector, D-FINE on CPU (Objects365 decision), one Qwen3.5 model for text and images,
      UVH-26 Indian vehicle classes.
-  7. **Small items:** rule-builder field for `incidentWindowSeconds`, triage queue polish, frame-exact stepping on every
-     camera of a synchronized view, RTCP sender-report clock, scrub-bar signals, F13 open items (operator release of a held
+  7. **Small items:** ~~rule-builder field for `incidentWindowSeconds`~~ and ~~frame-exact stepping on every camera of a
+     synchronized view~~ done in Session 37 (PR after #56); triage queue polish, RTCP sender-report clock, scrub-bar signals, F13 open items (operator release of a held
      segment; size change accepted by the crawler before the check sees it), Bucket 6 privacy tools (parked),
      `docs/BACKLOG.md` (about 25 older items, not re-checked for staleness).
   8. **Owner track (gates V0.1):** bench, clean-VM drill, real footage and labelled sets, pilot site, DPDP choices; decisions on
-     Qwen3-4B, C2PA library, Objects365, first vertical pack, reference hardware, Hindi scope.
+     C2PA library, Objects365, reference hardware, Hindi scope (Qwen3-4B approved and both vertical packs chosen on 2026-10-07).
 - **After that:** the two software features still open (describe-what-to-watch rules, footage integrity; the cited incident
   summary and alarm triage are in `master` since #50), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
   one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).

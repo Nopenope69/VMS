@@ -14,6 +14,7 @@ import {
   Filter,
   UserCheck,
   Download,
+  Workflow,
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -25,6 +26,7 @@ import { AiEvaluationBanner, AiProvenanceBadge } from '../components/AiEvaluatio
 import { AlarmSecondOpinion } from '../components/AlarmSecondOpinion';
 import { AlarmTriagePanel } from '../components/AlarmTriagePanel';
 import { AlarmIncidentSummary } from '../components/AlarmIncidentSummary';
+import { EventActionRuleModal } from '../components/EventActionRuleModal';
 import { useFeatureFlags } from '../services/features';
 import { DEMO_ALARMS, DEMO_EVENTS, DEMO_USER } from '../demo/fixtures';
 
@@ -90,6 +92,7 @@ export const Events: React.FC = () => {
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('ALARMS');
   const featureFlags = useFeatureFlags();
   const [triageRefresh, setTriageRefresh] = useState(0);
+  const [showAutomation, setShowAutomation] = useState(false);
 
   // Alarms State
   const [alarms, setAlarms] = useState<AlarmItem[]>([]);
@@ -459,6 +462,15 @@ export const Events: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* The rule builder (automation matrix): which events raise alarms and what else they do. */}
+          <button
+            onClick={() => setShowAutomation(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-vms-border bg-vms-panel text-vms-muted hover:text-vms-text"
+            data-testid="open-automation-rules"
+          >
+            <Workflow className="w-3.5 h-3.5 text-vms-accent" />
+            <span>Automation rules</span>
+          </button>
           {/* Segmented Tab Switcher */}
           <div className="flex bg-vms-panel p-1 rounded border border-vms-border">
             <button
@@ -1064,6 +1076,8 @@ export const Events: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      <EventActionRuleModal isOpen={showAutomation} onClose={() => setShowAutomation(false)} />
     </div>
   );
 };

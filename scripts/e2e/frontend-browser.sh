@@ -4,7 +4,7 @@
 #
 #   TEST_DB_URL=postgresql://vigilone:pw@localhost:5432/vigilone_e2e scripts/e2e/frontend-browser.sh
 #
-# Needs: backend and frontend dependencies installed, Chromium for Playwright (PLAYWRIGHT_BROWSERS_PATH or
+# Needs: backend and frontend dependencies installed, ffmpeg (seed-step.ts records real video), Chromium for Playwright (PLAYWRIGHT_BROWSERS_PATH or
 # `npx playwright install chromium`), psql.
 set -euo pipefail
 : "${TEST_DB_URL:?set TEST_DB_URL to a scratch database (it is dropped and recreated)}"

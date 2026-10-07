@@ -228,6 +228,16 @@ Pick one or two with the first customers (owner decision):
 
 Fire and smoke and PPE (from the old V1.0 list) now ship inside packs.
 
+**Owner decision (2026-10-07): build two packs, Factory safety and Public safety (Railways and Safe City).**
+
+| Pack | Already built that it uses | Still needed |
+| --- | --- | --- |
+| **Factory safety** | Zones and tripwires (restricted areas), person down (worker fall, ADR 0017), alarm triage and incident windows, camera-sabotage detection | PPE (helmet, vest): first through an open-vocabulary check on person crops, then a licensed detector; fire and smoke (own fine-tune on D-Fire / Pyro-SDIS, licence check); forklift-pedestrian proximity (rules on tracks; needs a forklift class); site evaluation data |
+| **Public safety: Railways and Safe City** | Unattended object, wrong way, person down (platforms: zones where lying is normal), fence climbing (track and yard intrusion), Indian ANPR, cross-camera following, cited incident summaries, footage sealing | Crowd density, then crowd-flow prediction; fight and accident (rules on tracks, then VLM on short clips); Hindi and regional talk-down; tender-specific reports; site evaluation data |
+
+Both packs are configurations of the same appliance (rules, zones, reports), not separate products. Every detection
+in them stays advisory until measured on real site footage.
+
 **Detectors still to add:**
 - **Weapon detection:** fine-tune a permissive detector on licence-cleared data, with a high false-positive bar.
 - **Audio events** (gunshot, scream, glass break): opt-in, and needs camera audio.
@@ -271,7 +281,8 @@ From `PROJECT_STATE.md` section 9 and `docs/BACKLOG.md`:
    must be measured on it.
 4. **Licences first:** which approvals to grant first. Recommended: the detector weights and SigLIP 2 search
    path, then ANPR data, then SmolVLM2.
-5. **First vertical pack:** one or two (section 6, P3).
+5. **First vertical pack:** ~~one or two (section 6, P3)~~ **decided 2026-10-07: both Factory safety and Public safety
+   (Railways and Safe City)**; see P3.
 6. **Pilot sites:** which pilot site or sites provide the evaluation data.
 
 No calendar estimate is given. Re-estimate after the bench shows how long real-hardware validation takes.

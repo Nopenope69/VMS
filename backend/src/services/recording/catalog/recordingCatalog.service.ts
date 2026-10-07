@@ -424,6 +424,22 @@ export class RecordingCatalog {
     };
   }
 
+  /**
+   * The real frame on screen at `pts` in this segment: the last frame at or before it, read from the file's own frame
+   * times (the first frame when `pts` is before it). Used to put every camera of a synchronised view on one of its own
+   * frames after a step, not on a moment between frames. Null when the file cannot be read (the caller keeps the
+   * estimate and says APPROXIMATE).
+   */
+  async frameShownAt(segmentId: string, pts: bigint): Promise<{ pts: bigint; utc: Date; offsetMs: number } | null> {
+    const segment = await this.segmentRepo.findById(segmentId);
+    if (!segment) return null;
+    const frames = await this.framesAround(segment, pts, 'BACKWARD');
+    if (!frames || frames.length === 0) return null;
+    const shown = frames.reduce<bigint | null>((best, f) => (f <= pts ? f : best), null) ?? frames[0];
+    const utc = utcOfFrame(segment, shown);
+    return { pts: shown, utc, offsetMs: Math.max(0, utc.getTime() - segment.startTime.getTime()) };
+  }
+
   /** The real frames of a segment around a position, widening the window until a frame on the needed side is found. */
   private async framesAround(segment: RecordingSegment, centerPts: bigint, direction: 'FORWARD' | 'BACKWARD'): Promise<bigint[] | null> {
     if (!this.mediaProbeAdapter.probeFrameTimes) return null;

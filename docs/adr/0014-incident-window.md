@@ -30,7 +30,8 @@ triage and incident summaries (the next planned features) need one alarm to stan
 * Frigate also holds a detection that appears after an alert's last activity and publishes it as its own segment.
   We keep the simpler rule: after the window, a new alarm.
 * Joining across rules or cameras. A journey across cameras is the investigation entity (North Star, V1.0).
-* A window set from the rule builder UI. The field is accepted by the API (and validated); the form comes later.
+* ~~A window set from the rule builder UI.~~ Added 2026-10-07 (Session 37): "Group repeats into one alarm for N seconds" on
+  a TRIGGER_ALARM action; `e2e/automation-rules.spec.ts`.
 
 ## Consequences
 * `Alarm` gains `lastActivityAt`, `occurrenceCount`, `lastCanonicalEventId` (migration `20261014000000`).

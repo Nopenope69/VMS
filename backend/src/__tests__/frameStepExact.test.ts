@@ -47,13 +47,13 @@ function truthFrames(f: string): number[] {
   return pts.map((p) => Math.round(((p - pts[0]) * 90000 * num) / den));
 }
 
-async function register(f: string, startMs: number) {
+async function register(f: string, startMs: number, cam: string = cameraId) {
   const name = new Date(startMs).toISOString().replace(/T/, '_').replace(/:/g, '-').replace(/\.(\d+)Z$/, '-$1000');
   const target = path.join(path.dirname(f), `${name.slice(0, 19)}-${String(startMs % 1000).padStart(3, '0')}000.mp4`);
   fs.renameSync(f, target);
   const old = new Date(Date.now() - 600_000);
   fs.utimesSync(target, old, old);
-  return new RecordingCatalog(prisma, undefined, new FfprobeMediaAdapter()).registerSegment({ tenantId, cameraId, filePath: target });
+  return new RecordingCatalog(prisma, undefined, new FfprobeMediaAdapter()).registerSegment({ tenantId, cameraId: cam, filePath: target });
 }
 
 const catalog = () => new RecordingCatalog(prisma, undefined, new FfprobeMediaAdapter());
@@ -69,7 +69,7 @@ afterAll(async () => {
 });
 afterEach(async () => {
   await prisma.playbackSession.deleteMany({ where: { tenantId } });
-  await prisma.recordingSegment.deleteMany({ where: { cameraId } });
+  await prisma.recordingSegment.deleteMany({ where: { tenantId } });
 });
 
 describe('exact frame stepping (F12)', () => {
@@ -182,5 +182,60 @@ describe('exact frame stepping (F12)', () => {
     expect(r1.cameras[0].segmentId).toBe(seg.id);
     const r2: any = await sync.stepSessionFrame(session.id, 'BACKWARD');
     expect(r2.masterTimeUtc.getTime()).toBe(T0 + Math.ceil(frames[6] / 90));
+  });
+
+  it('every camera of a synchronised view lands on a real frame of its own, not between two of its frames', async () => {
+    // Camera A films at 25 fps; camera B at a variable rate and starts 137 ms later, so its frames never line up with A's.
+    const camB = await prisma.camera.create({
+      data: { tenantId, siteId: (await prisma.camera.findUniqueOrThrow({ where: { id: cameraId } })).siteId, name: 'framestep B', streamPath: `framestep_b_${seq}`, ipAddress: '127.0.0.1', mainRtspUri: `rtsp://127.0.0.1:8554/framestep_b_${seq}` },
+    });
+    const fa = file();
+    encode(fa, 6);
+    const fb = file();
+    vfr(fb, 6);
+    const framesB = truthFrames(fb);
+    await register(fa, T0);
+    const T0B = T0 + 137;
+    const segB = await register(fb, T0B, camB.id);
+    const sync = new PlaybackSyncService(prisma, catalog());
+    const session = await sync.createPlaybackSession(tenantId, userId, [cameraId, camB.id], new Date(T0 + 2000));
+
+    for (const direction of ['FORWARD', 'FORWARD', 'BACKWARD', 'FORWARD'] as const) {
+      const r: any = await sync.stepSessionFrame(session.id, direction);
+      expect(r.referenceCameraId).toBe(cameraId);
+      const a = r.cameras.find((c: any) => c.cameraId === cameraId);
+      const b = r.cameras.find((c: any) => c.cameraId === camB.id);
+      expect(a.framePrecision).toBe('EXACT');
+      expect(b.framePrecision).toBe('EXACT');
+      expect(b.segmentId).toBe(segB.id);
+      // B shows its last real frame at or before the master time.
+      const masterInB = (r.masterTimeUtc.getTime() - T0B) * 90;
+      const expected = framesB.filter((f) => f <= masterInB).pop()!;
+      expect(Number(BigInt(b.currentPts) - segB.startPts)).toBe(expected);
+      expect(b.offsetMs).toBe(Math.ceil(expected / 90));
+      expect(framesB).toContain(Number(BigInt(b.currentPts) - segB.startPts));
+    }
+    await prisma.camera.delete({ where: { id: camB.id } });
+  });
+
+  it('a camera whose file cannot be read keeps the computed position and says APPROXIMATE; the step still happens', async () => {
+    const camB = await prisma.camera.create({
+      data: { tenantId, siteId: (await prisma.camera.findUniqueOrThrow({ where: { id: cameraId } })).siteId, name: 'framestep gone', streamPath: `framestep_g_${seq}`, ipAddress: '127.0.0.1', mainRtspUri: `rtsp://127.0.0.1:8554/framestep_g_${seq}` },
+    });
+    const fa = file();
+    encode(fa, 4);
+    const fb = file();
+    encode(fb, 4);
+    await register(fa, T0);
+    const segB = await register(fb, T0 + 50, camB.id);
+    fs.rmSync(segB.filePath);
+    const sync = new PlaybackSyncService(prisma, catalog());
+    const session = await sync.createPlaybackSession(tenantId, userId, [cameraId, camB.id], new Date(T0 + 1000));
+    const r: any = await sync.stepSessionFrame(session.id, 'FORWARD');
+    expect(r.precision).toBe('EXACT');
+    const b = r.cameras.find((c: any) => c.cameraId === camB.id);
+    expect(b.framePrecision).toBe('APPROXIMATE');
+    expect(b.offsetMs).toBe(r.masterTimeUtc.getTime() - (T0 + 50));
+    await prisma.camera.delete({ where: { id: camB.id } });
   });
 });

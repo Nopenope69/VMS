@@ -40,6 +40,8 @@ interface CameraPlaybackTile {
   fps?: number;
   codec?: string;
   gapDurationMs?: number;
+  /** Set after a frame step: EXACT when this camera is on a real frame read from its file. */
+  framePrecision?: 'EXACT' | 'APPROXIMATE';
 }
 
 export const Investigation: React.FC = () => {
@@ -161,6 +163,7 @@ export const Investigation: React.FC = () => {
         fps: c.fps,
         codec: c.codec,
         gapDurationMs: c.gapDurationMs,
+        framePrecision: c.framePrecision,
       };
     });
     setCameraStates(stateMap);
@@ -532,8 +535,18 @@ export const Investigation: React.FC = () => {
                       <div className="flex flex-col items-center justify-center space-y-2 text-vms-muted">
                         <Film className="w-8 h-8 text-vms-dim" />
                         <div className="font-mono text-[11px] text-vms-text">
-                          PTS: <span className="text-sky-400">{state.currentPts || '1726278000'}</span>
+                          PTS: <span className="text-sky-400">{state.currentPts ?? '—'}</span>
                         </div>
+                        {state.framePrecision === 'EXACT' && (
+                          <span className="text-[10px] font-mono text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30" data-testid="frame-exact" title="This camera shows a real frame read from its recording">
+                            EXACT FRAME
+                          </span>
+                        )}
+                        {state.framePrecision === 'APPROXIMATE' && (
+                          <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30" data-testid="frame-approximate" title="The recording could not be read: the position is computed from the time, not a real frame">
+                            APPROX. FRAME
+                          </span>
+                        )}
                         <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
                           UTC SYNC LOCKED
                         </span>
