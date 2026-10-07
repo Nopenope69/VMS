@@ -139,6 +139,7 @@ describe('the first hash wins', () => {
     expect(again.status).toBe(SegmentStatus.CORRUPTED);
     expect(again.quarantineReason).toBe('DIFFERS_FROM_SEAL');
     expect(again.sha256Hash).toBe(original);
+    expect(again.sizeBytes).toBe(a.sizeBytes); // the row stays as recorded, not only its hash
     await register(catalog, c, a.filePath, 0); // the crawler comes back every pass
 
     const audits = await prisma.auditEvent.findMany({ where: { tenantId: c.tenantId, action: 'SEGMENT_INTEGRITY_FAILURE', resourceId: a.id } });

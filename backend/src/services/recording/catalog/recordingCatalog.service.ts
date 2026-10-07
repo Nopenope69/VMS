@@ -4,7 +4,7 @@ import { PrismaClient, RecordingSegment, EvidencePin, SegmentStatus } from '@pri
 import { StorageAdapter, LocalStorageAdapter } from './storageAdapter';
 import { MediaProbeAdapter, FfprobeMediaAdapter } from './mediaProbeAdapter';
 import { SegmentIndexer } from './segmentIndexer';
-import { SegmentRepository } from './segmentRepository';
+import { SegmentRepository, INTEGRITY_FAILURE, isHeldByIntegrityFinding } from './segmentRepository';
 import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
@@ -53,13 +53,13 @@ export interface SeekTargetResult {
   gapDurationMs?: number | null;
 }
 
+type KnownSegment = { status: SegmentStatus; sizeBytes: bigint; quarantineReason: string | null };
+
 /** A segment is only compared with its file clock while the file is this fresh (a restore from backup resets mtimes). */
 const CLOCK_CHECK_FRESH_MS = 3600_000;
 /** Segment end per its file name versus the file's last write: more than this apart means a clock or time zone problem. */
 const CLOCK_TOLERANCE_MS = 5 * 60_000;
 const CLOCK_WARNING_TITLE = 'Segment time does not match the file clock';
-/** Integrity failures that already said a sealed segment's content changed (ADR 0018). */
-const SEAL_CONFLICT_REASONS = new Set(['DIFFERS_FROM_SEAL', 'DB_HASH_DIFFERS_FROM_SEAL', 'HASH_MISMATCH']);
 
 /**
  * A frame step needs the segment's frame rate (or a real keyframe to step to). When neither is known the step is
@@ -212,6 +212,12 @@ export class RecordingCatalog {
 
     // Checked whenever a seal exists, even with sealing switched off since: a sealed segment keeps its first hash.
     const sealConflict = unusable ? null : await this.findSealConflict(input.filePath, sha256);
+    if (sealConflict) {
+      // The row stays as it was recorded (hash, size, times); it is only marked and reported, once.
+      const row = await this.prisma.recordingSegment.findUniqueOrThrow({ where: { filePath: input.filePath } });
+      if (!sealConflict.alreadyReported) await this.reportSealConflict(row, sha256!, sealConflict);
+      return this.prisma.recordingSegment.findUniqueOrThrow({ where: { filePath: input.filePath } });
+    }
 
     const segment = await this.segmentRepo.upsertSegment({
       tenantId: input.tenantId,
@@ -221,13 +227,13 @@ export class RecordingCatalog {
       endTime,
       durationMs: safeDurationMs,
       sizeBytes,
-      sha256Hash: sealConflict ? undefined : sha256,
+      sha256Hash: sha256,
       codec: codec ?? null,
       width: width ?? null,
       height: height ?? null,
       fps: fps ?? null,
-      status: unusable ? unusable.status : sealConflict ? SegmentStatus.CORRUPTED : SegmentStatus.FINALIZED,
-      quarantineReason: unusable ? unusable.reason : sealConflict ? 'DIFFERS_FROM_SEAL' : null,
+      status: unusable ? unusable.status : SegmentStatus.FINALIZED,
+      quarantineReason: unusable ? unusable.reason : null,
       startPts,
       endPts,
       timebaseNumerator: timebaseNum,
@@ -237,9 +243,7 @@ export class RecordingCatalog {
       storageVolumeId: input.storageVolumeId,
       storageEpochId: input.storageEpochId,
     });
-    if (sealConflict) {
-      if (!sealConflict.alreadyReported) await this.reportSealConflict(segment, sha256!, sealConflict);
-    } else if (isFeatureEnabled(FeatureFlag.FOOTAGE_SEALING)) {
+    if (isFeatureEnabled(FeatureFlag.FOOTAGE_SEALING)) {
       // Never throws: recording does not depend on sealing.
       await this.sealer.sealQuietly(segment);
     }
@@ -247,8 +251,8 @@ export class RecordingCatalog {
   }
 
   /**
-   * A file registered again whose hash differs from its segment's seal (ADR 0018). The first hash wins: the row keeps its
-   * stored hash and becomes CORRUPTED instead of taking the new one. Reported once; the crawler re-registers unusable
+   * A file registered again whose hash differs from its segment's seal (ADR 0018). The first hash wins: the row is not
+   * updated (hash, size and times stay as recorded) and becomes CORRUPTED. Reported once; the crawler re-registers unusable
    * files every pass and must not raise the alarm again each time. A file that matches its repaired hash is not a conflict.
    */
   private async findSealConflict(filePath: string, sha256: string | undefined): Promise<{ sealSha256: string; sealSequence: number; alreadyReported: boolean } | null> {
@@ -260,7 +264,8 @@ export class RecordingCatalog {
     if (!existing || existing.repairedSha256 === sha256) return null;
     const seal = await this.prisma.segmentSeal.findUnique({ where: { segmentId: existing.id }, select: { mediaSha256: true, sequence: true } });
     if (!seal || seal.mediaSha256 === sha256) return null;
-    const alreadyReported = existing.status === SegmentStatus.CORRUPTED && SEAL_CONFLICT_REASONS.has(existing.quarantineReason ?? '');
+    // A row already held by an integrity finding (this one, or a content check before it) was reported then.
+    const alreadyReported = isHeldByIntegrityFinding(existing);
     return { sealSha256: seal.mediaSha256, sealSequence: seal.sequence, alreadyReported };
   }
 
@@ -270,11 +275,15 @@ export class RecordingCatalog {
       await new SegmentIntegrityVerifier(this.prisma, this.storageAdapter).reportFailure(
         { ...segment, camera },
         SegmentStatus.CORRUPTED,
-        'DIFFERS_FROM_SEAL',
+        INTEGRITY_FAILURE.DIFFERS_FROM_SEAL,
         { sealedSha256: conflict.sealSha256, foundSha256, sealSequence: conflict.sealSequence },
       );
     } catch (err: any) {
       console.error(`[RecordingCatalog] segment ${segment.id} differs from its seal and could not be reported: ${err.message}`);
+      // Fail closed: the segment must stop counting as footage even when the report could not be written.
+      await this.prisma.recordingSegment
+        .update({ where: { id: segment.id }, data: { status: SegmentStatus.CORRUPTED, quarantineReason: INTEGRITY_FAILURE.DIFFERS_FROM_SEAL } })
+        .catch((e: any) => console.error(`[RecordingCatalog] segment ${segment.id} could not be marked CORRUPTED: ${e.message}`));
     }
   }
 
@@ -616,16 +625,16 @@ export class RecordingCatalog {
   /**
    * Rows already in the catalog for these files, loaded in batches (one query per few thousand files, not per file).
    */
-  private async knownSegments(files: string[]): Promise<Map<string, { status: SegmentStatus; sizeBytes: bigint }>> {
-    const known = new Map<string, { status: SegmentStatus; sizeBytes: bigint }>();
+  private async knownSegments(files: string[]): Promise<Map<string, KnownSegment>> {
+    const known = new Map<string, KnownSegment>();
     if (typeof (this.prisma as any).recordingSegment?.findMany !== 'function') return known;
     const CHUNK = 2000;
     for (let i = 0; i < files.length; i += CHUNK) {
       const rows = await this.prisma.recordingSegment.findMany({
         where: { filePath: { in: files.slice(i, i + CHUNK) } },
-        select: { filePath: true, status: true, sizeBytes: true },
+        select: { filePath: true, status: true, sizeBytes: true, quarantineReason: true },
       });
-      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes });
+      for (const r of rows) known.set(r.filePath, { status: r.status, sizeBytes: r.sizeBytes, quarantineReason: r.quarantineReason });
     }
     return known;
   }
@@ -636,7 +645,8 @@ export class RecordingCatalog {
    * It is cheap on a healthy disk (audit finding F2): a file whose row is already FINALIZED with the same size is
    * not probed or hashed again. Only new files, files that changed size, and files not yet usable (corrupt,
    * missing) are read, so the crawl does not compete with recording for disk time. Re-checking the content hash of
-   * old files is a separate, slower job and is not done here.
+   * old files is a separate, slower job and is not done here. A file the integrity check found changed (CORRUPTED,
+   * HASH_MISMATCH or SIZE_CHANGED) is not read or re-registered at all: that finding stands until a person acts.
    */
   async reconcileFilesystem(): Promise<number> {
     if (this.isReconciling) return 0;
@@ -656,6 +666,7 @@ export class RecordingCatalog {
         const candidateCamId = parts[parts.length - 2];
 
         const existing = known.get(filePath);
+        if (existing && isHeldByIntegrityFinding(existing)) continue;
         if (existing?.status === SegmentStatus.FINALIZED) {
           const st = await this.storageAdapter.stat(filePath);
           if (st.exists && BigInt(st.size) === existing.sizeBytes) continue;

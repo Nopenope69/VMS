@@ -1,19 +1,19 @@
 {
   "schema": "vigilone.test-status.v1",
-  "generatedAt": "2026-10-06T13:40:44.073Z",
-  "commit": "6da910d98dc6d57c7af67e61595fbb61d362b0d8",
-  "source": "https://github.com/Nopenope69/VMS/actions/runs/37471964509",
+  "generatedAt": "2026-10-07T09:11:54.333Z",
+  "commit": "c291687a360a301b0d73cf1c7702f7c127d89e06",
+  "source": "https://github.com/Nopenope69/VMS/actions/runs/37598013164",
   "projects": [
     {
       "name": "backend",
       "suites": {
-        "total": 180,
-        "passed": 180,
+        "total": 181,
+        "passed": 181,
         "failed": 0
       },
       "tests": {
-        "total": 1477,
-        "passed": 1441,
+        "total": 1486,
+        "passed": 1450,
         "failed": 0,
         "skipped": 36
       },
@@ -699,6 +699,13 @@
           "skipped": 0
         },
         {
+          "file": "backend/src/__tests__/integrityFindingStickyRealDb.test.ts",
+          "status": "passed",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        {
           "file": "backend/src/__tests__/internalCameras.test.ts",
           "status": "passed",
           "passed": 7,
@@ -1285,16 +1292,16 @@
       "name": "ai-worker",
       "suites": {
         "total": 37,
-        "passed": 35,
-        "failed": 1
+        "passed": 36,
+        "failed": 0
       },
       "tests": {
-        "total": 364,
-        "passed": 354,
-        "failed": 1,
-        "skipped": 9
+        "total": 363,
+        "passed": 358,
+        "failed": 0,
+        "skipped": 5
       },
-      "success": false,
+      "success": true,
       "suiteDetails": [
         {
           "file": "services/ai-worker/src/__tests__/adapterHttp.test.ts",
@@ -1389,10 +1396,10 @@
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenPose.test.ts",
-          "status": "failed",
-          "passed": 0,
-          "failed": 1,
-          "skipped": 4
+          "status": "passed",
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0
         },
         {
           "file": "services/ai-worker/src/__tests__/goldenQueryRewrite.test.ts",
@@ -1559,11 +1566,11 @@
     }
   ],
   "totals": {
-    "suites": 217,
-    "tests": 1841,
-    "passed": 1795,
-    "failed": 1,
-    "skipped": 45
+    "suites": 218,
+    "tests": 1849,
+    "passed": 1808,
+    "failed": 0,
+    "skipped": 41
   },
-  "allPassed": false
+  "allPassed": true
 }
