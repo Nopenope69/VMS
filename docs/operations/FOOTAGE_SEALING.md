@@ -19,6 +19,8 @@ Off by default. Set `VIGILONE_FEATURE_FOOTAGE_SEALING=true` and restart the back
 
 ## Checking a camera's chain
 
+On the **Footage Integrity** tab, "Check chain" next to a camera runs this check and shows the result. Through the API:
+
 `GET /api/v1/segment-seals/cameras/:cameraId/verify` (needs `CAMERA_VIEW`). Reads only. The answer lists:
 
 | Field | Meaning |

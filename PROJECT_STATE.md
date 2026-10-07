@@ -473,10 +473,22 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   - Sandbox lessons: tests read `DATABASE_URL` (the default in `src/__tests__/setup.ts` may not match the role you create:
     export the URL); install pgvector **before** the first `migrate deploy` (a failed migration row breaks `goLiveCheck`);
     real-DB suites share one database, so run them in band (`npm test` does) when comparing with CI.
+- **Session 37 (2026-10-07), branch `claude/funny-keller-vmjlaz`: camera-sabotage detection** (ADR 0019, flag
+  `CAMERA_SABOTAGE` on the backend and `AI_SABOTAGE_DETECTION` on the worker, both off; `docs/operations/CAMERA_SABOTAGE.md`).
+  The AI worker measures every sampled substream frame (classical: grey-level spread, saturated share, contrast-normalised
+  99th-percentile gradient as sharpness, brightness-invariant similarity of a coarse picture and edge map to a learnt
+  reference) and reports a covered, defocused, moved or blinded camera that lasts 10 s, once; `POST
+  /api/v1/internal/camera-sabotage` raises the existing `SCENE_CHANGE` event (it had no producer; `BLINDED` added, events.v1
+  `camera.degraded` / `TAMPER_BLINDED`), which `SCENE_CHANGE` rules turn into alarms. Thresholds set on four photographs
+  with ffmpeg-simulated noise, blur, covers, moves, glare, dusk and night; **not run on a real camera**. No UI change (the
+  rule builder already had the trigger). Then, in the same PR (#56): the end of a condition is recorded
+  (`CameraSabotageCondition` rows, informational `CAMERA_TAMPER_CLEARED` alert, no alarm) and a **Footage Integrity tab**
+  (operators and administrators, Alt+I; `GET /api/v1/footage-integrity/cameras`) shows per camera the tamper status, recent
+  conditions, sealed recordings with a "Check chain" button (the existing seal-chain check) and held recordings.
 - **Remaining towards the North Star (read in Session 35 from all strategy docs; next chat builds from here):**
-  1. **Footage integrity, parts 2 and 3:** classical camera-sabotage detection (covered, defocused, moved, blinded; no model,
-     no licence), then C2PA-style export manifests (library licence check first). A seal UI (chain status per camera) is also
-     open.
+  1. **Footage integrity, part 3:** C2PA-style export manifests (library licence check first). ~~Camera-sabotage
+     detection~~ done in Session 37. ~~A seal UI and a sabotage view~~ done in Session 37 (Footage Integrity tab). Still
+     open there: per-camera thresholds, and conditions left open when the worker restarts.
   2. **Describe-what-to-watch rules** and calibrated semantic triggers: blocked on the owner approving Qwen3-4B.
   3. **V1.0 understand-and-act (North Star section 6):** investigation entity (the context graph, PostgreSQL), VLM on short
      clips, AI-proposed actions executed by the rule engine, one or two vertical packs (owner picks).

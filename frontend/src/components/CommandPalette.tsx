@@ -18,6 +18,7 @@ import {
   Radio,
   CheckCircle2,
   CornerDownLeft,
+  ShieldAlert,
 } from 'lucide-react';
 
 export interface CommandItem {
@@ -180,6 +181,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         shortcut: 'Alt + 0',
         onSelect: () => {
           onSelectTab('audit');
+          onClose();
+        },
+      },
+      {
+        id: 'nav-integrity',
+        title: 'Footage Integrity',
+        subtitle: 'Camera tamper status, sealed recordings and held recordings',
+        category: 'CONSOLES',
+        icon: ShieldAlert,
+        shortcut: 'Alt + I',
+        onSelect: () => {
+          onSelectTab('integrity');
           onClose();
         },
       },

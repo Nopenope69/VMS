@@ -12,6 +12,7 @@ const Investigation = lazy(() => import('./pages/Investigation'));
 const FloorplanView = lazy(() => import('./pages/FloorplanView'));
 const StorageManagement = lazy(() => import('./pages/StorageManagement'));
 const ApplianceConsole = lazy(() => import('./pages/ApplianceConsole'));
+const FootageIntegrity = lazy(() => import('./pages/FootageIntegrity'));
 import { AlertTriangle } from 'lucide-react';
 import FirstRunWizard from './pages/FirstRunWizard';
 import Login from './pages/Login';
@@ -192,7 +193,7 @@ export const App: React.FC = () => {
 
   const allowedTabsByRole: Record<string, string[]> = {
     VIEWER: ['live', 'investigation', 'floorplans', 'playback'],
-    OPERATOR: ['live', 'investigation', 'floorplans', 'playback', 'devices', 'anpr', 'events'],
+    OPERATOR: ['live', 'investigation', 'floorplans', 'playback', 'devices', 'anpr', 'events', 'integrity'],
     TENANT_ADMIN: [
       'live',
       'investigation',
@@ -202,6 +203,7 @@ export const App: React.FC = () => {
       'anpr',
       'events',
       'evidence',
+      'integrity',
       'identity',
       'federation',
       'users',
@@ -218,6 +220,7 @@ export const App: React.FC = () => {
       'anpr',
       'events',
       'evidence',
+      'integrity',
       'identity',
       'federation',
       'users',
@@ -320,6 +323,7 @@ export const App: React.FC = () => {
           )}
           {currentTab === 'events' && <Events />}
           {currentTab === 'evidence' && <Evidence />}
+          {currentTab === 'integrity' && <FootageIntegrity />}
           {currentTab === 'identity' && (
             <OutOfScopeNotice
               name="Enterprise SSO & Identity Federation"

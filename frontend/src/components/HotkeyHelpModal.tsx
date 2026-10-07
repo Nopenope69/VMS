@@ -42,6 +42,7 @@ export const HotkeyHelpModal: React.FC<HotkeyHelpModalProps> = ({ isOpen, onClos
         { key: 'Alt + 3', description: 'Facility Floorplans' },
         { key: 'Alt + 4', description: 'Alarms & Incident Command' },
         { key: 'Alt + 5', description: 'Section 63 BSA Evidence' },
+        { key: 'Alt + I', description: 'Footage Integrity (tamper status, seals)' },
         { key: 'Alt + 6', description: 'Camera Fleet & ONVIF Devices' },
         { key: 'Alt + 7', description: 'Storage Management' },
         { key: 'Alt + 8', description: 'Appliance Host Telemetry' },

@@ -6,6 +6,28 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 37 (2026-10-07): camera-sabotage detection (ADR 0019, flag `CAMERA_SABOTAGE`, off by default)
+
+Branch `claude/funny-keller-vmjlaz`. Second part of footage integrity. The backend had a `SCENE_CHANGE` event kind
+(`OCCLUSION | DEFOCUS | DISPLACEMENT`), a rule trigger and an events.v1 mapping, but nothing produced it. Now the AI worker
+(`AI_SABOTAGE_DETECTION=true`) checks every sampled substream frame with classical measurements (no model, no licence) and
+reports a covered, defocused, moved or blinded camera once it has lasted 10 s. The backend records it as that event. Operations
+note `docs/operations/CAMERA_SABOTAGE.md`.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| Detector: reference learnt per camera and followed slowly; blinded / covered / defocused / moved; hold, grace, clear, re-arm, relearn of a moved view, stream gaps, letterbox padding excluded | DONE_UNVERIFIED on real cameras. 55 tests on four photographs decoded by real ffmpeg with sensor noise: each of six sabotage filters on each photo is reported once with the right type; dusk, night, a person, a 5% nudge and normal frames raise nothing. Mutation checks: weakening the cover, focus, hold, glare or low-detail rule fails 2 to 47 tests | `services/ai-worker/src/sabotageDetector.ts` |
+| Supervisor: every sampled frame checked before the motion gate; report retried twice on transport failure, not on refusal; a 501 is logged once; a throwing check never stops inference | DONE_UNVERIFIED (unit tests with stubs) | `streamSupervisor.ts`, `apiClient.ts`, `main.ts` |
+| `POST /api/v1/internal/camera-sabotage`: flag (501 off), validation, camera and tenant check (404), future-time refusal, event id from camera, type and start (a retry is evaluated once), `SCENE_CHANGE` event with measurements, alarm through a `SCENE_CHANGE` rule, events.v1 `camera.degraded` / `TAMPER_<type>` (`BLINDED` added) | DONE_VERIFIED on the real database: `cameraSabotageRealDb.test.ts` 13/13 | `services/camera/cameraSabotage.ts`, `routes/internal.routes.ts` |
+| End of a condition: worker reports CLEARED (restored after 30 s, or a moved view relearnt); `CameraSabotageCondition` rows (migration `20261019000000`) closed once; informational `CAMERA_TAMPER_CLEARED` alert, no rule, no alarm; 404 for a condition never reported or of another tenant | DONE_VERIFIED on the real database (`cameraSabotageRealDb.test.ts` 20/20; removing the close-once guard fails a test) and worker unit tests | `cameraSabotage.ts`, `sabotageDetector.ts` |
+| Footage Integrity page: `GET /api/v1/footage-integrity/cameras` (CAMERA_VIEW, tenant only) and the tab (operators and administrators, Alt+I): open and recent conditions, sealed recordings with a "Check chain" button, held recordings, a notice for each feature that is off | DONE_VERIFIED in a real browser: `e2e/footage-integrity.spec.ts` 3/3 on real seals signed with the test appliance key (intact chain; a changed stored hash reported as `STORED_HASH_DIFFERS`); viewers have no tab. Whole browser suite 31 passed | `routes/footageIntegrity.routes.ts`, `pages/FootageIntegrity.tsx`, `scripts/e2e/seed-integrity.ts` |
+| Thresholds measured on real site footage; CPU cost on the reference hardware; per-camera thresholds; restoring open conditions after a worker restart | NOT_STARTED | |
+
+Local runs after the Footage Integrity page was added: backend in band (PostgreSQL 16 with pgvector) **184 suites, 1479
+passed, 42 skipped, 0 failed**; ai-worker **31 suites, 341 passed, 83 skipped** (golden model tests skip without model
+files); browser suite **31 passed**; `tsc --noEmit` clean on backend, worker and frontend; frontend build and `check:no-demo`
+pass; the six gates pass; worker build and `check-sdk` pass. PR #56. Nothing has run on a real camera.
+
 ## Session 36 (2026-10-07): an integrity finding is no longer undone by re-registration (audit F13)
 
 Branch `claude/exciting-heisenberg-2ylmpx`. The five-minute crawler re-registered a segment the integrity check had marked
@@ -48,7 +70,8 @@ Ed25519 key) in a per-camera hash chain, anchored into the audit chain every 15 
 | First hash wins: a sealed file re-registered with other bytes keeps its hash, becomes CORRUPTED `DIFFERS_FROM_SEAL`, reported once even though the crawler re-registers it every pass; the periodic check reports `DB_HASH_DIFFERS_FROM_SEAL`; export refuses `EXPORT_SEGMENT_SEAL_MISMATCH` | DONE_UNVERIFIED (real DB tests) | same, `segmentIntegrity.ts`, `evidenceArchive.service.ts` |
 | Chain report `GET /api/v1/segment-seals/cameras/:cameraId/verify` and anchor worker | DONE_UNVERIFIED (real DB: edited, removed and anchored-then-cut seals, a bad signature, tenant isolation, 501 with the flag off) | `routes/segmentSeal.routes.ts` |
 | `segment_seals.json` in exports, verifier checks, `--require-segment-seals`, format parity test (300 seals) | DONE_UNVERIFIED (real export path, verifier run as a separate process) | `tools/vigilone-verify/vigilone-verify.mjs` |
-| Camera-sabotage detection, C2PA-style manifests | NOT_STARTED (next parts of footage integrity; C2PA needs a library licence check) | |
+| Camera-sabotage detection | Session 37 (ADR 0019) | |
+| C2PA-style manifests | NOT_STARTED (C2PA needs a library licence check) | |
 
 **Found on the way, fixed separately:** an integrity finding was undone when the crawler re-registered the file. Fixed for
 every segment by #54 (Session 36, audit F13). When merging, the seal reasons `DIFFERS_FROM_SEAL` and

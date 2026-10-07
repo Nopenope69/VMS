@@ -17,6 +17,7 @@ import {
   KeyRound,
   Search,
   Keyboard,
+  ShieldAlert,
 } from 'lucide-react';
 import api from '../services/api';
 import { FeatureFlagName, useFeatureFlags } from '../services/features';
@@ -101,6 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const incidentItems: NavItem[] = [
     { id: 'events', index: '4', label: 'Alarms', icon: Bell, badge: unackAlarms, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
     { id: 'evidence', index: '5', label: 'Evidence (Sec. 63)', icon: ShieldCheck, roles: ['TENANT_ADMIN', 'SUPER_ADMIN'] },
+    { id: 'integrity', index: 'I', label: 'Footage Integrity', icon: ShieldAlert, roles: ['OPERATOR', 'TENANT_ADMIN', 'SUPER_ADMIN'] },
   ];
 
   const adminItems: NavItem[] = [

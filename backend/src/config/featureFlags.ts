@@ -34,6 +34,7 @@ export enum FeatureFlag {
   ALARM_TRIAGE = 'ALARM_TRIAGE',
   INCIDENT_SUMMARY = 'INCIDENT_SUMMARY',
   FOOTAGE_SEALING = 'FOOTAGE_SEALING',
+  CAMERA_SABOTAGE = 'CAMERA_SABOTAGE',
 }
 
 export interface FeatureFlagDefinition {
@@ -214,6 +215,15 @@ export const FEATURE_FLAGS: Readonly<Record<FeatureFlag, FeatureFlagDefinition>>
     workers: ['segmentSealAnchor'],
     status:
       'Each recorded segment is sealed when it is registered: its SHA-256, times and size are signed with the appliance Ed25519 key and chained to the camera\'s previous seal, and the chain head is written into the audit chain every 15 minutes. A file or stored hash that later differs from its seal is reported as an integrity failure, never resealed. Exports carry the seals, and vigilone-verify checks them offline. Someone with root on the appliance can still read the key; seals stop lesser edits and accidents. Tested on the real database with real files; not run on a live appliance.',
+  },
+  [FeatureFlag.CAMERA_SABOTAGE]: {
+    flag: FeatureFlag.CAMERA_SABOTAGE,
+    envVar: envVarFor(FeatureFlag.CAMERA_SABOTAGE),
+    title: 'Camera-sabotage detection',
+    routePrefixes: [],
+    workers: [],
+    status:
+      'The AI worker (AI_SABOTAGE_DETECTION=true) watches every sampled substream frame for a covered, defocused, moved or blinded camera with classical image measurements (no model) and reports a condition that lasts 10 s once; the backend raises it as a camera-tamper event that SCENE_CHANGE rules turn into alarms. Thresholds were set on four photographs with simulated noise, blur, covers, moves and glare; not run on a real camera, so false-alarm rates on real sites are unknown.',
   },
 });
 

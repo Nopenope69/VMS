@@ -476,6 +476,7 @@ model Camera {
   exports               EvidenceExport[]
   recordingSchedule     RecordingSchedule?
   detectionZones        DetectionZone[]
+  sabotageConditions    CameraSabotageCondition[]
   ptzPresets            PtzPreset[]
   ptzTours              PtzTour[]
   ptzLock               PtzLock?
@@ -485,8 +486,8 @@ model Camera {
   detectionEvents       DetectionEvent[]
   objectCrops           ObjectCrop[]
   objectTracks          ObjectTrack[]
-  neighboursA           CameraNeighbour[]       @relation("NeighbourA")
-  neighboursB           CameraNeighbour[]       @relation("NeighbourB")
+  neighboursA           CameraNeighbour[]         @relation("NeighbourA")
+  neighboursB           CameraNeighbour[]         @relation("NeighbourB")
   vehicleObservations   VehicleObservation[]
   spatialAnalyticsRules SpatialAnalyticsRule[]
   spatialPlacement      CameraSpatialPlacement?
@@ -2225,4 +2226,26 @@ model SegmentSeal {
   createdAt      DateTime @default(now())
 
   @@unique([cameraId, sequence])
+}
+
+/// A camera-sabotage condition reported by the AI worker (ADR 0019): covered, defocused, moved or blinded, from the
+/// time it began until the worker reports it gone (`clearedAt`). One row per SCENE_CHANGE event it raised.
+model CameraSabotageCondition {
+  id               String    @id @default(uuid())
+  tenantId         String
+  cameraId         String
+  camera           Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  changeType       String
+  startedAt        DateTime
+  confirmedAt      DateTime
+  clearedAt        DateTime?
+  /// RESTORED (the picture returned to normal) or RELEARNED (a moved camera's new view became its reference).
+  clearReason      String?
+  score            Float
+  method           String
+  measurementsJson Json
+  eventId          String    @unique
+  createdAt        DateTime  @default(now())
+
+  @@index([tenantId, cameraId, confirmedAt])
 }

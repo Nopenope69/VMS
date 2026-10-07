@@ -10,6 +10,7 @@ import { spatialEngine } from '../services/spatial/engine';
 import { AnprIngestionService, AnprIngestionError } from '../services/anpr/anprIngestion.service';
 import { incidentOrchestrator, plateAggregator as anprAggregator, trackIndex } from '../composition';
 import { FeatureFlag, isFeatureEnabled } from '../config/featureFlags';
+import { CameraSabotageError, CameraSabotageService } from '../services/camera/cameraSabotage';
 
 let currentSpatialEngine = spatialEngine;
 
@@ -295,6 +296,28 @@ router.post('/anpr/observations', async (req: Request, res: Response) => {
   } catch (err: any) {
     if (err instanceof AnprIngestionError) return res.status(err.status).json({ error: err.message, code: err.code });
     return res.status(500).json({ error: err.message });
+  }
+});
+
+/** Camera-sabotage reports from the AI worker (ADR 0019). Off with the CAMERA_SABOTAGE flag. */
+let cameraSabotage: CameraSabotageService | null = null;
+router.post('/camera-sabotage', async (req: Request, res: Response) => {
+  if (!isFeatureEnabled(FeatureFlag.CAMERA_SABOTAGE)) {
+    return res.status(501).json({ error: 'Camera-sabotage detection is disabled on this appliance', code: 'FEATURE_DISABLED' });
+  }
+  try {
+    cameraSabotage ??= new CameraSabotageService(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
+    const { eventId, result, duplicate } = await cameraSabotage.report(req.body);
+    return res.json({
+      eventId,
+      ...(duplicate || result.duplicate ? { duplicate: true } : {}),
+      rulesTriggered: result.rulesTriggered,
+      ...(result.alarmId ? { alarmId: result.alarmId } : {}),
+    });
+  } catch (err: any) {
+    if (err instanceof CameraSabotageError) return res.status(err.status).json({ error: err.message, code: err.code });
+    console.error('Error ingesting camera-sabotage report:', err);
+    return res.status(500).json({ error: 'Failed to ingest camera-sabotage report' });
   }
 });
 

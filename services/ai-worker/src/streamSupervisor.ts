@@ -1,10 +1,11 @@
 import { EventEmitter } from 'events';
 import { StreamManager } from './streamManager';
 import { ResourceGovernor } from './frameQueue';
-import { AuthenticatedInternalApiClient } from './apiClient';
+import { AuthenticatedInternalApiClient, InternalApiError } from './apiClient';
 import { AiWorker } from './worker';
 import { MotionGate, MotionGateOptions } from './motionGate';
 import { MetricsRegistry } from './metrics';
+import { SABOTAGE_METHOD, SabotageDetector, SabotageFinding } from './sabotageDetector';
 import {
   DiscoveredCamera,
   CameraStreamConfig,
@@ -23,6 +24,10 @@ export interface StreamSupervisorConfig {
   /** P2.5 motion gating ('motion', default) or every sampled frame ('off'). */
   gateMode?: 'motion' | 'off';
   gateOptions?: MotionGateOptions;
+  /** Camera-sabotage detection on every sampled frame (ADR 0019); off when absent. */
+  sabotage?: SabotageDetector;
+  /** Waits before the 2nd and 3rd attempt to report a sabotage finding. Default 2 s, 4 s. */
+  sabotageRetryDelaysMs?: number[];
 }
 
 /**
@@ -56,6 +61,9 @@ export class StreamSupervisor extends EventEmitter {
   private readonly metrics: MetricsRegistry;
   private readonly gate: MotionGate;
   private consecutiveSyncFailures = 0;
+  private readonly sabotage?: SabotageDetector;
+  private readonly sabotageRetryDelaysMs: number[];
+  private sabotageDisabledLogged = false;
 
   constructor(config: StreamSupervisorConfig) {
     super();
@@ -67,6 +75,8 @@ export class StreamSupervisor extends EventEmitter {
     this.defaultStreamConfig = config.defaultStreamConfig || {};
     this.metrics = config.metrics || new MetricsRegistry();
     this.gate = new MotionGate({ ...(config.gateOptions || {}), mode: config.gateMode ?? config.gateOptions?.mode ?? 'motion' });
+    this.sabotage = config.sabotage;
+    this.sabotageRetryDelaysMs = config.sabotageRetryDelaysMs ?? [2000, 4000];
   }
 
   /**
@@ -164,8 +174,10 @@ export class StreamSupervisor extends EventEmitter {
     // StreamManager enqueues each decoded frame into the bounded per-camera queue and then emits
     // 'frame'. The queue is the only source of work: consuming the emitted frame as well would
     // infer the same frame twice.
-    manager.on('frame', () => {
+    manager.on('frame', (frame?: VideoFrame) => {
       this.metrics.inc('vigilone_ai_frames_sampled_total', 'Frames sampled from the loopback stream', { cameraId: camera.id });
+      // Every sampled frame, before the motion gate: a covered camera shows no motion.
+      if (frame) this.observeSabotage(frame);
       this.pump(camera.id);
     });
 
@@ -181,6 +193,77 @@ export class StreamSupervisor extends EventEmitter {
     manager.start();
 
     return manager;
+  }
+
+  /** Never throws: a failure here must not stop frame acquisition or inference. */
+  private observeSabotage(frame: VideoFrame): void {
+    if (!this.sabotage) return;
+    let findings: SabotageFinding[];
+    try {
+      findings = this.sabotage.observe(frame);
+    } catch (err: any) {
+      this.metrics.inc('vigilone_ai_sabotage_errors_total', 'Camera-sabotage checks that failed');
+      this.emit('warn', `camera-sabotage check failed for ${frame.cameraId}: ${err?.message || err}`);
+      return;
+    }
+    for (const f of findings) {
+      this.metrics.inc('vigilone_ai_sabotage_findings_total', 'Camera-sabotage conditions confirmed and cleared, by type', { type: f.type, state: f.state });
+      this.emit('sabotage', f);
+      void this.reportSabotage(f);
+    }
+  }
+
+  /** Sends a finding to the backend, retrying transport failures; a refusal (4xx/501) is not retried. */
+  private async reportSabotage(f: SabotageFinding): Promise<void> {
+    const body =
+      f.state === 'CLEARED'
+        ? {
+            state: 'CLEARED',
+            cameraId: f.cameraId,
+            tenantId: f.tenantId,
+            changeType: f.type,
+            startedAtUtc: f.startedAt.toISOString(),
+            clearedAtUtc: (f.clearedAt ?? f.confirmedAt).toISOString(),
+            clearReason: f.clearReason ?? 'RESTORED',
+            method: SABOTAGE_METHOD,
+          }
+        : {
+            state: 'CONFIRMED',
+            cameraId: f.cameraId,
+            tenantId: f.tenantId,
+            changeType: f.type,
+            score: f.score,
+            threshold: f.threshold,
+            startedAtUtc: f.startedAt.toISOString(),
+            confirmedAtUtc: f.confirmedAt.toISOString(),
+            method: SABOTAGE_METHOD,
+            measurements: f.measurements,
+          };
+    const counter = 'vigilone_ai_sabotage_reports_total';
+    const help = 'Camera-sabotage reports sent to the backend, by outcome';
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.apiClient.reportCameraSabotage(body);
+        this.metrics.inc(counter, help, { outcome: 'accepted' });
+        return;
+      } catch (err: any) {
+        const status = err instanceof InternalApiError ? err.statusCode : undefined;
+        if (status === 501) {
+          this.metrics.inc(counter, help, { outcome: 'backend_disabled' });
+          if (!this.sabotageDisabledLogged) {
+            this.sabotageDisabledLogged = true;
+            this.emit('warn', 'camera-sabotage findings are not recorded: the backend has VIGILONE_FEATURE_CAMERA_SABOTAGE off');
+          }
+          return;
+        }
+        if ((status !== undefined && status < 500) || attempt >= this.sabotageRetryDelaysMs.length) {
+          this.metrics.inc(counter, help, { outcome: status !== undefined && status < 500 ? 'refused' : 'failed' });
+          this.emit('warn', `camera-sabotage report for ${f.cameraId} (${f.type} ${f.state.toLowerCase()}) was not recorded: ${err?.message || err}`);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, this.sabotageRetryDelaysMs[attempt]));
+      }
+    }
   }
 
   /**
@@ -268,6 +351,7 @@ export class StreamSupervisor extends EventEmitter {
       this.streams.delete(cameraId);
       this.governor.releaseStream(cameraId);
       this.gate.forget(cameraId);
+      this.sabotage?.forget(cameraId);
       await manager.stop();
     }
   }

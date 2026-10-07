@@ -16,6 +16,7 @@ import {
   StreamDegradedPayload,
   DigitalIoPayload,
   SceneChangePayload,
+  SceneChangeType,
   SystemAlertPayload,
   SpatialRef,
   EvidenceRef,
@@ -362,7 +363,10 @@ export function fromSceneChange(
   params: BaseEventParams & {
     score: number;
     threshold: number;
-    changeType: 'OCCLUSION' | 'DEFOCUS' | 'DISPLACEMENT';
+    changeType: SceneChangeType;
+    method?: string;
+    startedAtUtc?: string;
+    measurements?: Record<string, number>;
   }
 ): VigilOneEvent<SceneChangePayload> {
   return createVigilOneEvent<SceneChangePayload>({
@@ -376,6 +380,9 @@ export function fromSceneChange(
       score: params.score,
       threshold: params.threshold,
       changeType: params.changeType,
+      ...(params.method ? { method: params.method } : {}),
+      ...(params.startedAtUtc ? { startedAtUtc: params.startedAtUtc } : {}),
+      ...(params.measurements ? { measurements: params.measurements } : {}),
     },
   });
 }
