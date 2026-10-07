@@ -240,7 +240,7 @@ others). Worker 32/33 suites, 323 passed, 2 skipped (RF-DETR, model not fetched)
 | Item | Label | Evidence and limits |
 | --- | --- | --- |
 | Rules and word list | DONE_VERIFIED on labelled sets | `queryParser.test.ts` (11 tests, floors per set). English and Hinglish held-out set 28/30 on its first run (29/30 after the "last hour" fix); `dev` 39/40. Sets written by the coding agent; see `docs/ai/nl-search-evaluation.md`. |
-| Rewrite model | DONE_VERIFIED on labelled sets | Devanagari set 0/20 with rules alone, 19/20 with the Qwen3-4B rewrite; median 2.4 s on CPU. `goldenQueryRewrite.test.ts` runs the real model (3 requests and a determinism check). The model needs the owner's licence approval to run in the product. |
+| Rewrite model | DONE_VERIFIED on labelled sets | Devanagari set 0/20 with rules alone, 19/20 with the Qwen3-4B rewrite; median 2.4 s on CPU. `goldenQueryRewrite.test.ts` runs the real model (3 requests and a determinism check). The owner approved running it in the product on 2026-10-07 (`model-license-exceptions.json`, Session 37). |
 | Endpoint | DONE_VERIFIED | `nlSearchRealDb.test.ts`: 501 with the flag off, 400 on a bad request, site time zone, another tenant's cameras never matched, only unreadable requests sent to the model with this tenant's names, original reading wins, fallback with the reason when the model fails or is not set up. |
 | Find panel | DONE_VERIFIED in a browser | `plain-language-search.spec.ts`: the request fills the form and lists what was understood, removing a part changes the search, the unread notice without a model. |
 | Real operators' requests | NOT_STARTED / BLOCKED_HUMAN | Needs the pilot: operators' own requests, scored the same way. |

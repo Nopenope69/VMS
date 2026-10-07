@@ -83,6 +83,7 @@ cd backend && npx ts-node scripts/eval/nl-search.ts --rewrite-url http://127.0.0
   one zone.
 - Without the model (no `QUERY_LLM_ADAPTER_URL`) or when it fails, the answer is what the rules read. The Find
   panel says that some words could not be read and why.
-- Qwen3-4B is a **candidate** (`models.lock.json`, Apache-2.0 weights, training data not fully disclosed). The
-  product refuses to run it until the owner approves it in `model-license-exceptions.json`.
+- Qwen3-4B is a candidate in `models.lock.json` (Apache-2.0 weights, training data not fully disclosed). The owner
+  approved running it in the product on 2026-10-07 (`model-license-exceptions.json`); this is a business decision,
+  not a legal clearance. The approval is checked against the model's SHA-256.
 - The model rewrites text only. It never sees video, and it never sets a filter itself.

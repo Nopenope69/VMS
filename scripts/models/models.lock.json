@@ -907,7 +907,7 @@
    },
    "governance": {
     "status": "PENDING_HUMAN_REVIEW",
-    "question": "Qwen3-4B weights are Apache-2.0, but its training data is undisclosed. Used only to rewrite a search request into English on site; VigilOne's own rules set every filter and the operator sees them before searching."
+    "question": "Qwen3-4B weights are Apache-2.0, but its training data is undisclosed. Used on site to rewrite a search request into English and to draft describe-what-to-watch rules; VigilOne's own rules set every filter and the operator reviews every draft. The owner approved running it in the product on 2026-10-07 (model-license-exceptions.json); legal review remains advisable."
    }
   },
   {

@@ -21,6 +21,13 @@
       "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 01LeRvHiXZZBz37VxpWr2oGZ (\"You have my go ahead for all licenses. Now build\")",
       "approvedAt": "2026-10-06",
       "reason": "Owner decision to run RTMPose-s (body7) for person-down and fence-climbing detection. Code and weights are Apache-2.0 (OpenMMLab MMPose, ONNX export by the project). The training mix includes datasets with non-commercial or research terms (AI Challenger, CrowdPose, MPII, sub-JHMDB, Halpe, PoseTrack18); under the owner's training-data policy of 2026-10-05 this is accepted by the owner, who bears the risk. The research recommended Indian legal advice, which has not been taken. The result is advisory: pose never changes an alarm by itself."
+    },
+    {
+      "key": "qwen3-4b-q4km",
+      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+      "approvedBy": "Nopenope69 (repository owner); entered by the coding agent (Claude Code) at the owner's explicit instruction in session 014G2eLuSVkjBrHRPchhheRJ (\"Approving the Qwen3-4B text model, which unlocks 'describe what to watch' rules.\")",
+      "approvedAt": "2026-10-07",
+      "reason": "Owner decision to run Qwen3-4B (Q4_K_M GGUF, official Qwen release) on site as the local text model: plain-language search rewriting and drafting describe-what-to-watch rules. Code and weights are Apache-2.0; the training data (about 36 trillion tokens) is undisclosed, so its rights are not documented. This is a business decision by the owner, not a legal clearance; Indian legal advice was recommended and has not been taken. The model only drafts: VigilOne's own rules and the operator decide every filter and every saved rule."
     }
   ]
 }

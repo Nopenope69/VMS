@@ -427,7 +427,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   (unattended bag, wrong way) are on `claude/amazing-hypatia-hkgolw` (Session 28); person down and fence climbing
   need a pose model and a licence decision (merged, #43). Bucket 6 (privacy tools) is parked.
 - **Plain-language search** (first of the five, Session 29, feature `NL_SEARCH`): rules with an English, Hinglish
-  and Devanagari word list fill the Find form; Qwen3-4B (candidate, needs the owner's approval to run in the
+  and Devanagari word list fill the Find form; Qwen3-4B (candidate, approved by the owner on 2026-10-07, to run in the
   product) only rewrites requests the word list cannot read, and what the rules read in the original wins.
   Measured in `docs/ai/nl-search-evaluation.md` (merged, #44).
 - **Model research (Session 31, 2026-10-05):** `docs/strategy/model-research-2026-10-05/` (README summary plus four
@@ -489,7 +489,8 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   1. **Footage integrity, part 3:** C2PA-style export manifests (library licence check first). ~~Camera-sabotage
      detection~~ done in Session 37. ~~A seal UI and a sabotage view~~ done in Session 37 (Footage Integrity tab). Still
      open there: per-camera thresholds, and conditions left open when the worker restarts.
-  2. **Describe-what-to-watch rules** and calibrated semantic triggers: blocked on the owner approving Qwen3-4B.
+  2. **Describe-what-to-watch rules** and calibrated semantic triggers: **unblocked**, the owner approved Qwen3-4B on
+     2026-10-07 (Session 37).
   3. **V1.0 understand-and-act (North Star section 6):** investigation entity (the context graph, PostgreSQL), VLM on short
      clips, AI-proposed actions executed by the rule engine, one or two vertical packs (owner picks).
   4. **Threat detections still open:** fire/smoke (own fine-tune on D-Fire/Pyro-SDIS), weapons (staged data, operator
