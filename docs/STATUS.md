@@ -6,6 +6,18 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 35 (2026-10-07): close out Session 34, and the status workflow fix
+
+Branch `claude/upbeat-goldberg-l9x44s`. Session 34 is merged (#52). The status run on its merge commit
+(run 37471964509, commit `6da910d`) failed one ai-worker suite, `goldenPose.test.ts`: #52 added the RTMPose-s fetch to
+`ci.yml` but not to `status.yml`, which also sets `VIGILONE_REQUIRE_MODEL_TESTS=1`, so the suite failed instead of skipping.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| `status.yml` fetches `rtmpose-s-body7-256x192` like `ci.yml` | DONE_UNVERIFIED in CI (the status run happens after merge). Locally: with the model file hidden the suite gives the CI result (1 failed, 4 skipped); with the file fetched and SHA-256 verified, 4 passed | `.github/workflows/status.yml` |
+
+Nothing else changed. No flag default or shipping claim changed.
+
 ## Session 34 (2026-10-06): person down and fence climbing (body pose)
 
 Branch `claude/jolly-wozniak-j9gqjy`. The owner's first priority (`PROJECT_STATE.md` section 9), built on RTMPose-s. ADR 0017,
