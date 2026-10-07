@@ -6,6 +6,17 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
+## Session 37, second PR (2026-10-07): rule builder reachable, alarm grouping field, frame-exact stepping on every camera
+
+Branch `claude/funny-keller-vmjlaz` (restarted from `master` after #56 merged).
+
+| Piece | State | Where |
+| --- | --- | --- |
+| Rule builder opens from the Alarms page (it opened only from the Federation console, which v1.0 never shows, so no operator could reach it) | DONE_VERIFIED in a real browser (`e2e/automation-rules.spec.ts` 3/3, as an OPERATOR) | `pages/Events.tsx` |
+| Alarm grouping field on TRIGGER_ALARM actions (`incidentWindowSeconds`, ADR 0014): saved as entered, empty means off, out-of-range or fractional values refused by the form (and the backend); shown in the rule list | DONE_VERIFIED in a real browser (same spec) | `components/EventActionRuleModal.tsx` |
+| Every camera of a synchronised view on a real frame of its own after a step (`frameShownAt`); per-camera `framePrecision` EXACT or APPROXIMATE; tile badge; invented fallback PTS removed | DONE_VERIFIED: `frameStepExact.test.ts` 10/10 with two real recordings at different frame rates 137 ms apart and an unreadable file; `e2e/frame-step.spec.ts` with real ffmpeg recordings | `playbackSync.service.ts`, `recordingCatalog.service.ts`, `pages/Investigation.tsx` |
+| Owner approval of Qwen3-4B recorded; both vertical packs chosen | DONE (`check:model-licenses` passes) | `scripts/models/model-license-exceptions.json`, North Star P3 |
+
 ## Session 37 (2026-10-07): camera-sabotage detection (ADR 0019, flag `CAMERA_SABOTAGE`, off by default)
 
 Branch `claude/funny-keller-vmjlaz`. Second part of footage integrity. The backend had a `SCENE_CHANGE` event kind
