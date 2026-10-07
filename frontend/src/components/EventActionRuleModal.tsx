@@ -271,6 +271,12 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                             className="px-1.5 py-0.5 rounded bg-vms-surface border border-vms-border text-vms-accent text-[10px]"
                           >
                             {act.type}
+                            {act.type === 'TRIGGER_ALARM' && Number(act.config?.incidentWindowSeconds) > 0 && (
+                              <span className="text-vms-muted" data-testid="rule-incident-window">
+                                {' '}
+                                · groups repeats within {act.config.incidentWindowSeconds}s
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -421,7 +427,8 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                         {index + 1}
                       </div>
 
-                      <div className="flex-1 grid grid-cols-3 gap-2">
+                      <div className="flex-1 space-y-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block text-[10px] text-vms-muted mb-1 font-mono">Action Type</label>
                           <select
@@ -429,6 +436,11 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                             onChange={(e) => {
                               const updated = [...actions];
                               updated[index].type = e.target.value;
+                              // Alarm grouping belongs to TRIGGER_ALARM only (ADR 0014).
+                              if (e.target.value !== 'TRIGGER_ALARM' && updated[index].config?.incidentWindowSeconds !== undefined) {
+                                const { incidentWindowSeconds: _dropped, ...rest } = updated[index].config;
+                                updated[index].config = rest;
+                              }
                               setActions(updated);
                             }}
                             className="w-full bg-vms-surface border border-vms-border rounded p-1.5 font-mono text-vms-text text-xs focus:border-vms-accent focus:outline-none"
@@ -473,6 +485,38 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
                             Continue on failure
                           </label>
                         </div>
+                      </div>
+                      {act.type === 'TRIGGER_ALARM' && (
+                        <div className="flex flex-wrap items-center gap-2" data-testid="incident-window-field">
+                          <label htmlFor={`incident_window_${index}`} className="text-[10px] text-vms-muted font-mono">
+                            Group repeats into one alarm for
+                          </label>
+                          <input
+                            id={`incident_window_${index}`}
+                            type="number"
+                            min={0}
+                            max={86400}
+                            step={1}
+                            placeholder="off"
+                            value={act.config?.incidentWindowSeconds ?? ''}
+                            onChange={(e) => {
+                              const updated = [...actions];
+                              const raw = e.target.value.trim();
+                              const { incidentWindowSeconds: _old, ...rest } = updated[index].config || {};
+                              // Empty or 0 turns grouping off. Anything else is sent as typed; the backend refuses
+                              // what is not a whole number of seconds from 0 to 86400 and the error is shown.
+                              updated[index].config = raw === '' || Number(raw) === 0 ? rest : { ...rest, incidentWindowSeconds: Number(raw) };
+                              setActions(updated);
+                            }}
+                            className="w-24 bg-vms-bg border border-vms-border focus:border-vms-accent text-vms-text text-xs font-mono rounded px-2 py-1 placeholder:text-vms-dim focus-visible:outline-none"
+                          />
+                          <span className="text-[10px] text-vms-muted font-mono">seconds</span>
+                          <span className="text-[10px] text-vms-dim">
+                            Repeat firings of this rule on the same camera within this time join the open alarm (counted, severity can only
+                            rise) instead of raising new ones. Never longer than one hour per alarm. Empty means every firing raises its own alarm.
+                          </span>
+                        </div>
+                      )}
                       </div>
 
                       {actions.length > 1 && (

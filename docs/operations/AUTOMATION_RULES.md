@@ -4,6 +4,14 @@
 `backend/src/services/automation/ruleSchema.ts`; an invalid rule is rejected with
 `RULE_INVALID` rather than stored.
 
+**On screen:** Alarms page, **Automation rules** (operators and administrators, permission `AUTOMATION_MANAGE`). Until
+2026-10-07 the builder opened only from the Federation console, which v1.0 never shows, so rules could only be made
+through the API.
+
+**Alarm grouping (ADR 0014):** on a `TRIGGER_ALARM` action, "Group repeats into one alarm for N seconds" sets
+`incidentWindowSeconds`. Empty or 0 keeps one alarm per firing. The form accepts whole seconds from 0 to 86400 and the
+backend refuses anything else. The rule list shows "groups repeats within Ns".
+
 ## Triggers
 
 `PERSON_DETECTED`, `VEHICLE_DETECTED` (AI objects from the ai-worker: `minConfidence`,

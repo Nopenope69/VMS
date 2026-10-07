@@ -169,7 +169,7 @@ State stays `DONE_UNVERIFIED` below because it is **not proven on a real camera,
 | Piece | State | Where |
 | --- | --- | --- |
 | Reference study of 16 public repositories (design ideas only) | DONE_VERIFIED (read, not run) | `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` |
-| Incident window, one incident one alarm | DONE_UNVERIFIED | ADR 0014, migration 20261014000000; no rule-builder field yet |
+| Incident window, one incident one alarm | DONE_UNVERIFIED | ADR 0014, migration 20261014000000; rule-builder field added in Session 37 (browser test) |
 | Alarm triage queue and proposals, Triage tab | DONE_UNVERIFIED | ADR 0015, flag `ALARM_TRIAGE`; thresholds are guesses |
 | RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known (F13 fixed in Session 36, with two open items) | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
 | Time assumptions pinned (`TZ=UTC`), mismatch warning, clock limits written down | DONE_UNVERIFIED | `docs/operations/EVIDENCE_VERIFICATION.md` |
