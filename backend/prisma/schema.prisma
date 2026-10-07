@@ -2203,3 +2203,26 @@ model TrackLink {
   @@index([toTrackId])
   @@index([tenantId, status])
 }
+
+/// A signed record of one recorded segment, made when it was recorded (ADR 0018). One hash chain per camera.
+/// No foreign keys on purpose: a seal outlives its segment, its camera and retention, so a deletion stays visible.
+model SegmentSeal {
+  id             String   @id @default(uuid())
+  tenantId       String?
+  cameraId       String
+  sequence       Int
+  segmentId      String   @unique
+  startUtc       DateTime
+  endUtc         DateTime
+  sizeBytes      BigInt
+  mediaSha256    String
+  prevSealHash   String
+  sealedAt       DateTime
+  keyFingerprint String
+  /// SHA-256 of the canonical body (vigilone.segment-seal.v1); the signature is Ed25519 over the same text.
+  sealHash       String   @unique
+  signature      String
+  createdAt      DateTime @default(now())
+
+  @@unique([cameraId, sequence])
+}

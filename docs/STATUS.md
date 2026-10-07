@@ -6,7 +6,7 @@ yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or 
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
 
-## Session 35 (2026-10-07): close out Session 34, and the status workflow fix
+## Session 35 (2026-10-07): close out Session 34, status workflow fix, footage sealing
 
 Branch `claude/upbeat-goldberg-l9x44s`. Session 34 is merged (#52). The status run on its merge commit
 (run 37471964509, commit `6da910d`) failed one ai-worker suite, `goldenPose.test.ts`: #52 added the RTMPose-s fetch to
@@ -16,7 +16,29 @@ Branch `claude/upbeat-goldberg-l9x44s`. Session 34 is merged (#52). The status r
 | --- | --- | --- |
 | `status.yml` fetches `rtmpose-s-body7-256x192` like `ci.yml` | DONE_UNVERIFIED in CI (the status run happens after merge). Locally: with the model file hidden the suite gives the CI result (1 failed, 4 skipped); with the file fetched and SHA-256 verified, 4 passed | `.github/workflows/status.yml` |
 
-Nothing else changed. No flag default or shipping claim changed.
+PR #53: all 10 CI checks green.
+
+### Footage sealing (ADR 0018, flag `FOOTAGE_SEALING`, off by default)
+
+First part of footage integrity (landscape doc, Tier 1 item 5). Each registered segment gets a signed seal (appliance
+Ed25519 key) in a per-camera hash chain, anchored into the audit chain every 15 minutes, carried in exports and checked by
+`vigilone-verify` 1.2.0. Operations note `docs/operations/FOOTAGE_SEALING.md`.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| `SegmentSeal` table, migration `20261018000000` (no foreign keys: seals outlive segments) | DONE_VERIFIED on PostgreSQL 16 (`migrate deploy`; `migrate diff` shows only the existing pgvector index) | `prisma/schema.prisma` |
+| Sealing at registration, per-camera advisory lock, never fails registration | DONE_UNVERIFIED on a live appliance. Real DB with real ffmpeg files: six concurrent registrations give sequences 1..6; an unreadable key leaves the segment registered with one warning | `recording/catalog/segmentSeal.ts`, `recordingCatalog.service.ts` |
+| First hash wins: a sealed file re-registered with other bytes keeps its hash, becomes CORRUPTED `DIFFERS_FROM_SEAL`, reported once even though the crawler re-registers it every pass; the periodic check reports `DB_HASH_DIFFERS_FROM_SEAL`; export refuses `EXPORT_SEGMENT_SEAL_MISMATCH` | DONE_UNVERIFIED (real DB tests) | same, `segmentIntegrity.ts`, `evidenceArchive.service.ts` |
+| Chain report `GET /api/v1/segment-seals/cameras/:cameraId/verify` and anchor worker | DONE_UNVERIFIED (real DB: edited, removed and anchored-then-cut seals, a bad signature, tenant isolation, 501 with the flag off) | `routes/segmentSeal.routes.ts` |
+| `segment_seals.json` in exports, verifier checks, `--require-segment-seals`, format parity test (300 seals) | DONE_UNVERIFIED (real export path, verifier run as a separate process) | `tools/vigilone-verify/vigilone-verify.mjs` |
+| Camera-sabotage detection, C2PA-style manifests | NOT_STARTED (next parts of footage integrity; C2PA needs a library licence check) | |
+
+**Found on the way (not fixed here, a separate task):** an unsealed segment that the integrity check marks CORRUPTED is
+re-registered by the 5-minute crawler and returned to FINALIZED with the changed file's hash. Sealed segments are protected
+by this change; unsealed ones are not.
+
+**Limits stated in the ADR:** root on the appliance can read the key and re-sign; a tail cut before the next anchor is not
+visible; no key rotation record; seals are never deleted.
 
 ## Session 34 (2026-10-06): person down and fence climbing (body pose)
 

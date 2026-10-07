@@ -74,6 +74,7 @@ describe('Stage 5: Full Evidence Manifest Cryptographic Binding Chain (Section 3
       modelManifest: { findMany: jest.fn().mockResolvedValue([]) },
       explanation: { findMany: jest.fn().mockResolvedValue([]) },
       incidentSummary: { findMany: jest.fn().mockResolvedValue([]) },
+      segmentSeal: { findMany: jest.fn().mockResolvedValue([]) },
       evidenceExport: {
         create: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({ id: 'EXP_STAGE5_BINDING_001', ...data })

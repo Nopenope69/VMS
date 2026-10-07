@@ -461,6 +461,11 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
 - **Session 35 (2026-10-07):** the first status run on `master` after #52 failed one ai-worker suite (`goldenPose`): #52
   added the RTMPose fetch to `ci.yml` but not to `status.yml`, which also sets `VIGILONE_REQUIRE_MODEL_TESTS=1`. Fixed by
   fetching the model there too. When a golden-model suite is added, add its fetch to **both** workflows.
+  Then **footage sealing** (ADR 0018, flag `FOOTAGE_SEALING`, `docs/operations/FOOTAGE_SEALING.md`): a signed, per-camera
+  chained seal of every segment at registration, audit-chain anchors, seals in exports checked by `vigilone-verify
+  --require-segment-seals`. Next parts of footage integrity: camera-sabotage detection (classical, no model), then C2PA-style
+  manifests (library licence check first). Open bug found: the crawler returns an unsealed CORRUPTED segment to FINALIZED
+  with the changed hash (suggested as a separate task).
 - **After that:** the two software features still open (describe-what-to-watch rules, footage integrity; the cited incident
   summary and alarm triage are in `master` since #50), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
   one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).
@@ -508,7 +513,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   search `tools/eval`, `services/anpr` and the retention code; three early "gaps" already existed.
 - **Next for this branch's line of work (after person down and fence climbing, which the owner put first, above):** (a) **describe-what-to-watch rules** (a local model drafts a normal rule, the dry run shows last
   week's matches, the operator saves it; needs the owner's approval of the local text model, Qwen3-4B, in the licence process);
-  (b) **footage integrity** (per-device signing of segment hashes at ingest, C2PA-style manifests on exports after a licence check,
+  (b) **footage integrity** (~~per-device signing of segment hashes at ingest~~ done in Session 35 as segment seals, C2PA-style manifests on exports after a licence check,
   classical camera-sabotage detection); (c) ~~per-camera health endpoint~~ **done in Session 33** (no reconnect count: nothing records one); (d) ~~`ai-adapter.v1` result fields~~ **dropped in Session 33**: `ModelCardV1.input` already carries size and colour space, `cost` belongs to the tracker, edge clipping can be derived. Then the leftovers: stepping every camera of a synchronized view
   onto its own frame (only the reference camera is frame-exact today), a measured stream delay from RTCP sender reports,
   audit finding F8 (orphan file after a crash during retention, known, no change), a rule-builder field for

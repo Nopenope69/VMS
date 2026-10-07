@@ -9,6 +9,8 @@ import { CoverageIndex, CoverageReport } from './coverageIndex';
 import { EvidencePinRegistry } from './evidencePinRegistry';
 import { RetentionPolicyEngine, RetentionPolicyConfig, PruneReport } from './retentionPolicy';
 import { SegmentIntegrityVerifier } from './segmentIntegrity';
+import { SegmentSealer } from './segmentSeal';
+import { FeatureFlag, isFeatureEnabled } from '../../../config/featureFlags';
 import { computeFileSha256 } from '../../../utils/crypto';
 import { parseSegmentFilenameTimestamp } from '../../../utils/segmentPath';
 import { isWithinActiveWriteGrace } from '../../reconciliation/crashRecovery.service';
@@ -56,6 +58,8 @@ const CLOCK_CHECK_FRESH_MS = 3600_000;
 /** Segment end per its file name versus the file's last write: more than this apart means a clock or time zone problem. */
 const CLOCK_TOLERANCE_MS = 5 * 60_000;
 const CLOCK_WARNING_TITLE = 'Segment time does not match the file clock';
+/** Integrity failures that already said a sealed segment's content changed (ADR 0018). */
+const SEAL_CONFLICT_REASONS = new Set(['DIFFERS_FROM_SEAL', 'DB_HASH_DIFFERS_FROM_SEAL', 'HASH_MISMATCH']);
 
 /**
  * A frame step needs the segment's frame rate (or a real keyframe to step to). When neither is known the step is
@@ -96,6 +100,7 @@ export class RecordingCatalog {
   private segmentRepo: SegmentRepository;
   private pinRegistry: EvidencePinRegistry;
   private retentionEngine: RetentionPolicyEngine;
+  private sealer: SegmentSealer;
 
   private reconcilerTimer: NodeJS.Timeout | null = null;
   private retentionTimer: NodeJS.Timeout | null = null;
@@ -112,6 +117,7 @@ export class RecordingCatalog {
     this.mediaProbeAdapter = mediaProbeAdapter || new FfprobeMediaAdapter();
     this.segmentRepo = new SegmentRepository(prisma);
     this.pinRegistry = new EvidencePinRegistry(prisma);
+    this.sealer = new SegmentSealer(prisma);
     this.retentionEngine = new RetentionPolicyEngine(
       prisma,
       this.segmentRepo,
@@ -204,7 +210,10 @@ export class RecordingCatalog {
       }
     }
 
-    return this.segmentRepo.upsertSegment({
+    // Checked whenever a seal exists, even with sealing switched off since: a sealed segment keeps its first hash.
+    const sealConflict = unusable ? null : await this.findSealConflict(input.filePath, sha256);
+
+    const segment = await this.segmentRepo.upsertSegment({
       tenantId: input.tenantId,
       cameraId: input.cameraId,
       filePath: input.filePath,
@@ -212,13 +221,13 @@ export class RecordingCatalog {
       endTime,
       durationMs: safeDurationMs,
       sizeBytes,
-      sha256Hash: sha256,
+      sha256Hash: sealConflict ? undefined : sha256,
       codec: codec ?? null,
       width: width ?? null,
       height: height ?? null,
       fps: fps ?? null,
-      status: unusable ? unusable.status : SegmentStatus.FINALIZED,
-      quarantineReason: unusable ? unusable.reason : null,
+      status: unusable ? unusable.status : sealConflict ? SegmentStatus.CORRUPTED : SegmentStatus.FINALIZED,
+      quarantineReason: unusable ? unusable.reason : sealConflict ? 'DIFFERS_FROM_SEAL' : null,
       startPts,
       endPts,
       timebaseNumerator: timebaseNum,
@@ -228,6 +237,45 @@ export class RecordingCatalog {
       storageVolumeId: input.storageVolumeId,
       storageEpochId: input.storageEpochId,
     });
+    if (sealConflict) {
+      if (!sealConflict.alreadyReported) await this.reportSealConflict(segment, sha256!, sealConflict);
+    } else if (isFeatureEnabled(FeatureFlag.FOOTAGE_SEALING)) {
+      // Never throws: recording does not depend on sealing.
+      await this.sealer.sealQuietly(segment);
+    }
+    return segment;
+  }
+
+  /**
+   * A file registered again whose hash differs from its segment's seal (ADR 0018). The first hash wins: the row keeps its
+   * stored hash and becomes CORRUPTED instead of taking the new one. Reported once; the crawler re-registers unusable
+   * files every pass and must not raise the alarm again each time. A file that matches its repaired hash is not a conflict.
+   */
+  private async findSealConflict(filePath: string, sha256: string | undefined): Promise<{ sealSha256: string; sealSequence: number; alreadyReported: boolean } | null> {
+    if (!sha256 || typeof (this.prisma as any).segmentSeal?.findUnique !== 'function') return null;
+    const existing = await this.prisma.recordingSegment.findUnique({
+      where: { filePath },
+      select: { id: true, status: true, quarantineReason: true, repairedSha256: true },
+    });
+    if (!existing || existing.repairedSha256 === sha256) return null;
+    const seal = await this.prisma.segmentSeal.findUnique({ where: { segmentId: existing.id }, select: { mediaSha256: true, sequence: true } });
+    if (!seal || seal.mediaSha256 === sha256) return null;
+    const alreadyReported = existing.status === SegmentStatus.CORRUPTED && SEAL_CONFLICT_REASONS.has(existing.quarantineReason ?? '');
+    return { sealSha256: seal.mediaSha256, sealSequence: seal.sequence, alreadyReported };
+  }
+
+  private async reportSealConflict(segment: RecordingSegment, foundSha256: string, conflict: { sealSha256: string; sealSequence: number }): Promise<void> {
+    try {
+      const camera = await this.prisma.camera.findUnique({ where: { id: segment.cameraId }, select: { tenantId: true } });
+      await new SegmentIntegrityVerifier(this.prisma, this.storageAdapter).reportFailure(
+        { ...segment, camera },
+        SegmentStatus.CORRUPTED,
+        'DIFFERS_FROM_SEAL',
+        { sealedSha256: conflict.sealSha256, foundSha256, sealSequence: conflict.sealSequence },
+      );
+    } catch (err: any) {
+      console.error(`[RecordingCatalog] segment ${segment.id} differs from its seal and could not be reported: ${err.message}`);
+    }
   }
 
   /** One warning per camera per hour, however many segments are off. Never throws: indexing must not fail on a report. */

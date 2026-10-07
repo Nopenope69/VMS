@@ -27,6 +27,8 @@ Segments in object storage (not local) and segments already marked bad are skipp
 | `FILE_MISSING_DURING_RUN` (status FILE_MISSING) | The file was removed or its disk went away while the appliance was running |
 | `SIZE_CHANGED` (status CORRUPTED) | A finalized file has a different size than recorded |
 | `HASH_MISMATCH` (status CORRUPTED) | Same size or not, the content no longer matches the recorded hash |
+| `DIFFERS_FROM_SEAL` (status CORRUPTED) | A sealed segment's file was registered again with other content. It keeps its first hash (ADR 0018, `FOOTAGE_SEALING.md`) and is reported once |
+| `DB_HASH_DIFFERS_FROM_SEAL` (status CORRUPTED) | The stored hash of a sealed segment no longer equals its seal: the database row was changed |
 
 A failed segment stops counting as footage: it is left out of coverage, playback, seek and export, and the timeline shows a gap.
 

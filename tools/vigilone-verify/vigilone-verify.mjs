@@ -3,7 +3,7 @@
  * vigilone-verify: offline verifier for VigilOne evidence packages (P4.5).
  *
  *   vigilone-verify <package.zip | extracted-dir> [--trusted-key key.pem | --trusted-key-sha256 HEX]
- *                   [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--json]
+ *                   [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--require-segment-seals] [--json]
  *
  * Needs only Node.js >= 18. No network access and no dependencies. It checks:
  *   - manifest.json is canonical JSON; manifest.sha256 matches it; manifest.sig is a valid Ed25519
@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const MERKLE_DOMAIN = 'VIGILONE-EVIDENCE-SEGMENT-V1';
 const GENESIS = '0'.repeat(64);
 const HEX64 = /^[a-f0-9]{64}$/;
@@ -587,6 +587,99 @@ export function verifyIncidentSummariesSection({ manifest, artifacts, json, chec
   check('summary.scope', doc.cameraId === cam && doc.window?.startUtc === w?.startUtc && doc.window?.endUtc === w?.endUtc && outOfScope.length === 0, outOfScope.length ? `${outOfScope.length} summary(ies) are for another camera or outside the export window` : 'every summary is for this camera and inside the export window');
 }
 
+// ---------------------------------------------------------------- segment seals (ADR 0018)
+// Own copy of the backend's seal format (backend/src/services/recording/catalog/segmentSeal.ts, sealBodyV1). The parity
+// test in backend/src/__tests__/segmentSeal.test.ts runs both on the same seal.
+export const SEAL_SCHEMA_V1 = 'vigilone.segment-seal.v1';
+export const SEALS_DOCUMENT_SCHEMA = 'vigilone.segment-seals.v1';
+const SEAL_BODY_KEYS = ['cameraId', 'endUtc', 'keyFingerprint', 'mediaSha256', 'prevSealHash', 'schema', 'sealedAtUtc', 'segmentId', 'sequence', 'sizeBytes', 'startUtc'];
+
+/** SHA-256 of a seal body's canonical JSON; null when the body is not a v1 seal body (extra or missing keys). */
+export function sealHashV1(body) {
+  if (!isObj(body) || canonicalizeJson(Object.keys(body).sort()) !== canonicalizeJson(SEAL_BODY_KEYS) || body.schema !== SEAL_SCHEMA_V1) return null;
+  return sha256(canonicalizeJson(body));
+}
+
+export function verifySegmentSealsSection({ manifest, artifacts, json, check, warn, opts = {}, keyPem, keyFp, leaves }) {
+  if (!manifest.segmentSeals) {
+    check('seals.present', false, 'the manifest has no segment seals section (sealing was off, or the package predates ADR 0018)', opts.requireSegmentSeals ? 'FAIL' : 'WARN');
+    return;
+  }
+  const s = manifest.segmentSeals;
+  const art = artifacts.find((a) => a.path === s.artifact && a.role === 'SEGMENT_SEALS');
+  check('seals.artifact_bound', Boolean(art), `${s.artifact} listed with role SEGMENT_SEALS`);
+  const doc = art ? json(art.path) : null;
+  if (!doc) return;
+  const seals = Array.isArray(doc.seals) ? [...doc.seals].sort((a, b) => (a?.body?.sequence ?? 0) - (b?.body?.sequence ?? 0)) : [];
+  const cam = manifest.camera?.id;
+  const exported = Array.isArray(doc.exportedSegmentIds) ? doc.exportedSegmentIds : [];
+  const bySegment = new Map(seals.map((x) => [x?.body?.segmentId, x]));
+  const sealedExported = exported.filter((id) => bySegment.has(id)).length;
+  check(
+    'seals.summary_matches',
+    doc.schema === SEALS_DOCUMENT_SCHEMA && doc.schema === s.schema && doc.sealSchema === SEAL_SCHEMA_V1 && doc.cameraId === cam &&
+      seals.length === s.sealCount && sealedExported === s.exportedSegmentsSealed && exported.length === s.exportedSegmentCount,
+    'segment_seals.json agrees with the signed summary',
+  );
+
+  // Each seal: its hash recomputes from its body, and the package's appliance key signed it.
+  const badHash = [];
+  const badSig = [];
+  const otherKey = [];
+  for (const x of seals) {
+    const b = x?.body;
+    const h = sealHashV1(b);
+    if (!h || h !== x.sealHash || b.cameraId !== cam || !HEX64.test(b.mediaSha256 || '')) {
+      badHash.push(b?.sequence ?? '?');
+      continue;
+    }
+    if (b.keyFingerprint !== keyFp) {
+      otherKey.push(b.sequence);
+      continue;
+    }
+    let ok = false;
+    try {
+      ok = crypto.verify(null, Buffer.from(canonicalizeJson(b), 'utf8'), keyPem, Buffer.from(String(x.signature || ''), 'base64'));
+    } catch {
+      ok = false;
+    }
+    if (!ok) badSig.push(b.sequence);
+  }
+  check('seals.hashes', badHash.length === 0, badHash.length ? `seal(s) ${badHash.slice(0, 10).join(', ')} do not recompute from their bodies or are not v1 seals of this camera` : `${seals.length} seal(s) recompute`);
+  check('seals.signatures', badSig.length === 0 && otherKey.length === 0,
+    badSig.length ? `seal(s) ${badSig.slice(0, 10).join(', ')} do not verify with the package key` : otherKey.length ? `seal(s) ${otherKey.slice(0, 10).join(', ')} were signed by another key and cannot be checked with this package` : 'every seal is signed by the package appliance key');
+
+  // The run of seals is unbroken: consecutive sequence numbers, each linking to the one before.
+  let chainOk = true;
+  let chainDetail = seals.length ? `seals ${seals[0].body?.sequence} to ${seals[seals.length - 1].body?.sequence}, unbroken` : 'no seals';
+  seals.forEach((x, i) => {
+    if (!chainOk) return;
+    const b = x.body || {};
+    if (i === 0) {
+      if (b.sequence === 1 && b.prevSealHash !== GENESIS) (chainOk = false), (chainDetail = 'the first seal of the chain does not start from the genesis hash');
+      return;
+    }
+    const p = seals[i - 1];
+    if (b.sequence !== p.body?.sequence + 1) (chainOk = false), (chainDetail = `seal ${p.body?.sequence + 1} is missing before ${b.sequence}`);
+    else if (b.prevSealHash !== p.sealHash) (chainOk = false), (chainDetail = `seal ${b.sequence} does not link to seal ${p.body?.sequence}`);
+  });
+  check('seals.chain', chainOk, chainDetail);
+
+  // Every exported segment that has a seal: its Merkle leaf carries the sealed hash and times.
+  const camLeaves = (leaves || []).filter((l) => l.cameraId === cam);
+  const leafIds = new Set(camLeaves.map((l) => l.segmentId));
+  const mismatch = camLeaves.filter((l) => {
+    const x = bySegment.get(l.segmentId);
+    return x && (x.body.mediaSha256 !== l.mediaSha256 || Date.parse(x.body.startUtc) !== Date.parse(l.startUtc) || Date.parse(x.body.endUtc) !== Date.parse(l.endUtc));
+  });
+  check('seals.leaves_match', mismatch.length === 0 && exported.every((id) => leafIds.has(id)),
+    mismatch.length ? `segment(s) ${mismatch.slice(0, 5).map((l) => l.segmentId).join(', ')} differ from their seals` : 'every sealed exported segment matches its seal (media hash, start, end)');
+  const unsealed = camLeaves.filter((l) => !bySegment.has(l.segmentId));
+  if (unsealed.length) check('seals.coverage', !opts.requireSegmentSeals, `${unsealed.length} of ${camLeaves.length} exported segment(s) carry no seal`, opts.requireSegmentSeals ? 'FAIL' : 'WARN');
+  else if (camLeaves.length) check('seals.coverage', true, `all ${camLeaves.length} exported segment(s) are sealed`);
+  if (seals.length && seals[0].body?.sequence !== 1) warn('seals.scope', `the package shows seals ${seals[0].body?.sequence} onwards; earlier seals of this camera stay on the appliance (check them there with the seal chain report)`);
+}
+
 // ---------------------------------------------------------------- verification
 export function verifyPackage(files, opts = {}) {
   const results = [];
@@ -723,6 +816,8 @@ export function verifyPackage(files, opts = {}) {
   verifyExplanationsSection({ manifest, artifacts, json, check, warn, opts });
   // Incident summaries (ADR 0016)
   verifyIncidentSummariesSection({ manifest, artifacts, json, check, opts });
+  // Segment seals (ADR 0018)
+  verifySegmentSealsSection({ manifest, artifacts, json, check, warn, opts, keyPem, keyFp, leaves });
 
   // Derivation
   if (manifest.derivation) {
@@ -754,7 +849,7 @@ function main(argv) {
   };
   const target = args.find((a, i) => !a.startsWith('--') && !['--trusted-key', '--trusted-key-sha256'].includes(args[i - 1]));
   if (!target || args.includes('--help')) {
-    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--json]');
+    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--require-segment-seals] [--json]');
     return 2;
   }
   let files;
@@ -770,6 +865,7 @@ function main(argv) {
     requireAiProvenance: args.includes('--require-ai-provenance'),
     requireExplanations: args.includes('--require-explanations'),
     requireIncidentSummaries: args.includes('--require-incident-summaries'),
+    requireSegmentSeals: args.includes('--require-segment-seals'),
   };
   const results = verifyPackage(files, opts);
   const failed = results.filter((r) => r.status === 'FAIL');

@@ -28,6 +28,7 @@ describe('Feature flags: typed registry', () => {
         'EXPLANATIONS',
         'FEDERATION',
         'FLOORPLANS',
+        'FOOTAGE_SEALING',
         'OBJECT_CROPS',
         'OBJECT_STORAGE_ARCHIVE',
         'OIDC_SSO',
