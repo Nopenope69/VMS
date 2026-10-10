@@ -254,6 +254,12 @@
       "justification": "Names an output-tensor layout (decoder kind) selected by the manifest modelSignature.decoder field; it never supplies a model name, version or hash. Model identity and provenance come from the registered ModelManifest (P2.4/P2.6)."
     },
     {
+      "file": "backend/src/services/evidence/archive/c2paManifestBuilder.ts",
+      "patternId": "INVENTED_VERSION",
+      "text": "version: '1.0.0',",
+      "justification": "C2PA 2.2 claim generator metadata: the release version of the VigilOne Edge VMS software creating the manifest, not an invented camera or model version."
+    },
+    {
       "file": "backend/src/services/federation/recordLog.ts",
       "patternId": "INVENTED_HASH",
       "text": "export const GENESIS_HASH = '0'.repeat(64);",

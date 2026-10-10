@@ -132,7 +132,7 @@ export class PackageAssembler {
       // 4c. Generate C2PA manifest (c2pa_manifest.json)
       if ((videoSha256 || options.videoFilePath || fs.existsSync(path.join(workDir, 'video.mp4'))) && options.manifestData) {
         const destVideoPath = path.join(workDir, 'video.mp4');
-        const vSha = videoSha256 || (fs.existsSync(destVideoPath) ? await computeFileSha256(destVideoPath) : (options.manifestData.videoChecksumSha256 || '0'.repeat(64)));
+        const vSha = videoSha256 || (fs.existsSync(destVideoPath) ? await computeFileSha256(destVideoPath) : (options.manifestData.videoChecksumSha256 || ''));
         const tenantId = options.manifestData.tenantId || '';
         const applianceId = options.manifestData.applianceIdentifier || `VIGILONE-EDGE-${(tenantId || 'DEFAULT').substring(0, 8).toUpperCase()}`;
         const segmentCount = options.manifestData.leafCount ?? (options.manifestData.leaves ? options.manifestData.leaves.length : (options.manifestData.cameras ? options.manifestData.cameras.reduce((acc: number, c: any) => acc + (c.segmentCount || 0), 0) : (options.manifestData.segmentCount ?? 0)));
@@ -144,7 +144,7 @@ export class PackageAssembler {
           startUtc: options.manifestData.timeRange?.startUtc || options.manifestData.timeWindow?.startUtc || options.manifestData.startUtc || new Date(),
           endUtc: options.manifestData.timeRange?.endUtc || options.manifestData.timeWindow?.endUtc || options.manifestData.endUtc || new Date(),
           videoSha256: vSha,
-          evidenceMerkleRoot: options.manifestData.evidenceMerkleRoot || '0'.repeat(64),
+          evidenceMerkleRoot: options.manifestData.evidenceMerkleRoot || '',
           segmentCount,
           partAPartyName: options.manifestData.bsaCertificate?.partAPartyName || options.manifestData.bsaSection63Details?.partAParty?.name || options.manifestData.partAPartyName,
           partAPartyDesignation: options.manifestData.bsaCertificate?.partAPartyDesignation || options.manifestData.bsaSection63Details?.partAParty?.designation || options.manifestData.partAPartyDesignation,

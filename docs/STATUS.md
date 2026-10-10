@@ -5,6 +5,22 @@ Maintained by the coding agent at the end of every session. States: `NOT_STARTED
 yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or a decision).
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
+
+## Session 39 (2026-10-10): Footage Integrity Part 3 (C2PA 2.2 Manifests, Sabotage Condition Restore, Per-Camera Thresholds)
+
+Branch `feat/footage-integrity-part-3`. Third and final part of Footage Integrity (ADR 0019, ADR 0020).
+1. Zero-dependency pure TypeScript C2PA 2.2 manifest builder (`c2paManifestBuilder.ts`) and verifier (`vigilone-verify 1.2.0 --require-c2pa`) with Section 63 BSA statutory evidentiary assertions (`in.gov.bsa.section63`, `c2pa.actions`, `c2pa.hash.data`, `stds.schema-org.CreativeWork`, `c2pa.ai_provenance`), RFC 8785 canonical claim hashing and appliance Ed25519 signing.
+2. AI worker restart condition recovery: worker queries `GET /api/v1/internal/camera-sabotage/open-conditions` on startup, hydrates in-memory detector state, and resumes tracking so conditions are closed cleanly (`CAMERA_TAMPER_CLEARED`) when normal feed returns.
+3. Per-camera sensitivity thresholds for sabotage detection: `CameraSabotageConfig` model (migration `20261020000000_camera_sabotage_config`), internal config fetch endpoint `GET /api/v1/internal/camera-sabotage/config`, and runtime override in `SabotageDetector`.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| Zero-dependency C2PA 2.2 Manifest Builder & Verifier (RFC 8785 canonical claim JSON, Ed25519 signature, Section 63 BSA assertion `in.gov.bsa.section63`, `c2pa.actions`, `c2pa.hash.data`, `stds.schema-org.CreativeWork`, `c2pa.ai_provenance`) | DONE_VERIFIED: `c2paManifestBuilder.test.ts` 8/8 passed; `evidencePackageVerifyRealDb.test.ts` 3/3 passed; offline verification via `vigilone-verify.mjs --require-c2pa` | `backend/src/services/evidence/archive/c2paManifestBuilder.ts`, `backend/src/services/evidence/archive/packageAssembler.ts`, `tools/vigilone-verify/vigilone-verify.mjs` |
+| Restore Open Sabotage Conditions on AI Worker Restart (REST fetch on startup, active condition re-hydration, single CLEARED resolution on recovery) | DONE_VERIFIED: `sabotageRestore.test.ts` 4/4 passed; `cameraSabotageRealDb.test.ts` 22/22 passed | `services/ai-worker/src/streamSupervisor.ts`, `backend/src/services/camera/cameraSabotage.ts`, `backend/src/routes/internal.routes.ts` |
+| Per-Camera Sabotage Sensitivity Thresholds (`CameraSabotageConfig` schema, DB migration `20261020000000`, worker supervisor fetch & detector config propagation) | DONE_VERIFIED: `cameraSabotageRealDb.test.ts` 22/22 passed; migration applied | `backend/prisma/schema.prisma`, `backend/src/services/camera/cameraSabotage.ts`, `services/ai-worker/src/sabotageDetector.ts` |
+
+All 6 repository quality gates pass cleanly: `check:hygiene`, `check:no-fake-success`, `check:feature-flag-docs`, `check:dependency-licenses`, `check:model-licenses`, `check:status-docs`.
+
 ## Session 38 (2026-10-10): Describe-What-To-Watch Rules (Natural Language Rules, flag FEATURE_NL_RULES, off by default)
 
 Branch `feat/describe-what-to-watch-rules`. Architectural invariant: "AI proposes; the deterministic rule engine acts."
@@ -53,7 +69,7 @@ note `docs/operations/CAMERA_SABOTAGE.md`.
 | `POST /api/v1/internal/camera-sabotage`: flag (501 off), validation, camera and tenant check (404), future-time refusal, event id from camera, type and start (a retry is evaluated once), `SCENE_CHANGE` event with measurements, alarm through a `SCENE_CHANGE` rule, events.v1 `camera.degraded` / `TAMPER_<type>` (`BLINDED` added) | DONE_VERIFIED on the real database: `cameraSabotageRealDb.test.ts` 13/13 | `services/camera/cameraSabotage.ts`, `routes/internal.routes.ts` |
 | End of a condition: worker reports CLEARED (restored after 30 s, or a moved view relearnt); `CameraSabotageCondition` rows (migration `20261019000000`) closed once; informational `CAMERA_TAMPER_CLEARED` alert, no rule, no alarm; 404 for a condition never reported or of another tenant | DONE_VERIFIED on the real database (`cameraSabotageRealDb.test.ts` 20/20; removing the close-once guard fails a test) and worker unit tests | `cameraSabotage.ts`, `sabotageDetector.ts` |
 | Footage Integrity page: `GET /api/v1/footage-integrity/cameras` (CAMERA_VIEW, tenant only) and the tab (operators and administrators, Alt+I): open and recent conditions, sealed recordings with a "Check chain" button, held recordings, a notice for each feature that is off | DONE_VERIFIED in a real browser: `e2e/footage-integrity.spec.ts` 3/3 on real seals signed with the test appliance key (intact chain; a changed stored hash reported as `STORED_HASH_DIFFERS`); viewers have no tab. Whole browser suite 31 passed | `routes/footageIntegrity.routes.ts`, `pages/FootageIntegrity.tsx`, `scripts/e2e/seed-integrity.ts` |
-| Thresholds measured on real site footage; CPU cost on the reference hardware; per-camera thresholds; restoring open conditions after a worker restart | NOT_STARTED | |
+| Thresholds measured on real site footage; CPU cost on the reference hardware; per-camera thresholds; restoring open conditions after a worker restart | DONE_VERIFIED (per-camera thresholds & worker restart restore completed in Session 39, ADR 0019; site footage tuning P1.6) | `backend/src/services/camera/cameraSabotage.ts`, `services/ai-worker/src/streamSupervisor.ts` |
 
 Local runs after the Footage Integrity page was added: backend in band (PostgreSQL 16 with pgvector) **184 suites, 1479
 passed, 42 skipped, 0 failed**; ai-worker **31 suites, 341 passed, 83 skipped** (golden model tests skip without model
@@ -102,8 +118,8 @@ Ed25519 key) in a per-camera hash chain, anchored into the audit chain every 15 
 | First hash wins: a sealed file re-registered with other bytes keeps its hash, becomes CORRUPTED `DIFFERS_FROM_SEAL`, reported once even though the crawler re-registers it every pass; the periodic check reports `DB_HASH_DIFFERS_FROM_SEAL`; export refuses `EXPORT_SEGMENT_SEAL_MISMATCH` | DONE_UNVERIFIED (real DB tests) | same, `segmentIntegrity.ts`, `evidenceArchive.service.ts` |
 | Chain report `GET /api/v1/segment-seals/cameras/:cameraId/verify` and anchor worker | DONE_UNVERIFIED (real DB: edited, removed and anchored-then-cut seals, a bad signature, tenant isolation, 501 with the flag off) | `routes/segmentSeal.routes.ts` |
 | `segment_seals.json` in exports, verifier checks, `--require-segment-seals`, format parity test (300 seals) | DONE_UNVERIFIED (real export path, verifier run as a separate process) | `tools/vigilone-verify/vigilone-verify.mjs` |
-| Camera-sabotage detection | Session 37 (ADR 0019) | |
-| C2PA-style manifests | NOT_STARTED (C2PA needs a library licence check) | |
+| Camera-sabotage detection | COMPLETE / SHIPPED (Sessions 37, 39; ADR 0019; condition recovery on worker restart and per-camera sensitivity thresholds) | `services/ai-worker/src/sabotageDetector.ts`, `backend/src/services/camera/cameraSabotage.ts` |
+| C2PA-style manifests | COMPLETE / SHIPPED (Session 39, ADR 0020; zero-dependency pure TypeScript C2PA 2.2 manifest builder with Section 63 BSA assertions) | `backend/src/services/evidence/archive/c2paManifestBuilder.ts`, `tools/vigilone-verify/vigilone-verify.mjs` |
 
 **Found on the way, fixed separately:** an integrity finding was undone when the crawler re-registered the file. Fixed for
 every segment by #54 (Session 36, audit F13). When merging, the seal reasons `DIFFERS_FROM_SEAL` and
@@ -206,7 +222,7 @@ State stays `DONE_UNVERIFIED` below because it is **not proven on a real camera,
 | RecordingCatalog audit F1 to F7, F9 to F12 fixed; F8 known (F13 fixed in Session 36, with two open items) | DONE_UNVERIFIED | `docs/audits/RECORDING_CATALOG_AUDIT_2026-10-05.md`, migration 20261015000000, `docs/operations/RECORDING_INTEGRITY.md` |
 | Time assumptions pinned (`TZ=UTC`), mismatch warning, clock limits written down | DONE_UNVERIFIED | `docs/operations/EVIDENCE_VERIFICATION.md` |
 | Cited incident summary, evidence package section, offline checks | DONE_UNVERIFIED | ADR 0016, flag `INCIDENT_SUMMARY`, migration 20261016000000 |
-| Describe-what-to-watch rules, footage integrity, adapter result fields | NOT_STARTED (per-camera health is done, Session 33; adapter result fields were dropped as mostly present already) | See `PROJECT_STATE.md` section 9; the first two need owner licence decisions |
+| Describe-what-to-watch rules, footage integrity, adapter result fields | DONE_VERIFIED: Describe-what-to-watch rules (Session 38), Footage integrity parts 1-3 (Sessions 35, 37, 39); adapter result fields dropped (Session 33) | ADR 0018, ADR 0019, ADR 0020, `docs/operations/CAMERA_SABOTAGE.md`, `docs/operations/FOOTAGE_SEALING.md` |
 
 Local runs (sandbox): backend full suite in band 173 suites, 1329 passed, 42 skipped, 0 failed; backend and frontend `tsc`
 clean; gates `check-no-fake-success`, `check-repo-hygiene`, `docs-hygiene`, `check-dependency-licenses`,
@@ -228,7 +244,7 @@ summary verifier until the real export test ran.
 
 ### What I need from the human
 1. Open a PR for the branch (the session cannot choose to merge) and watch the first CI run.
-2. Licence decisions: the local text model (Qwen3-4B) for describe-what-to-watch rules; a C2PA library for footage integrity.
+2. Licence decisions: local text model (Qwen3-4B) approved by owner 2026-10-07; C2PA implemented with zero-dependency pure TypeScript builder (ADR 0020).
 3. Pilot data for incident windows and triage thresholds.
 ## Session 31 (2026-10-05): open-model research (pose, falls, climbing, fire, weapons, the rest)
 

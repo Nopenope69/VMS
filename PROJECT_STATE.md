@@ -492,9 +492,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   no longer shows an invented PTS. (3) Owner decisions recorded: **Qwen3-4B approved** (`model-license-exceptions.json`),
   **both vertical packs** (Factory safety; Public safety for Railways and Safe City; North Star P3).
 - **Remaining towards the North Star (read in Session 35 from all strategy docs; next chat builds from here):**
-  1. **Footage integrity, part 3:** C2PA-style export manifests (library licence check first). ~~Camera-sabotage
-     detection~~ done in Session 37. ~~A seal UI and a sabotage view~~ done in Session 37 (Footage Integrity tab). Still
-     open there: per-camera thresholds, and conditions left open when the worker restarts.
+  1. ~~**Footage integrity, part 3:**~~ **done in Session 39** (commits `dd6c9c5`, `54eec2f`, `d202cb0`, `9ab0004`): zero-dependency pure TypeScript C2PA 2.2 export manifests with Section 63 BSA assertions (`c2paManifestBuilder.ts`, ADR 0020; verified offline with `vigilone-verify 1.2.0 --require-c2pa`), restoring open sabotage conditions across AI worker restarts (`sabotageRestore.test.ts`, ADR 0019), and per-camera sensitivity thresholds for sabotage detection (ADR 0019, migration `20261020000000_camera_sabotage_config`, `CameraSabotageConfig`).
   2. **Describe-what-to-watch rules** and calibrated semantic triggers: **unblocked**, the owner approved Qwen3-4B on
      2026-10-07 (Session 37).
   3. **V1.0 understand-and-act (North Star section 6):** investigation entity (the context graph, PostgreSQL), VLM on short
@@ -513,7 +511,7 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
      `docs/BACKLOG.md` (about 25 older items, not re-checked for staleness).
   8. **Owner track (gates V0.1):** bench, clean-VM drill, real footage and labelled sets, pilot site, DPDP choices; decisions on
      C2PA library, Objects365, reference hardware, Hindi scope (Qwen3-4B approved and both vertical packs chosen on 2026-10-07).
-- **After that:** the two software features still open (describe-what-to-watch rules, footage integrity; the cited incident
+- **After that:** the software features (describe-what-to-watch rules and footage integrity part 3 are done; the cited incident
   summary and alarm triage are in `master` since #50), fire/smoke, weapons; quick wins from the research (PP-OCRv6 detector, D-FINE on CPU,
   one Qwen3.5 model for text and images, UVH-26 Indian vehicle classes).
 - **Reference study (2026-10-05):** `docs/strategy/vigilone-oss-reference-study-2026-10-05.md` adds four small items
@@ -559,11 +557,11 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   `QUERY_TEMPLATE_ENSEMBLE`). Unbuilt items and why are in section 6 of the adoption study. Lesson: before proposing a gap,
   search `tools/eval`, `services/anpr` and the retention code; three early "gaps" already existed.
 - **Next for this branch's line of work (after person down and fence climbing, which the owner put first, above):** (a) ~~**describe-what-to-watch rules**~~ **done in Session 38** (Qwen3-4B extracts RuleIntentIR, deterministic compiler resolves cameras/zones/dwell/schedules, operator reviews interpretation and historical replay preview);
-  (b) **footage integrity part 3** (C2PA-style manifests on exports after licence verification, per-camera sensitivity thresholds for sabotage detection, restoring open sabotage conditions across AI worker restarts);
+  (b) ~~**footage integrity part 3**~~ **done in Session 39** (commits `dd6c9c5`, `54eec2f`, `d202cb0`, `9ab0004`; ADR 0019, ADR 0020; C2PA 2.2 manifests, Section 63 BSA assertions, condition recovery on AI worker restart, per-camera sensitivity thresholds);
   (c) ~~per-camera health endpoint~~ **done in Session 33**; (d) ~~`ai-adapter.v1` result fields~~ **dropped in Session 33**. Then the leftovers: a measured stream delay from RTCP sender reports,
   audit finding F8 (orphan file after a crash during retention, known, no change), and Bucket 6 (privacy tools, parked).
 - **Owner decisions still needed:** (the #47 branch is merged, via #50); approve or reject the local text model and C2PA library for (a)
-  and (b); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
+  and (b) (C2PA resolved with zero-dependency pure TypeScript implementation; Qwen3-4B approved); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
   quarantine cap (old open question); all of the field track (bench, clean-VM drill, real footage, pilot site, DPDP choices).
 - **Sandbox set-up for the next session (the cloud container is fresh each time):** `cd backend && npm ci` and the same in
   `frontend`; PostgreSQL stops when the container restarts (`service postgresql start`); pgvector is not preinstalled
