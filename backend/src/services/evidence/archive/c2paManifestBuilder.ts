@@ -289,38 +289,18 @@ export function verifyC2paManifest(
   const canonicalClaim = canonicalizeJson(unsignedClaim);
 
   let verified = false;
-  // Try hex decoding first if 128-char hex
-  if (/^[0-9a-fA-F]{128}$/.test(sig)) {
-    try {
-      verified = crypto.verify(
-        null,
-        Buffer.from(canonicalClaim, 'utf8'),
-        effectivePubKey,
-        Buffer.from(sig, 'hex')
-      );
-    } catch (_) {}
-  }
-  // Try base64 decoding
-  if (!verified) {
-    try {
-      verified = crypto.verify(
-        null,
-        Buffer.from(canonicalClaim, 'utf8'),
-        effectivePubKey,
-        Buffer.from(sig, 'base64')
-      );
-    } catch (_) {}
-  }
-  // Fallback try hex if not attempted
-  if (!verified) {
-    try {
-      verified = crypto.verify(
-        null,
-        Buffer.from(canonicalClaim, 'utf8'),
-        effectivePubKey,
-        Buffer.from(sig, 'hex')
-      );
-    } catch (_) {}
+  try {
+    const sigBuf = /^[0-9a-fA-F]{128}$/.test(sig)
+      ? Buffer.from(sig, 'hex')
+      : Buffer.from(sig, 'base64');
+    verified = crypto.verify(
+      null,
+      Buffer.from(canonicalClaim, 'utf8'),
+      effectivePubKey,
+      sigBuf
+    );
+  } catch (_) {
+    verified = false;
   }
 
   if (!verified) {

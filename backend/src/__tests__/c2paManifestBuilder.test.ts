@@ -179,4 +179,11 @@ describe('C2PA Manifest Builder and Verifier (c2paManifestBuilder)', () => {
     const badGenerator = { ...manifestObj, claim_generator: '' };
     expect(verifyC2paManifest(badGenerator).valid).toBe(false);
   });
+
+  it('correctly preserves 0 segmentCount in BSA Section 63 assertion', () => {
+    const { manifestObj } = buildC2paManifest({ ...dummyInput, segmentCount: 0 });
+    const bsa = manifestObj.assertions.find((a) => a.label === 'in.gov.bsa.section63');
+    expect(bsa?.data.segmentCount).toBe(0);
+    expect(verifyC2paManifest(manifestObj).valid).toBe(true);
+  });
 });

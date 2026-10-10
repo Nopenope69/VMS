@@ -737,12 +737,12 @@ export function verifyC2paSection({ manifest, artifacts, files, json, check, war
 
   let sigOk = false;
   try {
-    sigOk = crypto.verify(null, Buffer.from(canonicalClaim, 'utf8'), verifyKey, Buffer.from(sig, 'hex'));
-  } catch (_) {}
-  if (!sigOk) {
-    try {
-      sigOk = crypto.verify(null, Buffer.from(canonicalClaim, 'utf8'), verifyKey, Buffer.from(sig, 'base64'));
-    } catch (_) {}
+    const sigBuf = /^[0-9a-fA-F]{128}$/.test(sig)
+      ? Buffer.from(sig, 'hex')
+      : Buffer.from(sig, 'base64');
+    sigOk = crypto.verify(null, Buffer.from(canonicalClaim, 'utf8'), verifyKey, sigBuf);
+  } catch (_) {
+    sigOk = false;
   }
 
   if (!sigOk) {

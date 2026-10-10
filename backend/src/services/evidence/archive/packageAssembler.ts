@@ -135,7 +135,7 @@ export class PackageAssembler {
         const vSha = videoSha256 || (fs.existsSync(destVideoPath) ? await computeFileSha256(destVideoPath) : (options.manifestData.videoChecksumSha256 || '0'.repeat(64)));
         const tenantId = options.manifestData.tenantId || '';
         const applianceId = options.manifestData.applianceIdentifier || `VIGILONE-EDGE-${(tenantId || 'DEFAULT').substring(0, 8).toUpperCase()}`;
-        const segmentCount = options.manifestData.leafCount || (options.manifestData.leaves ? options.manifestData.leaves.length : (options.manifestData.cameras ? options.manifestData.cameras.reduce((acc: number, c: any) => acc + (c.segmentCount || 0), 0) : (options.manifestData.segmentCount || 1)));
+        const segmentCount = options.manifestData.leafCount ?? (options.manifestData.leaves ? options.manifestData.leaves.length : (options.manifestData.cameras ? options.manifestData.cameras.reduce((acc: number, c: any) => acc + (c.segmentCount || 0), 0) : (options.manifestData.segmentCount ?? 0)));
 
         const c2paInput: C2paManifestInput = {
           exportId: options.exportId,
