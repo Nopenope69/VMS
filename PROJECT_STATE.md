@@ -558,13 +558,10 @@ it onto `master` with fixes (Session 19 in `docs/STATUS.md`):
   `docs/operations/` (`AI_EXECUTION_PROVIDER`, `ARCHIVE_AWARE_RETENTION`, `CAMERA_HEALTH`, `PLATE_NEAR_MATCH`,
   `QUERY_TEMPLATE_ENSEMBLE`). Unbuilt items and why are in section 6 of the adoption study. Lesson: before proposing a gap,
   search `tools/eval`, `services/anpr` and the retention code; three early "gaps" already existed.
-- **Next for this branch's line of work (after person down and fence climbing, which the owner put first, above):** (a) **describe-what-to-watch rules** (a local model drafts a normal rule, the dry run shows last
-  week's matches, the operator saves it; needs the owner's approval of the local text model, Qwen3-4B, in the licence process);
-  (b) **footage integrity** (~~per-device signing of segment hashes at ingest~~ done in Session 35 as segment seals, C2PA-style manifests on exports after a licence check,
-  classical camera-sabotage detection); (c) ~~per-camera health endpoint~~ **done in Session 33** (no reconnect count: nothing records one); (d) ~~`ai-adapter.v1` result fields~~ **dropped in Session 33**: `ModelCardV1.input` already carries size and colour space, `cost` belongs to the tracker, edge clipping can be derived. Then the leftovers: stepping every camera of a synchronized view
-  onto its own frame (only the reference camera is frame-exact today), a measured stream delay from RTCP sender reports,
-  audit finding F8 (orphan file after a crash during retention, known, no change), a rule-builder field for
-  `incidentWindowSeconds`, a queue page polish for triage, and Bucket 6 (privacy tools, parked).
+- **Next for this branch's line of work (after person down and fence climbing, which the owner put first, above):** (a) ~~**describe-what-to-watch rules**~~ **done in Session 38** (Qwen3-4B extracts RuleIntentIR, deterministic compiler resolves cameras/zones/dwell/schedules, operator reviews interpretation and historical replay preview);
+  (b) **footage integrity part 3** (C2PA-style manifests on exports after licence verification, per-camera sensitivity thresholds for sabotage detection, restoring open sabotage conditions across AI worker restarts);
+  (c) ~~per-camera health endpoint~~ **done in Session 33**; (d) ~~`ai-adapter.v1` result fields~~ **dropped in Session 33**. Then the leftovers: a measured stream delay from RTCP sender reports,
+  audit finding F8 (orphan file after a crash during retention, known, no change), and Bucket 6 (privacy tools, parked).
 - **Owner decisions still needed:** (the #47 branch is merged, via #50); approve or reject the local text model and C2PA library for (a)
   and (b); choose incident windows per rule from pilot data; whether footage of a removed camera may be auto-deleted by the
   quarantine cap (old open question); all of the field track (bench, clean-VM drill, real footage, pilot site, DPDP choices).

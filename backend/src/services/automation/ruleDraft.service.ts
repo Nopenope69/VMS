@@ -37,11 +37,11 @@ export class RuleDraftService {
     if (testOverrideDrafter !== undefined && testOverrideDrafter !== null) {
       return testOverrideDrafter;
     }
-    const url = setting('RULE_LLM_ADAPTER_URL') || process.env.QUERY_LLM_ADAPTER_URL;
+    const url = setting('RULE_LLM_ADAPTER_URL');
     if (!url) {
       throw new RuleDraftError(
         'AI_WORKER_UNAVAILABLE',
-        'No rule draft adapter configured (RULE_LLM_ADAPTER_URL or QUERY_LLM_ADAPTER_URL)'
+        'No rule draft adapter configured (RULE_LLM_ADAPTER_URL)'
       );
     }
     const adapterClient = new AiAdapterClient(url, {

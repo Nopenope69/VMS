@@ -31,7 +31,7 @@ The system extracts the operator's intent into a typed intermediate representati
 
 ## 2. End-to-End User Experience & UI Workflow
 
-The operator workflow is integrated directly into [`EventActionRuleModal.tsx`](file:///Users/tecbusiness/Documents/antigravity/optimistic-newton/frontend/src/components/EventActionRuleModal.tsx):
+The operator workflow is integrated directly into `EventActionRuleModal.tsx` (`frontend/src/components/EventActionRuleModal.tsx`):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐

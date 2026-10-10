@@ -26,7 +26,8 @@
     "status:generate": "ts-node scripts/ci/generate-status.ts",
     "check:status-docs": "ts-node scripts/ci/generate-status.ts --check",
     "check:dependency-licenses": "ts-node scripts/ci/check-dependency-licenses.ts",
-    "conformance:ai-adapter": "ts-node scripts/conformance/ai-adapter.ts"
+    "conformance:ai-adapter": "ts-node scripts/conformance/ai-adapter.ts",
+    "eval:rules": "ts-node --project tsconfig.json ../tools/eval/rule-draft-eval.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

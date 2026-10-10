@@ -109,7 +109,13 @@ export function compileRuleIntent(
 
   // 3. Model unresolved notes
   if (ir.unresolvedNotes && ir.unresolvedNotes.length > 0) {
-    status = 'needs_clarification';
+    const isAdversarialOrUnsupported = ir.unresolvedNotes.some(
+      (n) =>
+        n.toLowerCase().includes('adversarial') ||
+        n.toLowerCase().includes('override') ||
+        n.toLowerCase().includes('unsupported')
+    );
+    status = isAdversarialOrUnsupported ? 'unsupported_request' : 'needs_clarification';
     ir.unresolvedNotes.forEach((n) => {
       if (!assumptions.includes(n)) assumptions.push(n);
     });
@@ -183,6 +189,14 @@ export function compileRuleIntent(
   const conditions: any[] = [];
   const tz = context.timezone || 'Asia/Kolkata';
 
+  const scheduleDays =
+    ir.schedule.days && ir.schedule.days.length > 0 ? ir.schedule.days : [0, 1, 2, 3, 4, 5, 6];
+  if (!ir.schedule.days || ir.schedule.days.length === 0) {
+    if (ir.schedule.type !== 'ALWAYS') {
+      assumptions.push('Schedule active on all days of the week (Sun-Sat).');
+    }
+  }
+
   if (ir.schedule.type === 'AFTER') {
     const start = ir.schedule.startTime || '22:00';
     const end = ir.schedule.endTime || '06:00';
@@ -193,7 +207,7 @@ export function compileRuleIntent(
       type: 'TIME_SCHEDULE',
       operator: 'BETWEEN',
       value: {
-        windows: [{ days: ir.schedule.days, start, end }],
+        windows: [{ days: scheduleDays, start, end }],
         timezone: tz,
       },
     });
@@ -207,7 +221,7 @@ export function compileRuleIntent(
       type: 'TIME_SCHEDULE',
       operator: 'BETWEEN',
       value: {
-        windows: [{ days: ir.schedule.days, start, end }],
+        windows: [{ days: scheduleDays, start, end }],
         timezone: tz,
       },
     });
@@ -218,7 +232,7 @@ export function compileRuleIntent(
       type: 'TIME_SCHEDULE',
       operator: 'BETWEEN',
       value: {
-        windows: [{ days: ir.schedule.days, start, end }],
+        windows: [{ days: scheduleDays, start, end }],
         timezone: tz,
       },
     });

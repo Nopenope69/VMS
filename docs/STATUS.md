@@ -5,6 +5,27 @@ Maintained by the coding agent at the end of every session. States: `NOT_STARTED
 yet run where it matters), `BLOCKED_HUMAN` (needs hardware, a clean VM, data or a decision).
 Nothing here says "passing" without the run that showed it. CI-generated test counts live in
 `docs/generated/TEST_STATUS.md` (written only by `.github/workflows/status.yml`).
+## Session 38 (2026-10-10): Describe-What-To-Watch Rules (Natural Language Rules, flag FEATURE_NL_RULES, off by default)
+
+Branch `feat/describe-what-to-watch-rules`. Architectural invariant: "AI proposes; the deterministic rule engine acts."
+Allows physical security operators to describe rules in plain language (English, Hinglish, Hindi). Local Qwen3-4B model
+extracts structured `RuleIntentIR` JSON via an isolated SingleFlightQueue (concurrency 1) in `ai-worker`. A 100% deterministic
+backend compiler resolves physical cameras & zones under strict tenant boundaries, maps behaviors to triggers (loitering dwell
+hysteresis on person detector, tripwire cross, person down, fence climb, camera tamper, abandoned objects), compiles schedules
+with overnight shift assumptions and weekday filters, and sets alarm grouping. The existing automation dry-run previews against
+the last 7 days of historical stored events without modifying video or running inline inference.
+
+| Piece | State | Where |
+| --- | --- | --- |
+| Feature flag `FEATURE_NL_RULES` (off by default) and setting `RULE_LLM_ADAPTER_URL` | DONE_VERIFIED: `settings.test.ts` 18/18; `check:feature-flag-docs` exit 0 | `backend/src/config/featureFlags.ts`, `backend/src/config/settings.ts`, `docs/operations/FEATURE_FLAGS.md` |
+| Typed Intermediate Representation `RuleIntentIR` (Zod schema, enum mappings) | DONE_VERIFIED: `ruleIntentTypes.ts`, `ruleIntentExtraction.test.ts` 13/13 | `services/ai-worker/src/textllm/ruleIntentTypes.ts`, `backend/src/services/automation/ruleIntentTypes.ts` |
+| AI Worker Intent Extraction Pipeline (SingleFlightLimiter(3), Qwen3-4B prompt formatting, tenant site entity injection, 15s deadline) | DONE_VERIFIED: `ruleIntentExtraction.test.ts` 13/13; ai-worker regression suite 32/32 suites, 354 passed | `services/ai-worker/src/textllm/ruleDraftPipeline.ts`, `services/ai-worker/src/textllm/ruleDraftAdapterCore.ts`, `services/ai-worker/src/adapter/httpServer.ts` |
+| Deterministic Rule Compiler (Tenant isolation, entity resolution, dwell mapping, overnight schedule assumption recording, validation via RuleInputSchema) | DONE_VERIFIED: `ruleCompiler.test.ts` 7/7 | `backend/src/services/automation/ruleCompiler.ts` |
+| Backend Endpoint `POST /api/v1/automation/rules/draft-nl` (Feature gated, AUTOMATION_MANAGE permission, audit logging with DPDP prompt truncation) | DONE_VERIFIED on real database: `ruleDraftRealDb.test.ts` 5/5 | `backend/src/services/automation/ruleDraft.service.ts`, `backend/src/routes/automation.routes.ts` |
+| Frontend Rule Builder AI Prompt Bar, Interpretation & Assumptions Review Card, Historical Event Replay (Last 7 Days) disclaimer | DONE_VERIFIED: `npm run build` exits 0 cleanly; `e2e/nl-rules.spec.ts` | `frontend/src/components/EventActionRuleModal.tsx`, `frontend/e2e/nl-rules.spec.ts` |
+| Semantic Accuracy Evaluation Suite across 33 labelled prompts (English, Hinglish, Hindi, Adversarial, Ambiguous) | DONE_VERIFIED: `npm run eval:rules` exits 0, 100.0% score (33/33 passed, 100% adversarial injection rejection) | `tools/eval/rule-draft-eval.ts` |
+
+All 6 repository quality gates pass cleanly: `check:hygiene`, `check:no-fake-success`, `check:feature-flag-docs`, `check:dependency-licenses`, `check:model-licenses`, `check:status-docs`.
 
 ## Session 37, second PR (2026-10-07): rule builder reachable, alarm grouping field, frame-exact stepping on every camera
 
