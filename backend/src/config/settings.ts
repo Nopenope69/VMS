@@ -141,6 +141,7 @@ export const SETTINGS = {
 
   // Automation / Natural Language Rules
   FEATURE_NL_RULES: flag('Natural language automation rules authoring (off by default; experimental).'),
+  RULE_LLM_ADAPTER_URL: httpUrl('ai-adapter.v1 rule-draft adapter URL.', undefined),
 
   // Test only
   WHATSAPP_API_BASE_URL: optionalText('Test only: WhatsApp Cloud API base URL (honoured only when NODE_ENV=test).'),

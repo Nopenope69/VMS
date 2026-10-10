@@ -10,10 +10,12 @@ import { EVENT_KIND_NAMES, isEventKind } from '../services/incident/orchestrator
 import { validateRuleInput, RuleValidationError } from '../services/automation/ruleSchema';
 import { RulePreviewService, PREVIEW_MAX_DAYS } from '../services/automation/rulePreview.service';
 import { AuditChainService } from '../services/audit/auditChain.service';
+import { RuleDraftService, RuleDraftError } from '../services/automation/ruleDraft.service';
 
 const router = Router();
 const ruleEngine = new RuleEngine(prisma);
 const previewService = new RulePreviewService(prisma);
+const ruleDraftService = new RuleDraftService(prisma);
 
 function ruleError(res: Response, err: any): void {
   if (err instanceof RuleValidationError) {
@@ -173,6 +175,60 @@ router.post(
       res.json(result);
     } catch (err: any) {
       ruleError(res, err);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/automation/rules/draft-nl
+ * Natural language rule authoring: drafts a rule from plain language using Qwen3-4B,
+ * compiles deterministically with entity resolution and semantic validation. Audited.
+ */
+router.post(
+  '/rules/draft-nl',
+  requireAuth,
+  authorize(Permission.AUTOMATION_MANAGE),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const { instruction } = req.body || {};
+      if (!instruction || typeof instruction !== 'string' || !instruction.trim()) {
+        res.status(400).json({ error: 'instruction must be a non-empty string', code: 'INVALID_INSTRUCTION' });
+        return;
+      }
+
+      const result = await ruleDraftService.draftRule(tenantId, instruction.trim());
+
+      await AuditChainService.record(prisma, {
+        tenantId,
+        userId: req.user!.id,
+        action: 'AUTOMATION_RULE_DRAFT_NL',
+        resourceType: 'AutomationRule',
+        resourceId: result.draftRule?.name || 'draft',
+        ipAddress: req.ip || '127.0.0.1',
+        metadata: {
+          promptSha256: result.promptSha256,
+          instructionTruncated: instruction.trim().slice(0, 100),
+          status: result.interpretation.status,
+          triggerType: result.draftRule?.triggerType,
+        },
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof RuleDraftError) {
+        if (err.code === 'FEATURE_DISABLED') {
+          res.status(501).json({ error: err.message, code: err.code });
+          return;
+        }
+        if (err.code === 'AI_WORKER_UNAVAILABLE') {
+          res.status(503).json({ error: err.message, code: err.code });
+          return;
+        }
+        res.status(400).json({ error: err.message, code: err.code });
+        return;
+      }
+      res.status(500).json({ error: err.message });
     }
   }
 );

@@ -103,7 +103,7 @@ export class AiAdapterClient {
    * POSTs a request (a fresh requestId is added) and returns the validated ok result. With `model`, the result's
    * provenance must name exactly that model.
    */
-  async call(path: '/v1/infer' | '/v1/embed-text' | '/v1/rewrite-text', body: Record<string, unknown>, model?: ModelRef): Promise<OkResult> {
+  async call(path: '/v1/infer' | '/v1/embed-text' | '/v1/rewrite-text' | '/v1/extract-rule-intent', body: Record<string, unknown>, model?: ModelRef): Promise<OkResult> {
     const requestId = crypto.randomUUID();
     let json: unknown;
     try {

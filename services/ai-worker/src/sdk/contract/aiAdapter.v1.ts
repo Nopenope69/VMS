@@ -237,6 +237,8 @@ export const InferenceResultV1 = z.discriminatedUnion('status', [
       verification: VerificationV1.optional(),
       /** v1.2, optional: present for a `POST /v1/rewrite-text` answer. */
       rewrite: RewriteV1.optional(),
+      /** optional: present for a `POST /v1/extract-rule-intent` answer. */
+      ruleIntent: z.object({ ir: z.record(z.any()), promptSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
       provenance: AiProvenanceV1,
       latencyMs: z.number().nonnegative(),
     })
