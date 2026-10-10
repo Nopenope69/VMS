@@ -6,6 +6,9 @@ import {
   Zap,
   AlertCircle,
   CheckCircle2,
+  Sparkles,
+  Loader2,
+  Info,
 } from 'lucide-react';
 import api from '../services/api';
 import Modal from './ui/Modal';
@@ -43,6 +46,21 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
       continueOnFailure: true,
     },
   ]);
+
+  // Natural Language Rule Drafting State
+  const [nlPrompt, setNlPrompt] = useState('');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [aiTriggerConfig, setAiTriggerConfig] = useState<Record<string, any>>({});
+  const [interpretation, setInterpretation] = useState<{
+    status: 'ready_for_review' | 'needs_clarification' | 'unsupported_request';
+    summary: string;
+    assumptions: string[];
+    unresolvedFields: string[];
+    resolvedEntities: {
+      cameras: Array<{ id: string; name: string }>;
+      zones: Array<{ id: string; name: string; cameraId?: string }>;
+    };
+  } | null>(null);
 
   const fetchRulesAndHistory = async () => {
     try {
@@ -82,21 +100,95 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
     setActions(actions.filter((_, i) => i !== index));
   };
 
+  const handleDraftNl = async () => {
+    if (!nlPrompt.trim()) return;
+    setIsDrafting(true);
+    setStatusNotice(null);
+    try {
+      const res = await api.post('/automation/rules/draft-nl', { instruction: nlPrompt.trim() });
+      const { draftRule, interpretation: interp } = res.data;
+      setInterpretation(interp);
+
+      if (draftRule) {
+        if (draftRule.name) setName(draftRule.name);
+        if (draftRule.triggerType) setTriggerType(draftRule.triggerType);
+        if (draftRule.cooldownSeconds !== undefined) setCooldownSeconds(draftRule.cooldownSeconds);
+        if (draftRule.priority !== undefined) setPriority(draftRule.priority);
+        if (draftRule.actions && draftRule.actions.length) setActions(draftRule.actions);
+        if (draftRule.triggerConfig) setAiTriggerConfig(draftRule.triggerConfig);
+
+        const newDraft: RuleDraft = {
+          ...emptyRuleDraft(),
+          minDwellSeconds: draftRule.triggerConfig?.minDwellSeconds ? String(draftRule.triggerConfig.minDwellSeconds) : '',
+          vehicleClasses: draftRule.triggerConfig?.objectClasses || [],
+        };
+
+        const timeCond = draftRule.conditions?.find((c: any) => c.type === 'TIME_SCHEDULE');
+        if (timeCond) {
+          newDraft.scheduleEnabled = true;
+          newDraft.scheduleMode = timeCond.operator || 'BETWEEN';
+          if (timeCond.value?.windows?.[0]) {
+            const w = timeCond.value.windows[0];
+            newDraft.scheduleStart = w.start;
+            newDraft.scheduleEnd = w.end;
+            newDraft.scheduleDays = w.days;
+          }
+          newDraft.scheduleTimezone = timeCond.value?.timezone || '';
+        }
+
+        setDraft(newDraft);
+
+        // Auto-run historical preview for 7 days
+        try {
+          const to = new Date();
+          const from = new Date(to.getTime() - 7 * 86400_000);
+          const parts = buildRuleParts(draftRule.triggerType, newDraft);
+          const previewRes = await api.post('/automation/rules/preview', {
+            triggerType: draftRule.triggerType,
+            triggerConfig: { ...parts.triggerConfig, ...(draftRule.triggerConfig || {}) },
+            conditions: parts.conditions,
+            cooldownSeconds: draftRule.cooldownSeconds,
+            from: from.toISOString(),
+            to: to.toISOString(),
+          });
+          setPreview(previewRes.data);
+        } catch {
+          // Preview is advisory
+        }
+      }
+    } catch (err: any) {
+      setStatusNotice({
+        type: 'error',
+        message: err.response?.data?.error || 'Failed to draft rule with AI',
+      });
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setStatusNotice(null);
+      const parts = buildRuleParts(triggerType, draft);
       await api.post('/automation/rules', {
         name,
         triggerType,
         cooldownSeconds,
         priority,
-        ...buildRuleParts(triggerType, draft),
+        triggerConfig: {
+          ...parts.triggerConfig,
+          ...aiTriggerConfig,
+        },
+        conditions: parts.conditions,
         actions,
       });
       setName('');
       setDraft(emptyRuleDraft());
       setPreview(null);
+      setInterpretation(null);
+      setNlPrompt('');
+      setAiTriggerConfig({});
       setActiveTab('rules');
       setStatusNotice({ type: 'success', message: `Rule '${name}' created successfully.` });
       fetchRulesAndHistory();
@@ -330,6 +422,149 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
 
           {activeTab === 'create' && (
             <form onSubmit={handleSaveRule} className="space-y-4 text-xs">
+              {/* Natural Language Rule Drafting Assistant */}
+              <div className="p-3.5 bg-gradient-to-r from-sky-950/40 via-vms-panel to-vms-panel border border-sky-500/30 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-sky-400" />
+                    <span className="font-mono font-bold text-xs text-sky-300 uppercase tracking-wider">
+                      Describe-What-To-Watch (AI Configuration Assistant)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-vms-dim">
+                    Local Qwen3-4B · Edge Isolated · Advisory Draft
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <div className="relative flex-1">
+                    <Input
+                      data-testid="nl-rule-prompt-input"
+                      placeholder="e.g. Alert if a person loiters near the server room for more than 5 minutes after 10 PM"
+                      value={nlPrompt}
+                      onChange={(e) => setNlPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleDraftNl();
+                        }
+                      }}
+                      className="w-full text-xs bg-vms-surface border-sky-500/40 focus:border-sky-400 font-sans"
+                      disabled={isDrafting}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    data-testid="nl-rule-draft-button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleDraftNl}
+                    disabled={isDrafting || !nlPrompt.trim()}
+                    className="shrink-0 flex items-center space-x-1.5 bg-sky-600 hover:bg-sky-500 text-white font-mono"
+                  >
+                    {isDrafting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Drafting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Draft Rule</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Interpretation & Semantic Assumptions Review Card */}
+                {interpretation && (
+                  <div
+                    data-testid="nl-rule-interpretation-card"
+                    className={`p-3 rounded border font-mono text-xs space-y-2 ${
+                      interpretation.status === 'ready_for_review'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : interpretation.status === 'needs_clarification'
+                        ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                        : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span
+                          data-testid="nl-rule-status-badge"
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            interpretation.status === 'ready_for_review'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                              : interpretation.status === 'needs_clarification'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/50'
+                          }`}
+                        >
+                          {interpretation.status.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-vms-text font-sans font-medium text-xs">
+                          {interpretation.summary}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Resolved Entities */}
+                    {(interpretation.resolvedEntities.cameras.length > 0 ||
+                      interpretation.resolvedEntities.zones.length > 0) && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <span className="text-vms-dim text-[11px]">Resolved:</span>
+                        {interpretation.resolvedEntities.cameras.map((c) => (
+                          <span
+                            key={c.id}
+                            className="px-1.5 py-0.5 rounded bg-vms-surface border border-vms-border text-[10px] text-sky-300"
+                          >
+                            📷 {c.name}
+                          </span>
+                        ))}
+                        {interpretation.resolvedEntities.zones.map((z) => (
+                          <span
+                            key={z.id}
+                            className="px-1.5 py-0.5 rounded bg-vms-surface border border-vms-border text-[10px] text-emerald-300"
+                          >
+                            📐 {z.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Explicit Assumptions */}
+                    {interpretation.assumptions && interpretation.assumptions.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-vms-border/50">
+                        <div className="text-[10px] uppercase tracking-wider text-vms-muted font-bold flex items-center space-x-1">
+                          <Info className="w-3 h-3 text-sky-400" />
+                          <span>Explicit Assumptions (Review carefully):</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-0.5 text-[11px] text-vms-text pl-1">
+                          {interpretation.assumptions.map((asm, idx) => (
+                            <li key={idx}>{asm}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Unresolved Fields / Clarification Needed */}
+                    {interpretation.unresolvedFields && interpretation.unresolvedFields.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-vms-border/50">
+                        <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center space-x-1">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Needs Clarification / Missing Information:</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-200 pl-1">
+                          {interpretation.unresolvedFields.map((uf, idx) => (
+                            <li key={idx}>{uf}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-vms-muted mb-1 font-mono uppercase tracking-wider text-[10px]">
@@ -535,12 +770,22 @@ export const EventActionRuleModal: React.FC<EventActionRuleModalProps> = ({
 
               {preview && (
                 <div className="p-3 bg-vms-panel border border-vms-border rounded font-mono text-xs space-y-1" role="status">
-                  <div className="text-vms-accent uppercase tracking-wider text-[10px]">Preview: last 7 days of stored events (nothing was executed)</div>
+                  <div className="text-vms-accent uppercase tracking-wider text-[10px] font-bold">
+                    Historical Event Replay (Last 7 Days)
+                  </div>
+                  <div className="text-[11px] text-vms-muted italic">
+                    Evaluated against stored historical events. Does not re-run CV models on raw video.
+                  </div>
                   <div>
                     scanned {preview.scanned}
                     {preview.truncated ? ' (truncated)' : ''} • trigger matched {preview.triggerMatched} • conditions matched {preview.conditionsMatched} •{' '}
                     <span className="text-vms-text font-semibold">would fire {preview.wouldFire}</span>
                   </div>
+                  {preview.triggerMatched === 0 && (
+                    <div className="text-[11px] text-amber-400 bg-amber-950/40 border border-amber-800/60 p-2 rounded mt-1">
+                      0 matches in historical replay. Evaluated against {preview.scanned} stored events over the past 7 days. This means no events matching the rule&apos;s criteria occurred during this window.
+                    </div>
+                  )}
                   {preview.samples?.slice(0, 5).map((s: any) => (
                     <div key={s.eventId} className="text-vms-muted">
                       {s.timestampUtc.replace('T', ' ').slice(0, 19)} UTC {s.type} {s.objectClass || s.analyticType || ''}
