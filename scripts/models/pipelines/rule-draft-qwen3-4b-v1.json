@@ -1,0 +1,90 @@
+{
+  "$comment": "Describe-what-to-watch rules: Qwen3-4B served by llama.cpp's llama-server. Extracts physical security operator instructions into a typed RuleIntentIR JSON structure. A deterministic backend compiler then resolves physical cameras and zones, dwell thresholds, and time windows before operator confirmation.",
+  "name": "qwen3-4b-rule-draft",
+  "version": "1.0.0",
+  "tasks": ["rule_draft"],
+  "components": [
+    {
+      "role": "rule_draft_model",
+      "key": "qwen3-4b-q4km",
+      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
+    }
+  ],
+  "llamaCpp": {
+    "tag": "b11277",
+    "commit": "eae11d2217fe9225d1aaba48773b6cca45ae4de9",
+    "repository": "https://github.com/ggml-org/llama.cpp"
+  },
+  "generation": {
+    "temperature": 0,
+    "seed": 42,
+    "maxTokens": 400,
+    "contextSize": 4096,
+    "thinking": false
+  },
+  "prompt": {
+    "templateVersion": "rule-draft.v1",
+    "system": "You are a physical security rule generator for the VigilOne VMS. Convert operator instructions into a typed RuleIntentIR JSON. Known site locations: {locations}. Behaviors: LOITERING, TRIPWIRE_CROSS, AREA_INTRUSION, PERSON_DOWN, FENCE_CLIMB, CAMERA_TAMPER, OBJECT_ABANDONED, UNRECOGNIZED_VEHICLE, GENERIC_DETECTION. Reply with JSON ONLY conforming to the RuleIntentIR schema.",
+    "examples": [
+      {
+        "instruction": "Alert security if a person loiters near the server room for more than 5 minutes after 10 PM",
+        "ir": {
+          "suggestedName": "Server Room After-Hours Loitering",
+          "behavior": "LOITERING",
+          "targetClass": "person",
+          "locationPhrase": "server room",
+          "durationSeconds": 300,
+          "schedule": {
+            "type": "AFTER",
+            "startTime": "22:00",
+            "endTime": "06:00",
+            "days": [0, 1, 2, 3, 4, 5, 6]
+          },
+          "actionType": "ALARM",
+          "severity": "CRITICAL",
+          "unresolvedNotes": []
+        }
+      },
+      {
+        "instruction": "gate 2 perimeter pe agar koi ghuse toh alarm bajao",
+        "ir": {
+          "suggestedName": "Gate 2 Perimeter Intrusion",
+          "behavior": "AREA_INTRUSION",
+          "targetClass": "any",
+          "locationPhrase": "gate 2 perimeter",
+          "durationSeconds": null,
+          "schedule": {
+            "type": "ALWAYS",
+            "startTime": null,
+            "endTime": null,
+            "days": [0, 1, 2, 3, 4, 5, 6]
+          },
+          "actionType": "ALARM",
+          "severity": "CRITICAL",
+          "unresolvedNotes": []
+        }
+      },
+      {
+        "instruction": "Notify if a person falls down near platform 1 between 8 AM and 8 PM",
+        "ir": {
+          "suggestedName": "Platform 1 Person Down Alert",
+          "behavior": "PERSON_DOWN",
+          "targetClass": "person",
+          "locationPhrase": "platform 1",
+          "durationSeconds": null,
+          "schedule": {
+            "type": "BETWEEN",
+            "startTime": "08:00",
+            "endTime": "20:00",
+            "days": [0, 1, 2, 3, 4, 5, 6]
+          },
+          "actionType": "NOTIFICATION",
+          "severity": "WARNING",
+          "unresolvedNotes": []
+        }
+      }
+    ],
+    "maxInstructionChars": 500,
+    "maxLocations": 64
+  }
+}
