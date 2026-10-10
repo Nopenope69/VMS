@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { SETTINGS, SELF_CHECKED_SETTINGS, SettingError, setting, settingProblems } from '../config/settings';
 import { envSchema } from '../config/env';
+import { FEATURE_NL_RULES, isNlRulesEnabled } from '../config/featureFlags';
 
 describe('settings', () => {
   it('every default is valid, so an empty environment has no problems', () => {
@@ -88,5 +89,17 @@ describe('settings', () => {
     };
     walk(root);
     expect(offenders).toEqual([]);
+  });
+
+  it('FEATURE_NL_RULES defaults to false and can be read', () => {
+    expect(setting('FEATURE_NL_RULES', {})).toBe(false);
+    expect(setting('FEATURE_NL_RULES', { FEATURE_NL_RULES: 'true' })).toBe(true);
+    expect(setting('FEATURE_NL_RULES', { FEATURE_NL_RULES: 'false' })).toBe(false);
+    expect(isNlRulesEnabled()).toBe(false);
+    expect(isNlRulesEnabled(undefined, { FEATURE_NL_RULES: 'true' })).toBe(true);
+    expect(isNlRulesEnabled(undefined, { VIGILONE_FEATURE_NL_RULES: 'true' })).toBe(true);
+    expect(isNlRulesEnabled('tenant-1', { FEATURE_NL_RULES: 'true' })).toBe(true);
+    expect(isNlRulesEnabled('tenant-1', { FEATURE_NL_RULES: 'false' })).toBe(false);
+    expect(FEATURE_NL_RULES).toBe('FEATURE_NL_RULES');
   });
 });

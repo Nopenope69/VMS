@@ -278,3 +278,15 @@ export function renderFeatureFlagMarkdownTable(): string {
   }
   return lines.join('\n');
 }
+
+export const FEATURE_NL_RULES = 'FEATURE_NL_RULES';
+
+/**
+ * Check whether natural-language automation rule authoring (Describe-What-To-Watch) is enabled.
+ * Defaults to false (disabled). Read from FEATURE_NL_RULES or VIGILONE_FEATURE_NL_RULES.
+ */
+export function isNlRulesEnabled(tenantId?: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.FEATURE_NL_RULES ?? env.VIGILONE_FEATURE_NL_RULES;
+  return raw !== undefined && TRUTHY.has(raw.trim().toLowerCase());
+}
+

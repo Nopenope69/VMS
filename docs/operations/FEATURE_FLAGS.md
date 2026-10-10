@@ -40,6 +40,7 @@ Flags are read from the environment on every request. Set `VIGILONE_FEATURE_<FLA
 | `TRACK_INDEX` | `VIGILONE_FEATURE_TRACK_INDEX` | `/api/v1/tracks` (list, one track, `POST /search` and appearance following, which also need `SEMANTIC_SEARCH`; camera neighbours, plate following, links and journeys: `CROSS_CAMERA_FOLLOW.md`) and the per-detection track update in detection and plate ingestion (ADR 0011, 0012; `TRACK_INDEX.md`, `TRACK_SEARCH.md`) |
 | `INVESTIGATION_TIMING` | `VIGILONE_FEATURE_INVESTIGATION_TIMING` | `/api/v1/investigations/timings` and the stopwatch on the Investigation page (`PILOT_MEASUREMENT.md`, section 4) |
 | `OBJECT_CROPS` | `VIGILONE_FEATURE_OBJECT_CROPS` | `/api/v1/crop-policy` (per-site person-crop switch and retention), crop capture on the detection path and the `cropPurger` worker (ADR 0005); person crops also need the per-site switch |
+| `FEATURE_NL_RULES` | `FEATURE_NL_RULES` / `VIGILONE_FEATURE_NL_RULES` | `POST /api/v1/automation/rules/draft-nl` (natural language rule drafting assistant using local Qwen3-4B; off by default; see `docs/superpowers/specs/2026-10-09-describe-what-to-watch-rules-design.md`) |
 
 Note: the ANPR router also checks the licence entitlement (`requireFeature('ANPR')` in
 `middleware/license.ts`). The feature flag is an operational switch; the licence is a commercial

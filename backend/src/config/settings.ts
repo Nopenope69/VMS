@@ -139,6 +139,9 @@ export const SETTINGS = {
     doc: "Phrasings for QUERY_TEMPLATE_ENSEMBLE, separated by '|', each containing {q} once (default: '{q}', 'a photo of {q}', 'a CCTV image of {q}', 'a security camera photo of {q}').",
   } as Spec<string[]>,
 
+  // Automation / Natural Language Rules
+  FEATURE_NL_RULES: flag('Natural language automation rules authoring (off by default; experimental).'),
+
   // Test only
   WHATSAPP_API_BASE_URL: optionalText('Test only: WhatsApp Cloud API base URL (honoured only when NODE_ENV=test).'),
   VIGILONE_ANPR_TEST_ENDPOINT: flag('Test only: exposes POST /anpr/detect (honoured only when NODE_ENV=test).'),
