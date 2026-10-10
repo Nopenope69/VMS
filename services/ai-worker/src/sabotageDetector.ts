@@ -104,6 +104,7 @@ interface CameraState {
   suspects: Map<SabotageType, Suspect>;
   /** Conditions already reported, with the last time each was seen. */
   active: Map<SabotageType, { startedAt: number; reportedAt: number; lastSeen: number; score: number; threshold: number }>;
+  options?: Partial<SabotageDetectorOptions>;
 }
 
 export interface FrameAnalysis extends Omit<SabotageMeasurements, 'referenceSharpness' | 'similarity'> {
@@ -137,10 +138,26 @@ export class SabotageDetector {
     this.cameras.delete(cameraId);
   }
 
+  /** Sets or removes per-camera sensitivity threshold overrides. */
+  public setCameraConfig(cameraId: string, options?: Partial<SabotageDetectorOptions> | null): void {
+    const cleanOptions = options
+      ? Object.fromEntries(Object.entries(options).filter(([_, v]) => v !== undefined))
+      : undefined;
+    let cam = this.cameras.get(cameraId);
+    if (!cam) {
+      cam = { ref: null, suspects: new Map(), active: new Map(), options: cleanOptions };
+      this.cameras.set(cameraId, cam);
+    } else {
+      cam.options = cleanOptions;
+    }
+  }
+
   /** Whether the camera's reference view is learnt (false while learning). */
   public isReady(cameraId: string): boolean {
-    const ref = this.cameras.get(cameraId)?.ref;
-    return !!ref && ref.frames >= this.o.learnFrames;
+    const cam = this.cameras.get(cameraId);
+    const ref = cam?.ref;
+    const learnFrames = cam?.options?.learnFrames ?? this.o.learnFrames;
+    return !!ref && ref.frames >= learnFrames;
   }
 
   /** Conditions currently reported and not yet cleared. */
@@ -155,6 +172,7 @@ export class SabotageDetector {
       cam = { ref: null, suspects: new Map(), active: new Map() };
       this.cameras.set(cameraId, cam);
     }
+    const opt: Required<SabotageDetectorOptions> = { ...this.o, ...(cam.options || {}) };
     for (const c of conditions) {
       if (!cam.active.has(c.type)) {
         cam.active.set(c.type, {
@@ -162,7 +180,7 @@ export class SabotageDetector {
           reportedAt: c.confirmedAt.getTime(),
           lastSeen: c.confirmedAt.getTime(),
           score: c.score ?? 1,
-          threshold: c.threshold ?? this.thresholdFor(c.type),
+          threshold: c.threshold ?? this.thresholdFor(c.type, opt),
         });
       }
     }
@@ -181,10 +199,11 @@ export class SabotageDetector {
       cam = { ref: null, suspects: new Map(), active: new Map() };
       this.cameras.set(frame.cameraId, cam);
     }
-    if (cam.lastFrameAt !== undefined && t - cam.lastFrameAt > this.o.maxGapMs) cam.suspects.clear();
+    const opt: Required<SabotageDetectorOptions> = { ...this.o, ...(cam.options || {}) };
+    if (cam.lastFrameAt !== undefined && t - cam.lastFrameAt > opt.maxGapMs) cam.suspects.clear();
     cam.lastFrameAt = t;
 
-    if (!cam.ref || cam.ref.frames < this.o.learnFrames) {
+    if (!cam.ref || cam.ref.frames < opt.learnFrames) {
       cam.ref = learn(cam.ref, a);
       return [];
     }
@@ -199,12 +218,12 @@ export class SabotageDetector {
       referenceSharpness: round(ref.sharpness),
       similarity: round(similarity),
     };
-    const seen = this.classify(a, ref, similarity);
+    const seen = this.classify(a, ref, similarity, opt);
 
     const findings: SabotageFinding[] = [];
     for (const [type, score] of seen) {
       const s = cam.suspects.get(type);
-      if (s && t - s.lastSeen <= this.o.graceMs) {
+      if (s && t - s.lastSeen <= opt.graceMs) {
         s.lastSeen = t;
         s.score = score;
       } else cam.suspects.set(type, { since: t, lastSeen: t, score });
@@ -214,22 +233,22 @@ export class SabotageDetector {
         continue;
       }
       const sus = cam.suspects.get(type)!;
-      if (t - sus.since >= this.o.holdMs) {
-        cam.active.set(type, { startedAt: sus.since, reportedAt: t, lastSeen: t, score: round(score), threshold: this.thresholdFor(type) });
+      if (t - sus.since >= opt.holdMs) {
+        cam.active.set(type, { startedAt: sus.since, reportedAt: t, lastSeen: t, score: round(score), threshold: this.thresholdFor(type, opt) });
         findings.push({
           state: 'CONFIRMED',
           cameraId: frame.cameraId,
           tenantId: frame.tenantId,
           type,
           score: round(score),
-          threshold: this.thresholdFor(type),
+          threshold: this.thresholdFor(type, opt),
           startedAt: new Date(sus.since),
           confirmedAt: new Date(t),
           measurements: m,
         });
       }
     }
-    for (const [type, s] of cam.suspects) if (t - s.lastSeen > this.o.graceMs) cam.suspects.delete(type);
+    for (const [type, s] of cam.suspects) if (t - s.lastSeen > opt.graceMs) cam.suspects.delete(type);
     const ended = (type: SabotageType, act: NonNullable<ReturnType<typeof cam.active.get>>, clearReason: 'RESTORED' | 'RELEARNED') => {
       cam!.active.delete(type);
       findings.push({
@@ -246,47 +265,47 @@ export class SabotageDetector {
         measurements: m,
       });
     };
-    for (const [type, act] of cam.active) if (t - act.lastSeen >= this.o.clearMs) ended(type, act, 'RESTORED');
+    for (const [type, act] of cam.active) if (t - act.lastSeen >= opt.clearMs) ended(type, act, 'RESTORED');
 
     const moved = cam.active.get('DISPLACEMENT');
-    if (moved && seen.has('DISPLACEMENT') && t - moved.reportedAt >= this.o.relearnMs) {
+    if (moved && seen.has('DISPLACEMENT') && t - moved.reportedAt >= opt.relearnMs) {
       // The camera stays moved: its new view becomes the reference (the move was reported once).
       cam.suspects.clear();
       ended('DISPLACEMENT', moved, 'RELEARNED');
       cam.ref = learn(null, a);
     } else if (seen.size === 0 && cam.suspects.size === 0 && cam.active.size === 0) {
-      follow(ref, a, this.o.followRate);
+      follow(ref, a, opt.followRate);
     }
     return findings;
   }
 
   /** Scores of the conditions this frame shows: at most one, checked in the order blinded, covered, defocused, moved. */
-  private classify(a: FrameAnalysis, ref: Reference, similarity: number): Map<SabotageType, number> {
+  private classify(a: FrameAnalysis, ref: Reference, similarity: number, opt: Required<SabotageDetectorOptions>): Map<SabotageType, number> {
     const out = new Map<SabotageType, number>();
-    if (a.brightFraction >= this.o.blindedFraction && ref.brightFraction < this.o.blindedFraction / 2) {
+    if (a.brightFraction >= opt.blindedFraction && ref.brightFraction < opt.blindedFraction / 2) {
       out.set('BLINDED', a.brightFraction);
       return out;
     }
     // A reference with almost no detail (a blank wall, a dark scene) cannot show that detail went missing.
-    if (ref.stdLuma <= this.o.flatStd * 1.5) return out;
-    const flat = a.stdLuma <= this.o.flatStd || a.darkFraction >= 0.95;
+    if (ref.stdLuma <= opt.flatStd * 1.5) return out;
+    const flat = a.stdLuma <= opt.flatStd || a.darkFraction >= 0.95;
     const ratio = a.sharpness / Math.max(ref.sharpness, 1e-6);
-    if (flat && similarity < this.o.coveredSimilarity) out.set('OCCLUSION', clamp01(1 - similarity));
-    else if (!flat && ratio <= this.o.defocusSharpnessRatio) out.set('DEFOCUS', clamp01(1 - ratio));
-    else if (!flat && similarity < this.o.displacedSimilarity) out.set('DISPLACEMENT', clamp01(1 - similarity));
+    if (flat && similarity < opt.coveredSimilarity) out.set('OCCLUSION', clamp01(1 - similarity));
+    else if (!flat && ratio <= opt.defocusSharpnessRatio) out.set('DEFOCUS', clamp01(1 - ratio));
+    else if (!flat && similarity < opt.displacedSimilarity) out.set('DISPLACEMENT', clamp01(1 - similarity));
     return out;
   }
 
-  private thresholdFor(type: SabotageType): number {
+  private thresholdFor(type: SabotageType, opt: Required<SabotageDetectorOptions> = this.o): number {
     switch (type) {
       case 'BLINDED':
-        return this.o.blindedFraction;
+        return opt.blindedFraction;
       case 'OCCLUSION':
-        return round(1 - this.o.coveredSimilarity);
+        return round(1 - opt.coveredSimilarity);
       case 'DEFOCUS':
-        return round(1 - this.o.defocusSharpnessRatio);
+        return round(1 - opt.defocusSharpnessRatio);
       case 'DISPLACEMENT':
-        return round(1 - this.o.displacedSimilarity);
+        return round(1 - opt.displacedSimilarity);
     }
   }
 }

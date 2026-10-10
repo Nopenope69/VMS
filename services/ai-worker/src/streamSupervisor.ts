@@ -146,6 +146,25 @@ export class StreamSupervisor extends EventEmitter {
     for (const cam of discovered) {
       discoveredMap.set(cam.id, cam);
 
+      if (this.sabotage) {
+        const sc = cam.sabotageConfig;
+        this.sabotage.setCameraConfig(
+          cam.id,
+          sc
+            ? {
+                holdMs: sc.holdSeconds !== undefined ? sc.holdSeconds * 1000 : undefined,
+                clearMs: sc.clearSeconds !== undefined ? sc.clearSeconds * 1000 : undefined,
+                graceMs: sc.graceSeconds !== undefined ? sc.graceSeconds * 1000 : undefined,
+                blindedFraction: sc.blindedFraction,
+                flatStd: sc.flatStd,
+                coveredSimilarity: sc.coveredSimilarity,
+                defocusSharpnessRatio: sc.defocusSharpnessRatio,
+                displacedSimilarity: sc.displacedSimilarity,
+              }
+            : undefined
+        );
+      }
+
       if (cam.monitored && !this.streams.has(cam.id)) {
         if (this.governor.canAdmitStream(cam.id)) {
           this.startCameraStream(cam);

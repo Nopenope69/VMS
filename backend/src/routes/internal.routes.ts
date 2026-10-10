@@ -252,11 +252,21 @@ export async function handleGetInternalCameras(req: Request, res: Response) {
         name: true,
         streamPath: true,
         monitored: true,
+        sabotageConfigJson: true,
       },
       orderBy: { name: 'asc' },
     });
 
-    return res.status(200).json({ cameras });
+    return res.status(200).json({
+      cameras: cameras.map((c) => ({
+        id: c.id,
+        tenantId: c.tenantId,
+        name: c.name,
+        streamPath: c.streamPath,
+        monitored: c.monitored,
+        sabotageConfig: c.sabotageConfigJson ?? undefined,
+      })),
+    });
   } catch (err: any) {
     console.error('Error fetching internal cameras:', err);
     return res.status(500).json({ error: 'Failed to retrieve internal cameras' });

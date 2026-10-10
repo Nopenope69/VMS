@@ -7,7 +7,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createTenantWithCamera, createUserWithToken, startApp } from './helpers/realDb';
 import { markAutomationRulesChanged } from '../services/automation/ruleCache';
-import { sabotageEventId } from '../services/camera/cameraSabotage';
+import { CameraSabotageConfigSchema, sabotageEventId } from '../services/camera/cameraSabotage';
 import { toEventV1 } from '../contracts/eventMapping.v1';
 import { eventFromRow } from '../services/incident/orchestrator/incidentOrchestrator.service';
 
@@ -360,6 +360,44 @@ describe('GET /api/v1/internal/camera-sabotage/open', () => {
     const row = await prisma.cameraSabotageCondition.findUniqueOrThrow({ where: { id: target.id } });
     expect(row.clearedAt).not.toBeNull();
     expect(row.clearReason).toBe('RESTORED');
+  });
+
+  describe('per-camera sabotage config overrides', () => {
+    it('validates CameraSabotageConfigSchema correctly', () => {
+      const valid = {
+        holdSeconds: 15,
+        clearSeconds: 45,
+        graceSeconds: 5,
+        blindedFraction: 0.3,
+        flatStd: 8,
+        coveredSimilarity: 0.6,
+        defocusSharpnessRatio: 0.4,
+        displacedSimilarity: 0.4,
+      };
+      expect(CameraSabotageConfigSchema.safeParse(valid).success).toBe(true);
+
+      expect(CameraSabotageConfigSchema.safeParse({ holdSeconds: -1 }).success).toBe(false);
+      expect(CameraSabotageConfigSchema.safeParse({ flatStd: 60 }).success).toBe(false);
+      expect(CameraSabotageConfigSchema.safeParse({ extraField: 123 }).success).toBe(false);
+    });
+
+    it('GET /api/v1/internal/cameras returns sabotageConfig when configured in database', async () => {
+      const customConfig = { flatStd: 8, holdSeconds: 5 };
+      await prisma.camera.update({
+        where: { id: cameraId },
+        data: { sabotageConfigJson: customConfig } as any,
+      });
+
+      const res = await fetch(`${app.url}/api/v1/internal/cameras?tenantId=${tenantId}`, {
+        headers: { authorization: `Bearer ${SECRET}` },
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(Array.isArray(body.cameras)).toBe(true);
+      const cam = body.cameras.find((c: any) => c.id === cameraId);
+      expect(cam).toBeDefined();
+      expect(cam.sabotageConfig).toEqual(customConfig);
+    });
   });
 });
 

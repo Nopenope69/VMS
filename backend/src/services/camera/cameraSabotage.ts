@@ -57,6 +57,21 @@ export const CameraSabotageClearedSchema = z
 
 export type CameraSabotageCleared = z.infer<typeof CameraSabotageClearedSchema>;
 
+export const CameraSabotageConfigSchema = z
+  .object({
+    holdSeconds: z.number().positive().max(300).optional(),
+    clearSeconds: z.number().positive().max(600).optional(),
+    graceSeconds: z.number().positive().max(60).optional(),
+    blindedFraction: z.number().min(0.05).max(0.95).optional(),
+    flatStd: z.number().min(1).max(50).optional(),
+    coveredSimilarity: z.number().min(0.05).max(0.95).optional(),
+    defocusSharpnessRatio: z.number().min(0.05).max(0.95).optional(),
+    displacedSimilarity: z.number().min(0.05).max(0.95).optional(),
+  })
+  .strict();
+
+export type CameraSabotageConfig = z.infer<typeof CameraSabotageConfigSchema>;
+
 export class CameraSabotageError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) {
     super(message);

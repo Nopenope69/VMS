@@ -443,6 +443,8 @@ model Camera {
   lprMode         Boolean  @default(false)
   /// { fps (1-5), roi: [x1,y1,x2,y2] normalised, maxWidth, minConfidence }
   lprConfigJson   Json?
+  /// Per-camera sabotage detection overrides (ADR 0019): { holdSeconds, clearSeconds, blindedFraction, flatStd, coveredSimilarity, defocusSharpnessRatio, displacedSimilarity }
+  sabotageConfigJson Json?
 
   // Stream & Recording State
   mainRtspUri            String // Resolved via ONVIF GetStreamUri

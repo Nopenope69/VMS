@@ -152,6 +152,17 @@ export interface WorkerHealthStatus {
   lastError?: string;
 }
 
+export interface SabotageCameraConfig {
+  holdSeconds?: number;
+  clearSeconds?: number;
+  graceSeconds?: number;
+  blindedFraction?: number;
+  flatStd?: number;
+  coveredSimilarity?: number;
+  defocusSharpnessRatio?: number;
+  displacedSimilarity?: number;
+}
+
 export interface DiscoveredCamera {
   id: string;
   tenantId: string;
@@ -159,6 +170,7 @@ export interface DiscoveredCamera {
   streamPath: string;
   /** Watched by the appliance (Camera.monitored); the worker analyses monitored cameras. */
   monitored: boolean;
+  sabotageConfig?: SabotageCameraConfig;
 }
 
 export interface FrameGeometry {
