@@ -290,3 +290,76 @@ describe('GET /api/v1/footage-integrity/cameras', () => {
     }
   });
 });
+
+describe('GET /api/v1/internal/camera-sabotage/open', () => {
+  const getOpen = async (tenant?: string, authHeader = `Bearer ${SECRET}`) => {
+    const url = new URL(`${app.url}/api/v1/internal/camera-sabotage/open`);
+    if (tenant) url.searchParams.set('tenantId', tenant);
+    const r = await fetch(url.toString(), {
+      headers: authHeader ? { authorization: authHeader } : {},
+    });
+    return { status: r.status, json: (await r.json()) as any };
+  };
+
+  it('requires the internal secret', async () => {
+    const r = await getOpen(undefined, '');
+    expect(r.status).toBe(401);
+  });
+
+  it('answers 501 CAMERA_SABOTAGE_DISABLED while the flag is off', async () => {
+    delete process.env.VIGILONE_FEATURE_CAMERA_SABOTAGE;
+    try {
+      const r = await getOpen(tenantId);
+      expect(r.status).toBe(501);
+      expect(r.json.code).toBe('CAMERA_SABOTAGE_DISABLED');
+    } finally {
+      process.env.VIGILONE_FEATURE_CAMERA_SABOTAGE = 'true';
+    }
+  });
+
+  it('returns open conditions and respects tenantId filter', async () => {
+    const all = await getOpen();
+    expect(all.status).toBe(200);
+    expect(Array.isArray(all.json.conditions)).toBe(true);
+    expect(all.json.conditions.length).toBeGreaterThanOrEqual(3);
+
+    const forTenant = await getOpen(tenantId);
+    expect(forTenant.status).toBe(200);
+    expect(forTenant.json.conditions.every((c: any) => c.tenantId === tenantId)).toBe(true);
+    expect(forTenant.json.conditions.every((c: any) => c.clearedAt === null)).toBe(true);
+    const types = forTenant.json.conditions.map((c: any) => c.changeType).sort();
+    expect(types).toEqual(['BLINDED', 'DISPLACEMENT', 'OCCLUSION']);
+
+    const other = await getOpen(otherTenantId);
+    expect(other.status).toBe(200);
+    expect(other.json.conditions).toEqual([]);
+  });
+
+  it('closing a restored condition with its startedAt closes the row', async () => {
+    const res = await getOpen(tenantId);
+    expect(res.status).toBe(200);
+    const target = res.json.conditions.find((c: any) => c.changeType === 'DISPLACEMENT');
+    expect(target).toBeDefined();
+
+    const clearRes = await post({
+      state: 'CLEARED',
+      cameraId: target.cameraId,
+      tenantId: target.tenantId,
+      changeType: target.changeType,
+      startedAtUtc: new Date(target.startedAt).toISOString(),
+      clearedAtUtc: new Date().toISOString(),
+      clearReason: 'RESTORED',
+      method: target.method,
+    });
+    expect(clearRes.status).toBe(200);
+
+    const after = await getOpen(tenantId);
+    expect(after.status).toBe(200);
+    expect(after.json.conditions.some((c: any) => c.id === target.id)).toBe(false);
+
+    const row = await prisma.cameraSabotageCondition.findUniqueOrThrow({ where: { id: target.id } });
+    expect(row.clearedAt).not.toBeNull();
+    expect(row.clearReason).toBe('RESTORED');
+  });
+});
+

@@ -4,6 +4,7 @@ import { URL } from 'url';
 import { NormalizedDetectionEvent, DiscoveredCamera } from './types';
 import type { ModelLockEntry } from './modelCatalog';
 import type { CameraActivity } from './motionGate';
+import type { SabotageType } from './sabotageDetector';
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -176,6 +177,37 @@ export class AuthenticatedInternalApiClient {
   /** Reports a confirmed camera-sabotage condition (covered, defocused, moved, blinded); ADR 0019. */
   public reportCameraSabotage(body: Record<string, unknown>): Promise<{ eventId: string; duplicate?: boolean }> {
     return this.request('POST', '/camera-sabotage', body);
+  }
+
+  /** Fetches open camera-sabotage conditions from the backend (for worker restart recovery). */
+  public async fetchOpenSabotageConditions(tenantId?: string): Promise<{
+    conditions: Array<{
+      id: string;
+      cameraId: string;
+      tenantId: string;
+      changeType: SabotageType;
+      startedAt: string;
+      confirmedAt: string;
+      score: number;
+      threshold: number;
+      method: string;
+    }>;
+  }> {
+    const query: Record<string, string> = {};
+    if (tenantId) query.tenantId = tenantId;
+    return this.request<{
+      conditions: Array<{
+        id: string;
+        cameraId: string;
+        tenantId: string;
+        changeType: SabotageType;
+        startedAt: string;
+        confirmedAt: string;
+        score: number;
+        threshold: number;
+        method: string;
+      }>;
+    }>('GET', '/camera-sabotage/open', undefined, query);
   }
 
   /** Per-camera gating inputs: armed by AI rules, time of last classical motion (P2.5). */

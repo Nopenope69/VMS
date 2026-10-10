@@ -5,7 +5,7 @@ import { AuthenticatedInternalApiClient, InternalApiError } from './apiClient';
 import { AiWorker } from './worker';
 import { MotionGate, MotionGateOptions } from './motionGate';
 import { MetricsRegistry } from './metrics';
-import { SABOTAGE_METHOD, SabotageDetector, SabotageFinding } from './sabotageDetector';
+import { SABOTAGE_METHOD, SabotageDetector, SabotageFinding, SabotageType } from './sabotageDetector';
 import {
   DiscoveredCamera,
   CameraStreamConfig,
@@ -115,6 +115,30 @@ export class StreamSupervisor extends EventEmitter {
         this.gate.setActivity(await (this.apiClient as any).fetchAiActivity());
       } catch (err: any) {
         this.emit('warn', `AI activity poll failed (gating falls back to local motion): ${err.message}`);
+      }
+    }
+    if (this.sabotage) {
+      try {
+        const { conditions } = await this.apiClient.fetchOpenSabotageConditions();
+        if (Array.isArray(conditions)) {
+          const byCamera = new Map<string, Array<{ type: SabotageType; startedAt: Date; confirmedAt: Date; score?: number; threshold?: number }>>();
+          for (const c of conditions) {
+            const list = byCamera.get(c.cameraId) ?? [];
+            list.push({
+              type: c.changeType,
+              startedAt: new Date(c.startedAt),
+              confirmedAt: new Date(c.confirmedAt),
+              score: c.score,
+              threshold: c.threshold,
+            });
+            byCamera.set(c.cameraId, list);
+          }
+          for (const [camId, list] of byCamera) {
+            this.sabotage.restoreActive(camId, list);
+          }
+        }
+      } catch (err: any) {
+        this.emit('warn', `Failed to fetch open sabotage conditions from backend: ${err?.message || err}`);
       }
     }
     const discoveredMap = new Map<string, DiscoveredCamera>();

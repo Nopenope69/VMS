@@ -301,8 +301,27 @@ router.post('/anpr/observations', async (req: Request, res: Response) => {
 
 /** Camera-sabotage reports from the AI worker (ADR 0019). Off with the CAMERA_SABOTAGE flag. */
 let cameraSabotage: CameraSabotageService | null = null;
+export function isCameraSabotageEnabled(): boolean {
+  return isFeatureEnabled(FeatureFlag.CAMERA_SABOTAGE);
+}
+
+router.get('/camera-sabotage/open', async (req: Request, res: Response) => {
+  if (!isCameraSabotageEnabled()) {
+    return res.status(501).json({ error: 'Camera-sabotage detection is disabled on this appliance', code: 'CAMERA_SABOTAGE_DISABLED' });
+  }
+  try {
+    cameraSabotage ??= new CameraSabotageService(prisma, (ev) => incidentOrchestrator.ingestEvent(ev));
+    const tenantId = typeof req.query.tenantId === 'string' && req.query.tenantId.trim() ? req.query.tenantId.trim() : undefined;
+    const conditions = await cameraSabotage.getOpenConditions(tenantId);
+    return res.json({ conditions });
+  } catch (err: any) {
+    console.error('Error fetching open camera-sabotage conditions:', err);
+    return res.status(500).json({ error: 'Failed to fetch open camera-sabotage conditions' });
+  }
+});
+
 router.post('/camera-sabotage', async (req: Request, res: Response) => {
-  if (!isFeatureEnabled(FeatureFlag.CAMERA_SABOTAGE)) {
+  if (!isCameraSabotageEnabled()) {
     return res.status(501).json({ error: 'Camera-sabotage detection is disabled on this appliance', code: 'FEATURE_DISABLED' });
   }
   try {

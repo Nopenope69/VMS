@@ -13,7 +13,7 @@
  * (`CAMERA_TAMPER_CLEARED`, no rule trigger) records that the camera was restored.
  */
 import crypto from 'crypto';
-import { EventSeverity, PrismaClient } from '@prisma/client';
+import { CameraSabotageCondition, EventSeverity, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { fromSceneChange, fromSystemAlert } from '../incident/orchestrator/events';
 import type { IngestResult, SceneChangeType, VigilOneEvent } from '../incident/orchestrator/types';
@@ -96,6 +96,17 @@ export class CameraSabotageService {
     private readonly ingest: (event: VigilOneEvent) => Promise<IngestResult>,
     private readonly now: () => number = Date.now
   ) {}
+
+  /** Queries open sabotage conditions for the appliance or a specific tenant. */
+  async getOpenConditions(tenantId?: string): Promise<CameraSabotageCondition[]> {
+    return this.prisma.cameraSabotageCondition.findMany({
+      where: {
+        clearedAt: null,
+        ...(tenantId ? { tenantId } : {}),
+      },
+      orderBy: { startedAt: 'asc' },
+    });
+  }
 
   /** A confirmed condition (raises SCENE_CHANGE) or the end of one (closes it); `state` tells which. */
   async report(body: unknown): Promise<{ eventId: string; result: IngestResult; duplicate?: boolean }> {

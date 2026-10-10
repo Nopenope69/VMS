@@ -148,6 +148,26 @@ export class SabotageDetector {
     return [...(this.cameras.get(cameraId)?.active.keys() ?? [])];
   }
 
+  /** Restores open/active conditions across worker restarts. */
+  public restoreActive(cameraId: string, conditions: Array<{ type: SabotageType; startedAt: Date; confirmedAt: Date; score?: number; threshold?: number }>): void {
+    let cam = this.cameras.get(cameraId);
+    if (!cam) {
+      cam = { ref: null, suspects: new Map(), active: new Map() };
+      this.cameras.set(cameraId, cam);
+    }
+    for (const c of conditions) {
+      if (!cam.active.has(c.type)) {
+        cam.active.set(c.type, {
+          startedAt: c.startedAt.getTime(),
+          reportedAt: c.confirmedAt.getTime(),
+          lastSeen: c.confirmedAt.getTime(),
+          score: c.score ?? 1,
+          threshold: c.threshold ?? this.thresholdFor(c.type),
+        });
+      }
+    }
+  }
+
   /**
    * Looks at one sampled frame. Returns the findings confirmed by this frame (usually none). Never throws for a
    * well-formed frame; a frame whose size does not match its buffer is ignored.
