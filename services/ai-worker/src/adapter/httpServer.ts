@@ -44,6 +44,8 @@ export interface AdapterCoreLike {
   handleTextEmbedRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
   /** v1.2, optional: only a query_rewrite adapter serves POST /v1/rewrite-text. */
   handleTextRewriteRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
+  /** optional: rule_draft adapter serves POST /v1/extract-rule-intent. */
+  handleRuleIntentRequest?(body: unknown): ReturnType<AiAdapterCore['handleInferRequest']>;
 }
 
 export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOptions = {}): http.Server {
@@ -54,7 +56,7 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
     const correlationId =
       typeof incoming === 'string' && /^[\w.:-]{1,128}$/.test(incoming) ? incoming : crypto.randomUUID();
     const url = (req.url || '/').split('?')[0];
-    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url === '/v1/descriptor' || url === '/v1/health' || url === '/v1/infer' || url === '/v1/embed-text' || url === '/v1/rewrite-text' || url === '/metrics' ? url : 'other', method: req.method || '' });
+    core.metrics.inc('vigilone_ai_adapter_http_requests_total', 'Adapter HTTP requests', { path: url === '/v1/descriptor' || url === '/v1/health' || url === '/v1/infer' || url === '/v1/embed-text' || url === '/v1/rewrite-text' || url === '/v1/extract-rule-intent' || url === '/metrics' ? url : 'other', method: req.method || '' });
 
     if (req.method === 'GET' && url === '/v1/descriptor') return send(res, 200, core.describe(), correlationId);
     if (req.method === 'GET' && url === '/v1/health') {
@@ -69,7 +71,9 @@ export function createAdapterServer(core: AdapterCoreLike, opts: AdapterHttpOpti
         ? core.handleTextEmbedRequest.bind(core)
         : req.method === 'POST' && url === '/v1/rewrite-text' && core.handleTextRewriteRequest
           ? core.handleTextRewriteRequest.bind(core)
-          : null;
+          : req.method === 'POST' && url === '/v1/extract-rule-intent' && core.handleRuleIntentRequest
+            ? core.handleRuleIntentRequest.bind(core)
+            : null;
     if (req.method === 'POST' && (url === '/v1/infer' || textEmbed)) {
       const handle = textEmbed ?? core.handleInferRequest.bind(core);
       const chunks: Buffer[] = [];

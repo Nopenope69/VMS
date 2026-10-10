@@ -6,7 +6,7 @@
  */
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'plate_detection_for_redaction' | 'embedding' | 'vlm_verification' | 'query_rewrite';
+export type AiTaskV1 = 'object_detection' | 'plate_recognition' | 'face_detection_for_redaction' | 'plate_detection_for_redaction' | 'embedding' | 'vlm_verification' | 'query_rewrite' | 'rule_draft';
 
 export type AdapterErrorCode =
   | 'MODEL_NOT_LOADED'
@@ -132,6 +132,8 @@ export type InferenceResultV1 =
       verification?: VerificationV1;
       /** v1.2, optional: present for a POST /v1/rewrite-text answer. */
       rewrite?: { text: string; promptSha256: string };
+      /** optional: present for a POST /v1/extract-rule-intent answer. */
+      ruleIntent?: { ir: any; promptSha256: string };
       provenance: AiProvenanceV1;
       latencyMs: number;
     }

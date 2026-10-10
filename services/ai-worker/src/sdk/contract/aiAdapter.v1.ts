@@ -18,7 +18,7 @@ import { AiProvenanceV1 } from './events.v1';
 
 export const AI_ADAPTER_CONTRACT = 'ai-adapter.v1' as const;
 
-export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding', 'vlm_verification', 'query_rewrite']);
+export const AiTaskV1 = z.enum(['object_detection', 'plate_recognition', 'face_detection_for_redaction', 'plate_detection_for_redaction', 'embedding', 'vlm_verification', 'query_rewrite', 'rule_draft']);
 
 export const ModelCardV1 = z
   .object({
