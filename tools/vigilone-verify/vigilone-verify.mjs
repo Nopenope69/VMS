@@ -680,6 +680,79 @@ export function verifySegmentSealsSection({ manifest, artifacts, json, check, wa
   if (seals.length && seals[0].body?.sequence !== 1) warn('seals.scope', `the package shows seals ${seals[0].body?.sequence} onwards; earlier seals of this camera stay on the appliance (check them there with the seal chain report)`);
 }
 
+// ---------------------------------------------------------------- C2PA manifest (ADR 0020)
+export function verifyC2paSection({ manifest, artifacts, files, json, check, warn, opts = {}, keyPem }) {
+  if (!files.has('c2pa_manifest.json')) {
+    if (opts.requireC2pa) {
+      check('c2pa_manifest', false, 'c2pa_manifest.json is required but not present');
+    }
+    return;
+  }
+
+  const c2pa = json('c2pa_manifest.json');
+  if (!c2pa) {
+    check('c2pa_manifest', false, 'failed to parse c2pa_manifest.json');
+    return;
+  }
+
+  if (c2pa.c2pa_version !== '2.2') {
+    check('c2pa_manifest', false, `unsupported c2pa_version: ${c2pa.c2pa_version}`);
+    return;
+  }
+
+  const assertions = Array.isArray(c2pa.assertions) ? c2pa.assertions : [];
+  const hashAssertion = assertions.find((a) => a.label === 'c2pa.hash.data')?.data;
+  const media = artifacts.find((a) => a.role === 'PRIMARY_MEDIA');
+  const expectedVideoSha = media?.sha256 || manifest.videoChecksumSha256;
+
+  if (!hashAssertion || hashAssertion.hash !== expectedVideoSha) {
+    check(
+      'c2pa_manifest',
+      false,
+      `c2pa.hash.data hash does not match video.mp4 (${hashAssertion?.hash} vs ${expectedVideoSha})`
+    );
+    return;
+  }
+
+  const bsaAssertion = assertions.find((a) => a.label === 'in.gov.bsa.section63')?.data;
+  if (!bsaAssertion || bsaAssertion.evidenceMerkleRoot !== manifest.evidenceMerkleRoot) {
+    check(
+      'c2pa_manifest',
+      false,
+      `in.gov.bsa.section63 evidenceMerkleRoot mismatch (${bsaAssertion?.evidenceMerkleRoot} vs ${manifest.evidenceMerkleRoot})`
+    );
+    return;
+  }
+
+  const sig = c2pa.signature_info?.signature;
+  if (!sig || typeof sig !== 'string') {
+    check('c2pa_manifest', false, 'missing signature_info.signature in c2pa_manifest.json');
+    return;
+  }
+
+  const { signature: _ignored, ...sigInfoWithoutSig } = c2pa.signature_info || {};
+  const claimWithoutSig = { ...c2pa, signature_info: sigInfoWithoutSig };
+  const canonicalClaim = canonicalizeJson(claimWithoutSig);
+  const verifyKey = opts.trustedKeyPem || c2pa.signature_info?.publicKeyPem || keyPem;
+
+  let sigOk = false;
+  try {
+    sigOk = crypto.verify(null, Buffer.from(canonicalClaim, 'utf8'), verifyKey, Buffer.from(sig, 'hex'));
+  } catch (_) {}
+  if (!sigOk) {
+    try {
+      sigOk = crypto.verify(null, Buffer.from(canonicalClaim, 'utf8'), verifyKey, Buffer.from(sig, 'base64'));
+    } catch (_) {}
+  }
+
+  if (!sigOk) {
+    check('c2pa_manifest', false, 'c2pa_manifest signature verification failed');
+    return;
+  }
+
+  check('c2pa_manifest', true, 'C2PA 2.2 manifest valid and Ed25519 signature verified');
+}
+
 // ---------------------------------------------------------------- verification
 export function verifyPackage(files, opts = {}) {
   const results = [];
@@ -818,6 +891,8 @@ export function verifyPackage(files, opts = {}) {
   verifyIncidentSummariesSection({ manifest, artifacts, json, check, opts });
   // Segment seals (ADR 0018)
   verifySegmentSealsSection({ manifest, artifacts, json, check, warn, opts, keyPem, keyFp, leaves });
+  // C2PA export manifest (ADR 0020)
+  verifyC2paSection({ manifest, artifacts, files, json, check, warn, opts, keyPem });
 
   // Derivation
   if (manifest.derivation) {
@@ -849,7 +924,7 @@ function main(argv) {
   };
   const target = args.find((a, i) => !a.startsWith('--') && !['--trusted-key', '--trusted-key-sha256'].includes(args[i - 1]));
   if (!target || args.includes('--help')) {
-    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--require-segment-seals] [--json]');
+    console.error('usage: vigilone-verify <package.zip | dir> [--trusted-key key.pem | --trusted-key-sha256 HEX] [--require-ai-provenance] [--require-explanations] [--require-incident-summaries] [--require-segment-seals] [--require-c2pa] [--json]');
     return 2;
   }
   let files;
@@ -866,6 +941,7 @@ function main(argv) {
     requireExplanations: args.includes('--require-explanations'),
     requireIncidentSummaries: args.includes('--require-incident-summaries'),
     requireSegmentSeals: args.includes('--require-segment-seals'),
+    requireC2pa: args.includes('--require-c2pa'),
   };
   const results = verifyPackage(files, opts);
   const failed = results.filter((r) => r.status === 'FAIL');

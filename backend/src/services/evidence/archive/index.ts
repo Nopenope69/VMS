@@ -6,3 +6,4 @@ export * from './derivativeExporter';
 export * from './manifestBuilder';
 export * from './packageAssembler';
 export * from './evidenceArchive.service';
+export * from './c2paManifestBuilder';

@@ -117,7 +117,7 @@ describe('P4.5 evidence packages verified offline', () => {
     expect(r.code).toBe(0);
     expect(r.out.verdict).toBe('VALID');
     const ids = r.out.results.map((x: any) => x.id);
-    expect(ids).toEqual(expect.arrayContaining(['manifest.signature', 'merkle.root', 'custody.chain', 'custody.export_event', 'ai.records_attributed', 'ai.summary_matches']));
+    expect(ids).toEqual(expect.arrayContaining(['manifest.signature', 'merkle.root', 'custody.chain', 'custody.export_event', 'ai.records_attributed', 'ai.summary_matches', 'c2pa_manifest']));
     expect(r.out.results.find((x: any) => x.id === 'ai.unattributed')?.status).toBe('WARN');
 
     const dir = unzip(exportZip);
@@ -126,6 +126,17 @@ describe('P4.5 evidence packages verified offline', () => {
     expect(ai.records.every((x: any) => x.model.sha256 === modelSha && x.cameraId === cameraId)).toBe(true);
     expect(ai.unattributed.count).toBe(1);
     expect(ai.models).toEqual([expect.objectContaining({ name: 'yolox-test', sha256: modelSha, registered: true, evaluation: null })]);
+
+    // C2PA 2.2 manifest assertions
+    const c2pa = JSON.parse(fs.readFileSync(path.join(dir, 'c2pa_manifest.json'), 'utf8'));
+    expect(c2pa.c2pa_version).toBe('2.2');
+    expect(c2pa.claim_generator).toBe('VigilOne Edge VMS/1.0.0');
+    expect(c2pa.assertions.find((a: any) => a.label === 'c2pa.hash.data')?.data.hash).toBeDefined();
+    expect(c2pa.assertions.find((a: any) => a.label === 'in.gov.bsa.section63')?.data.evidenceMerkleRoot).toBeDefined();
+
+    // Verify with --require-c2pa
+    expect(verify(exportZip, '--require-c2pa').code).toBe(0);
+
     // pinning the appliance key
     expect(verify(exportZip, '--trusted-key', path.join(dir, 'appliance_public_key.pem')).code).toBe(0);
     expect(verify(exportZip, '--trusted-key-sha256', '0'.repeat(64)).code).toBe(1);
@@ -171,6 +182,10 @@ describe('P4.5 evidence packages verified offline', () => {
     d = copy();
     fs.writeFileSync(path.join(d, 'note.txt'), 'x');
     expect(failed(verify(d))).toEqual(['artifacts.no_unlisted_files']);
+    // 6. c2pa_manifest.json missing with --require-c2pa
+    d = copy();
+    fs.rmSync(path.join(d, 'c2pa_manifest.json'));
+    expect(failed(verify(d, '--require-c2pa'))).toContain('c2pa_manifest');
   });
 
   it('a redacted derivative package links to the parent evidence and verifies', async () => {

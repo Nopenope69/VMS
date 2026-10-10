@@ -400,6 +400,7 @@ export class EvidenceArchive {
       const applianceIdentifier = `VIGILONE-EDGE-${params.tenantId.substring(0, 8).toUpperCase()}`;
       const manifestData: any = {
         exportId,
+        tenantId: params.tenantId,
         applianceIdentifier,
         timestamp: now.toISOString(),
         requestingUser: {

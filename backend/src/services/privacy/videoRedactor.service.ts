@@ -103,8 +103,10 @@ function runFfmpeg(args: string[], timeoutMs = 30 * 60 * 1000): Promise<void> {
   });
 }
 
-export const ffmpegRenderer: Renderer = ({ sourcePath, filterScriptPath, outputPath }) =>
-  runFfmpeg(['-v', 'error', '-nostdin', '-y', '-i', sourcePath, '-filter_script:v', filterScriptPath, '-map', '0:v:0', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath]);
+export const ffmpegRenderer: Renderer = ({ sourcePath, filterScriptPath, outputPath }) => {
+  const filterGraph = fs.existsSync(filterScriptPath) ? fs.readFileSync(filterScriptPath, 'utf8') : '';
+  return runFfmpeg(['-v', 'error', '-nostdin', '-y', '-i', sourcePath, '-filter:v', filterGraph, '-map', '0:v:0', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath]);
+};
 
 export async function ffmpegVersion(): Promise<string | null> {
   return FFmpegService.version();
